@@ -5519,6 +5519,8 @@ describe('run.sh platform step', () => {
       fn('drop_run_lock'),
       fn('to_main'),
       fn('platform_move'),
+      // the app's token when STUB_APP_TOKEN is set, exported as the real one does
+      'gh_identity() { [[ -n "${STUB_APP_TOKEN:-}" ]] || return 1; export GH_TOKEN="$STUB_APP_TOKEN" GITHUB_TOKEN="$STUB_APP_TOKEN"; }',
       fn('record_platform'),
       'platform_env',
       'unexported_env $DESK_VARS',
@@ -5878,6 +5880,31 @@ describe('run.sh platform step', () => {
       expect(read('vars')).toBe('from-file|from-env|file-secret|unset|unset\n');
       expect(read('sibling.env')).not.toMatch(
         /DESK_|from-file|from-env|file-secret/
+      );
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    "passes the app's token to the command and to no other child",
+    async () => {
+      stubNode('exit 0');
+      await tick({ ...CREDS, STUB_APP_TOKEN: 'app-token' });
+      const node = read('node.env');
+      expect(node).toContain('GITHUB_TOKEN=app-token');
+      expect(node).not.toContain('GH_TOKEN=');
+      expect(read('sibling.env')).not.toMatch(/^(GH|GITHUB)_TOKEN=/m);
+    }
+  );
+
+  it.skipIf(!hasZsh)(
+    'reads GitHub anonymously when the app has no token',
+    async () => {
+      stubNode('exit 0');
+      await tick({ ...CREDS, GITHUB_TOKEN: 'ambient' });
+      const node = read('node.env');
+      expect(node).toMatch(/^GITHUB_TOKEN=$/m);
+      expect(read('node.calls')).toBe(
+        'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
       );
     }
   );

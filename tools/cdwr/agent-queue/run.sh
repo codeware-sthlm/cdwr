@@ -659,7 +659,12 @@ record_platform() {
   ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
     # The deadline and the 5-minute takeover of platform.lock count from the end of the move
     [[ "$move" == move ]] && { platform_move; touch "$lockdir"; }
-    FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
+    # The app's token for the GitHub reads: anonymous, they share 60 an hour with the host's IP
+    local gh_token=""
+    gh_identity && gh_token="${GITHUB_TOKEN:-}"
+    unset GH_TOKEN GITHUB_TOKEN
+    GITHUB_TOKEN="$gh_token" \
+      FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
       PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
       PLATFORM_INFISICAL_CLIENT_SECRET="${PLATFORM_INFISICAL_CLIENT_SECRET:-}" \
       PLATFORM_INFISICAL_PROJECT_ID="${PLATFORM_INFISICAL_PROJECT_ID:-}" \

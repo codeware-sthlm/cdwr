@@ -1,4 +1,4 @@
-import { readSentry } from './platform.collect';
+import { readDeploy, readSentry } from './platform.collect';
 import { SHARED_KEY } from './platform.logic';
 
 const env = { PLATFORM_SENTRY_AUTH_TOKEN: 'tok', PLATFORM_SENTRY_ORG: 'cdwr' };
@@ -43,5 +43,52 @@ describe('readSentry', () => {
       'is:unresolved tenant:acme'
     ]);
     expect(Object.keys(read.value.tops).sort()).toEqual([SHARED_KEY, 'acme']);
+  });
+});
+
+describe('readDeploy', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  // Both GitHub reads answer; the headers each one was sent are kept
+  const stubGithub = () => {
+    const headers: Record<string, string>[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init: RequestInit) => {
+        headers.push(init.headers as Record<string, string>);
+        return url.includes('/jobs')
+          ? json({ jobs: [{ name: 'deploy', conclusion: 'success' }] })
+          : json({
+              workflow_runs: [
+                {
+                  id: 7,
+                  head_sha: 'abc',
+                  html_url: 'https://github.test/run/7',
+                  updated_at: '2026-11-21T00:00:00Z'
+                }
+              ]
+            });
+      })
+    );
+    return headers;
+  };
+
+  it('reads as the app when given its token', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'app-token');
+    const headers = stubGithub();
+    expect((await readDeploy()).ok).toBe(true);
+    expect(headers).toHaveLength(2);
+    for (const h of headers)
+      expect(h['Authorization']).toBe('Bearer app-token');
+  });
+
+  it('reads anonymously without a token', async () => {
+    vi.stubEnv('GITHUB_TOKEN', '');
+    const headers = stubGithub();
+    expect((await readDeploy()).ok).toBe(true);
+    for (const h of headers) expect(h).not.toHaveProperty('Authorization');
   });
 });

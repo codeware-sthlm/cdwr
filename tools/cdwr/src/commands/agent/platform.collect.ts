@@ -388,11 +388,14 @@ const JobsSchema = z.object({
   )
 });
 
+/** GitHub's REST read, as the app when run.sh passes its token: anonymous reads share 60 an hour per IP */
 async function githubGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  const token = process.env['GITHUB_TOKEN'];
   const response = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
     headers: {
       Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28'
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
   });
@@ -406,7 +409,7 @@ async function githubGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
 }
 
 /**
- * The last completed deploy run of main (public repository, no token) and what its deploy job
+ * The last completed deploy run of main (public repository; the app's token when given) and what its deploy job
  * concluded. A manual run on main counts as well as a push: it is how a production redeploy starts.
  */
 export async function readDeploy(): Promise<Reading<DeployRead>> {
