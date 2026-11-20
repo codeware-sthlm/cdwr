@@ -374,6 +374,51 @@ describe.skipIf(!hasBash || !hasJq || !hasGnuDate)('self-deploy.sh', () => {
     });
   });
 
+  describe('the deploy lock', () => {
+    // flock(1) holds deploy.lock around the tick, as `cdwr agent deploy` does over ssh
+    const tickUnderLock = (env: Record<string, string> = {}) =>
+      spawnSync('flock', [path('deploy.lock'), 'bash', SCRIPT], {
+        env: {
+          PATH: `${join(root, 'bin')}:${process.env['PATH'] ?? ''}`,
+          HOME: root,
+          FAKE_DIR: fake,
+          SELF_DEPLOY_DIR: dir,
+          SELF_DEPLOY_API: 'https://api.test',
+          SELF_DEPLOY_RAW: 'https://raw.test',
+          SELF_DEPLOY_WAIT_SECONDS: '0',
+          SELF_DEPLOY_POLL_SECONDS: '0',
+          ...env
+        },
+        encoding: 'utf8'
+      });
+
+    it('skips a new build while a deploy by hand holds it', () => {
+      runs(NEW);
+      const result = tickUnderLock({ SELF_DEPLOY_NOW: String(at) });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('a deploy by hand holds');
+      expect(dockerLog()).toEqual([]);
+      expect(deployed()).toBe(false);
+    });
+
+    it('skips the check, so no rollback runs beside a deploy by hand', () => {
+      checking();
+      const result = tickUnderLock({
+        SELF_DEPLOY_NOW: String(at + 7200)
+      });
+      expect(result.stdout).toContain('a deploy by hand holds');
+      expect(dockerLog()).toEqual([]);
+      expect(read(path('image.env'))).toBe(`AGENT_IMAGE_TAG=${OLD_TAG}\n`);
+    });
+
+    it('deploys once the lock is free, and leaves the lock file', () => {
+      runs(NEW);
+      tick({ SELF_DEPLOY_NOW: String(at) });
+      expect(deployed()).toBe(true);
+      expect(existsSync(path('deploy.lock'))).toBe(true);
+    });
+  });
+
   describe('a hold from cdwr agent deploy --tag', () => {
     it('keeps the running tag while the newest build is the held one', () => {
       runs(NEW);

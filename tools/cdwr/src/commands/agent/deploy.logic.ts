@@ -1,4 +1,5 @@
 import { CliError } from '../../cli/errors';
+import { shellQuote } from '../../services/shell';
 
 /** Where the compose project lives on the host */
 export const REMOTE_DIR = '/opt/cdwr-agent';
@@ -8,6 +9,12 @@ export const REMOTE_IMAGE_ENV = `${REMOTE_DIR}/image.env`;
 export const PREVIOUS_SUFFIX = '.previous';
 /** Holds one tag: the newest build a deploy by hand saw; self-deploy waits for a newer one */
 export const REMOTE_HOLD = `${REMOTE_DIR}/hold`;
+/** flock(1) on it serializes a deploy by hand with the host's self-deploy timer */
+export const REMOTE_LOCK = `${REMOTE_DIR}/deploy.lock`;
+/** Printed by the remote side of deployLock once it holds the lock */
+export const LOCKED = 'locked';
+/** flock's exit code when the wait for the lock runs out */
+export const LOCK_BUSY = 75;
 export const CONTAINER = 'cdwr-agent';
 /** Inside the container: records a deploy for the desk, reading a JSON object on stdin */
 export const DEPLOY_GATE = '/opt/agent-queue/deploy-gate.sh';
@@ -79,6 +86,26 @@ const compose = (...rest: string[]): string[] => [
   REMOTE_IMAGE_ENV,
   ...rest
 ];
+
+/**
+ * Holds the host's deploy lock for as long as this ssh runs: flock waits up to
+ * `seconds` for it, prints LOCKED, then cat keeps it until stdin closes. A
+ * dropped connection ends cat too, so a lock is never left behind. The one
+ * call that goes through a remote shell; the quoted part is constant.
+ */
+export const deployLock = (host: string, seconds: number): Remote =>
+  ssh(
+    host,
+    'flock',
+    '-w',
+    String(Math.max(0, Math.round(seconds))),
+    '-E',
+    String(LOCK_BUSY),
+    REMOTE_LOCK,
+    'sh',
+    '-c',
+    shellQuote(`echo ${LOCKED} && exec cat >/dev/null`)
+  );
 
 export const uploadCompose = (host: string, content: string): Remote => ({
   ...ssh(host, 'tee', REMOTE_COMPOSE),

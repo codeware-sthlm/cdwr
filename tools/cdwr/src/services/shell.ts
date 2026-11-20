@@ -189,6 +189,52 @@ export function runInteractive(
   }).finally(restore);
 }
 
+/**
+ * Start a binary that holds something while it runs, such as an ssh to
+ * `flock … cat`, and resolve once it prints the `ready` line. The release
+ * closes its stdin and resolves when it has exited. Rejects with a
+ * CommandError carrying the exit code when it exits before it is ready.
+ */
+export function hold(
+  binary: string,
+  args: string[],
+  ready: string
+): Promise<() => Promise<void>> {
+  return new Promise((resolve, reject) => {
+    const child = track(
+      spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    );
+    let held = false;
+    let stdout = '';
+    let stderr = '';
+    const exited = new Promise<void>((done) => child.once('close', done));
+    child.stdin?.on('error', () => undefined);
+    child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (held) return;
+      stdout += chunk.toString();
+      if (!stdout.split(/\r?\n/).slice(0, -1).includes(ready)) return;
+      held = true;
+      resolve(async () => {
+        child.stdin?.end();
+        await exited;
+      });
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      if (held) return;
+      reject(
+        new CommandError(
+          [binary, ...args].join(' '),
+          stdout,
+          stderr,
+          code ?? signal
+        )
+      );
+    });
+  });
+}
+
 /** Quote for a POSIX shell, for the rare command that has to go through one */
 export const shellQuote = (value: string): string =>
   `'${value.replace(/'/g, "'\\''")}'`;
