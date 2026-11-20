@@ -3,8 +3,9 @@
 --   psql "<owner url>" -v role=<platform role> -f tools/cdwr/agent-queue/platform-role.sql
 --   psql "<owner url>" -v role=<platform role> -v grant=1 -f tools/cdwr/agent-queue/platform-role.sql
 -- Column grants on exactly what `platform.sql` reads, so the role never sees api keys or hashes
--- in the tables, plus pg_read_all_stats, so it sees every session in pg_stat_activity and not
--- only its own. That membership also shows other sessions' query text, as any statistics reader.
+-- in the tables, plus pg_monitor, whose pg_read_all_stats lets it see every session in
+-- pg_stat_activity and not only its own. That membership also shows other sessions' query text,
+-- as any statistics reader.
 -- They survive added and altered columns; rerun after a granted column or table is dropped and
 -- recreated, or when `platform.sql` reads a new column (add it to both lists here first).
 -- Rerunning is harmless. Grant mode fails when the role can still read more than the list.
@@ -31,9 +32,10 @@ GRANT SELECT (id, slug, name, deployment, status, stats_website_id)
   ON payload.tenants TO :"role";
 GRANT SELECT (_parent_id, _order, hostname, app, is_primary, certificate_status)
   ON payload.tenants_domains TO :"role";
--- Statistics views only, no table data: the connection count is per server. Last, so a
--- refused grant (it needs ADMIN OPTION on the role) leaves the column grants above in place
-GRANT pg_read_all_stats TO :"role";
+-- Statistics views and settings only, no table data: the connection count is per server.
+-- pg_monitor, since Supabase's postgres holds ADMIN OPTION on it but not on pg_read_all_stats.
+-- Last, so a refused grant leaves the column grants above in place
+GRANT pg_monitor TO :"role";
   \endif
 \endif
 
