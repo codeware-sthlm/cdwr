@@ -10,6 +10,7 @@ import { FORCE_LOGOUT_PATH, SESSION_COOKIES } from './utils/force-logout';
 import { signupRewrite } from './utils/platform-signup';
 import { isWellFormedActionId } from './utils/server-action';
 import { SITE_GATE_PATH, isGatedPath } from './utils/site-gate';
+import { isUnroutableSitePath } from './utils/unroutable-path';
 
 export function proxy(request: NextRequest) {
   const csp = cspForRequest(request.nextUrl.pathname, process.env);
@@ -43,6 +44,17 @@ function route(request: NextRequest, requestHeaders: Headers) {
     !isWellFormedActionId(actionId)
   ) {
     return new NextResponse(null, { status: 404 });
+  }
+
+  // A dotted path no site route serves — a scanner's `/.env` or
+  // `/wp-config.php`. Refused here, before the site's catch-all spends a
+  // Postgres connection finding nothing, which a burst of probes turns into
+  // pool timeouts for real visitors.
+  if (isUnroutableSitePath(pathname)) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: { 'x-robots-tag': 'noindex' }
+    });
   }
 
   // Force logout — drops the session cookies and lands on the login screen.
