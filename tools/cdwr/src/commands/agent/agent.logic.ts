@@ -151,7 +151,8 @@ export const QUEUE_FILES = [
   'notify.sh',
   'telemetry.sh',
   'deploy-gate.sh',
-  'linear-tools.txt'
+  'linear-tools.txt',
+  'hold-paths.txt'
 ] as const;
 export type QueueFile = (typeof QUEUE_FILES)[number];
 
@@ -169,7 +170,8 @@ export const byFile = <T>(
   'notify.sh': fn('notify.sh'),
   'telemetry.sh': fn('telemetry.sh'),
   'deploy-gate.sh': fn('deploy-gate.sh'),
-  'linear-tools.txt': fn('linear-tools.txt')
+  'linear-tools.txt': fn('linear-tools.txt'),
+  'hold-paths.txt': fn('hold-paths.txt')
 });
 /** What the queue scripts call; their directories make up the job's PATH */
 export const QUEUE_BINARIES = ['node', 'claude', 'jq', 'git', 'gh', 'pnpm'];

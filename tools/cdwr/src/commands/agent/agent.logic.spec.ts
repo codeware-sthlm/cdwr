@@ -164,7 +164,8 @@ describe('constants', () => {
       'notify.sh',
       'telemetry.sh',
       'deploy-gate.sh',
-      'linear-tools.txt'
+      'linear-tools.txt',
+      'hold-paths.txt'
     ]);
   });
 });
@@ -365,7 +366,8 @@ describe('queuePaths', () => {
         'notify.sh': '/h/.cdwr/agent-queue/notify.sh',
         'telemetry.sh': '/h/.cdwr/agent-queue/telemetry.sh',
         'deploy-gate.sh': '/h/.cdwr/agent-queue/deploy-gate.sh',
-        'linear-tools.txt': '/h/.cdwr/agent-queue/linear-tools.txt'
+        'linear-tools.txt': '/h/.cdwr/agent-queue/linear-tools.txt',
+        'hold-paths.txt': '/h/.cdwr/agent-queue/hold-paths.txt'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
@@ -612,7 +614,8 @@ describe('filesDrift', () => {
     'notify.sh': 'n',
     'telemetry.sh': 't',
     'deploy-gate.sh': 'q',
-    'linear-tools.txt': 'l'
+    'linear-tools.txt': 'l',
+    'hold-paths.txt': 'h'
   };
 
   const all = {
@@ -626,11 +629,13 @@ describe('filesDrift', () => {
     'notify.sh': 'n',
     'telemetry.sh': 't',
     'deploy-gate.sh': 'q',
-    'linear-tools.txt': 'l'
+    'linear-tools.txt': 'l',
+    'hold-paths.txt': 'h'
   };
 
   it.each([
     [all, 'current'],
+    [{ ...all, 'hold-paths.txt': undefined }, 'missing'],
     [{ ...all, 'linear-tools.txt': undefined }, 'missing'],
     [{ ...all, 'linear-tools.txt': 'x' }, 'stale'],
     [{ ...all, 'watch.jq': undefined }, 'missing'],

@@ -84,6 +84,7 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/deploy-gate.sh \
   tools/cdwr/agent-queue/watch.jq \
   tools/cdwr/agent-queue/linear-tools.txt \
+  tools/cdwr/agent-queue/hold-paths.txt \
   /opt/agent-queue/
 COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh \
   apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/
