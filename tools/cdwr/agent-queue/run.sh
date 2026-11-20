@@ -207,6 +207,8 @@ unexported_env() {
 platform_env() { unexported_env $PLATFORM_VARS; }
 platform_env
 unexported_env $DESK_VARS
+# The desk's address for the review's daily notice; not a secret, read the same way
+unexported_env AGENT_DESK_URL
 platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }
 desk_platform_on() {
   [[ -n "${DESK_FLY_TOKEN:-}" && -n "${DESK_INFISICAL_CLIENT_ID:-}" && -n "${DESK_INFISICAL_CLIENT_SECRET:-}" && -n "${DESK_INFISICAL_PROJECT_ID:-}" ]]
@@ -2414,13 +2416,39 @@ devlog_run() {
   fi
 }
 
+# own_read <file>: the own_actions rows received after the newest review that listed them (its
+# own.until, else 24 hours ago), written to <file> as { since, until, items }. until is the newest
+# received_at, the database's clock, so the next review starts exactly where this one ended and a
+# row sent late is listed once; a review that stored own null skips nothing. False when a read
+# failed: the review then stores own null.
+own_read() {
+  setopt local_options no_err_exit
+  local prev since rows
+  prev="$(supabase_select_checked reviews "own=not.is.null&select=own&order=at.desc&limit=1")" || return 1
+  since="$(jq -r '.[0].own.until // empty' <<<"$prev" 2>/dev/null)"
+  [[ -n "$since" ]] || since="$(TZ=UTC date -v-1d +%FT%TZ 2>/dev/null || TZ=UTC date -d '1 day ago' +%FT%TZ 2>/dev/null)"
+  rows="$(supabase_select_checked own_actions "received_at=gt.${since//+/%2B}&order=received_at.asc&limit=1000")" || return 1
+  jq -nc --arg since "$since" --argjson rows "$rows" '{since: $since,
+    until: ([$rows[].received_at] | max // $since),
+    items: ([$rows[] | {at, kind, ticket, pr, title, target, result, reason}] | sort_by(.at))}' > "$1"
+}
+# The daily notice of what the queue did on its own, once a review is stored (watch.jq own_notice).
+# Through notify, so notify-level never silences it: it is the audit in place of Håkan's approval.
+review_notice() {
+  local msg
+  msg="$(watch -r --arg desk "${AGENT_DESK_URL:-}" 'include "watch"; own_notice($desk)' <<<"$1")"
+  [[ -n "$msg" ]] || { note "warn: review: no daily notice$(watch_err)"; return 0; }
+  note "review: notice: $msg"
+  notify "$msg"
+}
+
 # The daily backlog review: reads the queue view the run just wrote (tree and audit candidates) and
 # the last 90 days of dismissals, each with the finding it names, and writes its brief, actions and
 # findings to review-out.json.
 # It ends with `REVIEWED <n> actions` or `failed: <line>`. `cdwr agent review-check` validates the
 # file and prints the reviews row; nothing is stored for a file it refuses.
 review_run() {
-  local log result rc=0 spent="" outcome line cost row out_json issue n since
+  local log result rc=0 spent="" outcome line cost row out_json issue n since own_file
   local out="$HOME_DIR/review-out.json" model=opus requested=false
   run_kind=review
   [[ -e "$HOME_DIR/review-requested" ]] && requested=true
@@ -2496,8 +2524,13 @@ review_run() {
     n="${${line#REVIEWED }%% *}"
     cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
     [[ "$cost" == <->(|.<->) ]] || cost=0
+    # What the queue did on its own goes to the row by code, never through the session
+    own_file="$HOME_DIR/review-own.json"
+    rm -f "$own_file"
+    own_read "$own_file" || { own_file=""; note "warn: review: own_actions not read"; }
     # With --json the check prints {"ok":true,"result":<row>}, or {"ok":false,"error":{"message":"failed: …"}}
-    out_json="$(node "$REPO/tools/cdwr/bin/cdwr.mjs" agent review-check "$out" --host "$(telemetry_host)" --cost "$cost" --model "$model" --json 2>> "$log" </dev/null || true)"
+    out_json="$(node "$REPO/tools/cdwr/bin/cdwr.mjs" agent review-check "$out" --host "$(telemetry_host)" --cost "$cost" --model "$model" \
+      ${own_file:+--own "$own_file"} --json 2>> "$log" </dev/null || true)"
     if row="$(jq -ce 'select(.ok == true) | .result | objects' <<<"$out_json" 2>/dev/null)"; then
       if ! supabase_insert_checked reviews "$row"; then
         note "warn: review: not stored (see $log)"
@@ -2505,6 +2538,7 @@ review_run() {
         review_line "failed: not stored"
         return 0
       fi
+      review_notice "$row"
       note "review: $n action(s)"
       record nothing "" "review: $n action(s)$spent"
       review_line "ran $(date +%H:%M), $n actions, \$$(printf '%.2f' "$cost")"

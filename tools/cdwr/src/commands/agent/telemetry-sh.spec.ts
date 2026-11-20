@@ -231,6 +231,70 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       expect(out.stdout).toBe('[]\nrc=0');
     });
 
+    describe('supabase_select_checked', () => {
+      it('prints the array a good read returns', async () => {
+        status = 200;
+        const out = await answering(
+          configured(),
+          `supabase_select_checked runs 'select=id&limit=2'`
+        );
+        expect(out.stdout).toBe('[{"id":1},{"id":2}]\nrc=0');
+        expect(hits[0]).toMatchObject({
+          method: 'GET',
+          url: '/rest/v1/runs?select=id&limit=2'
+        });
+      });
+
+      it('prints an empty array for no rows, which is not a failure', async () => {
+        status = 200;
+        reply = '[]';
+        const out = await answering(
+          configured(),
+          `supabase_select_checked runs 'a=b'`
+        );
+        expect(out.stdout).toBe('[]\nrc=0');
+      });
+
+      it('prints nothing and returns 1 when the call fails, without the key', async () => {
+        status = 500;
+        const out = await answering(
+          configured(),
+          `supabase_select_checked runs 'a=b'`
+        );
+        expect(out.stdout).toBe('rc=1');
+        expect(out.stderr).toContain('warn: supabase runs?a=b failed');
+        expect(out.stderr).not.toContain(KEY);
+      });
+
+      it('prints nothing and returns 1 when nothing listens', async () => {
+        const out = await answering(
+          { ...configured(), AGENT_SUPABASE_URL: 'http://127.0.0.1:1' },
+          `supabase_select_checked runs 'a=b'`
+        );
+        expect(out.stdout).toBe('rc=1');
+      });
+
+      it('prints nothing and returns 1 when the body is not an array', async () => {
+        status = 200;
+        reply = '{"message":"nope"}';
+        const out = await answering(
+          configured(),
+          `supabase_select_checked runs 'a=b'`
+        );
+        expect(out.stdout).toBe('rc=1');
+      });
+
+      it.each([
+        [{}],
+        [{ AGENT_SUPABASE_URL: 'http://127.0.0.1:1' }],
+        [{ AGENT_SUPABASE_SERVICE_KEY: KEY }]
+      ])('returns 1 without calling when %j is not enough', async (env) => {
+        const out = await zsh(env, `supabase_select_checked runs 'a=b'`);
+        expect(out.stdout).toBe('rc=1');
+        expect(hits).toEqual([]);
+      });
+    });
+
     it.each([
       [{}],
       [{ AGENT_SUPABASE_URL: 'http://127.0.0.1:1' }],

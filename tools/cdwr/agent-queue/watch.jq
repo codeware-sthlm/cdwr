@@ -836,6 +836,41 @@ def deploy_state($runs; $notes; $mergedAt; $now):
 # True for a watch entry whose PR the watch enqueued at least once; a refused enqueue is no try
 def self_merged: (.autoMerge.tries // 0) >= 1;
 
+# --- What the queue did on its own (own_actions), as the review lists it ---
+
+# An own result that went wrong or waits on Håkan; OWN_TROUBLE in @codeware/shared/util/agent-review
+# holds the same list for the desk
+def own_trouble: IN("left-queue", "held", "refused", "failure", "skipped", "unknown", "rolled-back", "stuck");
+
+# A timestamp as "20 Nov", from its first 19 characters read as UTC; null when it doesn't parse
+def own_day: (.[0:19] + "Z" | epoch? // null) | if . == null then null else strftime("%d %b") | ltrimstr("0") end;
+
+# The daily notice from a stored reviews row: the counts of what the queue did on its own since the
+# review before, up to five items that went wrong or wait on Håkan, and where to read the rest
+def own_notice($desk):
+  (if $desk == "" then "See the desk." else "See \($desk)" end) as $see
+  | .own as $o
+  | if $o == null then "Review stored, but what the queue did on its own was not read. \($see)"
+    else (($o.since // "" | own_day) // "the review before") as $day
+    | if ($o.items | length) == 0 then "Nothing on its own since \($day). \($see)"
+      else
+        ([ $o.items[]
+           | if .kind == "merge" and .result == "merged" then "merged"
+             elif .kind == "apply" and .result == "applied" then "applied"
+             elif .kind == "deploy" and .result == "success" then "deployed"
+             elif .kind == "self-deploy" and .result == "ok" then "self-deployed"
+             else .result end ]
+         | group_by(.) | map("\(length) \(.[0])") | join(", ")) as $counts
+        | [ $o.items[] | select(.result | own_trouble) ] as $bad
+        | ([ $bad[0:5][]
+             | "\(.ticket // .target // "the agent") \(.kind) \(.result)\(if .reason then " (\(.reason[0:80]))" else "" end)" ]
+           + (if ($bad | length) > 5 then [ "\(($bad | length) - 5) more" ] else [] end)) as $named
+        | "On its own since \($day): \($counts)."
+          + (if ($named | length) > 0 then " Needs a look: \($named | join("; "))." else "" end)
+          + " \($see)"
+      end
+    end;
+
 # True while a ticket that merged on its own keeps agent:review for its deploy, so it stays
 # watched: up to 3 hours while the deploy is not read, and until Håkan clears the label once it
 # failed, was skipped or never settled (the self-merge-deploy gap)

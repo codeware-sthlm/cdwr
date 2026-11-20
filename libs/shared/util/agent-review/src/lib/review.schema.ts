@@ -72,7 +72,40 @@ export const reviewFileSchema = z.object({
   suggestions: z.array(suggestionSchema).max(3)
 });
 
+/** One thing the queue did on its own, as an own_actions row; the review lists them by code */
+const ownItemSchema = z.object({
+  at: z.string(),
+  kind: z.enum(['merge', 'deploy', 'apply', 'self-deploy']),
+  ticket: z.string().nullable(),
+  pr: z.number().int().nullable(),
+  title: z.string().nullable(),
+  target: z.string().nullable(),
+  result: text,
+  reason: z.string().nullable()
+});
+
+/** The own_actions rows received after `since`, up to `until`: the next review starts there */
+export const reviewOwnSchema = z.object({
+  since: z.string(),
+  until: z.string(),
+  items: z.array(ownItemSchema)
+});
+
+/** Results that went wrong or wait on Håkan; the desk marks them and the notice names them */
+export const OWN_TROUBLE = [
+  'left-queue',
+  'held',
+  'refused',
+  'failure',
+  'skipped',
+  'unknown',
+  'rolled-back',
+  'stuck'
+];
+
 export type Review = z.infer<typeof reviewSchema>;
+export type ReviewOwn = z.infer<typeof reviewOwnSchema>;
+export type ReviewOwnItem = z.infer<typeof ownItemSchema>;
 export type ReviewFile = z.infer<typeof reviewFileSchema>;
 export type ReviewAction = z.infer<typeof actionSchema>;
 export type ReviewFinding = z.infer<typeof findingSchema>;

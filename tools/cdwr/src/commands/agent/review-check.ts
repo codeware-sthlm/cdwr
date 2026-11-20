@@ -13,7 +13,7 @@ import { checkReview } from './review-check.logic';
 export default defineCommand({
   summary: 'Check a review file and print the reviews row for it',
   description:
-    'Reads a review JSON file, checks it against the review schema and prints the reviews row (host, brief, actions, findings, stale, suggestions, cost, model) for the telemetry database; with --json that is the result. On an unreadable file or a schema failure it prints one line, failed: <path>: <message>, and exits 1.',
+    'Reads a review JSON file, checks it against the review schema and prints the reviews row (host, brief, actions, findings, stale, suggestions, own, cost, model) for the telemetry database; with --json that is the result. On an unreadable file or a schema failure it prints one line, failed: <path>: <message>, and exits 1.',
   danger: 'read',
   history: false,
   inputs: {
@@ -43,23 +43,41 @@ export default defineCommand({
       description: 'The model that wrote the review',
       optional: true,
       flagOnly: true
+    }),
+    own: input.string({
+      prompt: 'Which own_actions file?',
+      short: 'o',
+      description:
+        'What the queue did on its own since the review before, as { since, until, items }; the row gets own null without it, or when it does not parse',
+      optional: true,
+      flagOnly: true
     })
   },
 
-  async plan(ctx, { file, host, cost, model }) {
+  async plan(ctx, { file, host, cost, model, own }) {
     const text = await readFile(resolve(ctx.root, file), 'utf8').catch(
       (error: NodeJS.ErrnoException) => {
         throw new CliError(`failed: ${file}: ${error.message}`);
       }
     );
-    const checked = checkReview(text, { host: host ?? hostId(), cost, model });
+    // An unreadable own file leaves own null; the review still stands
+    const ownText =
+      own === undefined
+        ? undefined
+        : await readFile(resolve(ctx.root, own), 'utf8').catch(() => '');
+    const checked = checkReview(text, {
+      host: host ?? hostId(),
+      cost,
+      model,
+      own: ownText
+    });
     if (!checked.ok) throw new CliError(checked.message);
     return { steps: [], data: checked.row };
   },
 
   async apply(_ctx, row) {
     return {
-      summary: `${row.findings.length} findings, ${row.actions.length} actions`,
+      summary: `${row.findings.length} findings, ${row.actions.length} actions${row.own ? `, ${row.own.items.length} on its own` : ''}`,
       json: row
     };
   }

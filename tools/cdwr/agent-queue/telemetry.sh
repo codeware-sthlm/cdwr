@@ -62,10 +62,11 @@ _supabase_delete() {
   return 0
 }
 
-# _supabase_rows <method> <url> [json]: prints the JSON array the call returns, `[]` otherwise.
+# _supabase_rows <method> <url> [json] [strict]: prints the JSON array the call returns, `[]` otherwise;
+# with strict a failure prints nothing and returns 1, so an empty answer can't stand for a failed one.
 # With -f and -sS a success writes only the body and a failure only the error, so both can be read from one capture.
 _supabase_rows() {
-  local method=$1 url=$2 body=${3:-} out msg
+  local method=$1 url=$2 body=${3:-} strict=${4:-} out msg
   local -a data
   [[ -z "$body" ]] || data=(-H 'Content-Type: application/json' -H 'Prefer: return=representation' -d "$body")
   if ! out="$(printf 'header = "apikey: %s"\nheader = "Authorization: Bearer %s"\n' \
@@ -74,16 +75,26 @@ _supabase_rows() {
     msg="warn: supabase ${url##*/rest/v1/} failed: ${out//$'\n'/ }"
     msg="${msg//$AGENT_SUPABASE_SERVICE_KEY/***}"
     if (( $+functions[note] )); then note "$msg"; else print -ru2 -- "$msg"; fi
+    [[ -n "$strict" ]] && return 1
     print -r -- '[]'
     return 0
   fi
-  if [[ "$(jq -r 'type' <<<"$out" 2>/dev/null)" == array ]]; then print -r -- "$out"; else print -r -- '[]'; fi
+  if [[ "$(jq -r 'type' <<<"$out" 2>/dev/null)" == array ]]; then print -r -- "$out"
+  elif [[ -n "$strict" ]]; then return 1
+  else print -r -- '[]'; fi
   return 0
 }
 
 supabase_select() {
   if [[ -z "${AGENT_SUPABASE_URL:-}" || -z "${AGENT_SUPABASE_SERVICE_KEY:-}" ]]; then print -r -- '[]'; return 0; fi
   _supabase_rows GET "${AGENT_SUPABASE_URL%/}/rest/v1/$1?$2"
+}
+
+# supabase_select_checked <table> <query>: as supabase_select, but returns 1 when the read failed or
+# telemetry is off
+supabase_select_checked() {
+  telemetry_on || return 1
+  _supabase_rows GET "${AGENT_SUPABASE_URL%/}/rest/v1/$1?$2" "" strict
 }
 
 supabase_patch() {
