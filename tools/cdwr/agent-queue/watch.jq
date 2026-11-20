@@ -424,7 +424,8 @@ def apply_verdict($item):
         if $j.key != $a[2] then "the dry run read \($j.key), not \($a[2])"
         elif $j.value != $a[3] then "the dry run read another value"
         elif $j.state == "same" then "already set"
-        else "ok" end
+        elif $j.state == "absent" or $j.state == "different" then "ok"
+        else "the dry run carried no state" end
       else "unknown kind" end
     elif $item.kind == "restart" then
       if $j.app != $a[0] then "the dry run read \($j.app), not \($a[0])"

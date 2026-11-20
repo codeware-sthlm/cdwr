@@ -881,6 +881,20 @@ describe('apply list', () => {
           set,
           { ...at, key: set[2], state: 'absent', value: '5' },
           'the dry run read another value'
+        ],
+        [
+          'set with an unknown state',
+          'secret-set',
+          set,
+          { ...at, key: set[2], state: 'bogus', value: '4' },
+          'the dry run carried no state'
+        ],
+        [
+          'set with no state',
+          'secret-set',
+          set,
+          { ...at, key: set[2], value: '4' },
+          'the dry run carried no state'
         ]
       ])('%s', (_name, kind, args, json, expected) => {
         expect(verdict(kind, args, env(json))).toBe(expected);
