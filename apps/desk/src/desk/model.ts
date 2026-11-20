@@ -69,7 +69,7 @@ import {
   sessionEnded,
   silentAfter
 } from './live';
-import { byCreated, parseWatch } from './parsers';
+import { type ApplyItem, byCreated, openApply, parseWatch } from './parsers';
 import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
@@ -224,6 +224,9 @@ export type Model = {
   /** Open PRs whose ticket is parked on a wait (review fixes on CI); kept out of `parked` and `next` */
   prWaits: Map<string, QueueParked>;
   handoffs: QueueAfter[];
+  /** The apply list of each ticket in `handoffs`, every item in its state */
+  apply: Map<string, ApplyItem[]>;
+  /** Open hand-off items plus open apply items */
   handoffItems: number;
   next: QueueNext[];
   parked: QueueParked[];
@@ -1071,7 +1074,7 @@ export const model = (
   /** The web desk the NUC serves, rather than the Mac app */
   web = false
 ): Model => {
-  const { data, details, liveHandoffs } = state;
+  const { data, details, liveHandoffs, liveApply } = state;
   const { runs, ideas, activity } = data;
   const nowMs = now.getTime();
   const idx = issueIndex(data);
@@ -1134,7 +1137,13 @@ export const model = (
       const live = liveHandoffs.get(x.ticket);
       return live ? { ...x, items: live } : x;
     })
-    .filter((x) => x.items?.length);
+    .filter(
+      (x) => x.items?.length || openApply(liveApply.get(x.ticket) ?? []).length
+    );
+  // Open apply items wait too: a merged ticket with an unapplied one stays on the desk
+  const apply = new Map(
+    handoffs.map((x) => [x.ticket, liveApply.get(x.ticket) ?? []])
+  );
 
   // A parked review (its fixes on CI) shows as its open PR, with the wait as the row's note
   const prWaits = new Map(
@@ -1289,7 +1298,14 @@ export const model = (
     heldApprovals,
     prWaits,
     handoffs,
-    handoffItems: handoffs.reduce((n, x) => n + (x.items?.length || 0), 0),
+    apply,
+    handoffItems: handoffs.reduce(
+      (n, x) =>
+        n +
+        (x.items?.length || 0) +
+        openApply(apply.get(x.ticket) ?? []).length,
+      0
+    ),
     next,
     parked,
     renovate: v ? v.renovate : [],

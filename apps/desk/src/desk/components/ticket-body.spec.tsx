@@ -3,6 +3,7 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
+import type { ApplyItem } from '../parsers';
 import { type DeskState, createState } from '../state';
 import { NOW, runs, ticketDesk, view } from '../view/fixtures';
 import { ACTIVITY_MAX } from '../view/ticket';
@@ -51,6 +52,41 @@ describe('TicketBody', () => {
       'Spend',
       'Activity'
     ]);
+  });
+
+  it('lists the apply list with each item in its state', () => {
+    const s = ticketDesk();
+    const item = (text: string, over: Partial<ApplyItem> = {}): ApplyItem => {
+      const spec = text.split(' · ')[0];
+      const tokens = spec.split(' ');
+      return {
+        text,
+        spec,
+        kind: tokens[0],
+        args: tokens.slice(1),
+        afterDeploy: false,
+        checked: false,
+        dropped: false,
+        outcome: null,
+        ...over
+      };
+    };
+    s.liveApply.set('COD-5', [
+      item('restart cdwr-cms', { checked: true, outcome: 'applied 07:12Z' }),
+      item('agent-deploy', { dropped: true }),
+      item('scale cdwr-cms 2', {
+        outcome: 'refused: no DESK_FLY_TOKEN on nuc'
+      }),
+      item('deploy-workflow cms production', { afterDeploy: true }),
+      item('supabase-migration a.sql')
+    ]);
+    const c = body(s, 'COD-5');
+    const rows = [...c.querySelectorAll('li')].map(text);
+    expect(rows).toContain('restart cdwr-cmsappliedapplied 07:12Z');
+    expect(rows).toContain('agent-deploydropped');
+    expect(rows).toContain('scale cdwr-cms 2refusedno DESK_FLY_TOKEN on nuc');
+    expect(rows).toContain('deploy-workflow cms productionwaiting for deploy');
+    expect(rows).toContain('supabase-migration a.sqlpending');
   });
 
   it('lists the candidates to check after the gaps', () => {

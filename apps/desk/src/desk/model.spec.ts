@@ -38,6 +38,7 @@ import {
   waitAges,
   watchByTicket
 } from './model';
+import type { ApplyItem } from './parsers';
 import { type DeskState, type Detail, createState } from './state';
 import type { QueueTreeNode, QueueView } from './types';
 
@@ -68,6 +69,22 @@ const detail = (over: Partial<Detail> = {}): Detail => ({
   blockedBy: [],
   pr: null,
   prAt: null,
+  ...over
+});
+
+const applyItem = (
+  spec: string,
+  checked: boolean,
+  over: Partial<ApplyItem> = {}
+): ApplyItem => ({
+  text: spec,
+  spec,
+  kind: spec.split(' ')[0],
+  args: spec.split(' ').slice(1),
+  afterDeploy: false,
+  checked,
+  dropped: false,
+  outcome: null,
   ...over
 });
 
@@ -465,6 +482,12 @@ describe('model', () => {
       s.liveHandoffs.set('COD-41', ['Check C']);
       // COD-40's were all ticked since the view was taken
       s.liveHandoffs.set('COD-40', []);
+      // COD-40 has an applied item only; COD-42 has prose ticked but one apply item open
+      s.liveApply.set('COD-40', [applyItem('restart cdwr-cms', true)]);
+      s.liveApply.set('COD-42', [
+        applyItem('restart cdwr-cms', true),
+        applyItem('scale cdwr-cms 2', false)
+      ]);
     });
     const m = model(state, NOW);
 
@@ -491,9 +514,18 @@ describe('model', () => {
 
     it('reads hand-off items live, ahead of the queue view', () => {
       expect(m.handoffs.map((x) => [x.ticket, x.items])).toEqual([
-        ['COD-41', ['Check C']]
+        ['COD-41', ['Check C']],
+        ['COD-42', []]
       ]);
-      expect(m.handoffItems).toBe(1);
+      expect(m.handoffItems).toBe(2);
+    });
+
+    it('keeps a merged ticket with an open apply item waiting, and drops one whose items are all applied', () => {
+      expect(m.handoffs.map((x) => x.ticket)).not.toContain('COD-40');
+      expect(m.apply.get('COD-42')?.map((a) => a.spec)).toEqual([
+        'restart cdwr-cms',
+        'scale cdwr-cms 2'
+      ]);
     });
 
     it('lists the slots held by open PRs, then parked tickets without one', () => {

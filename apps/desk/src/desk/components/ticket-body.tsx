@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { waitName } from '../constants';
 import { dayTime, seenAgo, tidy, usd } from '../format';
+import type { ApplyItem } from '../parsers';
 import { findingsByTicket } from '../view/review';
 import {
   type TicketQueue,
@@ -85,6 +86,16 @@ const TreePart = ({
   </Part>
 );
 
+/** An apply item's chip kind, chip text and the rest of its outcome */
+const applyState = (a: ApplyItem): [string, string, string | null] => {
+  if (a.checked) return ['ready', 'applied', a.outcome];
+  if (a.dropped) return ['parked', 'dropped', a.outcome];
+  if (a.outcome?.startsWith('refused:'))
+    return ['blocked', 'refused', a.outcome.slice('refused:'.length).trim()];
+  if (a.afterDeploy) return ['parked', 'waiting for deploy', a.outcome];
+  return ['needs-input', 'pending', a.outcome];
+};
+
 const QueuePart = ({ queue, now }: { queue: TicketQueue; now: Date }) => (
   <Part title="Queue">
     {queue.waiting ? (
@@ -152,6 +163,25 @@ const QueuePart = ({ queue, now }: { queue: TicketQueue; now: Date }) => (
               <Inline text={h} />
             </li>
           ))}
+        </ul>
+      </Row>
+    ) : null}
+    {queue.apply.length ? (
+      <Row label="Apply list">
+        <ul className="grid min-w-0 gap-1">
+          {queue.apply.map((a, n) => {
+            const [kind, label, note] = applyState(a);
+            return (
+              <li
+                key={n}
+                className="flex min-w-0 flex-wrap items-baseline gap-x-2"
+              >
+                <code>{a.spec}</code>
+                <Chip kind={kind}>{label}</Chip>
+                {note ? <span className={META}>{note}</span> : null}
+              </li>
+            );
+          })}
         </ul>
       </Row>
     ) : null}
