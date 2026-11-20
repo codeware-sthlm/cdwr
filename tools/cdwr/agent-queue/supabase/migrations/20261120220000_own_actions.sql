@@ -18,7 +18,9 @@ create table if not exists public.own_actions (
   reason text,
   -- when the row reached the table, which a resend never changes: a review lists the rows received
   -- since the one before it, so an event sent late is still listed once
-  received_at timestamptz not null default now()
+  -- (clock_timestamp, not the transaction's start, so a slow upsert gets no earlier time than one
+  -- that committed before it)
+  received_at timestamptz not null default clock_timestamp()
 );
 
 create index if not exists own_actions_received_at_idx on public.own_actions (received_at);

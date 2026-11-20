@@ -8455,6 +8455,18 @@ describe('step with merge', () => {
       ).toEqual([]);
     });
 
+    it('records no merge once the merge was handed to Håkan', () => {
+      expect(
+        step({
+          now: { state: 'merged' },
+          merge: null,
+          prev: queued({
+            autoMerge: { at: AT, tries: 1, oid: 'h1', held: { at: AT } }
+          })
+        }).own
+      ).toEqual([]);
+    });
+
     it('records the merge once, not on the next step', () => {
       expect(
         step({

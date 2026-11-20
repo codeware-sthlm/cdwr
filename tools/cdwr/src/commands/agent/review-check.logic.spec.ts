@@ -85,11 +85,11 @@ describe('checkReview own', () => {
     });
   });
 
-  it('puts null in the row without own, or with an unreadable one', () => {
+  it('leaves own out of the row without own, or with an unreadable one', () => {
     for (const own of [undefined, '', '{nope']) {
-      expect(
-        checkReview(JSON.stringify(base), { host: 'mac', own })
-      ).toMatchObject({ ok: true, row: { own: null } });
+      const result = checkReview(JSON.stringify(base), { host: 'mac', own });
+      expect(result).toMatchObject({ ok: true });
+      expect(result.ok && 'own' in result.row).toBe(false);
     }
   });
 
@@ -220,7 +220,7 @@ describe('checkReview', () => {
     });
     expect(result).toEqual({
       ok: true,
-      row: { host: 'mac', ...review, own: null, cost: 0.5, model: null }
+      row: { host: 'mac', ...review, cost: 0.5, model: null }
     });
   });
 

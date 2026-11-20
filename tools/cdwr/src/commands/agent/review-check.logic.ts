@@ -9,8 +9,8 @@ import {
 /** The reviews table row the desk reads; `id` and `at` are the database's */
 export interface ReviewRow extends Review {
   host: string;
-  /** What the queue did on its own since the review before; null when it was not read */
-  own: ReviewOwn | null;
+  /** What the queue did on its own since the review before; absent when it was not read */
+  own?: ReviewOwn;
   cost: number | null;
   model: string | null;
 }
@@ -130,12 +130,14 @@ export const checkReview = (
   if (secret !== null) {
     return { ok: false, message: `failed: secret-like text in ${secret}` };
   }
+  const own = toOwn(extra.own);
   return {
     ok: true,
     row: {
       host: extra.host,
       ...toReview(parsed.data),
-      own: toOwn(extra.own),
+      // Left out when null, so a row still stores before the migration adds the column
+      ...(own === null ? {} : { own }),
       cost: extra.cost ?? null,
       model: extra.model ?? null
     }

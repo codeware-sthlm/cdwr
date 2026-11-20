@@ -294,7 +294,8 @@ def step:
   | (if $heldNow then [ { level: "action", message: "\($id): PR #\($pr) held: \($mv.verdict)" } ] else [] end) as $held
   # What the watch did on its own, for own_actions: a PR it enqueued first seen merged, its removal
   # from the queue, and a claimed merge it held. Each event_id is the same on a repeated step.
-  | ((if $now.state == "merged" and $prev.state != "merged" and ($am0.tries // 0) >= 1
+  # A merge after the watch handed it to Håkan (held) is his, not the queue's
+  | ((if $now.state == "merged" and $prev.state != "merged" and ($am0.tries // 0) >= 1 and $am0.held == null
       then [ { event_id: "merge:\($id):\($pr):merged", result: "merged", reason: null } ] else [] end)
      + (if $removed and $am0 != null
         then [ { event_id: "merge:\($id):\($pr):left:\($now.removedAt)", result: "left-queue",

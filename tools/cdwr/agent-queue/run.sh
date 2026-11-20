@@ -1038,9 +1038,14 @@ OWN="$HOME_DIR/own.jsonl"
 # own_event <event json>: the event with its own deterministic event_id; host and at are filled in
 own_event() {
   $check && return 0
+  # own_actions is public: a token in a reason (an error GitHub or a command printed) is withheld
+  # before it is kept, by the token prefixes review-check.logic.ts knows
   jq -c --arg host "$(telemetry_host)" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    def clean: if type == "string"
+      then gsub("eyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+|\\bsk[-_][A-Za-z0-9_-]{8,}|\\b(gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}|\\bxox[abprs]-[A-Za-z0-9-]{10,}|\\bAKIA[0-9A-Z]{16}\\b|\\b(sbp_|sb_secret_)[A-Za-z0-9_]{20,}|-----BEGIN[^\n]*"; "(withheld)")
+      else . end;
     {event_id, at: (.at // $at), host: $host, kind, ticket: (.ticket // null), pr: (.pr // null),
-     title: (.title // null), target: (.target // null), result, reason: (.reason // null)}' \
+     title: (.title // null | clean), target: (.target // null | clean), result, reason: (.reason // null | clean)}' \
     <<<"$1" >> "$OWN" 2>/dev/null || note "warn: own: an event was not kept"
   return 0
 }
@@ -1052,8 +1057,9 @@ own_self_deploy() {
   setopt local_options no_err_exit
   local file="$HOME_DIR/deploy.json" stamp="$HOME_DIR/deploy-recorded" ev key
   [[ -r "$file" ]] || return 0
+  # The time is part of the id: a second rollback to the same tag is a new event
   ev="$(jq -c 'select((.tag | type) == "string" and (.phase | IN("ok", "rolled-back", "stuck")))
-    | {event_id: "self-deploy:\(.tag):\(.phase)", kind: "self-deploy", target: .tag, result: .phase,
+    | {event_id: "self-deploy:\(.tag):\(.phase):\(.at // "")", kind: "self-deploy", target: .tag, result: .phase,
        reason: (.reason // null),
        at: (.at | if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T") then . else null end)}' "$file" 2>/dev/null)"
   [[ -n "$ev" ]] || return 0
@@ -1069,7 +1075,10 @@ own_send() {
   setopt local_options no_err_exit
   [[ -s "$OWN" ]] || return 0
   local rows
+  # A row the table would refuse is dropped here, since one would fail the whole batch every tick
   rows="$(jq -Rnc --argjson cut "$(( $(date +%s) - 7 * 86400 ))" '[inputs | fromjson? | objects
+    | select((.event_id | type) == "string" and (.kind | IN("merge", "deploy", "apply", "self-deploy"))
+             and (.result | type) == "string" and .result != "" and (.host | type) == "string")
     | select((.at // "" | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601? // 0) >= $cut)] | unique_by(.event_id)' "$OWN")" ||
     { note "warn: own: own.jsonl not read"; return 0; }
   jq -c '.[]' <<<"$rows" > "$OWN.tmp" && mv "$OWN.tmp" "$OWN"
@@ -2538,7 +2547,8 @@ review_run() {
         review_line "failed: not stored"
         return 0
       fi
-      review_notice "$row"
+      # supabase_insert_checked stores nothing without telemetry, and then there is nothing to tell
+      telemetry_on && review_notice "$row"
       note "review: $n action(s)"
       record nothing "" "review: $n action(s)$spent"
       review_line "ran $(date +%H:%M), $n actions, \$$(printf '%.2f' "$cost")"

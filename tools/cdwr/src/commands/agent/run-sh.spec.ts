@@ -397,6 +397,30 @@ describe('run.sh own events', () => {
       ]);
     });
 
+    it.skipIf(!canRun)(
+      'withholds a token in the text and keeps the rest',
+      () => {
+        const ghp = `ghp_${'a'.repeat(24)}`;
+        const jwt = 'eyJhbGciOi.eyJzdWIiOiIx.c2lnbmF0dXJl';
+        const sk = 'sk-abcdefgh12345678';
+        sh([
+          `own_event '${JSON.stringify({
+            event_id: 'e4',
+            kind: 'merge',
+            result: 'merged',
+            title: `push with ${ghp} failed`,
+            target: `jwt ${jwt} end`,
+            reason: `bad key ${sk}, retry`
+          })}'`
+        ]);
+        expect(events()[0]).toMatchObject({
+          title: 'push with (withheld) failed',
+          target: 'jwt (withheld) end',
+          reason: 'bad key (withheld), retry'
+        });
+      }
+    );
+
     it.skipIf(!canRun)('does nothing with --check', () => {
       sh([`own_event '{"event_id":"e3","kind":"merge","result":"merged"}'`], {
         check: true
@@ -420,7 +444,7 @@ describe('run.sh own events', () => {
       sh(['own_self_deploy']);
       expect(events()).toEqual([
         {
-          event_id: `self-deploy:${tag}:rolled-back`,
+          event_id: `self-deploy:${tag}:rolled-back:2026-11-20T07:12:00Z`,
           at: '2026-11-20T07:12:00Z',
           host: 'nuc',
           kind: 'self-deploy',
@@ -433,17 +457,35 @@ describe('run.sh own events', () => {
         }
       ]);
       expect(file('deploy-recorded')?.trim()).toBe(
-        `self-deploy:${tag}:rolled-back`
+        `self-deploy:${tag}:rolled-back:2026-11-20T07:12:00Z`
       );
       sh(['own_self_deploy']);
       expect(events()).toHaveLength(1);
     });
 
+    it.skipIf(!canRun)(
+      'records a second rollback to the same tag at another time',
+      () => {
+        deploy({ tag, phase: 'rolled-back', at: '2026-11-20T07:12:00Z' });
+        sh(['own_self_deploy']);
+        deploy({ tag, phase: 'rolled-back', at: '2026-11-20T09:30:00Z' });
+        sh(['own_self_deploy']);
+        expect(events().map((e) => e['event_id'])).toEqual([
+          `self-deploy:${tag}:rolled-back:2026-11-20T07:12:00Z`,
+          `self-deploy:${tag}:rolled-back:2026-11-20T09:30:00Z`
+        ]);
+      }
+    );
+
     it.skipIf(!canRun).each(['ok', 'stuck'])('records phase %s', (phase) => {
       deploy({ tag, phase });
       sh(['own_self_deploy']);
       expect(events()).toMatchObject([
-        { event_id: `self-deploy:${tag}:${phase}`, result: phase, reason: null }
+        {
+          event_id: `self-deploy:${tag}:${phase}:`,
+          result: phase,
+          reason: null
+        }
       ]);
     });
 
@@ -470,8 +512,8 @@ describe('run.sh own events', () => {
       deploy({ tag, phase: 'ok' });
       sh(['own_self_deploy']);
       expect(events().map((e) => e['event_id'])).toEqual([
-        `self-deploy:${tag}:stuck`,
-        `self-deploy:${tag}:ok`
+        `self-deploy:${tag}:stuck:`,
+        `self-deploy:${tag}:ok:`
       ]);
     });
 
@@ -538,6 +580,24 @@ describe('run.sh own events', () => {
       sh(['own_send']);
       expect(quiet()).toBeNull();
     });
+
+    it.skipIf(!canRun)(
+      'drops rows the table would refuse: bad kind, no result, no host or id',
+      () => {
+        const good = row('good', ago(1));
+        put([
+          good,
+          { ...row('kind', ago(1)), kind: 'other' },
+          { ...row('empty', ago(1)), result: '' },
+          { ...row('noresult', ago(1)), result: undefined },
+          { ...row('nohost', ago(1)), host: undefined },
+          { ...row('noid', ago(1)), event_id: undefined }
+        ]);
+        sh(['own_send']);
+        expect(upsert()?.rows.map((r) => r['event_id'])).toEqual(['good']);
+        expect(events().map((e) => e['event_id'])).toEqual(['good']);
+      }
+    );
   });
 });
 
