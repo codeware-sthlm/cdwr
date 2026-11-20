@@ -55,3 +55,73 @@ cannot signal them. The ticket worktrees are the session's, so `cdwr agent workt
 inside an implement session (its allow list has it, and its environment names the clone); the
 entrypoint removes, once, the worktrees that were linked to the queue's checkout before the
 session user existed.
+
+## The root installer
+
+Everything the NUC runs outside the container lives in `nuc/`: the self-deploy, the backup, their
+systemd units and the installer itself. `cdwr`, the deploy user, has no sudo but one line in
+`/etc/sudoers.d/cdwr-agent`:
+
+```txt
+cdwr ALL=(root) NOPASSWD: /usr/local/sbin/nuc-apply
+```
+
+`nuc-apply` is `nuc/nuc-apply.sh`, owned by root. `nuc-sync.sh`, from `cdwr-agent-nuc.timer`
+every 5 minutes, calls it with the newest commit on main that touches `nuc/`
+(`tools/cdwr/agent-queue/README.md`, "Host installer"). Given one 40-hex sha, and nothing else,
+it:
+
+- checks that main contains the sha, through GitHub's compare API
+- lists `apps/agent-host/nuc` at the sha through the contents API, and fails before installing
+  anything when a name is not `^[a-z0-9-]+\.(sh|service|timer)$` or an entry is not a file
+- fetches each file at the sha from raw.githubusercontent
+- installs each file that differs, owned by root: `*.sh` to `/usr/local/sbin` (755),
+  `*.service` and `*.timer` to `/etc/systemd/system` (644), and `nuc-apply.sh` last, as
+  `/usr/local/sbin/nuc-apply` by temp file and rename
+- after a unit changed, runs `daemon-reload`, then `enable` and `restart` for each changed timer.
+  A changed service is only reloaded: they are oneshots their timers fire, and restarting
+  `cdwr-agent-deploy.service` would start a deploy.
+
+It will not:
+
+- run git, or read anything from a checkout: a checkout `cdwr` can write would run its own
+  `.git/config` as root
+- install from a branch, or from anywhere but `apps/agent-host/nuc` at a commit on main
+- remove a file main deleted. Removing a unit or script stays a step by hand
+- write under `/etc/sudoers.d`
+- honour `NUC_APPLY_*` overrides when run as root (they exist for the specs; sudo drops them anyway)
+
+The control is the hold list: `tools/cdwr/agent-queue/hold-paths.txt` holds `apps/agent-host/nuc/**`,
+so a PR that changes what the installer installs, or the installer, never merges on its own.
+Root on the NUC follows a merge Håkan made.
+
+To change a script or unit, edit it in `nuc/` and merge. To add one, give it a name that fits the
+pattern; a timer is enabled on its first install. The apply list's `nuc-install` waits for the
+host to have applied the merge. A change under `nuc/` also triggers `agent-host-image.yml`, so an
+image is built and self-deployed too; that is harmless. A failed run is retried by the next merge that touches `nuc/`, or by removing
+`/opt/cdwr-agent/nuc-apply.json` on the NUC, so the next tick runs it again and records it.
+
+### Installing it once
+
+On the NUC, as an admin user (`ssh -t hakans@cdwr-nuc`), with `sha` the merge commit on main
+that has `nuc/nuc-apply.sh`. Install the sudoers line only once the hold list holds the queue's
+own scripts too (`watch.jq`, `run.sh`, `lib.sh`), or once you accept that an agent PR that rewrites
+the merge verdict could reach root through it.
+
+```sh
+sha=<merge sha>
+d="$(mktemp -d)"
+curl -fsSL -o "$d/nuc-apply.sh" "https://raw.githubusercontent.com/codeware-sthlm/cdwr/$sha/apps/agent-host/nuc/nuc-apply.sh"
+less "$d/nuc-apply.sh"
+sudo install -m 755 -o root -g root "$d/nuc-apply.sh" /usr/local/sbin/nuc-apply
+printf 'cdwr ALL=(root) NOPASSWD: /usr/local/sbin/nuc-apply\n' > "$d/cdwr-agent"
+sudo visudo -cf "$d/cdwr-agent"
+sudo install -m 440 -o root -g root "$d/cdwr-agent" /etc/sudoers.d/cdwr-agent
+sudo /usr/local/sbin/nuc-apply "$sha"
+sudo -u cdwr sudo -n -l /usr/local/sbin/nuc-apply
+rm -r "$d"
+```
+
+The first run installs everything in `nuc/` that differs and enables its timers, the
+installer's own `cdwr-agent-nuc.timer` included. The last line prints the installer's path when
+`cdwr` may run it.
