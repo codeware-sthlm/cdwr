@@ -59,7 +59,9 @@ describe('ReviewPanel', () => {
     expect(rows).toHaveLength(3);
     expect(text(rows[0])).toContain('merged');
     expect(text(rows[0])).toContain('Add the thing');
-    expect(text(rows[1])).toContain('deploy cms success');
+    // With no ticket the target leads the row, and only there
+    expect(text(rows[1])).toContain('deploy success');
+    expect(text(rows[1]).split('cms')).toHaveLength(2);
     expect(text(rows[2])).toContain('held');
     expect(text(rows[2])).toContain('a rename needs your look');
     expect(rows.map((r) => r.getAttribute('data-own-item'))).toEqual([

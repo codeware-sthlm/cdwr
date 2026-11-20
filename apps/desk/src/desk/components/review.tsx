@@ -59,8 +59,14 @@ const Section = ({
 );
 
 /** What an own action reads as: its kind and result in a few words */
-const ownWording = ({ kind, result, target }: ReviewOwnItem): string => {
-  const what = target ? ` ${target}` : '';
+const ownWording = ({
+  kind,
+  result,
+  target,
+  ticket
+}: ReviewOwnItem): string => {
+  // Without a ticket the target already stands first in the row
+  const what = target && ticket ? ` ${target}` : '';
   if (kind === 'merge')
     return (
       {
