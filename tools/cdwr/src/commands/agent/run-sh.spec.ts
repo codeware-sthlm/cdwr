@@ -1520,10 +1520,12 @@ describe('run.sh label_parts', () => {
 
 describe('run.sh watch_prs', () => {
   const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
-  const source = SCRIPT.slice(
-    SCRIPT.indexOf('watch_prs() {'),
-    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('watch_prs() {')) + 3
-  );
+  const cutFn = (name: string) =>
+    SCRIPT.slice(
+      SCRIPT.indexOf(`${name}() {`),
+      SCRIPT.indexOf('\n}\n', SCRIPT.indexOf(`${name}() {`)) + 3
+    );
+  const source = [cutFn('hold_list_warn'), cutFn('watch_prs')].join('\n');
   const canRun =
     spawnSync('zsh', ['-c', 'true']).status === 0 &&
     spawnSync('jq', ['--version']).status === 0;
@@ -1862,10 +1864,12 @@ describe('run.sh watch_prs', () => {
 
 describe('run.sh read_deploy', () => {
   const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
-  const source = SCRIPT.slice(
-    SCRIPT.indexOf('read_deploy() {'),
-    SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('read_deploy() {')) + 3
-  );
+  const cutFn = (name: string) =>
+    SCRIPT.slice(
+      SCRIPT.indexOf(`${name}() {`),
+      SCRIPT.indexOf('\n}\n', SCRIPT.indexOf(`${name}() {`)) + 3
+    );
+  const source = [cutFn('deploy_warn'), cutFn('read_deploy')].join('\n');
   const canRun =
     spawnSync('zsh', ['-c', 'true']).status === 0 &&
     spawnSync('jq', ['--version']).status === 0;
@@ -1976,14 +1980,23 @@ describe('run.sh read_deploy', () => {
     });
   });
 
-  it.skipIf(!canRun)('prints nothing and warns once when a read fails', () => {
-    writeFileSync(join(root, 'gh-fail'), '');
-    const r = run(merged, [newest]);
-    expect(r.stdout).toBe('');
-    expect(read('records')).toBe(
-      'warn COD-5 watch: could not read the deploy\n'
-    );
-  });
+  it.skipIf(!canRun)(
+    'prints nothing and warns once an hour when a read fails',
+    () => {
+      writeFileSync(join(root, 'gh-fail'), '');
+      const r = run(merged, [newest]);
+      expect(r.stdout).toBe('');
+      expect(read('records')).toBe(
+        'warn COD-5 watch: could not read the deploy\n'
+      );
+      // The next tick notes it again, but the warn row waits an hour
+      run(merged, [newest]);
+      expect(read('notes').split('\n').filter(Boolean)).toHaveLength(2);
+      expect(read('records')).toBe(
+        'warn COD-5 watch: could not read the deploy\n'
+      );
+    }
+  );
 
   it.skipIf(!canRun).each([
     ['not merged on its own', { ...merged, autoMerge: undefined }],

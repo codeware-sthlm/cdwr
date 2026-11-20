@@ -75,7 +75,12 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
     mkdirSync(seed);
     git(seed, 'init', '-q', '-b', 'main');
     writeFileSync(join(seed, 'a.txt'), 'one\n');
-    git(seed, 'add', 'a.txt');
+    mkdirSync(join(seed, 'tools/cdwr/agent-queue'), { recursive: true });
+    copyFileSync(
+      HOLD_PATHS_PATH,
+      join(seed, 'tools/cdwr/agent-queue/hold-paths.txt')
+    );
+    git(seed, 'add', '.');
     git(seed, 'commit', '-q', '-m', 'seed');
     git(dir, 'clone', '-q', '--bare', seed, 'origin.git');
     wt = join(dir, 'codeware-cod-705');
@@ -182,18 +187,29 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
       ]);
     });
 
-    it('holds when there is no hold list beside the script', () => {
-      const bare = join(dir, 'bare');
-      mkdirSync(bare);
-      copyFileSync(SCRIPT_PATH, join(bare, 'review-diff.sh'));
-      copyFileSync(WATCH_JQ_PATH, join(bare, 'watch.jq'));
+    it("judges by the list on origin/main, never the branch's own copy", () => {
+      writeFileSync(
+        join(wt, 'tools/cdwr/agent-queue/hold-paths.txt'),
+        '# nothing held\n'
+      );
+      mkdirSync(join(wt, 'apps/cms/src/migrations'), { recursive: true });
+      writeFileSync(join(wt, 'apps/cms/src/migrations/x.ts'), 'x\n');
+      expect(mergeLine(run(wt).stdout)).toEqual([
+        'Merge: held: apps/cms/src/migrations/x.ts matches apps/cms/src/migrations/** (one-way on tenant data), +1 more'
+      ]);
+    });
+
+    it('holds when origin/main has no hold list', () => {
+      git(wt, 'checkout', '-q', 'main');
+      git(wt, 'rm', '-q', 'tools/cdwr/agent-queue/hold-paths.txt');
+      git(wt, 'commit', '-q', '-m', 'no list');
+      git(wt, 'push', '-q', 'origin', 'main');
+      git(wt, 'checkout', '-q', BRANCH);
       writeFileSync(join(wt, 'a.txt'), 'two\n');
-      const result = spawnSync('zsh', [join(bare, 'review-diff.sh'), wt], {
-        encoding: 'utf8'
-      });
+      const result = run(wt);
       expect(result.status).toBe(0);
       expect(mergeLine(result.stdout)).toEqual([
-        'Merge: held: no hold list beside review-diff.sh'
+        'Merge: held: no hold list on origin/main'
       ]);
     });
 
@@ -201,13 +217,12 @@ describe.skipIf(!hasZsh)('review-diff.sh', () => {
       const bare = join(dir, 'bare');
       mkdirSync(bare);
       copyFileSync(SCRIPT_PATH, join(bare, 'review-diff.sh'));
-      copyFileSync(HOLD_PATHS_PATH, join(bare, 'hold-paths.txt'));
       writeFileSync(join(wt, 'a.txt'), 'two\n');
       const result = spawnSync('zsh', [join(bare, 'review-diff.sh'), wt], {
         encoding: 'utf8'
       });
       expect(mergeLine(result.stdout)).toEqual([
-        'Merge: held: no hold list beside review-diff.sh'
+        'Merge: held: no watch.jq beside review-diff.sh'
       ]);
     });
   });
