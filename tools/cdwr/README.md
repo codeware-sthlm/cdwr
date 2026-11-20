@@ -94,6 +94,16 @@ cdwr infisical resolve --path=/apps/cms    # per key: inherited, vault, or vault
 cdwr infisical cache --path=/apps/cms      # refresh apps/cms/.env.offline for OFFLINE=1; counts only, never values
 ```
 
+Three commands let the agent host write derived or non-secret values at an app folder (production or
+preview only, `/apps/<app>` or `/tenants/<slug>/apps/<app>`, never `DEPLOY_ENABLED` or
+`SITE_GATE_PASSWORD`). None prints a value; they back the `secret-*` apply-list kinds:
+
+```sh
+cdwr infisical copy-secret -e production -f /apps/cms --from KEY_A --to KEY_B     # copy, never overwrite
+cdwr infisical rewrite-url -e production -f /apps/cms --key KEY_A --host h --port 6543 --user u   # keeps the password
+cdwr infisical set-config  -e production -f /apps/cms --key KEY_A --value 4        # number, true/false or https url
+```
+
 `--path` defaults to `/apps/cms`. `--app` names the app that runs when it reads another app's folder
 (`--path=/apps/cms --app=headless` uses `apps/headless/.env.offline` and `.env`); it defaults to the path's app. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
 writes a local file (mode 600, gitignored) so it asks first; `--dry-run` lists the folders it

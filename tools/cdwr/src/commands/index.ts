@@ -197,6 +197,25 @@ export const ENTRIES: Entry[] = [
     load: () => import('./infisical/delete-folder').then((m) => m.default)
   },
   {
+    path: ['infisical', 'copy-secret'],
+    summary: 'Copy one secret to another key in the same Infisical folder',
+    danger: 'mutate',
+    load: () => import('./infisical/copy-secret').then((m) => m.default)
+  },
+  {
+    path: ['infisical', 'rewrite-url'],
+    summary:
+      'Rewrite the host, port or user of a url secret, keeping its password',
+    danger: 'mutate',
+    load: () => import('./infisical/rewrite-url').then((m) => m.default)
+  },
+  {
+    path: ['infisical', 'set-config'],
+    summary: 'Set one non-secret config value in an Infisical folder',
+    danger: 'mutate',
+    load: () => import('./infisical/set-config').then((m) => m.default)
+  },
+  {
     path: ['infisical', 'session'],
     summary: 'Whether the Infisical CLI is installed and logged in',
     danger: 'read',

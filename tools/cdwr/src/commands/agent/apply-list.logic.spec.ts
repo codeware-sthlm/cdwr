@@ -120,7 +120,16 @@ describe('validateItem', () => {
     'deploy-workflow cms production',
     `supabase-migration ${MIGRATION_FILE}`,
     'supabase-function ingest',
-    'agent-deploy'
+    'agent-deploy',
+    'secret-copy production /apps/cms DATABASE_URL DIRECT_DATABASE_URL',
+    'secret-copy preview /tenants/moon/apps/cms A_B C_D',
+    'secret-rewrite production /apps/cms DATABASE_URL host=aws-0-eu-central-1.pooler.supabase.com port=6543 user=postgres.abcdefgh after-deploy',
+    'secret-rewrite preview /apps/cms DATABASE_URL port=6543',
+    'secret-set production /apps/cms DATABASE_POOL_MAX 4',
+    'secret-set preview /apps/cms FEATURE_ON true',
+    'secret-set production /apps/cms PUBLIC_URL https://example.com/path',
+    'secret-set production /apps/cms POOL https://a.b/path',
+    'secret-rewrite production /apps/cms DATABASE_URL port=6543'
   ])('accepts %s', (spec) => {
     expect(validateItem(first(`- [ ] ${spec}`), ctx)).toBeNull();
   });
@@ -149,7 +158,137 @@ describe('validateItem', () => {
     ['supabase-function missing', 'no function missing'],
     ['supabase-function ../x', 'no function ../x'],
     ['agent-deploy now', 'agent-deploy takes 0 arguments'],
-    ['reboot cdwr-cms', 'unknown kind reboot']
+    ['reboot cdwr-cms', 'unknown kind reboot'],
+    ['secret-copy production /apps/cms A', 'secret-copy takes 4 arguments'],
+    ['secret-copy development /apps/cms A B', 'only production or preview'],
+    ['secret-copy production /agent-queue A B', 'bad folder /agent-queue'],
+    ['secret-copy production / A B', 'bad folder /'],
+    ['secret-copy production /apps A B', 'bad folder /apps'],
+    ['secret-copy production /apps/cms/ A B', 'bad folder /apps/cms/'],
+    ['secret-copy production /apps/Cms A B', 'bad folder /apps/Cms'],
+    [
+      'secret-copy production /tenants/moon/apps A B',
+      'bad folder /tenants/moon/apps'
+    ],
+    ['secret-copy production /apps/cms a B', 'bad key a'],
+    [
+      'secret-copy production /apps/cms DEPLOY_ENABLED B',
+      'DEPLOY_ENABLED is off limits'
+    ],
+    [
+      'secret-copy production /apps/cms A SITE_GATE_PASSWORD',
+      'SITE_GATE_PASSWORD is off limits'
+    ],
+    ['secret-copy production /apps/cms A A', 'from and to are the same key'],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL',
+      'secret-rewrite takes <env> <folder> <key> and 1–3 parts'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL port=1 port=2',
+      'port given twice'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL password=x',
+      'unknown part password'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL port=0',
+      'port must be 1–65535'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL port=65536',
+      'port must be 1–65535'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL host=A.com',
+      'bad host A.com'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL user=a@b',
+      'bad user a@b'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL host=a.com host=b',
+      'host given twice'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL host=a.com port=1 user=u host=b',
+      'secret-rewrite takes <env> <folder> <key> and 1–3 parts'
+    ],
+    [
+      'secret-rewrite development /apps/cms DATABASE_URL port=1',
+      'only production or preview'
+    ],
+    [
+      'secret-rewrite production /apps/cms SITE_GATE_PASSWORD port=1',
+      'SITE_GATE_PASSWORD is off limits'
+    ],
+    [
+      'secret-set production /apps/cms DATABASE_POOL_MAX',
+      'secret-set takes 4 arguments'
+    ],
+    ['secret-set development /apps/cms A 4', 'only production or preview'],
+    [
+      'secret-set production /apps/cms DEPLOY_ENABLED true',
+      'DEPLOY_ENABLED is off limits'
+    ],
+    [
+      'secret-set production /apps/cms API_KEY 4',
+      'API_KEY looks like a secret'
+    ],
+    [
+      'secret-set production /apps/cms X_TOKEN 4',
+      'X_TOKEN looks like a secret'
+    ],
+    [
+      'secret-set production /apps/cms X_SECRET 4',
+      'X_SECRET looks like a secret'
+    ],
+    [
+      'secret-set production /apps/cms X_PASSWORD 4',
+      'X_PASSWORD looks like a secret'
+    ],
+    [
+      'secret-set production /apps/cms POOL max',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms POOL http://x.com',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms POOL https://u:p@x.com',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms POOL https://u@x.com/',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms POOL -4',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-rewrite production /apps/cms DATABASE_URL port=06543',
+      'port must be 1–65535'
+    ],
+    [
+      'secret-set production /apps/cms POOL https://x.com?u@p',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms POOL https://hooks.example.com/x?token=abc',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms POOL https://a.b/#k=v',
+      'value must be a number, true, false or an https url without credentials'
+    ],
+    [
+      'secret-set production /apps/cms SITE_URL 4',
+      'SITE_URL must be an https url without credentials'
+    ]
   ])('refuses %s', (spec, why) => {
     expect(validateItem(first(`- [ ] ${spec}`), ctx)).toBe(why);
   });
