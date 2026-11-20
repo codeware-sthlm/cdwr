@@ -1,14 +1,20 @@
-import type { ReviewFinding } from '@codeware/shared/util/agent-review';
+import {
+  OWN_TROUBLE,
+  type ReviewFinding,
+  type ReviewOwn,
+  type ReviewOwnItem
+} from '@codeware/shared/util/agent-review';
 import { type ReactNode, useState } from 'react';
 
-import { seenAgo, usd } from '../format';
+import { dayKey, dayLabel, seenAgo, usd } from '../format';
 import type { ReviewRecord } from '../types';
 import { NOTE_MAX, findingChip } from '../view/review';
 
 import { WNOTE, WSNOOZE_CARD } from './before';
 import { Chip, Empty } from './items';
-import { GROUP, META } from './items-ui';
+import { GROUP, ID, META } from './items-ui';
 import { IdLink, Inline, TicketButton } from './links';
+import { STALE } from './sheet-ui';
 
 // The review the scheduler's review run wrote: on the tree page as a panel, and its findings as AI chips on the rows and in the Ticket sheet
 
@@ -52,6 +58,62 @@ const Section = ({
   </div>
 );
 
+/** What an own action reads as: its kind and result in a few words */
+const ownWording = ({ kind, result, target }: ReviewOwnItem): string => {
+  const what = target ? ` ${target}` : '';
+  if (kind === 'merge')
+    return (
+      {
+        merged: 'merged',
+        'left-queue': 'left the merge queue',
+        held: 'held',
+        refused: 'could not join the merge queue'
+      }[result] ?? `merge ${result}`
+    );
+  if (kind === 'deploy') return `deploy${what} ${result}`;
+  if (kind === 'apply') return `${result}${what}`;
+  // The tag already stands first in the row, in place of a ticket
+  return `self-deploy ${result.replace('-', ' ')}`;
+};
+
+/** What the queue did on its own since the last review, oldest first; nothing when the review did not read it */
+const OwnPart = ({ own }: { own: ReviewOwn | null }) => {
+  if (!own) return null;
+  const since = dayLabel(dayKey(own.since));
+  if (!own.items.length)
+    return <p className={META}>Nothing on its own since {since}.</p>;
+  return (
+    <Section title={`On its own since ${since}`}>
+      <ul className="grid gap-1.5" data-own>
+        {[...own.items]
+          .sort((a, b) => a.at.localeCompare(b.at))
+          .map((o, n) => {
+            const trouble = OWN_TROUBLE.includes(o.result);
+            return (
+              <li
+                key={`${o.at}-${n}`}
+                className={ROW}
+                data-own-item={trouble ? 'trouble' : ''}
+              >
+                {o.ticket ? (
+                  <IdLink id={o.ticket} />
+                ) : o.target ? (
+                  <span className={ID}>{o.target}</span>
+                ) : null}
+                <span className={trouble ? STALE : ''}>
+                  {trouble ? '! ' : ''}
+                  {ownWording(o)}
+                </span>
+                {o.title ? <span>{o.title}</span> : null}
+                {o.reason ? <span className={META}>{o.reason}</span> : null}
+              </li>
+            );
+          })}
+      </ul>
+    </Section>
+  );
+};
+
 type PanelProps = {
   review: ReviewRecord | null;
   now: Date;
@@ -89,6 +151,7 @@ export const ReviewPanel = ({
   const ran = seenAgo(review.at, now);
   return (
     <section className={PANEL} aria-label="Review">
+      <OwnPart own={review.own} />
       <p className="text-[0.92rem]">{review.brief}</p>
       {review.actions.length ? (
         <Section title="Do next">

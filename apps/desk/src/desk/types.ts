@@ -1,7 +1,9 @@
-import type { Review } from '@codeware/shared/util/agent-review';
+import type { Review, ReviewOwn } from '@codeware/shared/util/agent-review';
 
 /** The newest `reviews` row: what the review run handed the desk, and when, where and at what cost */
 export type ReviewRecord = Review & {
+  /** What the queue did on its own since the last review; null when not read or from before it was */
+  own: ReviewOwn | null;
   id: number;
   host: string;
   /** ISO */

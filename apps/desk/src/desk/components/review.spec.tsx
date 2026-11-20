@@ -51,6 +51,38 @@ describe('ReviewPanel', () => {
     expect(text(panel().c)).toContain('reviewed 30 min ago · $0.42 · sonnet');
   });
 
+  it('lists what the queue did on its own, oldest first, and marks trouble', () => {
+    const { c } = panel();
+    const t = text(c);
+    expect(t).toContain('On its own since Oct 28');
+    const rows = [...c.querySelectorAll('[data-own-item]')];
+    expect(rows).toHaveLength(3);
+    expect(text(rows[0])).toContain('merged');
+    expect(text(rows[0])).toContain('Add the thing');
+    expect(text(rows[1])).toContain('deploy cms success');
+    expect(text(rows[2])).toContain('held');
+    expect(text(rows[2])).toContain('a rename needs your look');
+    expect(rows.map((r) => r.getAttribute('data-own-item'))).toEqual([
+      '',
+      '',
+      'trouble'
+    ]);
+    expect(rows[0].querySelector('a')?.getAttribute('href')).toContain('COD-6');
+  });
+
+  it('says so when the queue did nothing on its own', () => {
+    const own = { since: '2026-10-28T08:00:00', until: '', items: [] };
+    const { c } = panel({ review: reviewRecord({ own }) });
+    expect(text(c)).toContain('Nothing on its own since Oct 28.');
+    expect(c.querySelector('[data-own]')).toBeNull();
+  });
+
+  it('shows nothing about it when the review did not read it', () => {
+    const { c } = panel({ review: reviewRecord({ own: null }) });
+    expect(text(c)).not.toContain('on its own');
+    expect(c.querySelector('[data-own]')).toBeNull();
+  });
+
   it('sends a review from its button', () => {
     const { c, onReview } = panel();
     const button = c.querySelector<HTMLButtonElement>('[data-review-now]');

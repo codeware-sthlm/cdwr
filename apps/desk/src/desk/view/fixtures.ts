@@ -48,6 +48,42 @@ export const reviewRecord = (
   ],
   stale: [{ ticket: 'COD-4', why: 'Untouched for 30 days', evidence: [] }],
   suggestions: [{ ticket: 'COD-5', why: 'A quick win' }],
+  own: {
+    since: '2026-10-28T08:00:00',
+    until: '2026-10-29T11:30:00',
+    items: [
+      {
+        at: '2026-10-28T09:00:00',
+        kind: 'merge',
+        ticket: 'COD-6',
+        pr: 61,
+        title: 'Add the thing',
+        target: null,
+        result: 'merged',
+        reason: null
+      },
+      {
+        at: '2026-10-28T10:00:00',
+        kind: 'deploy',
+        ticket: null,
+        pr: null,
+        title: null,
+        target: 'cms',
+        result: 'success',
+        reason: null
+      },
+      {
+        at: '2026-10-29T08:00:00',
+        kind: 'merge',
+        ticket: 'COD-7',
+        pr: 62,
+        title: 'Fix the other thing',
+        target: null,
+        result: 'held',
+        reason: 'a rename needs your look'
+      }
+    ]
+  },
   cost: 0.42,
   model: 'sonnet',
   ...over
