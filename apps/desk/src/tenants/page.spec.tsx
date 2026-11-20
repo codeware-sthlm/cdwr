@@ -300,6 +300,7 @@ describe('problems', () => {
       tenant('acme', {
         sentry: sentry({
           count24h: 31,
+          open24h: 31,
           count7d: 31,
           top: topIssue()
         }),
@@ -420,6 +421,7 @@ describe('problems', () => {
     const dialog = screen.getByRole('dialog', { name: 'ACME' });
     const text = dialog.textContent ?? '';
     expect(text).toContain('Last 24 hours');
+    expect(text).toContain('31 events, 31 open');
     expect(text).toContain('4.4');
     expect(text).toContain('CMS-4F');
     expect(text).toContain('TypeError: x is undefined');

@@ -85,6 +85,7 @@ export const tenant = (
 export const sentry = (over: Record<string, Json> = {}): Json => ({
   org: 'cdwr',
   count24h: 2,
+  open24h: 2,
   count7d: 14,
   top: null,
   ...over

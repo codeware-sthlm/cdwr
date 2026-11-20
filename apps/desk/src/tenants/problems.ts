@@ -32,10 +32,10 @@ export type Problem = {
   actions: string[];
 };
 
-/** Issues in the last 24 hours from which an error spike counts */
+/** Open (unresolved) error events in the last 24 hours from which an error spike counts; a row from before the open count uses its total */
 export const ERRORS_MIN = 10;
 
-/** How many times the daily average of the six days before the 24 hours an error spike must reach */
+/** How many times the daily average of all events over the six days before the 24 hours an error spike must reach */
 export const ERRORS_FACTOR = 3;
 
 /** The health check gives up after this many seconds */
@@ -182,9 +182,10 @@ const connections = (row: TenantRow): Problem[] => {
 const errors = (row: TenantRow): Problem[] => {
   const s = row.sentry;
   if (!s) return [];
+  // A row from before the open count falls back on the total
+  const open = s.open24h ?? s.count24h;
   const average = Math.max(0, (s.count7d - s.count24h) / 6);
-  if (s.count24h < ERRORS_MIN || s.count24h < ERRORS_FACTOR * average)
-    return [];
+  if (open < ERRORS_MIN || open < ERRORS_FACTOR * average) return [];
   const rounded = Math.round(average * 10) / 10;
   return [
     {
@@ -192,16 +193,16 @@ const errors = (row: TenantRow): Problem[] => {
       row: row.key,
       kind: 'errors',
       severity: 'warn',
-      title: `Error spike: ${s.count24h} in 24 hours`,
+      title: `Error spike: ${open}${s.open24h === null ? '' : ' open'} in 24 hours`,
       evidence: [
-        `${s.count24h} events in 24 hours against a daily average of ${rounded} over the six days before`,
+        `24 h: ${s.count24h} events${s.open24h === null ? ' (open count not read yet)' : `, ${open} open`}, against a daily average of ${rounded} over the six days before`,
         ...(s.top
           ? [
               `${s.top.shortId} · ${s.top.level} · ${s.top.count}× · ${s.top.title}`
             ]
           : [])
       ],
-      threshold: `At least ${ERRORS_MIN} events in 24 hours and at least ${ERRORS_FACTOR} times the daily average of the six days before; with no average, ${ERRORS_MIN} is enough.`,
+      threshold: `At least ${ERRORS_MIN} open (unresolved) events in 24 hours and at least ${ERRORS_FACTOR} times the daily average of all events, open or resolved, over the six days before; with no average, ${ERRORS_MIN} is enough. A regression reopens its issue, so its events count as open again.`,
       actions: ['Open the issue in Sentry', 'Check what deployed in that time']
     }
   ];

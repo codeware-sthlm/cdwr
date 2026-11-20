@@ -184,6 +184,7 @@ describe('parseTenantRow', () => {
     expect(row.sentry).toEqual({
       org: 'cdwr',
       count24h: 2,
+      open24h: 2,
       count7d: 14,
       top: {
         shortId: 'CMS-4F',
@@ -262,6 +263,11 @@ describe('parseTenantRow', () => {
     });
     expect(odd({ sentry: sentry({ count24h: 'many' }) }).sentry).toBeNull();
     expect(odd({ sentry: sentry({ org: 'a.b/c' }) }).sentry).toBeNull();
+    expect(odd({ sentry: sentry({ open24h: 'few' }) }).sentry).toMatchObject({
+      open24h: null,
+      count24h: 2,
+      count7d: 14
+    });
     expect(odd({ sentry: sentry({ top: { shortId: 3 } }) }).sentry?.top).toBe(
       null
     );

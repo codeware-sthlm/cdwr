@@ -79,10 +79,11 @@ export const utcClock = (iso: string): string => {
   return Number.isFinite(t) ? new Date(t).toISOString().slice(11, 16) : iso;
 };
 
-/** A tenant's Sentry read: the issue counts of the last day and week, and the busiest issue */
+/** A tenant's Sentry read: the event counts of the last day (all, and of unresolved issues; null on a row from before the open count) and week, and the busiest issue */
 export type TenantSentry = {
   org: string;
   count24h: number;
+  open24h: number | null;
   count7d: number;
   top: { shortId: string; level: string; count: number; title: string } | null;
 };
@@ -217,6 +218,9 @@ const sentry = (value: unknown): TenantSentry | null => {
   return {
     org,
     count24h,
+    // A row from before the open count has none; a malformed value reads the same way, so the
+    // rule falls back on the total rather than dropping the whole sentry read
+    open24h: num(value['open24h']),
     count7d,
     top:
       isRecord(top) && shortId && count !== null
