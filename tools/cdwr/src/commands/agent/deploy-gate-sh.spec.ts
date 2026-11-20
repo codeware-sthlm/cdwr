@@ -227,6 +227,79 @@ describe('deploy-gate.sh', () => {
     );
   });
 
+  describe('nuc-record', () => {
+    const read = () =>
+      JSON.parse(readFileSync(join(home, 'nuc-apply.json'), 'utf8')) as unknown;
+
+    it('keeps only the known fields', () => {
+      const result = run(
+        ['nuc-record'],
+        JSON.stringify({
+          sha: 'a'.repeat(40),
+          main: 'b'.repeat(40),
+          at: '2026-01-01T00:00:00Z',
+          phase: 'ok',
+          changed: ['units', 'sudoers'],
+          reason: 'why',
+          extra: 'dropped',
+          token: 'secret'
+        })
+      );
+      expect(result.status).toBe(0);
+      expect(read()).toEqual({
+        sha: 'a'.repeat(40),
+        main: 'b'.repeat(40),
+        at: '2026-01-01T00:00:00Z',
+        phase: 'ok',
+        changed: ['units', 'sudoers'],
+        reason: 'why'
+      });
+      expect(existsSync(join(home, 'nuc-apply.json.tmp'))).toBe(false);
+    });
+
+    it('turns missing and non-string values into null', () => {
+      const result = run(
+        ['nuc-record'],
+        JSON.stringify({ sha: 'a'.repeat(40), main: 5, at: ['x'], phase: {} })
+      );
+      expect(result.status).toBe(0);
+      expect(read()).toEqual({
+        sha: 'a'.repeat(40),
+        main: null,
+        at: null,
+        phase: null,
+        changed: null,
+        reason: null
+      });
+    });
+
+    it('drops non-strings from changed', () => {
+      run(
+        ['nuc-record'],
+        JSON.stringify({ changed: ['units', 5, null, {}, 'x'] })
+      );
+      expect(read()).toMatchObject({ changed: ['units', 'x'] });
+    });
+
+    it.each(['"units"', '{"a":1}', '5', 'null'])(
+      'makes changed null when it is %s',
+      (changed) => {
+        run(['nuc-record'], `{"changed": ${changed}}`);
+        expect(read()).toMatchObject({ changed: null });
+      }
+    );
+
+    it.each(['[]', '"x"', '5', 'null', 'not json', ''])(
+      'rejects %s with exit 2 and writes nothing',
+      (input) => {
+        const result = run(['nuc-record'], input);
+        expect(result.status).toBe(2);
+        expect(result.stderr).toContain('JSON object');
+        expect(existsSync(join(home, 'nuc-apply.json'))).toBe(false);
+      }
+    );
+  });
+
   describe('notify', () => {
     it('calls notify.sh beside the script, urgent from self-deploy, with the joined message', () => {
       const bin = join(root, 'bin');

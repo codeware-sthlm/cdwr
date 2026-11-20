@@ -6,6 +6,7 @@
 #   unpause         remove the paused file
 #   job             print job.json, nothing when there is none
 #   record          write deploy.json for the desk from the JSON object on stdin
+#   nuc-record      write nuc-apply.json from the JSON object on stdin (apps/agent-host/nuc/nuc-sync.sh)
 #   notify <text>   an urgent notice through notify.sh, from the source self-deploy
 # Every subcommand only reads or writes files in the queue home; the host gets no shell in here.
 # DEPLOY_GATE_PROC replaces /proc in specs.
@@ -61,19 +62,35 @@ record() {
   print -r -- "$body" > "$HOME_DIR/deploy.json.tmp" && mv -f "$HOME_DIR/deploy.json.tmp" "$HOME_DIR/deploy.json"
 }
 
+# What nuc-sync.sh saw nuc-apply do, for the apply kind nuc-install (run.sh apply_nuc)
+nuc_record() {
+  local body
+  body="$(jq -c '
+    def s: if type == "string" then . else null end;
+    if type != "object" then error("not an object") else . end
+    | {sha: (.sha | s), main: (.main | s), at: (.at | s), phase: (.phase | s),
+       changed: (if (.changed | type) == "array" then [.changed[] | strings] else null end),
+       reason: (.reason | s)}')" && [[ -n "$body" ]] || {
+    print -ru2 -- "deploy-gate: nuc-record takes a JSON object on stdin"
+    return 2
+  }
+  print -r -- "$body" > "$HOME_DIR/nuc-apply.json.tmp" && mv -f "$HOME_DIR/nuc-apply.json.tmp" "$HOME_DIR/nuc-apply.json"
+}
+
 case "${1:-}" in
   state) state ;;
   pause) pause ;;
   unpause) rm -f "$HOME_DIR/paused" ;;
   job) [[ -f "$HOME_DIR/job.json" ]] && cat "$HOME_DIR/job.json"; exit 0 ;;
   record) record ;;
+  nuc-record) nuc_record ;;
   notify)
     shift
     (( $# )) || { print -ru2 -- "deploy-gate: notify takes a message"; exit 2; }
     "$HERE/notify.sh" --level urgent --source self-deploy "$*"
     ;;
   *)
-    print -ru2 -- "usage: deploy-gate.sh state|pause|unpause|job|record|notify <text>"
+    print -ru2 -- "usage: deploy-gate.sh state|pause|unpause|job|record|nuc-record|notify <text>"
     exit 2
     ;;
 esac
