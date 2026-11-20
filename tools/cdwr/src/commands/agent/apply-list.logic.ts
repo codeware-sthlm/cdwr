@@ -1,3 +1,5 @@
+import { DEPLOYED } from '../../services/environment';
+
 /** An app Fly runs for the platform: the host cms, or a cms or headless client of a tenant */
 export const APP = /^cdwr-cms$|^cdwr-(cms|headless)-[a-z0-9][a-z0-9-]*$/;
 
@@ -10,6 +12,155 @@ export const MIGRATION =
 
 /** The name of a function of the agent-queue telemetry database */
 export const FUNCTION = /^[a-z0-9][a-z0-9-]*$/;
+
+/** The environments the NUC writes secrets in */
+export const ENV = new RegExp(`^(${DEPLOYED.join('|')})$`);
+
+/** An app folder in Infisical: `/apps/<app>` or `/tenants/<slug>/apps/<app>` */
+export const FOLDER =
+  /^\/(apps\/[a-z0-9][a-z0-9-]*|tenants\/[a-z0-9][a-z0-9-]*\/apps\/[a-z0-9][a-z0-9-]*)$/;
+
+/** A secret key */
+export const SECRET_KEY = /^[A-Z][A-Z0-9_]*$/;
+
+/** Keys no secret kind may read or write */
+export const FORBIDDEN_KEYS: readonly string[] = [
+  'DEPLOY_ENABLED',
+  'SITE_GATE_PASSWORD'
+];
+
+/** Key endings that mark a secret, which `secret-set` never writes */
+export const SECRET_SUFFIX = /_(SECRET|PASSWORD|TOKEN|KEY)$/;
+
+export const REWRITE_HOST = /^[a-z0-9.-]+$/;
+export const REWRITE_USER = /^[a-z0-9._-]+$/;
+/** A port without a leading zero, as the NUC reads it */
+export const REWRITE_PORT = /^[1-9][0-9]{0,4}$/;
+
+/** The parts `secret-rewrite` can change */
+export const REWRITE_PARTS = ['host', 'port', 'user'] as const;
+export type RewritePart = (typeof REWRITE_PARTS)[number];
+
+const SET_NUMBER = /^[0-9]+$/;
+
+/** Why a key cannot be used by a secret kind, or null */
+export const keyProblem = (key: string): string | null =>
+  FORBIDDEN_KEYS.includes(key)
+    ? `${key} is off limits`
+    : SECRET_KEY.test(key)
+      ? null
+      : `bad key ${key}`;
+
+/** Why an environment and folder cannot be used by a secret kind, or null */
+export const placeProblem = (env: string, folder: string): string | null =>
+  (ENV.test(env) ? null : 'only production or preview') ??
+  (FOLDER.test(folder) ? null : `bad folder ${folder}`);
+
+/** Whether a value is an https url without credentials, query or fragment */
+export const isPlainHttpsUrl = (value: string): boolean => {
+  if (!value.startsWith('https://')) return false;
+  const authority = value.slice('https://'.length).split('/')[0] ?? '';
+  if (authority === '' || authority.includes('@')) return false;
+  if (/[\s\p{Cc}?#]/u.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.username === '' &&
+      url.password === '' &&
+      url.search === '' &&
+      url.hash === ''
+    );
+  } catch {
+    return false;
+  }
+};
+
+/** Why a `secret-set` key and value are refused, or null */
+export const setProblem = (key: string, value: string): string | null => {
+  const bad = keyProblem(key);
+  if (bad) return bad;
+  if (SECRET_SUFFIX.test(key)) return `${key} looks like a secret`;
+  const plain = SET_NUMBER.test(value) || value === 'true' || value === 'false';
+  if (!plain && !isPlainHttpsUrl(value)) {
+    return 'value must be a number, true, false or an https url without credentials';
+  }
+  if (key.endsWith('_URL') && !isPlainHttpsUrl(value)) {
+    return `${key} must be an https url without credentials`;
+  }
+  return null;
+};
+
+/** Why a rewrite part is refused, or null */
+export const rewritePartProblem = (
+  part: string,
+  value: string
+): string | null => {
+  switch (part) {
+    case 'host':
+      return REWRITE_HOST.test(value) ? null : `bad host ${value}`;
+    case 'port': {
+      const port = Number(value);
+      return REWRITE_PORT.test(value) && port <= 65535
+        ? null
+        : 'port must be 1–65535';
+    }
+    case 'user':
+      return REWRITE_USER.test(value) ? null : `bad user ${value}`;
+    default:
+      return `unknown part ${part}`;
+  }
+};
+
+/** Why the `part=value` arguments of `secret-rewrite` are refused, or null */
+export function rewritePartsProblem(parts: readonly string[]): string | null {
+  if (parts.length === 0) return 'secret-rewrite needs host=, port= or user=';
+  const seen = new Set<string>();
+  for (const arg of parts) {
+    const at = arg.indexOf('=');
+    const part = at === -1 ? arg : arg.slice(0, at);
+    const value = at === -1 ? '' : arg.slice(at + 1);
+    if (seen.has(part)) return `${part} given twice`;
+    seen.add(part);
+    const bad = rewritePartProblem(part, value);
+    if (bad) return bad;
+  }
+  return null;
+}
+
+/** Why a `secret-copy` environment, folder and keys are refused, or null */
+export const copyProblem = (
+  environment: string,
+  folder: string,
+  from: string,
+  to: string
+): string | null =>
+  placeProblem(environment, folder) ??
+  keyProblem(from) ??
+  keyProblem(to) ??
+  (from === to ? 'from and to are the same key' : null);
+
+/** Why a `secret-set` environment, folder, key and value are refused, or null */
+export const setConfigProblem = (
+  environment: string,
+  folder: string,
+  key: string,
+  value: string
+): string | null =>
+  placeProblem(environment, folder) ??
+  keyProblem(key) ??
+  setProblem(key, value);
+
+/** Why a `secret-rewrite` environment, folder, key and `part=value` arguments are refused, or null */
+export const rewriteProblem = (
+  environment: string,
+  folder: string,
+  key: string,
+  parts: readonly string[]
+): string | null =>
+  placeProblem(environment, folder) ??
+  keyProblem(key) ??
+  rewritePartsProblem(parts);
 
 const ITEM = /^\s*[-*] \[( |x|X)\] (.*)$/;
 const SEPARATOR = ' · ';
@@ -132,6 +283,22 @@ export function validateItem(
     }
     case 'agent-deploy':
       return wrongCount(0);
+    case 'secret-copy': {
+      const [env = '', folder = '', from = '', to = ''] = args;
+      return wrongCount(4) ?? copyProblem(env, folder, from, to);
+    }
+    case 'secret-rewrite': {
+      const [env = '', folder = '', key = '', ...parts] = args;
+      return (
+        (args.length < 4 || args.length > 6
+          ? 'secret-rewrite takes <env> <folder> <key> and 1–3 parts'
+          : null) ?? rewriteProblem(env, folder, key, parts)
+      );
+    }
+    case 'secret-set': {
+      const [env = '', folder = '', key = '', value = ''] = args;
+      return wrongCount(4) ?? setConfigProblem(env, folder, key, value);
+    }
     default:
       return `unknown kind ${kind}`;
   }

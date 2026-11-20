@@ -9,6 +9,7 @@ export const ENVIRONMENTS = EnvironmentSchema.options;
 
 /** The deployed environments, without development */
 export const DEPLOYED = ['production', 'preview'] as const;
+export type Deployed = (typeof DEPLOYED)[number];
 
 const HINTS: Record<string, string> = {
   development: 'your local setup',
