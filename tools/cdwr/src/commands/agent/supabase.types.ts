@@ -488,6 +488,7 @@ export type Database = {
           findings: Json;
           stale: Json;
           suggestions: Json;
+          own: Json;
           cost: number | null;
           model: string | null;
         };
@@ -500,6 +501,7 @@ export type Database = {
           findings?: Json;
           stale?: Json;
           suggestions?: Json;
+          own?: Json;
           cost?: number | null;
           model?: string | null;
         };
@@ -512,8 +514,48 @@ export type Database = {
           findings?: Json;
           stale?: Json;
           suggestions?: Json;
+          own?: Json;
           cost?: number | null;
           model?: string | null;
+        };
+        Relationships: [];
+      };
+      own_actions: {
+        Row: {
+          event_id: string;
+          at: string;
+          host: string;
+          kind: string;
+          ticket: string | null;
+          pr: number | null;
+          title: string | null;
+          target: string | null;
+          result: string;
+          reason: string | null;
+        };
+        Insert: {
+          event_id: string;
+          at: string;
+          host: string;
+          kind: string;
+          ticket?: string | null;
+          pr?: number | null;
+          title?: string | null;
+          target?: string | null;
+          result: string;
+          reason?: string | null;
+        };
+        Update: {
+          event_id?: string;
+          at?: string;
+          host?: string;
+          kind?: string;
+          ticket?: string | null;
+          pr?: number | null;
+          title?: string | null;
+          target?: string | null;
+          result?: string;
+          reason?: string | null;
         };
         Relationships: [];
       };
