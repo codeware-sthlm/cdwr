@@ -1039,15 +1039,19 @@ OWN="$HOME_DIR/own.jsonl"
 own_event() {
   $check && return 0
   # own_actions is public: a token in a reason (an error GitHub or a command printed) is withheld
-  # before it is kept, by the token prefixes review-check.logic.ts knows
+  # before it is kept, by the token prefixes and the long run with a digit that review-check.logic.ts
+  # knows; a full commit sha is public and stays
   jq -c --arg host "$(telemetry_host)" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
     def clean: if type == "string"
       then gsub("eyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+|\\bsk[-_][A-Za-z0-9_-]{8,}|\\b(gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}|\\bxox[abprs]-[A-Za-z0-9-]{10,}|\\bAKIA[0-9A-Z]{16}\\b|\\b(sbp_|sb_secret_)[A-Za-z0-9_]{20,}|-----BEGIN[^\n]*"; "(withheld)")
+        | gsub("(?<r>[A-Za-z0-9+]{40,})"; .r | if test("^[0-9a-f]{40}$") or (test("[0-9]") | not) then . else "(withheld)" end)
       else . end;
     {event_id, at: (.at // $at), host: $host, kind, ticket: (.ticket // null), pr: (.pr // null),
      title: (.title // null | clean), target: (.target // null | clean), result, reason: (.reason // null | clean)}' \
-    <<<"$1" >> "$OWN" 2>/dev/null || note "warn: own: an event was not kept"
-  return 0
+    <<<"$1" >> "$OWN" 2>/dev/null && return 0
+  # False, so a caller that stamps what it recorded tries again next tick
+  note "warn: own: an event was not kept"
+  return 1
 }
 # The NUC's self-deploy, once deploy.json settles on a tag and phase not yet recorded. deploy-gate.sh
 # writes the file from another process, so the comparison runs here, each tick, against the
@@ -1065,7 +1069,7 @@ own_self_deploy() {
   [[ -n "$ev" ]] || return 0
   key="$(jq -r '.event_id' <<<"$ev")"
   [[ "$(cat "$stamp" 2>/dev/null)" == "$key" ]] && return 0
-  own_event "$ev"
+  own_event "$ev" || return 0
   print -r -- "$key" > "$stamp"
 }
 # own.jsonl trimmed to its last 7 days, one line per event, and those sent; a row already in the
