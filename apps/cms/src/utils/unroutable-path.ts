@@ -3,13 +3,16 @@ import { SENTRY_TUNNEL_ROUTE } from './sentry-tunnel';
 /**
  * Prefixes whose paths may hold a dot: media files under the api, the
  * admin's assets, Next's own files (`/__nextjs_font` among the dev server's),
- * the statistics script, the Sentry tunnel and the well-known files.
+ * the statistics script, the Sentry tunnel and the well-known files. Local
+ * media storage writes uploads into `public/media` and `public/stock-media`.
  */
 const OPEN_PREFIXES = [
   '/api',
   '/admin',
   '/_next',
   '/__nextjs_font',
+  '/media',
+  '/stock-media',
   '/stats',
   SENTRY_TUNNEL_ROUTE,
   '/.well-known'
@@ -29,7 +32,9 @@ export const SITE_FILES = [
   '/site-icon.png',
   '/site-icon.svg',
   '/site-apple-icon.png',
-  '/cdwr-cloud.png'
+  '/cdwr-cloud.png',
+  // Generated into `public/` by `nx studio-types cms`, for the admin's editor
+  '/studio-types.json'
 ];
 
 /** The admin's block images in `public/blocks` */
