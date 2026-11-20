@@ -72,6 +72,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./fly/restart').then((m) => m.default)
   },
   {
+    path: ['fly', 'scale'],
+    summary: 'Set how many machines a Fly app runs',
+    danger: 'mutate',
+    load: () => import('./fly/scale').then((m) => m.default)
+  },
+  {
     path: ['fly', 'deploy'],
     summary: 'Deploy an app to Fly through the deployment workflow',
     danger: 'mutate',
@@ -292,6 +298,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/review-check').then((m) => m.default)
   },
   {
+    path: ['agent', 'apply-list', 'check'],
+    summary: 'Check the apply list in a PR-ready comment',
+    danger: 'read',
+    load: () => import('./agent/apply-list').then((m) => m.default)
+  },
+  {
     path: ['agent', 'run'],
     summary: 'Start a planning run now',
     danger: 'mutate',
@@ -314,6 +326,12 @@ export const ENTRIES: Entry[] = [
     summary: 'Update the agent container on a host to a new image',
     danger: 'mutate',
     load: () => import('./agent/deploy').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'supabase-migrate'],
+    summary: 'Apply a queue migration to the agent-queue database, once',
+    danger: 'mutate',
+    load: () => import('./agent/supabase-migrate').then((m) => m.default)
   },
   {
     path: ['agent', 'notify'],
