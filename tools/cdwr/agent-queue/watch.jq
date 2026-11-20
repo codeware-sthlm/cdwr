@@ -743,8 +743,12 @@ def hold_check_lines($lines):
   | if $i == null then "Merge: held: no changed file in the diff"
     else
       ($lines[:$i] | join("\n") | hold_globs) as $holds
-      | [ $lines[$i:][] | capture("^diff --git a/(?<a>.*) b/(?<b>.*)$") | .a, .b ] as $files
-      | merge_line(hold_matches($files; $holds))
+      | [ $lines[$i:][] | select(startswith("diff --git ")) ] as $headers
+      | [ $headers[] | capture("^diff --git a/(?<a>.*) b/(?<b>.*)$") | .a, .b ] as $files
+      # A header in another form (no prefix, quoted paths) holds rather than passing unread
+      | if ($holds | length) == 0 then "Merge: held: the hold list is empty"
+        elif ($files | length) < 2 * ($headers | length) then "Merge: held: a diff header could not be read"
+        else merge_line(hold_matches($files; $holds)) end
     end;
 
 # True when the report says `**Ask me before merging**` on a line of its own
@@ -774,30 +778,39 @@ def merge_verdict($node; $holds):
      elif any(($node.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($c.createdAt | epoch))
        then "Håkan commented after the PR-ready comment"
      elif ($node | asks_before_merging) then "the report says Ask me before merging"
+     elif .reviewDecision == "CHANGES_REQUESTED" then "a review requested changes"
      elif .files == null then "the PR's files were not read"
      elif .files.pageInfo.hasNextPage == true then "too many changed files to check them all"
      elif ($files | length) == 0 then "no changed files read"
+     elif ($holds | length) == 0 then "the hold list is empty"
+     # GitHub gives a renamed file's new path only, so a move out of a held directory can't be seen
+     elif any((.files.nodes // [])[]; .changeType == "RENAMED") then "a file was renamed, and GitHub doesn't give its old path"
      else (hold_matches($files; $holds) as $m
            | if ($m | length) > 0 then merge_line($m) | sub("^Merge: held: "; "") else $d end)
      end) as $v
   | { verdict: $v, claimed: $claimed,
       transient: (($v | startswith("ok ") | not)
-                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main)"))) };
+                  # Review feedback is a session's pick, and Håkan knows his own comment
+                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main|[0-9]+ unresolved thread|too many review threads|Håkan commented)"))) };
 
 # The settled outcome of the production deploy after a self-merge, from the Fly Deployment push
 # runs for the merge commit and the annotations of that run's jobs: success, failure, skipped (the
-# deploy guard's "is older than" warning, COD-845), else pending, or unknown 3 hours after the merge
+# deploy guard's "is older than" warning, COD-845), superseded (cancelled: the push concurrency
+# group cancels a pending run when a newer merge queues, and that run deploys this code too), else
+# pending, or unknown 3 hours after the merge
 def deploy_state($runs; $notes; $mergedAt; $now):
   ([ ($runs.workflow_runs // [])[] ] | sort_by(.created_at // "") | last) as $r
   | if $r == null or $r.status != "completed" then
       (if $mergedAt != null and ($now - ($mergedAt | epoch)) > 10800 then "unknown" else "pending" end)
-    elif ($r.conclusion // "") | IN("failure", "cancelled", "timed_out", "startup_failure") then "failure"
+    elif $r.conclusion == "cancelled" then "superseded"
+    elif ($r.conclusion // "") | IN("failure", "timed_out", "startup_failure") then "failure"
     elif any(($notes // [])[]; (.annotation_level // "") == "warning" and ((.message // "") | test("is older than")))
       then "skipped"
     elif $r.conclusion == "success" then "success"
     else "unknown" end;
 
-def deploy_settled: IN("success", "failure", "skipped", "unknown");
+# True for a watch entry whose PR the watch enqueued at least once; a refused enqueue is no try
+def self_merged: (.autoMerge.tries // 0) >= 1;
 
 # True while a ticket that merged on its own keeps agent:review for its deploy, so it stays
 # watched: up to 3 hours while the deploy is not read, and until Håkan clears the label once it
@@ -805,7 +818,7 @@ def deploy_settled: IN("success", "failure", "skipped", "unknown");
 def deploy_hold($now; $watch):
   (($watch // {})[.identifier] // {}) as $w
   | ($w.deploy.state // "pending") as $s
-  | $w.autoMerge != null and $w.state == "merged"
+  | ($w | self_merged) and $w.state == "merged"
     and (($s | IN("failure", "skipped", "unknown"))
          or ($s == "pending" and ($w.mergedAt == null or ($now - ($w.mergedAt | epoch)) <= 10800)));
 
@@ -1267,7 +1280,7 @@ def ticket_gaps($now; $watch):
       if $w.state == "merged" and $open and .updatedAt != null and ($now - (.updatedAt | epoch)) > 3600
       then gap($t; "merged-not-done"; "\($t) is still open though its PR merged";
                "Set \($t) Done (the PR body lacked Closes)") else empty end,
-      if $w.autoMerge != null and $w.state == "merged" and (($w.deploy.state // "") | IN("failure", "skipped", "unknown"))
+      if ($w | self_merged) and $w.state == "merged" and (($w.deploy.state // "") | IN("failure", "skipped", "unknown"))
       then gap($t; "self-merge-deploy";
                "\($t) merged on its own and its production deploy \({ failure: "failed", skipped: "was skipped by the deploy guard", unknown: "never settled" }[$w.deploy.state])";
                "Check the Fly Deployment run" + (if ($w.deploy.run // null) != null then " (\($w.deploy.run))" else "" end)

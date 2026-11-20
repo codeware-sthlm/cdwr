@@ -1067,7 +1067,6 @@ describe('pr_state', () => {
       mergedAt: null,
       mergeCommit: null,
       ci: null,
-      mergeCommit: null,
       copilot: 'none'
     });
   });
@@ -1097,7 +1096,6 @@ describe('pr_state', () => {
       mergedAt: null,
       mergeCommit: null,
       ci: null,
-      mergeCommit: null,
       copilot: 'none'
     });
   });
@@ -7923,7 +7921,8 @@ describe('merge_verdict', () => {
     ).toEqual({
       verdict: '1 unresolved thread',
       claimed: true,
-      transient: false
+      // Review feedback is a session's pick, so no held notice
+      transient: true
     });
   });
 
@@ -8457,12 +8456,13 @@ describe('deploy after a self-merge', () => {
   });
 
   describe('deploy_state', () => {
-    it.each(['failure', 'cancelled', 'timed_out'])(
-      '%s is failure',
-      (conclusion) => {
-        expect(state([completed(conclusion)])).toBe('failure');
-      }
-    );
+    it('cancelled is superseded: a newer merge deploys this code too', () => {
+      expect(state([completed('cancelled')])).toBe('superseded');
+    });
+
+    it.each(['failure', 'timed_out'])('%s is failure', (conclusion) => {
+      expect(state([completed(conclusion)])).toBe('failure');
+    });
 
     it('is skipped for a success carrying the deploy guard warning', () => {
       expect(
