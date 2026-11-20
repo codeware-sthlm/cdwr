@@ -224,7 +224,8 @@ query($n: Int!) {
       isDraft
       mergedAt
       mergeCommit { oid }
-      files(first: 100) { pageInfo { hasNextPage } nodes { path } }
+      reviewDecision
+      files(first: 100) { pageInfo { hasNextPage } nodes { path changeType } }
       mergeable
       mergeStateStatus
       mergeQueueEntry { state }
@@ -1142,7 +1143,7 @@ relabel_merged() {
 read_deploy() {
   setopt local_options no_err_exit
   local entry="$1" id="${2:-}" sha runs newest rid jobs job notes="$HOME_DIR/watch-notes.jsonl" state
-  jq -e '.autoMerge != null and .state == "merged" and .mergeCommit != null
+  jq -e '(.autoMerge.tries // 0) >= 1 and .state == "merged" and .mergeCommit != null
     and ((.deploy.state // "pending") == "pending")' >/dev/null 2>&1 <<<"$entry" || return 0
   sha="$(jq -r '.mergeCommit' <<<"$entry")"
   runs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=$sha&event=push" 2>/dev/null)" ||
@@ -1152,7 +1153,7 @@ read_deploy() {
   : > "$notes"
   if [[ "$(jq -r '.status == "completed" and .conclusion == "success"' <<<"$newest")" == true ]]; then
     rid="$(jq -r '.id' <<<"$newest")"
-    jobs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/runs/$rid/jobs" 2>/dev/null)" ||
+    jobs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/runs/$rid/jobs?per_page=100" 2>/dev/null)" ||
       { rm -f "$notes"; note "warn: watch: could not read the deploy jobs of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
     for job in ${(f)"$(jq -r '.jobs[]?.id' <<<"$jobs")"}; do
       gh_read gh api "repos/codeware-sthlm/cdwr/check-runs/$job/annotations" 2>/dev/null >> "$notes" ||
@@ -1176,7 +1177,8 @@ watch_prs() {
   gh_identity_or_note
   # The hold list sits beside watch.jq. Unread, no PR merges on its own
   holds="$(watch -Rsc 'include "watch"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
-  [[ -n "$holds" ]] || holds=null
+  # An empty list is a broken install, not a licence: it reads as unread
+  [[ -n "$holds" && "$holds" != "[]" ]] || holds=null
   [[ "$holds" == null ]] && { note "warn: watch: hold-paths.txt not read, no PR merges on its own"; record warn "" "watch: hold-paths.txt not read"; }
   # Every page up to 5, through a file as in record_activity; only tickets past the cap go unwatched
   : > "$pages"

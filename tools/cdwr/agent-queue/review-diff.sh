@@ -30,10 +30,11 @@ base="$(git -C "$wt" merge-base origin/main HEAD)" || refuse "no merge base with
 out="$dir/review.diff"
 trap 'rm -f "$out.$$"' EXIT
 {
-  git -C "$wt" diff "$base"
+  # Fixed prefixes, whatever the host's diff config says: the Merge line reads `a/` and `b/`
+  git -C "$wt" diff --src-prefix=a/ --dst-prefix=b/ "$base"
   # Untracked files, which no diff against a commit shows; --no-index exits 1 on a difference
   git -C "$wt" ls-files --others --exclude-standard -z | while IFS= read -r -d '' file; do
-    git -C "$wt" diff --no-index -- /dev/null "$file" || true
+    git -C "$wt" diff --no-index --src-prefix=a/ --dst-prefix=b/ -- /dev/null "$file" || true
   done
 } > "$out.$$"
 mv -f "$out.$$" "$out"

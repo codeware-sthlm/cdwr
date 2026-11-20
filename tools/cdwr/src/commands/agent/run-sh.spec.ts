@@ -30,7 +30,7 @@ const READS = [
   /^gh api "repos\/codeware-sthlm\/cdwr\/actions\/workflows\/fly-deployment\.yml\/runs\?head_sha=\$1&per_page=5" /,
   /^gh api --paginate "repos\/codeware-sthlm\/cdwr\/pulls\/\$pr\/files" /,
   // read_deploy: the Fly Deployment runs of a merge commit, their jobs and annotations
-  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(workflows\/fly-deployment\.yml\/runs\?head_sha=|runs\/\$rid\/jobs)|check-runs\/\$job\/annotations)/
+  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(workflows\/fly-deployment\.yml\/runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/
 ];
 
 // The Copilot request and the merge command (the desk's, and the watch's own) are run.sh's only
@@ -1893,7 +1893,7 @@ describe('run.sh read_deploy', () => {
       `watch() { jq -L "${DIR}" "$@"; }`,
       'watch_err() { :; }',
       // Every read is logged; the answer is by URL, and gh-fail makes the run list fail
-      'gh_read() { print -r -- "$3" >> "$ROOT/calls"; case "$3" in *workflows*) [[ -f "$ROOT/gh-fail" ]] && return 1; cat "$ROOT/runs.json" ;; */jobs) cat "$ROOT/jobs.json" ;; *) cat "$ROOT/annotations.json" ;; esac; }',
+      'gh_read() { print -r -- "$3" >> "$ROOT/calls"; case "$3" in *workflows*) [[ -f "$ROOT/gh-fail" ]] && return 1; cat "$ROOT/runs.json" ;; */jobs\\?*) cat "$ROOT/jobs.json" ;; *) cat "$ROOT/annotations.json" ;; esac; }',
       source,
       `read_deploy '${JSON.stringify(entry)}' COD-5`
     ].join('\n');
@@ -1935,7 +1935,7 @@ describe('run.sh read_deploy', () => {
       expect(deploy.at).toMatch(/^\d{4}-\d\d-\d\dT/);
       expect(read('calls').split('\n').filter(Boolean)).toEqual([
         'repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=cafe123&event=push',
-        'repos/codeware-sthlm/cdwr/actions/runs/99/jobs',
+        'repos/codeware-sthlm/cdwr/actions/runs/99/jobs?per_page=100',
         'repos/codeware-sthlm/cdwr/check-runs/11/annotations',
         'repos/codeware-sthlm/cdwr/check-runs/12/annotations'
       ]);
