@@ -34,9 +34,13 @@ cp /opt/agent-queue/* "$AGENT_QUEUE_HOME/"
 # the sessions dir and the notice spool theirs to write. Docker applies the image's modes to a
 # new, empty volume only, so this runs at every start.
 chgrp queue /work && chmod 1775 /work
-chgrp -R queue "$AGENT_QUEUE_HOME" && chmod 750 "$AGENT_QUEUE_HOME" && chmod -R g+rX "$AGENT_QUEUE_HOME"
+# Only what this user owns: a file a session wrote is the session's, already in the queue group
+# through the setgid dir, and a chgrp or chmod on it fails and ends the start
+own=("$AGENT_QUEUE_HOME" "$AGENT_QUEUE_HOME"/**/*(DNU))
+chgrp queue "${own[@]}" && chmod g+rX "${own[@]}" && chmod 750 "$AGENT_QUEUE_HOME"
 install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"
-chmod -R g+rwX "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"
+own=("$AGENT_QUEUE_HOME"/{sessions,notify-spool}/**/*(DNU))
+(( ! ${#own} )) || chmod g+rwX "${own[@]}"
 # Ticket worktrees from before the session user are linked to this checkout and are this user's:
 # a session can neither use nor remove them, so they go, once. A deploy waits for an idle queue,
 # so none holds work in flight, and every branch is on origin.
@@ -225,13 +229,17 @@ relay_sessions() {
   for file in "$AGENT_QUEUE_HOME"/sessions/*.json(N); do
     stamp="$file.relayed"
     [[ -f "$stamp" && ! "$file" -nt "$stamp" ]] && continue
-    # The stamp takes the file's time before the read, so a change during the send is seen next
-    touch -r "$file" "$stamp"
-    IFS=$'\x1f' read -r id host state detail <<<"$(jq -r '[.id, .host, .state, .detail] | map(. // "") | join("\u001f")' "$file" 2>/dev/null)" || continue
-    [[ -n "$id" ]] || continue
+    # The stamp takes the file's time before the read, so a change during the send is seen next,
+    # and replaces the old one only once the row is sent: a failed send is tried again
+    touch -r "$file" "$stamp.new"
+    IFS=$'\x1f' read -r id host state detail <<<"$(jq -r '[.id, .host, .state, .detail] | map(. // "") | join("\u001f")' "$file" 2>/dev/null)" || { rm -f "$stamp.new"; continue; }
     # A file mirrored from another host is that host's session, which sends its own row
-    [[ -z "$host" || "$host" == "$(hostname -s)" ]] || continue
-    telemetry_session "$id" implement "$state" "$detail" || true
+    if [[ -z "$id" ]] || [[ -n "$host" && "$host" != "$(hostname -s)" ]] ||
+        telemetry_session "$id" implement "$state" "$detail" strict; then
+      mv -f "$stamp.new" "$stamp"
+    else
+      rm -f "$stamp.new"
+    fi
   done
 }
 relay_notices() {

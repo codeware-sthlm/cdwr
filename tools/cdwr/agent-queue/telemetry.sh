@@ -104,7 +104,7 @@ supabase_upsert() {
   [[ -n "${AGENT_SUPABASE_URL:-}" && -n "${AGENT_SUPABASE_SERVICE_KEY:-}" ]] || return 0
   local resolution=merge-duplicates
   [[ "${4:-merge}" == ignore ]] && resolution=ignore-duplicates
-  _supabase_post "${AGENT_SUPABASE_URL%/}/rest/v1/$1?on_conflict=$2" "resolution=$resolution,return=minimal" "$3"
+  _supabase_post "${AGENT_SUPABASE_URL%/}/rest/v1/$1?on_conflict=$2" "resolution=$resolution,return=minimal" "$3" "${5:-}"
 }
 
 supabase_delete() {
@@ -193,7 +193,8 @@ telemetry_queue_state() {
     "$(jq -nc --arg r "$9" 'def orNull: if . == "" then null else . end; {review: ($r | orNull)}')" >/dev/null || return 0
 }
 
-# telemetry_session <id> <kind> [state] [detail]: an empty or missing state or detail is null
+# telemetry_session <id> <kind> [state] [detail] [strict]: an empty or missing state or detail is
+# null; with strict, a failed send returns 1 (the container's relay tries it again)
 telemetry_session() {
   telemetry_on || return 0
   local body
@@ -201,7 +202,7 @@ telemetry_session() {
     --arg host "$(telemetry_host)" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
     def orNull: if . == "" then null else . end;
     {id: $id, host: $host, kind: $kind, last_seen: $now, state: ($state | orNull), detail: ($detail | orNull)}')" || return 0
-  supabase_upsert sessions id "$body" merge
+  supabase_upsert sessions id "$body" merge "${5:-}"
 }
 
 telemetry_host_metrics() {

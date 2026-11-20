@@ -179,12 +179,20 @@ describe('agent-host entrypoint', () => {
 
   it('shares /work, the queue home and the sessions dir with the session user at every start', () => {
     expect(entrypoint).toContain('chgrp queue /work && chmod 1775 /work');
+    // Only what the queue user owns: a session's file would fail the chgrp and end the start
     expect(entrypoint).toContain(
-      'chgrp -R queue "$AGENT_QUEUE_HOME" && chmod 750 "$AGENT_QUEUE_HOME" && chmod -R g+rX "$AGENT_QUEUE_HOME"'
+      'own=("$AGENT_QUEUE_HOME" "$AGENT_QUEUE_HOME"/**/*(DNU))'
+    );
+    expect(entrypoint).toContain(
+      'chgrp queue "${own[@]}" && chmod g+rX "${own[@]}" && chmod 750 "$AGENT_QUEUE_HOME"'
     );
     expect(entrypoint).toContain(
       'install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"'
     );
+    expect(entrypoint).toContain(
+      'own=("$AGENT_QUEUE_HOME"/{sessions,notify-spool}/**/*(DNU))'
+    );
+    expect(entrypoint).not.toMatch(/chgrp -R|chmod -R/);
     // Before the clone and the first run, right after the queue files are copied
     expect(entrypoint.indexOf('chgrp queue /work')).toBeGreaterThan(
       entrypoint.indexOf('cp /opt/agent-queue/*')
@@ -214,16 +222,19 @@ describe('agent-host entrypoint', () => {
 
   it('relays the session rows and the spooled notices from the sampler, as the queue user', () => {
     expect(entrypoint).toContain(
-      'telemetry_session "$id" implement "$state" "$detail" || true'
+      'telemetry_session "$id" implement "$state" "$detail" strict; then'
     );
     expect(entrypoint).toContain('stamp="$file.relayed"');
-    // Stamped before the read, so a change during the send is relayed next time; a mirrored
-    // file from another host is that host's to send
-    expect(entrypoint.indexOf('touch -r "$file" "$stamp"')).toBeLessThan(
+    // Stamped with the time before the read, so a change during the send is relayed next time,
+    // and only once the row is sent; a mirrored file from another host is that host's to send
+    expect(entrypoint.indexOf('touch -r "$file" "$stamp.new"')).toBeLessThan(
       entrypoint.indexOf('telemetry_session "$id" implement')
     );
+    expect(entrypoint).toMatch(
+      /"\$detail" strict; then\n\s+mv -f "\$stamp\.new" "\$stamp"\n\s+else\n\s+rm -f "\$stamp\.new"/
+    );
     expect(entrypoint).toContain(
-      '[[ -z "$host" || "$host" == "$(hostname -s)" ]] || continue'
+      '[[ -n "$host" && "$host" != "$(hostname -s)" ]]'
     );
     expect(entrypoint).toContain(
       'for file in "$AGENT_QUEUE_HOME"/notify-spool/*.json(N); do'
