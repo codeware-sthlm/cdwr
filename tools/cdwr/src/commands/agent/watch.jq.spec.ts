@@ -717,6 +717,202 @@ describe('apply list', () => {
     ])('%s', (_name, kind, args, envelope, expected) => {
       expect(verdict(kind, args, envelope)).toBe(expected);
     });
+
+    describe('the secret kinds', () => {
+      const F = '/apps/cms';
+      const at = { environment: 'production', folder: F };
+      const copy = ['production', F, 'DATABASE_URL', 'DIRECT_DATABASE_URL'];
+      const rewrite = ['production', F, 'DATABASE_URL', 'port=6543'];
+      const set = ['production', F, 'DATABASE_POOL_MAX', '4'];
+      const shape = (over: Record<string, unknown> = {}) => ({
+        host: { from: 'a', to: 'b' },
+        port: { from: '5432', to: '6543' },
+        userChanged: true,
+        passwordKept: true,
+        ...over
+      });
+
+      it.each([
+        [
+          'copy absent',
+          'secret-copy',
+          copy,
+          { ...at, from: copy[2], to: copy[3], state: 'absent' },
+          'ok'
+        ],
+        [
+          'copy same',
+          'secret-copy',
+          copy,
+          { ...at, from: copy[2], to: copy[3], state: 'same' },
+          'already copied'
+        ],
+        [
+          'copy different',
+          'secret-copy',
+          copy,
+          { ...at, from: copy[2], to: copy[3], state: 'different' },
+          'DIRECT_DATABASE_URL at /apps/cms already holds another value'
+        ],
+        [
+          'copy from another key',
+          'secret-copy',
+          copy,
+          { ...at, from: 'X', to: copy[3], state: 'absent' },
+          'the dry run read X, not DATABASE_URL'
+        ],
+        [
+          'copy to another key',
+          'secret-copy',
+          copy,
+          { ...at, from: copy[2], to: 'Y', state: 'absent' },
+          'the dry run read Y, not DIRECT_DATABASE_URL'
+        ],
+        [
+          'a secret kind read in another folder',
+          'secret-copy',
+          copy,
+          {
+            environment: 'production',
+            folder: '/apps/x',
+            from: copy[2],
+            to: copy[3],
+            state: 'absent'
+          },
+          'the dry run read /apps/x, not /apps/cms'
+        ],
+        [
+          'a secret kind read in another environment',
+          'secret-set',
+          set,
+          {
+            environment: 'preview',
+            folder: F,
+            key: set[2],
+            state: 'absent',
+            value: '4'
+          },
+          'the dry run read preview, not production'
+        ],
+        [
+          'a secret kind in preview',
+          'secret-set',
+          ['preview', F, 'DATABASE_POOL_MAX', '4'],
+          {
+            environment: 'preview',
+            folder: F,
+            key: 'DATABASE_POOL_MAX',
+            state: 'absent',
+            value: '4'
+          },
+          'ok'
+        ],
+        [
+          'rewrite different',
+          'secret-rewrite',
+          rewrite,
+          { ...at, key: 'DATABASE_URL', state: 'different', shape: shape() },
+          'ok'
+        ],
+        [
+          'rewrite same',
+          'secret-rewrite',
+          rewrite,
+          { ...at, key: 'DATABASE_URL', state: 'same', shape: shape() },
+          'already rewritten'
+        ],
+        [
+          'rewrite absent',
+          'secret-rewrite',
+          rewrite,
+          { ...at, key: 'DATABASE_URL', state: 'absent', shape: shape() },
+          'DATABASE_URL is absent at /apps/cms'
+        ],
+        [
+          'rewrite changing the password',
+          'secret-rewrite',
+          rewrite,
+          {
+            ...at,
+            key: 'DATABASE_URL',
+            state: 'different',
+            shape: shape({ passwordKept: false })
+          },
+          'the rewrite would change the password'
+        ],
+        [
+          'rewrite of another key',
+          'secret-rewrite',
+          rewrite,
+          { ...at, key: 'OTHER_URL', state: 'different', shape: shape() },
+          'the dry run read OTHER_URL, not DATABASE_URL'
+        ],
+        [
+          'set absent',
+          'secret-set',
+          set,
+          { ...at, key: set[2], state: 'absent', value: '4' },
+          'ok'
+        ],
+        [
+          'set different',
+          'secret-set',
+          set,
+          { ...at, key: set[2], state: 'different', value: '4' },
+          'ok'
+        ],
+        [
+          'set same',
+          'secret-set',
+          set,
+          { ...at, key: set[2], state: 'same', value: '4' },
+          'already set'
+        ],
+        [
+          'set of another key',
+          'secret-set',
+          set,
+          { ...at, key: 'Z', state: 'absent', value: '4' },
+          'the dry run read Z, not DATABASE_POOL_MAX'
+        ],
+        [
+          'set of another value',
+          'secret-set',
+          set,
+          { ...at, key: set[2], state: 'absent', value: '5' },
+          'the dry run read another value'
+        ]
+      ])('%s', (_name, kind, args, json, expected) => {
+        expect(verdict(kind, args, env(json))).toBe(expected);
+      });
+
+      // A command with nothing to change ends with `nothing` and no plan object
+      it.each([
+        ['secret-copy', copy, 'already copied'],
+        ['secret-rewrite', rewrite, 'already rewritten'],
+        ['secret-set', set, 'already set']
+      ])('%s takes a nothing run as its tick', (kind, args, nothing) => {
+        expect(
+          verdict(kind, args, { ok: true, command: 'infisical x', nothing })
+        ).toBe(nothing);
+        expect(
+          verdict(kind, args, {
+            ok: true,
+            command: 'infisical x',
+            nothing: 'odd'
+          })
+        ).toBe('the dry run carried no state');
+      });
+
+      it('does not take a nothing run for the other kinds', () => {
+        expect(
+          verdict('scale', ['cdwr-cms', '2'], {
+            ok: true,
+            nothing: 'already 2'
+          })
+        ).toBe('the dry run carried no state');
+      });
+    });
   });
 
   describe('apply_mark', () => {
