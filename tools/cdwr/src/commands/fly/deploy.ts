@@ -89,6 +89,7 @@ export default defineCommand({
     return {
       steps: [{ label: deploymentLabel(deployment), detail: `from ${ref}` }],
       target: { environment, name: app },
+      json: { ...deployment, ref },
       data: { ...deployment, ref }
     };
   },
