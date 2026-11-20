@@ -120,7 +120,8 @@ describe('validateItem', () => {
     'deploy-workflow cms production',
     `supabase-migration ${MIGRATION_FILE}`,
     'supabase-function ingest',
-    'agent-deploy'
+    'agent-deploy',
+    'nuc-install'
   ])('accepts %s', (spec) => {
     expect(validateItem(first(`- [ ] ${spec}`), ctx)).toBeNull();
   });
@@ -149,6 +150,7 @@ describe('validateItem', () => {
     ['supabase-function missing', 'no function missing'],
     ['supabase-function ../x', 'no function ../x'],
     ['agent-deploy now', 'agent-deploy takes 0 arguments'],
+    ['nuc-install abc', 'nuc-install takes 0 arguments'],
     ['reboot cdwr-cms', 'unknown kind reboot']
   ])('refuses %s', (spec, why) => {
     expect(validateItem(first(`- [ ] ${spec}`), ctx)).toBe(why);

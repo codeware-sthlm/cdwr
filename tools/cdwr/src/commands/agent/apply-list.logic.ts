@@ -131,6 +131,7 @@ export function validateItem(
       );
     }
     case 'agent-deploy':
+    case 'nuc-install':
       return wrongCount(0);
     default:
       return `unknown kind ${kind}`;
