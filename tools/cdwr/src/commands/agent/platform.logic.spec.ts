@@ -165,6 +165,7 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
     org: 'cdwr',
     day: { acme: 3 },
     week: { acme: 10, beta: 1 },
+    open: { acme: 2 },
     tops: {
       acme: ok({
         shortId: 'CDWR-1',
@@ -738,18 +739,21 @@ describe('the sentry column', () => {
     expect(row(rows, 'acme').sentry).toEqual({
       org: 'cdwr',
       count24h: 3,
+      open24h: 2,
       count7d: 10,
       top: { shortId: 'CDWR-1', level: 'error', count: 3, title: 'Boom' }
     });
     expect(row(rows, 'beta').sentry).toEqual({
       org: 'cdwr',
       count24h: 0,
+      open24h: 0,
       count7d: 1,
       top: null
     });
     expect(row(rows, SHARED_KEY).sentry).toEqual({
       org: 'cdwr',
       count24h: 0,
+      open24h: 0,
       count7d: 0,
       top: null
     });
@@ -762,6 +766,7 @@ describe('the sentry column', () => {
           org: 'cdwr',
           day: { [SHARED_KEY]: 27 },
           week: { [SHARED_KEY]: 40 },
+          open: { [SHARED_KEY]: 9 },
           tops: {
             [SHARED_KEY]: ok({
               shortId: 'CDWR-9',
@@ -776,6 +781,7 @@ describe('the sentry column', () => {
     expect(row(rows, SHARED_KEY).sentry).toEqual({
       org: 'cdwr',
       count24h: 27,
+      open24h: 9,
       count7d: 40,
       top: { shortId: 'CDWR-9', level: 'error', count: 20, title: 'Host boom' }
     });
@@ -786,6 +792,7 @@ describe('the sentry column', () => {
       org: 'cdwr',
       day: { acme: 1 },
       week: { acme: 1 },
+      open: { acme: 1 },
       tops: {
         acme: ok({
           shortId: 'CDWR-2',
@@ -816,6 +823,7 @@ describe('the sentry column', () => {
           org: 'cdwr',
           day: { acme: 3 },
           week: { acme: 3 },
+          open: { acme: 3 },
           tops: { acme: failed('Sentry answered 500') }
         })
       })
@@ -1658,6 +1666,7 @@ describe('what leaves the machine', () => {
           org: 'cdwr',
           day: { acme: 1 },
           week: { acme: 1 },
+          open: { acme: 1 },
           tops: {
             acme: ok({
               shortId: 'CDWR-1',
