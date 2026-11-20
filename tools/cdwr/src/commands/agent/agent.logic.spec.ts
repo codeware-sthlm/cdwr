@@ -163,6 +163,7 @@ describe('constants', () => {
       'watch.jq',
       'notify.sh',
       'telemetry.sh',
+      'deploy-gate.sh',
       'linear-tools.txt'
     ]);
   });
@@ -363,6 +364,7 @@ describe('queuePaths', () => {
         'watch.jq': '/h/.cdwr/agent-queue/watch.jq',
         'notify.sh': '/h/.cdwr/agent-queue/notify.sh',
         'telemetry.sh': '/h/.cdwr/agent-queue/telemetry.sh',
+        'deploy-gate.sh': '/h/.cdwr/agent-queue/deploy-gate.sh',
         'linear-tools.txt': '/h/.cdwr/agent-queue/linear-tools.txt'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
@@ -609,6 +611,7 @@ describe('filesDrift', () => {
     'watch.jq': 'b',
     'notify.sh': 'n',
     'telemetry.sh': 't',
+    'deploy-gate.sh': 'q',
     'linear-tools.txt': 'l'
   };
 
@@ -622,6 +625,7 @@ describe('filesDrift', () => {
     'watch.jq': 'b',
     'notify.sh': 'n',
     'telemetry.sh': 't',
+    'deploy-gate.sh': 'q',
     'linear-tools.txt': 'l'
   };
 
@@ -636,6 +640,8 @@ describe('filesDrift', () => {
     [{ ...all, 'github-app.sh': undefined }, 'missing'],
     [{ ...all, 'notify.sh': undefined }, 'missing'],
     [{ ...all, 'telemetry.sh': undefined }, 'missing'],
+    [{ ...all, 'deploy-gate.sh': undefined }, 'missing'],
+    [{ ...all, 'deploy-gate.sh': 'x' }, 'stale'],
     [{ ...all, 'notify.sh': 'x' }, 'stale'],
     [{ ...all, 'telemetry.sh': 'x' }, 'stale'],
     [{ ...all, 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],

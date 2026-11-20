@@ -81,6 +81,7 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   tools/cdwr/agent-queue/notify.sh \
   tools/cdwr/agent-queue/checkin.sh \
   tools/cdwr/agent-queue/telemetry.sh \
+  tools/cdwr/agent-queue/deploy-gate.sh \
   tools/cdwr/agent-queue/watch.jq \
   tools/cdwr/agent-queue/linear-tools.txt \
   /opt/agent-queue/
