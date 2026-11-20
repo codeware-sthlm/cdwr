@@ -24,16 +24,28 @@ export const psqlEnv = (url: string): Record<string, string> => ({
   ...libpqEnv(url)
 });
 
-/** Top-level `begin;`, `commit;` and `rollback;` lines, which the wrapper's own transaction owns */
 // A psql meta-command (`\!`, `\o |cmd`, `\copy … program`, `\i`) runs on the host and psql reads
-// one anywhere outside a quote, so any backslash is refused, like a statement that ends or
-// replaces the transaction
-const TRANSACTION_STATEMENT =
-  /\\\S*|^[ \t]*((begin|commit|rollback|abort|end)([ \t]+(transaction|work))?[ \t]*;|(start[ \t]+transaction|begin[ \t]+isolation|commit[ \t]+and)\b[^;\n]*;)/im;
+// one anywhere outside a quote, so any backslash is refused, even inside a string
+const META_COMMAND = /\\\S*/;
 
-/** The offending statement of a migration that manages its own transaction, or undefined */
-export const transactionStatement = (sql: string): string | undefined =>
-  TRANSACTION_STATEMENT.exec(sql)?.[0].trim().toLowerCase();
+// Dollar-quoted bodies, string and identifier literals and comments, which hide no statement
+const LITERAL_OR_COMMENT =
+  /\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$|'(?:[^']|'')*'|"(?:[^"]|"")*"|--[^\n]*|\/\*[\s\S]*?\*\//g;
+
+// The transaction-control statements the wrapper's own transaction owns
+const TRANSACTION_CONTROL =
+  /^(begin|commit|rollback|abort|end|start\s+transaction|savepoint|release|prepare\s+transaction|set\s+(local\s+|session\s+)?transaction|set\s+session\s+characteristics)\b/;
+
+/** The offending statement of a migration that manages its own transaction or runs a psql meta-command, or undefined */
+export const transactionStatement = (sql: string): string | undefined => {
+  const meta = META_COMMAND.exec(sql)?.[0];
+  if (meta) return meta.toLowerCase();
+  return sql
+    .replace(LITERAL_OR_COMMENT, ' ')
+    .split(';')
+    .map((statement) => statement.trim().replace(/\s+/g, ' ').toLowerCase())
+    .find((statement) => TRANSACTION_CONTROL.test(statement));
+};
 
 /** The question the plan asks the ledger, with the file name passed as `-v file=` */
 export const LEDGER_QUERY =

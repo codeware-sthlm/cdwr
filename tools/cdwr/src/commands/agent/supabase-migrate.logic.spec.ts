@@ -91,6 +91,16 @@ describe('transactionStatement', () => {
     'abort;',
     'start transaction isolation level serializable;',
     'commit and chain;',
+    'create table t (id int); commit;',
+    'savepoint s;',
+    'release savepoint s;',
+    'rollback to savepoint s;',
+    'set transaction read only;',
+    'SET LOCAL TRANSACTION isolation level serializable;',
+    'set session characteristics as transaction read only;',
+    "prepare transaction 'x';",
+    "commit prepared 'x';",
+    'select 1 /* c */;\n  commit',
     '\\! curl https://example.com',
     'select 1; \\o |sh',
     "\\copy t from program 'id'"
@@ -105,7 +115,14 @@ describe('transactionStatement', () => {
       '  perform 1;',
       'end',
       '$$;',
+      'create function g() returns void language plpgsql as $body$',
+      'begin',
+      '  if true then perform 1; end if;',
+      'end;',
+      '$body$;',
       '-- commit; later',
+      "insert into t (s) values ('x; commit');",
+      '/* rollback; */',
       'select 1;'
     ].join('\n');
     expect(transactionStatement(sql)).toBeUndefined();
