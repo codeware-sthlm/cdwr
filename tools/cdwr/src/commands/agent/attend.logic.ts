@@ -15,9 +15,11 @@ export interface AttendState {
   main: string;
   /** node_modules was installed from the current pnpm-lock.yaml */
   markerMatches: boolean;
+  /** The installed queue scripts differ from this checkout's */
+  queueDrifts: boolean;
 }
 
-export type AttendStep = 'switch' | 'install' | 'start';
+export type AttendStep = 'switch' | 'install' | 'queue' | 'start';
 
 export type AttendPlan =
   { refuse: string } | { steps: AttendStep[]; main: string };
@@ -51,7 +53,7 @@ export const describeStart = (path: string, ticket?: string): string =>
 export function planAttend(
   state: AttendState,
   path: string,
-  { start }: { start: boolean }
+  { start, queue = false }: { start: boolean; queue?: boolean }
 ): AttendPlan {
   if (!state.exists) return { refuse: `${path} does not exist` };
   if (!state.ofThisClone) {
@@ -66,6 +68,10 @@ export function planAttend(
     ...(state.head !== state.main || !state.markerMatches
       ? (['install'] as const)
       : []),
+    // The checkout moves in apply, so a move may bring new scripts; apply checks again
+    ...(queue && (state.head !== state.main || state.queueDrifts)
+      ? (['queue'] as const)
+      : []),
     ...(start ? (['start'] as const) : [])
   ];
   return { steps, main: state.main };
@@ -78,7 +84,9 @@ export const describeStep = (
 ): string =>
   step === 'switch'
     ? `Switch to origin/main ${short(main)}`
-    : 'Install dependencies when the lockfile changed';
+    : step === 'queue'
+      ? 'Install the queue scripts when they differ from main'
+      : 'Install dependencies when the lockfile changed';
 
 export const upToDate = (main: string): string =>
   `Already at origin/main ${short(main)}`;

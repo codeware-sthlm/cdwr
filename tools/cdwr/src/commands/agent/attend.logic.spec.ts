@@ -24,6 +24,7 @@ const state = (over: Partial<AttendState> = {}): AttendState => ({
   head: OLD,
   main: NEW,
   markerMatches: true,
+  queueDrifts: false,
   ...over
 });
 
@@ -72,6 +73,27 @@ describe('planAttend', () => {
       });
     }
   );
+});
+
+describe('planAttend with the queue scripts', () => {
+  it.each([
+    ['behind', {}, ['switch', 'install', 'queue']],
+    ['current and installed', { head: NEW }, []],
+    ['current, scripts differ', { head: NEW, queueDrifts: true }, ['queue']]
+  ] satisfies [string, Partial<AttendState>, string[]][])(
+    'steps when %s',
+    (_name, over, steps) => {
+      expect(
+        planAttend(state(over), '/w/q', { start: true, queue: true })
+      ).toEqual({ steps: [...steps, 'start'], main: NEW });
+    }
+  );
+
+  it('leaves the scripts alone off the Mac host', () => {
+    expect(
+      planAttend(state({ head: NEW, queueDrifts: true }), '/w/q', NO_START)
+    ).toEqual({ steps: [], main: NEW });
+  });
 });
 
 describe('planAttend with start', () => {
@@ -155,6 +177,9 @@ describe('texts', () => {
     expect(describeStep('switch', NEW)).toBe('Switch to origin/main bbbbbbbb');
     expect(describeStep('install', NEW)).toBe(
       'Install dependencies when the lockfile changed'
+    );
+    expect(describeStep('queue', NEW)).toBe(
+      'Install the queue scripts when they differ from main'
     );
     expect(ready(NEW)).toBe('The checkout is at origin/main bbbbbbbb');
     expect(upToDate(NEW)).toBe('Already at origin/main bbbbbbbb');

@@ -8,8 +8,15 @@ import { z } from 'zod';
 import { defineCommand } from '../../cli/command';
 import { CliError, EXIT } from '../../cli/errors';
 import { input } from '../../cli/inputs';
-import { childEnv, run, runInteractive } from '../../services/shell';
+import { paths, queueDrift } from '../../services/agent-queue';
+import {
+  childEnv,
+  run,
+  runInteractive,
+  shellQuote
+} from '../../services/shell';
 
+import { hostKind } from './agent.logic';
 import {
   type AttendState,
   attendPath,
@@ -100,7 +107,8 @@ export default defineCommand({
       detached: false,
       head: '',
       main: '',
-      markerMatches: false
+      markerMatches: false,
+      queueDrifts: false
     };
     if (exists) {
       const theirs = await commonDir(path).catch(() => undefined);
@@ -117,7 +125,8 @@ export default defineCommand({
           detached: (await git(path, ['branch', '--show-current'])) === '',
           head,
           main,
-          markerMatches: await markerMatches(path)
+          markerMatches: await markerMatches(path),
+          queueDrifts: queueDrift(paths(ctx.env), path) !== 'current'
         };
       } else {
         state = { ...state, exists, ofThisClone };
@@ -130,7 +139,11 @@ export default defineCommand({
       isMainThread &&
       Boolean(process.stdin.isTTY) &&
       Boolean(process.stdout.isTTY);
-    const verdict = planAttend(state, path, { start: starting && terminal });
+    const verdict = planAttend(state, path, {
+      start: starting && terminal,
+      // The container gets its scripts from the image, not from here
+      queue: hostKind(process.platform, ctx.env) === 'launchd'
+    });
     if ('refuse' in verdict) throw new CliError(verdict.refuse);
     if (verdict.steps.includes('start')) {
       // Before anything moves, rather than after the install
@@ -198,6 +211,26 @@ export default defineCommand({
         });
         const lock = await git(path, ['hash-object', 'pnpm-lock.yaml']);
         await writeFile(join(path, MARKER), `${lock}\n`);
+      });
+    }
+    // The checkout is at main now, so its scripts are the ones to compare
+    if (
+      steps.includes('queue') &&
+      queueDrift(paths(ctx.env), path) !== 'current'
+    ) {
+      const line = `cd ${shellQuote(path)} && node tools/cdwr/bin/cdwr.mjs agent install --yes`;
+      await ctx.ui.task('Installing the queue scripts', async () => {
+        await run(
+          'node',
+          ['tools/cdwr/bin/cdwr.mjs', 'agent', 'install', '--yes'],
+          { cwd: path, env: childEnv(ctx.env), timeout: 5 * 60_000 }
+        ).catch(() => {
+          throw new CliError(
+            'The queue scripts did not install',
+            EXIT.failed,
+            `Run by hand: ${line}`
+          );
+        });
       });
     }
     if (!steps.includes('start')) {
