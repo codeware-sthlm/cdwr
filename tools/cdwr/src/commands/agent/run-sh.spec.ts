@@ -421,6 +421,39 @@ describe('run.sh own events', () => {
       }
     );
 
+    it.skipIf(!canRun)(
+      'withholds a long run with a digit and keeps a commit sha and a path',
+      () => {
+        const run = `Ab3${'x'.repeat(40)}`;
+        const sha = 'a'.repeat(39) + '1';
+        const path =
+          'tools/cdwr/agent-queue/supabase/migrations/20261120120000_own_actions.sql';
+        sh([
+          `own_event '${JSON.stringify({
+            event_id: 'e5',
+            kind: 'apply',
+            result: 'refused',
+            title: `token ${run} leaked`,
+            target: path,
+            reason: `merge commit ${sha}`
+          })}'`
+        ]);
+        expect(events()[0]).toMatchObject({
+          title: 'token (withheld) leaked',
+          target: path,
+          reason: `merge commit ${sha}`
+        });
+      }
+    );
+
+    it.skipIf(!canRun)('is false when the event could not be kept', () => {
+      mkdirSync(join(home, 'own.jsonl'));
+      const r = sh([
+        `own_event '{"event_id":"e6","kind":"merge","result":"merged"}' || print -r -- not-kept`
+      ]);
+      expect(r.stdout).toContain('not-kept');
+    });
+
     it.skipIf(!canRun)('does nothing with --check', () => {
       sh([`own_event '{"event_id":"e3","kind":"merge","result":"merged"}'`], {
         check: true
@@ -516,6 +549,16 @@ describe('run.sh own events', () => {
         `self-deploy:${tag}:ok:`
       ]);
     });
+
+    it.skipIf(!canRun)(
+      'leaves the stamp alone when the event could not be kept',
+      () => {
+        deploy({ tag, phase: 'ok' });
+        mkdirSync(join(home, 'own.jsonl'));
+        sh(['own_self_deploy']);
+        expect(file('deploy-recorded')).toBeNull();
+      }
+    );
 
     it.skipIf(!canRun)('does nothing without a deploy.json', () => {
       sh(['own_self_deploy']);
