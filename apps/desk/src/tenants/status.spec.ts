@@ -180,9 +180,9 @@ describe('statusOf', () => {
         parseTenantRow(shared({ deploy: deployRun({ conclusion: 'failure' }) }))
       )
     ).toBe('warn');
-    expect(statusFor({ sentry: sentry({ count24h: 30, count7d: 30 }) })).toBe(
-      'warn'
-    );
+    expect(
+      statusFor({ sentry: sentry({ count24h: 30, open24h: 30, count7d: 30 }) })
+    ).toBe('warn');
   });
 
   it('ranks down over warn over off', () => {

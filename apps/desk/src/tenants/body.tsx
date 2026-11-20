@@ -330,7 +330,11 @@ export const TenantBody = ({
         <Section title="Sentry">
           <dl className={KV}>
             <dt>Last 24 hours</dt>
-            <dd>{row.sentry.count24h}</dd>
+            <dd>
+              {row.sentry.open24h === null
+                ? row.sentry.count24h
+                : `${row.sentry.count24h} events, ${row.sentry.open24h} open`}
+            </dd>
             <dt>Daily average, 7 days</dt>
             <dd>{round1(row.sentry.count7d / 7)}</dd>
             {row.sentry.top ? (

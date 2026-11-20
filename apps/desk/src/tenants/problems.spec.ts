@@ -34,8 +34,8 @@ const tenantProblems = (over: Parameters<typeof tenant>[1] = {}) =>
 const sharedProblems = (over: Parameters<typeof shared>[0] = {}) =>
   problemsOf(parseTenantRow(shared(over)));
 
-const spike = (count24h: number, count7d: number) =>
-  tenantProblems({ sentry: sentry({ count24h, count7d }) });
+const spike = (count24h: number, count7d: number, open24h = count24h) =>
+  tenantProblems({ sentry: sentry({ count24h, count7d, open24h }) });
 
 describe('down', () => {
   it('is raised once per app whose health is read and not ok', () => {
@@ -265,9 +265,53 @@ describe('errors', () => {
     expect(spike(40, 40)).toHaveLength(1);
   });
 
+  it.each([
+    { name: 'a high total with nothing open', args: [60, 60, 0], warns: false },
+    {
+      name: 'a total below the minimum, all open',
+      args: [9, 9, 9],
+      warns: false
+    },
+    {
+      name: 'open over the threshold, whatever the total',
+      args: [500, 500, 12],
+      warns: true
+    },
+    { name: 'no average, 10 open', args: [10, 10, 10], warns: true },
+    { name: 'no average, 9 open', args: [40, 40, 9], warns: false },
+    { name: 'open below 3x the average', args: [60, 90, 14], warns: false }
+  ] as const)('judges the open count: $name', ({ args, warns }) => {
+    expect(spike(...args)).toHaveLength(warns ? 1 : 0);
+  });
+
+  it('falls back on the total for a row without an open count', () => {
+    const row = (count24h: number) =>
+      tenantProblems({
+        sentry: sentry({ count24h, count7d: count24h, open24h: null })
+      });
+    expect(row(10)).toHaveLength(1);
+    expect(row(9)).toEqual([]);
+    expect(row(10)[0].evidence[0]).toContain('open count not read yet');
+    expect(row(10)[0].title).toBe('Error spike: 10 in 24 hours');
+  });
+
+  it('shows the total and the open count in the evidence and the title', () => {
+    const [p] = spike(40, 40, 12);
+    expect(p.title).toBe('Error spike: 12 open in 24 hours');
+    expect(p.evidence[0]).toBe(
+      '24 h: 40 events, 12 open, against a daily average of 0 over the six days before'
+    );
+    expect(p.threshold).toContain('open (unresolved)');
+  });
+
   it('carries the top issue in its evidence and the thresholds in its text', () => {
     const [p] = tenantProblems({
-      sentry: sentry({ count24h: 31, count7d: 31, top: topIssue() })
+      sentry: sentry({
+        count24h: 31,
+        open24h: 31,
+        count7d: 31,
+        top: topIssue()
+      })
     });
     expect(p.key).toBe('acme:errors');
     expect(p.evidence).toContain(
