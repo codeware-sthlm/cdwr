@@ -92,12 +92,16 @@ describe('isUnroutableSitePath', () => {
     '/admin/collections/pages',
     '/_next/data/x.json',
     '/__nextjs_font/inter-latin.woff2',
+    '/media/a.png',
+    '/stock-media/b.jpg',
     '/stats/script.js',
     '/monitoring',
     '/.well-known/security.txt',
     '/robots.txt',
     '/sitemap.xml',
-    '/favicon.ico'
+    '/favicon.ico',
+    // Generated, so it is only on disk after `nx studio-types cms`
+    '/studio-types.json'
   ])('passes %s on', (path) => {
     expect(isUnroutableSitePath(path)).toBe(false);
   });
