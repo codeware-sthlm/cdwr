@@ -304,10 +304,10 @@ to **What to take next**.
    tool instead: a `general-purpose` agent that reads the same file with Read and reports
    findings in the skill's form. When neither could review, open no PR: see **Implement-only
    runs**, step 10. After the last commit, whichever way the review ran, run
-   `tools/cdwr/agent-queue/review-diff.sh <worktree>` from this checkout once more and keep its
-   second line: the `Merge:` line of the PR-ready comment (step 6). It reads the diff's files
-   against `hold-paths.txt` beside the script, main's list, the one the watch reads too. Push and
-   open the PR (plan summary in the body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
+   `tools/cdwr/agent-queue/review-diff.sh <worktree>` once more and keep its second line: the
+   `Merge:` line of the PR-ready comment (step 6). It reads the diff's files against the
+   `hold-paths.txt` on `origin/main`, the list the watch reads too, never the branch's own copy.
+   Push and open the PR (plan summary in the body, ending with `Closes COD-123`). Never `Part of`, `Ref` or another contributing word:
    on merge Linear moves those tickets back to In Progress instead of Done. Notify `info`:
    PR opened. Then park on `copilot` (see **Parking**) and go to **What to take next**.
 6. **Copilot round.** Copilot reviews every PR on its own; handle it before the gate. See
@@ -333,15 +333,17 @@ to **What to take next**.
    own reads agree (`merge_verdict` in `watch.jq`; the README has the full account). The PR
    passes the desk's verdict (open, not a draft, `MERGEABLE`, CI green, no unresolved thread), the
    ticket is `agent:review`, the PR-ready comment has the `Code review:` line and says it merges
-   on its own, no human comment is newer than that comment, the report has no
-   `**Ask me before merging**` line, no review requested changes, and the PR's complete file list
+   on its own, no human comment is newer than that comment (the watch reads the ticket's newest
+   50), the ticket is not parked on a wait, the report has no `**Ask me before merging**` line,
+   no review requested changes, and the PR's complete file list
    matches no glob in `hold-paths.txt`, read from the installed copy beside `watch.jq`, so a PR
    never changes the list for itself. A claimed merge refused for a lasting reason gets one
    `action` notice per head (`held: <why>`), and the PR waits for Håkan as before. A comment by
    Håkan after the PR-ready comment holds the merge for good, `review addressed` or not: once he
-   engages, the merge is his. When the merge queue drops an enqueued PR, the watch retries once
-   on a new head (**A PR that conflicts with main**, **A PR the merge queue refused**); a second
-   drop is Håkan's. After the merge the watch reads the production deploy of the merge commit,
+   engages, the merge is his. When the merge queue drops an enqueued PR for a cause a session
+   can fix, a conflict or failing checks, the watch retries once on a new head (**A PR that
+   conflicts with main**, **A PR the merge queue refused**); any other cause and a second drop
+   are Håkan's. After the merge the watch reads the production deploy of the merge commit,
    and the ticket keeps `agent:review` meanwhile (**What to take next** step 9).
 
    **A check is never a hand-off.** Whatever the agent can read itself (the desk's tables,
@@ -467,14 +469,17 @@ Handle it between tickets.
    When `gh pr view <n> --json mergeable` reads `CONFLICTING`, rebase first (**A PR that
    conflicts with main**).
 2. Each point is its own commit on top; review fixes stack, they aren't squashed.
-3. Reply in each thread `**Agent:** Fixed in <sha>: <what changed>` and resolve it. A point
-   you aren't sure about gets your reading and stays unresolved.
+3. Reply in each thread `**Agent:** Fixed in <sha>: <what changed>`, and resolve it once the
+   fix is pushed (step 5), never before: the watch merges a green head whose threads are all
+   resolved, so a thread resolved before the push can let the head without its fix merge. A
+   point you aren't sure about gets your reading and stays unresolved.
    Judge a Copilot thread as in **Copilot review** step 3: fix what is valid, reply with the
    concrete reason and resolve what doesn't apply, and for a design question leave your reading,
    keep the thread unresolved and list it in the `review addressed` comment.
 4. A point raised as a ticket comment gets a reply comment starting `**Agent:**`.
-5. Run the narrow checks for what changed, push, park on `CI` (see **Parking**) and go to
-   **What to take next**. A failure on resume is fixed and parked again.
+5. Run the narrow checks for what changed, push, resolve the threads whose fixes are in, park on
+   `CI` (see **Parking**) and go to **What to take next**. A failure on resume is fixed and
+   parked again.
 6. Once CI is green, post `**Agent: review addressed**` with what changed and what stays open. The ticket stays
    `agent:review`; notify `action`: review addressed. A comment by Håkan after the PR-ready
    comment holds the watch's own merge for good, so say in the comment that the merge is his.
@@ -663,13 +668,15 @@ and never enqueues that PR again.
 
 3. Judge each thread on its merits; Copilot is often right and sometimes misreads intent.
    - **Valid:** fix it as its own commit on top (review fixes stack, they aren't squashed),
-     reply `**Agent:** Fixed in <sha>: <what changed>`, and resolve the thread.
+     reply `**Agent:** Fixed in <sha>: <what changed>`, and resolve the thread after the push
+     in step 4, never before: the watch merges a green head whose threads are all resolved.
    - **Not applicable:** reply `**Agent:** Not changing this: <the concrete reason>`, and
      resolve the thread.
    - **A design question, or you aren't sure:** reply with your reading, leave the thread
      **unresolved**, and list it in the PR-ready comment for Håkan.
 4. Re-run the narrow checks for whatever you changed, add the preview label
-   (`gh pr edit <n> --add-label preview-deploy`), push, and park on `CI`. The PR is ready to
+   (`gh pr edit <n> --add-label preview-deploy`), push, resolve the threads whose fixes are in,
+   and park on `CI`. The PR is ready to
    test from here: the label deploys a preview at once and on every later push, and nothing
    else adds it. The label goes on before the push, so the push's run is the one that
    survives their shared concurrency group. Park on `CI` even when nothing changed: it

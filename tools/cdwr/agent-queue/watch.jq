@@ -251,16 +251,21 @@ def step:
      and (($now.removedReason // "") | ascii_downcase) != "merged") as $removed
   | (if ($now.removedReason // "") == "" then "no reason given"
      else $now.removedReason | ascii_downcase | gsub("_"; " ") end) as $why
-  # A PR the watch enqueued once gets one retry: a conflict through the conflict pick, failing
-  # checks through the merge-queue pick, both on a new head. A second removal is Håkan's.
-  | ($removed and $am0 != null and ($am0.tries // 0) == 1 and $am0.held == null) as $retry
+  # A PR the watch enqueued once gets one retry when a session can fix the cause: a conflict
+  # through the conflict pick, failing checks through the merge-queue pick, both on a new head. Any
+  # other reason (the queue cleared, a ruleset, a rollback) and a second removal are Håkan's.
+  | ($conflicting or ($why | test("fail|conflict|check|timeout"))) as $fixable
+  | ($removed and $am0 != null and ($am0.tries // 0) == 1 and $am0.held == null) as $first
+  | ($first and $fixable) as $retry
   | (if $removed | not then []
      elif $retry then [ { level: "info", message: "\($id): PR #\($pr) left the merge queue (\($why)), retrying once" } ]
+     elif $first then [ { level: "action", message: "\($id): PR #\($pr) left the merge queue (\($why)), the merge is yours" } ]
      elif $am0 != null and ($am0.tries // 0) >= 2 and $am0.held == null
        then [ { level: "action", message: "\($id): PR #\($pr) left the merge queue again (\($why)), the merge is yours" } ]
      else [ { level: "action", message: "\($id): PR #\($pr) left the merge queue (\($why))" } ] end) as $removal
   | (if $am0 == null then null
      elif $retry then $am0 + { removed: { at: $now.removedAt, reason: $why, oid: ($now.oid // null) } }
+     elif $first then $am0 + { held: "merge queue refused: \($why)" }
      elif $removed and ($am0.tries // 0) >= 2 then $am0 + { held: "merge queue refused twice" }
      else $am0 end) as $am
   # The watch's own merge (merge_verdict, computed by the caller as $in.merge): at most two
@@ -703,10 +708,12 @@ def review_feedback_detail($watch):
 # --- Auto-merge: the watch merges an agent PR on no hold path itself (run.sh watch_prs) ---
 
 # [{ glob, reason }] from the text of hold-paths.txt: one `<glob>  # <reason>` per line, with
-# blank and `#` lines skipped
+# blank and `#` lines skipped. A line in any other form is an error, never a hold dropped unseen
 def hold_globs:
   [ split("\n")[] | trim | select(. != "" and (startswith("#") | not))
-    | capture("^(?<glob>[^\\s#]+)(?:\\s*#\\s*(?<reason>.*))?$")
+    | . as $line
+    | ([ capture("^(?<glob>[^\\s#]+)(?:\\s*#\\s*(?<reason>.*))?$") ] | first
+       // error("hold-paths.txt: unreadable line: \($line)"))
     | { glob, reason: ((.reason // "") | trim) } ];
 
 # An anchored regex for a hold glob: `**/` is any run of directories, `**` any path, `*` any run
@@ -755,9 +762,11 @@ def hold_check_lines($lines):
 def asks_before_merging:
   any(report[]; trim | test("^\\*\\*ask me before merging\\b"; "i"));
 
-# True for a line of the comment's body that starts with $prefix, bold or not
+# True for a line of the comment's body that starts with $prefix: bold or not (`**Merge:** …` too),
+# as a list item or not
 def body_line($prefix):
-  (.body // "") | split("\n") | any(.[]; trim | gsub("^\\*\\*"; "") | ascii_downcase | startswith($prefix));
+  (.body // "") | split("\n")
+  | any(.[]; trim | sub("^[-*]\\s+"; "") | gsub("\\*\\*"; "") | trim | ascii_downcase | startswith($prefix));
 
 # The watch's own verdict on merging a PR by itself, from the pullRequest node it just read, the
 # ticket and the parsed hold list: { verdict, claimed, transient }. verdict is `ok <node id> <head
@@ -775,6 +784,8 @@ def merge_verdict($node; $holds):
      elif $c == null then "no PR-ready comment"
      elif ($c | body_line("code review:") | not) then "the PR-ready comment has no Code review line"
      elif ($claimed | not) then "the PR-ready comment does not say it merges on its own"
+     # A parked wait is a session mid-round: a push is coming, or CI runs on the head it just pushed
+     elif ($node | parked) != null then "the ticket is parked on a wait"
      elif any(($node.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($c.createdAt | epoch))
        then "Håkan commented after the PR-ready comment"
      elif ($node | asks_before_merging) then "the report says Ask me before merging"
@@ -791,7 +802,7 @@ def merge_verdict($node; $holds):
   | { verdict: $v, claimed: $claimed,
       transient: (($v | startswith("ok ") | not)
                   # Review feedback is a session's pick, and Håkan knows his own comment
-                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main|[0-9]+ unresolved thread|too many review threads|Håkan commented)"))) };
+                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main|[0-9]+ unresolved thread|too many review threads|Håkan commented|the ticket is parked|the ticket is not agent:review)"))) };
 
 # The settled outcome of the production deploy after a self-merge, from the Fly Deployment push
 # runs for the merge commit and the annotations of that run's jobs: success, failure, skipped (the

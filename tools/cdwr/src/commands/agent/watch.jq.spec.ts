@@ -7642,6 +7642,12 @@ describe('hold list', () => {
         { glob: 'b.txt', reason: '' }
       ]);
     });
+
+    it('fails on a line it cannot read, so no hold is dropped unseen', () => {
+      expect(() =>
+        run('hold_globs', 'a/**  # fine\nb/** one-way, no hash\n')
+      ).toThrow(/unreadable line: b\/\*\* one-way, no hash/);
+    });
   });
 
   describe('hold_matches', () => {
@@ -7853,6 +7859,44 @@ describe('merge_verdict', () => {
       verdict: 'ok PR_node1 h1',
       claimed: true,
       transient: false
+    });
+  });
+
+  it('reads a bold Merge label and a list item as the claim', () => {
+    expect(
+      verdict(
+        prNode(),
+        withComments(
+          READY_BODY(
+            '- **Code review:** no findings',
+            '**Merge:** merging on its own: no hold path'
+          )
+        )
+      )
+    ).toMatchObject({ verdict: 'ok PR_node1 h1', claimed: true });
+  });
+
+  it('holds while the ticket is parked on a wait, without a notice', () => {
+    expect(
+      verdict(
+        prNode(),
+        ticket({
+          description:
+            '## Plan\n\n**Next:** `Waiting: CI · PR 5 @ abc1234 · since 2026-10-01T00:00Z`'
+        })
+      )
+    ).toEqual({
+      verdict: 'the ticket is parked on a wait',
+      claimed: true,
+      transient: true
+    });
+  });
+
+  it('holds without a notice when the ticket lost its agent label', () => {
+    expect(verdict(prNode(), ticket({ labels: { nodes: [] } }))).toEqual({
+      verdict: 'the ticket is not agent:review',
+      claimed: true,
+      transient: true
     });
   });
 
@@ -8233,6 +8277,31 @@ describe('step with merge', () => {
           oid: 'h1'
         }
       });
+    });
+
+    it('hands the merge to Håkan at once for a reason no session can fix', () => {
+      const r = step({
+        now: { ...removed, removedReason: 'QUEUE_CLEARED' },
+        merge: null,
+        prev: prev({
+          state: 'queued',
+          autoMerge: { at: AT, tries: 1, oid: 'h1' }
+        })
+      });
+      expect(r.notices).toEqual([
+        {
+          level: 'action',
+          message:
+            'COD-9: PR #5 left the merge queue (queue cleared), the merge is yours'
+        }
+      ]);
+      expect(r.entry.autoMerge).toEqual({
+        at: AT,
+        tries: 1,
+        oid: 'h1',
+        held: 'merge queue refused: queue cleared'
+      });
+      expect(r.enqueue).toBe(false);
     });
 
     it('hands the merge to Håkan after the second removal', () => {

@@ -1091,7 +1091,7 @@ query($after: String) {
       description
       labels { nodes { id name } }
       attachments { nodes { url createdAt } }
-      comments(first: 50, orderBy: createdAt) { nodes { id body createdAt user { id app } } }
+      comments(last: 50, orderBy: createdAt) { nodes { id body createdAt user { id app } } }
     }
   }
 }
@@ -1140,6 +1140,25 @@ relabel_merged() {
 # runs of the merge commit and, once the newest one succeeded, the annotations of its jobs, and
 # prints { state, run, at } from watch.jq deploy_state. Prints nothing when there is nothing to read
 # or a read failed: the deploy stays as it was, with one warn.
+# The hold list and the deploy reads fail every tick while they fail: noted each time, one warn row
+# an hour, as activity_warn, so a lasting failure can't push real rows out of runs.jsonl
+hold_list_warn() {
+  local stamp="$HOME_DIR/hold-paths-warned-at" last
+  note "warn: watch: hold-paths.txt not read, no PR merges on its own"
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "" "watch: hold-paths.txt not read"
+}
+deploy_warn() {
+  local stamp="$HOME_DIR/deploy-warned-at" last
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "$1" "watch: could not read the deploy"
+}
 read_deploy() {
   setopt local_options no_err_exit
   local entry="$1" id="${2:-}" sha runs newest rid jobs job notes="$HOME_DIR/watch-notes.jsonl" state
@@ -1147,24 +1166,24 @@ read_deploy() {
     and ((.deploy.state // "pending") == "pending")' >/dev/null 2>&1 <<<"$entry" || return 0
   sha="$(jq -r '.mergeCommit' <<<"$entry")"
   runs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=$sha&event=push" 2>/dev/null)" ||
-    { note "warn: watch: could not read the deploy of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+    { note "warn: watch: could not read the deploy of $sha ($id)"; deploy_warn "$id"; return 0; }
   newest="$(jq -c '[.workflow_runs[]?] | sort_by(.created_at // "") | last' <<<"$runs" 2>/dev/null)" ||
-    { note "warn: watch: unreadable deploy runs for $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+    { note "warn: watch: unreadable deploy runs for $sha ($id)"; deploy_warn "$id"; return 0; }
   : > "$notes"
   if [[ "$(jq -r '.status == "completed" and .conclusion == "success"' <<<"$newest")" == true ]]; then
     rid="$(jq -r '.id' <<<"$newest")"
     jobs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/runs/$rid/jobs?per_page=100" 2>/dev/null)" ||
-      { rm -f "$notes"; note "warn: watch: could not read the deploy jobs of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+      { rm -f "$notes"; note "warn: watch: could not read the deploy jobs of $sha ($id)"; deploy_warn "$id"; return 0; }
     for job in ${(f)"$(jq -r '.jobs[]?.id' <<<"$jobs")"}; do
       gh_read gh api "repos/codeware-sthlm/cdwr/check-runs/$job/annotations" 2>/dev/null >> "$notes" ||
-        { rm -f "$notes"; note "warn: watch: could not read the deploy annotations of $sha ($id)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+        { rm -f "$notes"; note "warn: watch: could not read the deploy annotations of $sha ($id)"; deploy_warn "$id"; return 0; }
     done
   fi
   state="$(watch -rn --argjson runs "$runs" --slurpfile notes "$notes" --arg merged "$(jq -r '.mergedAt // ""' <<<"$entry")" \
     --argjson now "$(date +%s)" 'include "watch";
     deploy_state($runs; ($notes | add // []); (if $merged == "" then null else $merged end); $now)')"
   rm -f "$notes"
-  [[ -n "$state" ]] || { note "warn: watch: deploy_state failed for $sha ($id)$(watch_err)"; record warn "$id" "watch: could not read the deploy"; return 0; }
+  [[ -n "$state" ]] || { note "warn: watch: deploy_state failed for $sha ($id)$(watch_err)"; deploy_warn "$id"; return 0; }
   jq -nc --arg s "$state" --argjson r "$newest" --arg at "$(date -u +%FT%TZ)" \
     '{state: $s, run: ($r.html_url // null), at: $at}'
 }
@@ -1179,7 +1198,7 @@ watch_prs() {
   holds="$(watch -Rsc 'include "watch"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
   # An empty list is a broken install, not a licence: it reads as unread
   [[ -n "$holds" && "$holds" != "[]" ]] || holds=null
-  [[ "$holds" == null ]] && { note "warn: watch: hold-paths.txt not read, no PR merges on its own"; record warn "" "watch: hold-paths.txt not read"; }
+  [[ "$holds" == null ]] && hold_list_warn
   # Every page up to 5, through a file as in record_activity; only tickets past the cap go unwatched
   : > "$pages"
   for page in {1..5}; do
