@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/tanstackstart-react';
 import type { AnyRouter } from '@tanstack/react-router';
 import { createIsomorphicFn } from '@tanstack/react-start';
+import { z } from 'zod';
 
 import { sentryOptions } from './sentry';
 
@@ -15,6 +16,12 @@ import { sentryOptions } from './sentry';
  */
 export const initSentryClient = createIsomorphicFn().client(
   (router: AnyRouter) => {
+    // Zod probes for eval with `Function("")` on its first object parse. The
+    // CSP blocks it and the browser reports that, even though Zod catches the
+    // error. Jitless skips the probe, and with it the compiled fast path.
+    // Before the DSN check, since the report goes out with or without Sentry
+    z.config({ jitless: true });
+
     if (!import.meta.env.SENTRY_DSN || Sentry.getClient()) {
       return;
     }
