@@ -1403,6 +1403,59 @@ GQL
 
 apply_app() { [[ "$1" == cdwr-cms || "$1" == cdwr-(cms|headless)-[a-z0-9][a-z0-9-]# ]]; }
 
+# apply_secret_argv <kind> <args>...: the cdwr arguments of a secret-copy, secret-rewrite or
+# secret-set item, one per line; returns 1 when an argument breaks the closed patterns. Only the
+# set value can be printed: copy and rewrite never carry one.
+apply_secret_argv() {
+  setopt local_options no_err_exit extended_glob
+  local kind=$1 env folder key part v rest p seen=""
+  shift
+  local -a out parts
+  local seg='[a-z0-9][a-z0-9-]#'
+  (( $# >= 4 )) || return 1
+  env=$1 folder=$2
+  [[ "$env" == (production|preview) ]] || return 1
+  [[ "$folder" == /apps/${~seg} || "$folder" == /tenants/${~seg}/apps/${~seg} ]] || return 1
+  shift 2
+  out=(--env "$env" --folder "$folder")
+  case "$kind" in
+    secret-copy)
+      (( $# == 2 )) || return 1
+      for key in "$@"; do apply_secret_key "$key" || return 1; done
+      print -rl -- infisical copy-secret "${out[@]}" --from "$1" --to "$2" ;;
+    secret-rewrite)
+      (( $# >= 2 && $# <= 4 )) || return 1
+      key=$1; shift
+      apply_secret_key "$key" || return 1
+      parts=()
+      for part in "$@"; do
+        case "$part" in
+          host=[a-z0-9.-]##) [[ "$seen" != *h* ]] && seen+=h && parts+=(--host "${part#host=}") || return 1 ;;
+          port=[1-9][0-9](#c0,4)) p=${part#port=}; (( p <= 65535 )) && [[ "$seen" != *p* ]] && seen+=p && parts+=(--port "$p") || return 1 ;;
+          user=[a-z0-9._-]##) [[ "$seen" != *u* ]] && seen+=u && parts+=(--user "${part#user=}") || return 1 ;;
+          *) return 1 ;;
+        esac
+      done
+      print -rl -- infisical rewrite-url "${out[@]}" --key "$key" "${parts[@]}" ;;
+    secret-set)
+      (( $# == 2 )) || return 1
+      key=$1 v=$2
+      apply_secret_key "$key" || return 1
+      [[ "$key" == *_(SECRET|PASSWORD|TOKEN|KEY) ]] && return 1
+      if [[ "$v" == https://* ]]; then
+        rest=${v#https://}
+        [[ -n "$rest" && "${rest%%/*}" != *@* && "$v" != *[[:space:][:cntrl:]?#]* ]] || return 1
+      else
+        [[ "$key" == *_URL ]] && return 1
+        [[ "$v" == ([0-9]##|true|false) ]] || return 1
+      fi
+      print -rl -- infisical set-config "${out[@]}" --key "$key" --value "$v" ;;
+  esac
+}
+
+# apply_secret_key <key>: an environment variable name the apply list may touch
+apply_secret_key() { [[ "$1" == [A-Z][A-Z0-9_]# && "$1" != (DEPLOY_ENABLED|SITE_GATE_PASSWORD) ]]; }
+
 # apply_argv <item json>: the cdwr arguments, one per line, and nothing for the kinds that run no
 # command. Returns 1 when the kind or an argument breaks the vocabulary.
 apply_argv() {
@@ -1425,6 +1478,10 @@ apply_argv() {
     supabase-function)
       [[ "$n" == 1 && "$a1" == [a-z0-9][a-z0-9-]# && -d "$REPO/tools/cdwr/agent-queue/supabase/functions/$a1" ]] ;;
     agent-deploy) [[ "$n" == 0 ]] ;;
+    secret-copy|secret-rewrite|secret-set)
+      local -a sargs
+      sargs=("${(@f)$(jq -r '.args[]' <<<"$1" 2>/dev/null)}")
+      [[ "$n" == "${#sargs}" ]] && apply_secret_argv "$kind" "${sargs[@]}" ;;
     *) return 1 ;;
   esac
 }
@@ -1443,6 +1500,12 @@ apply_cdwr() {
     supabase-migration)
       ( cd "$REPO" && AGENT_SUPABASE_DB_URL="$DESK_SUPABASE_DB_URL" FLY_API_TOKEN="" FLY_ACCESS_TOKEN="" \
           INFISICAL_SERVICE_TOKEN="" node tools/cdwr/bin/cdwr.mjs "$@" --yes --json 2>/dev/null </dev/null ) ;;
+    # The NUC's Infisical identity only: the commands write derived or non-secret values
+    secret-copy|secret-rewrite|secret-set)
+      ( cd "$REPO" && INFISICAL_CLIENT_ID="$DESK_INFISICAL_CLIENT_ID" INFISICAL_CLIENT_SECRET="$DESK_INFISICAL_CLIENT_SECRET" \
+          INFISICAL_PROJECT_ID="$DESK_INFISICAL_PROJECT_ID" INFISICAL_SERVICE_TOKEN="" \
+          FLY_API_TOKEN="" FLY_ACCESS_TOKEN="" AGENT_SUPABASE_DB_URL="" \
+          node tools/cdwr/bin/cdwr.mjs "$@" --yes --json 2>/dev/null </dev/null ) ;;
     *) return 1 ;;
   esac
 }
@@ -1481,7 +1544,7 @@ apply_self_deploy() {
 # `refused <why>`. Run it in a command substitution.
 apply_item() {
   setopt local_options no_err_exit extended_glob
-  local entry=$1 item=$2 kind sha seen now out ok verdict state
+  local entry=$1 item=$2 kind sha seen now out ok verdict state v
   local -a cmd
   kind="$(jq -r '.kind' <<<"$item")"
   sha="$(jq -r '.apply.sha // ""' <<<"$entry")"
@@ -1514,6 +1577,10 @@ apply_item() {
       git -C "$REPO" diff --quiet "$sha" HEAD -- "$(jq -r '.args[0]' <<<"$item")" 2>/dev/null ||
         { print -r -- "refused the file changed after the merge"; return 0; } ;;
     deploy-workflow) ( gh_identity ) || { print -r -- "refused no GitHub app"; return 0; } ;;
+    secret-copy|secret-rewrite|secret-set)
+      for v in DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID; do
+        [[ -n "${(P)v:-}" ]] || { print -r -- "refused no $v on $(telemetry_host)"; return 0; }
+      done ;;
   esac
   cmd=("${(@f)$(apply_argv "$item")}")
   [[ -n "${cmd[1]}" ]] || { print -r -- "refused bad args"; return 0; }
@@ -1522,10 +1589,12 @@ apply_item() {
   verdict="$(watch -r --argjson item "$item" 'include "watch"; apply_verdict($item)' <<<"$out")" ||
     verdict="watch.jq failed$(watch_err)"
   [[ "$verdict" == already\ <-> ]] && { print -r -- "applied $verdict"; return 0; }
+  # The secret kinds' verdicts hold no value but a set one, which the PR states
+  [[ "$kind" == secret-* && "$verdict" == already\ * ]] && { print -r -- "applied ${verdict%%$'\n'*}"; return 0; }
   [[ "$verdict" == ok ]] || { print -r -- "refused ${verdict%%$'\n'*}"; return 0; }
-  # Only .ok, the run url and the error message leave the call, on one line each
+  # Only .ok, the run url or outcome and the error message leave the call, on one line each
   out="$(apply_cdwr "$kind" "${cmd[@]}" | jq -r '(.ok | tostring),
-    (if .ok == true then (.result | objects | .runUrl | strings) // "" else (.error.message // "cdwr failed") end
+    (if .ok == true then (.result | objects | [.runUrl, .outcome | strings] | join(", ")) // "" else (.error.message // "cdwr failed") end
      | gsub("[\\r\\n]+"; " "))' 2>/dev/null)"
   # $( ) drops an empty second line, so `true` may be the whole of it
   ok="${out%%$'\n'*}"

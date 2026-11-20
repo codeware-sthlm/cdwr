@@ -4294,9 +4294,13 @@ describe('run.sh apply list', () => {
     'tools/cdwr/agent-queue/supabase/migrations/20261120120000_applied_migrations.sql';
   let home: string;
 
-  // apply_app is a one-line function
-  const APPLY_APP = SCRIPT.match(/^apply_app\(\) \{.*\}$/m)?.[0] ?? '';
+  // apply_app and apply_secret_key are one-line functions
+  const ONE_LINERS = ['apply_app', 'apply_secret_key'].map(
+    (name) =>
+      SCRIPT.match(new RegExp(`^${name}\\(\\) \\{.*\\}$`, 'm'))?.[0] ?? ''
+  );
   const FNS = [
+    'apply_secret_argv',
     'apply_argv',
     'apply_cdwr',
     'apply_deploy_state',
@@ -4310,7 +4314,7 @@ describe('run.sh apply list', () => {
     'watch_err'
   ]
     .map(fn)
-    .concat(APPLY_APP);
+    .concat(ONE_LINERS);
 
   const write = (name: string, content: string, mode?: number) => {
     mkdirSync(join(home, name, '..'), { recursive: true });
@@ -4446,7 +4450,130 @@ describe('run.sh apply list', () => {
         ['agent', 'supabase-migrate', MIGRATION]
       ],
       ['supabase-function', ['desk-notify'], []],
-      ['agent-deploy', [], []]
+      ['agent-deploy', [], []],
+      [
+        'secret-copy',
+        ['production', '/apps/cms', 'DATABASE_URL', 'DIRECT_DATABASE_URL'],
+        [
+          'infisical',
+          'copy-secret',
+          '--env',
+          'production',
+          '--folder',
+          '/apps/cms',
+          '--from',
+          'DATABASE_URL',
+          '--to',
+          'DIRECT_DATABASE_URL'
+        ]
+      ],
+      [
+        'secret-rewrite',
+        [
+          'production',
+          '/apps/cms',
+          'DATABASE_URL',
+          'host=aws-0-eu-central-1.pooler.supabase.com',
+          'port=6543',
+          'user=postgres.abcdefgh'
+        ],
+        [
+          'infisical',
+          'rewrite-url',
+          '--env',
+          'production',
+          '--folder',
+          '/apps/cms',
+          '--key',
+          'DATABASE_URL',
+          '--host',
+          'aws-0-eu-central-1.pooler.supabase.com',
+          '--port',
+          '6543',
+          '--user',
+          'postgres.abcdefgh'
+        ]
+      ],
+      [
+        'secret-rewrite',
+        ['preview', '/tenants/acme/apps/cms', 'DATABASE_URL', 'port=6543'],
+        [
+          'infisical',
+          'rewrite-url',
+          '--env',
+          'preview',
+          '--folder',
+          '/tenants/acme/apps/cms',
+          '--key',
+          'DATABASE_URL',
+          '--port',
+          '6543'
+        ]
+      ],
+      [
+        'secret-set',
+        ['production', '/apps/cms', 'DATABASE_POOL_MAX', '4'],
+        [
+          'infisical',
+          'set-config',
+          '--env',
+          'production',
+          '--folder',
+          '/apps/cms',
+          '--key',
+          'DATABASE_POOL_MAX',
+          '--value',
+          '4'
+        ]
+      ],
+      [
+        'secret-set',
+        ['production', '/apps/cms', 'POOL', 'https://a.b/path'],
+        [
+          'infisical',
+          'set-config',
+          '--env',
+          'production',
+          '--folder',
+          '/apps/cms',
+          '--key',
+          'POOL',
+          '--value',
+          'https://a.b/path'
+        ]
+      ],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DATABASE_URL', 'port=6543'],
+        [
+          'infisical',
+          'rewrite-url',
+          '--env',
+          'production',
+          '--folder',
+          '/apps/cms',
+          '--key',
+          'DATABASE_URL',
+          '--port',
+          '6543'
+        ]
+      ],
+      [
+        'secret-set',
+        ['production', '/apps/cms', 'PUBLIC_URL', 'https://example.com/a@b'],
+        [
+          'infisical',
+          'set-config',
+          '--env',
+          'production',
+          '--folder',
+          '/apps/cms',
+          '--key',
+          'PUBLIC_URL',
+          '--value',
+          'https://example.com/a@b'
+        ]
+      ]
     ])('prints the argv of %s %j', (kind, args, expected) => {
       const r = argv(kind, args);
       expect(r.rc).toBe('rc=0');
@@ -4484,7 +4611,79 @@ describe('run.sh apply list', () => {
       ['supabase-function', ['missing']],
       ['supabase-function', []],
       ['agent-deploy', ['x']],
-      ['frobnicate', []]
+      ['frobnicate', []],
+      ['secret-copy', ['development', '/apps/cms', 'A_B', 'C_D']],
+      ['secret-copy', ['production', '/agent-queue', 'A_B', 'C_D']],
+      ['secret-copy', ['production', '/apps/cms', 'A_B']],
+      ['secret-copy', ['production', '/apps/cms', 'DEPLOY_ENABLED', 'C_D']],
+      ['secret-copy', ['production', '/apps/cms', 'A_B', 'SITE_GATE_PASSWORD']],
+      ['secret-copy', ['production', '/apps/cms', 'a_b', 'C_D']],
+      ['secret-copy', ['production', '/apps/Cms', 'A_B', 'C_D']],
+      ['secret-copy', ['production', '/tenants/x/cms', 'A_B', 'C_D']],
+      ['secret-rewrite', ['production', '/apps/cms', 'DATABASE_URL']],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DATABASE_URL', 'password=x']
+      ],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DATABASE_URL', 'port=1', 'port=2']
+      ],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DATABASE_URL', 'port=65536']
+      ],
+      ['secret-rewrite', ['production', '/apps/cms', 'DATABASE_URL', 'port=0']],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DATABASE_URL', 'host=a b']
+      ],
+      [
+        'secret-rewrite',
+        [
+          'production',
+          '/apps/cms',
+          'DATABASE_URL',
+          'host=a',
+          'port=1',
+          'user=u',
+          'x=y'
+        ]
+      ],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DEPLOY_ENABLED', 'port=1']
+      ],
+      ['secret-set', ['production', '/apps/cms', 'API_TOKEN', '4']],
+      ['secret-set', ['production', '/apps/cms', 'ADMIN_PASSWORD', 'true']],
+      ['secret-set', ['production', '/apps/cms', 'SIGNING_KEY', '4']],
+      ['secret-set', ['production', '/apps/cms', 'HOOK_SECRET', 'true']],
+      ['secret-set', ['production', '/apps/cms', 'DEPLOY_ENABLED', 'true']],
+      ['secret-set', ['production', '/apps/cms', 'X_URL', 'https://u:p@h/x']],
+      ['secret-set', ['production', '/apps/cms', 'X_URL', 'https://u@h']],
+      ['secret-set', ['production', '/apps/cms', 'X_URL', '4']],
+      ['secret-set', ['production', '/apps/cms', 'X_URL', 'http://h']],
+      ['secret-set', ['production', '/apps/cms', 'X_LEVEL', 'verbose']],
+      ['secret-set', ['production', '/apps/cms', 'X_LEVEL', '4 5']],
+      ['secret-set', ['production', '/apps/cms', 'X_LEVEL']],
+      [
+        'secret-rewrite',
+        ['production', '/apps/cms', 'DATABASE_URL', 'port=06543']
+      ],
+      [
+        'secret-set',
+        ['production', '/apps/cms', 'X_LEVEL', 'https://x.com?u@p']
+      ],
+      [
+        'secret-set',
+        [
+          'production',
+          '/apps/cms',
+          'X_LEVEL',
+          'https://hooks.example.com/x?token=abc'
+        ]
+      ],
+      ['secret-set', ['production', '/apps/cms', 'X_LEVEL', 'https://a.b/#k=v']]
     ])('refuses %s %j', (kind, args) => {
       const r = argv(kind, args);
       expect(r.rc).toBe('rc=1');
@@ -4651,6 +4850,140 @@ describe('run.sh apply list', () => {
       expect(r.stdout.trim()).toMatch(/^applied /);
     });
 
+    describe('the secret kinds', () => {
+      const setItem = item('secret-set', [
+        'production',
+        '/apps/cms',
+        'DATABASE_POOL_MAX',
+        '4'
+      ]);
+      const setDry = {
+        ok: true,
+        plan: {
+          json: {
+            environment: 'production',
+            folder: '/apps/cms',
+            key: 'DATABASE_POOL_MAX',
+            state: 'absent',
+            value: '4'
+          }
+        }
+      };
+
+      it.each([
+        ['DESK_INFISICAL_CLIENT_ID'],
+        ['DESK_INFISICAL_CLIENT_SECRET'],
+        ['DESK_INFISICAL_PROJECT_ID']
+      ])('refuses without %s', (name) => {
+        write('dry.json', JSON.stringify(setDry));
+        const creds = CREDS.split(' ')
+          .filter((c) => !c.startsWith(`${name}=`))
+          .join(' ');
+        const r = run(
+          ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+          { ENTRY: entry(), ITEM: JSON.stringify(setItem) },
+          [creds]
+        );
+        expect(r.stdout.trim()).toBe(`refused no ${name} on nuc`);
+        expect(nodeCalls()).toEqual([]);
+      });
+
+      it('names the Infisical credentials and empties the Fly and Supabase ones', () => {
+        write(
+          'bin/node',
+          [
+            '#!/bin/sh',
+            `echo "$*" >> "${home}/node.calls"`,
+            'case "$*" in',
+            `  *--dry-run*) env > "${home}/node.dry.env"; cat "${home}/dry.json" ;;`,
+            `  *) env > "${home}/node.env"; cat "${home}/real.json" ;;`,
+            'esac'
+          ].join('\n'),
+          0o755
+        );
+        write('dry.json', JSON.stringify(setDry));
+        write(
+          'real.json',
+          JSON.stringify({ ok: true, result: { outcome: 'set to 4' } })
+        );
+        const r = run(
+          ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+          { ENTRY: entry(), ITEM: JSON.stringify(setItem) },
+          [
+            CREDS,
+            'typeset +x DESK_SUPABASE_DB_URL=postgres://x',
+            'FLY_API_TOKEN=leak'
+          ]
+        );
+        expect(r.stdout.trim()).toMatch(
+          /^applied \d{4}-\d\d-\d\dT\d\d:\d\dZ, set to 4$/
+        );
+        expect(nodeCalls()).toEqual([
+          'tools/cdwr/bin/cdwr.mjs infisical set-config --env production --folder /apps/cms --key DATABASE_POOL_MAX --value 4 --dry-run --yes --json',
+          'tools/cdwr/bin/cdwr.mjs infisical set-config --env production --folder /apps/cms --key DATABASE_POOL_MAX --value 4 --yes --json'
+        ]);
+        for (const name of ['node.dry.env', 'node.env']) {
+          const env = file(name) ?? '';
+          expect(env).toContain('INFISICAL_CLIENT_ID=i\n');
+          expect(env).toContain('INFISICAL_CLIENT_SECRET=s\n');
+          expect(env).toContain('INFISICAL_PROJECT_ID=p\n');
+          expect(env).toContain('INFISICAL_SERVICE_TOKEN=\n');
+          expect(env).toContain('FLY_API_TOKEN=\n');
+          expect(env).toContain('FLY_ACCESS_TOKEN=\n');
+          expect(env).toContain('AGENT_SUPABASE_DB_URL=\n');
+        }
+      });
+
+      it('ticks an already-there verdict without applying', () => {
+        write(
+          'dry.json',
+          JSON.stringify({
+            ...setDry,
+            plan: { json: { ...setDry.plan.json, state: 'same' } }
+          })
+        );
+        expect(apply(setItem)).toBe('applied already set');
+        expect(nodeCalls()).toHaveLength(1);
+      });
+
+      it('refuses a verdict that is not ok or already', () => {
+        write(
+          'dry.json',
+          JSON.stringify({
+            ...setDry,
+            plan: { json: { ...setDry.plan.json, value: '5' } }
+          })
+        );
+        expect(apply(setItem)).toBe('refused the dry run read another value');
+      });
+
+      it('still refuses a migration that is already applied', () => {
+        write(
+          'dry.json',
+          JSON.stringify({
+            ok: true,
+            plan: {
+              json: {
+                environment: 'production',
+                file: MIGRATION,
+                applied: true,
+                dryRun: null
+              }
+            }
+          })
+        );
+        const r = run(
+          ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+          {
+            ENTRY: entry(),
+            ITEM: JSON.stringify(item('supabase-migration', [MIGRATION]))
+          },
+          ['typeset +x DESK_SUPABASE_DB_URL=postgres://x']
+        );
+        expect(r.stdout.trim()).toBe('refused already applied');
+      });
+    });
+
     it('refuses a migration without a database url', () => {
       expect(apply(item('supabase-migration', [MIGRATION]))).toBe(
         'refused no DESK_SUPABASE_DB_URL on nuc'
@@ -4814,6 +5147,156 @@ describe('run.sh apply list', () => {
     };
     const a = item('restart', ['cdwr-cms']);
     const b = item('restart', ['cdwr-headless-moon']);
+
+    it('replays the four items of a database split without a value in comment, notice or notes', () => {
+      const SECRET = 'postgres://postgres:S3cret@db.x/postgres';
+      const F = '/apps/cms';
+      const items = [
+        item('secret-copy', [
+          'production',
+          F,
+          'DATABASE_URL',
+          'DIRECT_DATABASE_URL'
+        ]),
+        item('secret-rewrite', [
+          'production',
+          F,
+          'DATABASE_URL',
+          'host=aws-0-eu-central-1.pooler.supabase.com',
+          'port=6543',
+          'user=postgres.abcdefgh'
+        ]),
+        item('secret-set', ['production', F, 'DATABASE_POOL_MAX', '4']),
+        item('restart', ['cdwr-cms'])
+      ];
+      const dry = (json: unknown) =>
+        JSON.stringify({ ok: true, plan: { json } });
+      const at = { environment: 'production', folder: F, debug: SECRET };
+      const answers: Record<string, string> = {
+        'copy-secret': dry({
+          ...at,
+          from: 'DATABASE_URL',
+          to: 'DIRECT_DATABASE_URL',
+          state: 'absent'
+        }),
+        'rewrite-url': dry({
+          ...at,
+          key: 'DATABASE_URL',
+          state: 'different',
+          shape: {
+            host: {
+              from: 'db.x',
+              to: 'aws-0-eu-central-1.pooler.supabase.com'
+            },
+            port: { from: '5432', to: '6543' },
+            userChanged: true,
+            passwordKept: true
+          }
+        }),
+        'set-config': dry({
+          ...at,
+          key: 'DATABASE_POOL_MAX',
+          state: 'absent',
+          value: '4'
+        }),
+        restart: dry({
+          environment: 'production',
+          app: 'cdwr-cms',
+          machines: [{ id: 'm1' }]
+        })
+      };
+      for (const [k, v] of Object.entries(answers)) write(`dry.${k}.json`, v);
+      const real = (outcome?: string) =>
+        JSON.stringify({
+          ok: true,
+          result: { ...(outcome ? { outcome } : {}), value: SECRET }
+        });
+      write(
+        'real.copy-secret.json',
+        real('copied DATABASE_URL to DIRECT_DATABASE_URL')
+      );
+      write(
+        'real.rewrite-url.json',
+        real('rewrote DATABASE_URL: host, port, user')
+      );
+      write('real.set-config.json', real('set DATABASE_POOL_MAX'));
+      write('real.restart.json', JSON.stringify({ ok: true }));
+      write(
+        'bin/node',
+        [
+          '#!/bin/sh',
+          `echo "$*" >> "${home}/node.calls"`,
+          'for k in copy-secret rewrite-url set-config restart; do',
+          '  case "$*" in *" $k "*) key=$k ;; esac',
+          'done',
+          'case "$*" in',
+          `  *--dry-run*) cat "${home}/dry.$key.json" ;;`,
+          `  *) cat "${home}/real.$key.json" ;;`,
+          'esac'
+        ].join('\n'),
+        0o755
+      );
+      const entry = {
+        pr: 5,
+        apply: {
+          commentId: 'c1',
+          sha: SHA,
+          items,
+          left: [],
+          invalid: null,
+          done: false
+        }
+      };
+      const r = run(
+        ['apply_list COD-830 "$ENTRY"'],
+        { ENTRY: JSON.stringify(entry) },
+        [
+          'typeset +x DESK_FLY_TOKEN=fly-desk DESK_INFISICAL_CLIENT_ID=i DESK_INFISICAL_CLIENT_SECRET=s DESK_INFISICAL_PROJECT_ID=p',
+          `apply_tick() { print -r -- "$*" >> "${home}/tick.calls"; return 0; }`,
+          `apply_save() { return 0; }`,
+          'git() { return 0; }',
+          'gh_identity() { return 0; }',
+          'gh() { return 0; }',
+          `note() { print -r -- "$*" >> "${home}/notes"; }`,
+          'record() { :; }',
+          `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`
+        ]
+      );
+      const out = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as {
+        apply: {
+          done: boolean;
+          items: { status: string; outcome: string }[];
+        };
+      };
+      expect(out.apply.items.map((i) => i.status)).toEqual([
+        'applied',
+        'applied',
+        'applied',
+        'applied'
+      ]);
+      expect(out.apply.items[0]?.outcome).toMatch(
+        /, copied DATABASE_URL to DIRECT_DATABASE_URL$/
+      );
+      expect(out.apply.items[2]?.outcome).toMatch(/, set DATABASE_POOL_MAX$/);
+      const ticks = lines('tick.calls');
+      expect(ticks).toHaveLength(4);
+      expect(ticks[1]).toContain('rewrote DATABASE_URL: host, port, user');
+      const notices = lines('notices');
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toContain(
+        'secret-copy production /apps/cms DATABASE_URL'
+      );
+      const everything = [
+        JSON.stringify(out),
+        ...ticks,
+        ...notices,
+        ...lines('notes'),
+        r.stdout,
+        r.stderr
+      ].join('\n');
+      expect(everything).not.toContain('S3cret');
+      expect(everything).not.toContain('postgres://postgres:');
+    });
 
     it('marks a list with an invalid item and applies nothing', () => {
       const bad = item('restart', ['cdwr-cms;rm']);
