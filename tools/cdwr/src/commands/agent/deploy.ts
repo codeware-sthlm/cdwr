@@ -11,21 +11,28 @@ import {
   COMPOSE_SOURCE,
   CONTAINER,
   DEFAULT_WAIT_MINUTES,
+  DEPLOY_GATE,
   IMAGE_WORKFLOW,
   IMPLEMENT_LOCK,
   PAUSED,
   REMOTE_COMPOSE,
+  REMOTE_HOLD,
   REMOTE_IMAGE_ENV,
   RUN_LOCK,
   type Remote,
   type SessionState,
   assertHost,
   assertTag,
+  clearHold,
   headShaOf,
+  holdFor,
+  isExecutable,
   isPid,
   isRunning,
+  keepPrevious,
   lockFile,
   lockOld,
+  parseImageEnv,
   parseReport,
   parseRunning,
   pathExists,
@@ -33,6 +40,8 @@ import {
   pidAlive,
   pidIsWait,
   pull,
+  readImageEnv,
+  recordDeploy,
   report,
   sessionState,
   tagFromSha,
@@ -41,6 +50,7 @@ import {
   up,
   uploadCompose,
   waitPlan,
+  writeHold,
   writeTag
 } from './deploy.logic';
 
@@ -163,7 +173,7 @@ async function latestImageTag(): Promise<string> {
 export default defineCommand({
   summary: 'Update the agent container on a host to a new image',
   description:
-    'Over ssh: ships the compose file, waits for the queue to be idle, pulls the image and restarts the container. Without --tag the latest successful image build on main is used.',
+    'Over ssh: keeps the current image.env and compose.yaml as *.previous for the host rollback, ships the compose file, waits for the queue to be idle, pulls the image, restarts the container and records the deploy for the desk. Without --tag the latest successful image build on main is used. A --tag older than that build writes a hold, so the host does not deploy over it until main builds a newer one; deploying the latest build lifts the hold.',
   danger: 'mutate',
   needs: ['gh'],
   inputs: {
@@ -196,13 +206,27 @@ export default defineCommand({
 
   async plan(ctx, { host, tag, wait, force }) {
     assertHost(host);
-    const resolved = tag
-      ? assertTag(tag)
-      : await ctx.ui.task(
-          'Finding the latest image build',
-          latestImageTag,
-          (t) => `Latest image build: ${t}`
-        );
+    let resolved: string;
+    let newest: string | null;
+    if (tag) {
+      resolved = assertTag(tag);
+      // Only needed for the hold: not finding it must not stop a deploy of a given tag
+      newest = await latestImageTag().catch(() => null);
+    } else {
+      resolved = await ctx.ui.task(
+        'Finding the latest image build',
+        latestImageTag,
+        (t) => `Latest image build: ${t}`
+      );
+      newest = resolved;
+    }
+    const hold = holdFor(resolved, newest);
+    const holdDetail =
+      hold.kind === 'hold'
+        ? `write ${REMOTE_HOLD} with ${hold.tag}, the newest build, so the host does not deploy over ${resolved} until main builds a newer one`
+        : hold.kind === 'clear'
+          ? `remove ${REMOTE_HOLD}; ${resolved} is the newest build`
+          : `the newest build could not be found: ${REMOTE_HOLD} is left as it is`;
     const compose = readFileSync(join(ctx.root, COMPOSE_SOURCE), 'utf8');
     return {
       steps: [
@@ -215,6 +239,11 @@ export default defineCommand({
             : `up to ${wait} minutes, or until the session only waits in wait.sh; only when the container runs`
         },
         {
+          label: 'Keep the previous files',
+          detail: `${REMOTE_IMAGE_ENV} and ${REMOTE_COMPOSE} copied to *.previous, unless this is a first deploy`
+        },
+        { label: 'Set or lift the hold', detail: holdDetail },
+        {
           label: 'Upload the compose file',
           detail: `${host}:${REMOTE_COMPOSE}`
         },
@@ -224,15 +253,19 @@ export default defineCommand({
         },
         { label: 'Pull the image' },
         { label: 'Restart the container' },
-        { label: 'Resume the queue and report the image' }
+        { label: 'Resume the queue and report the image' },
+        {
+          label: 'Record the deploy for the desk',
+          detail: `${DEPLOY_GATE} record, when the image has it`
+        }
       ],
       target: { name: host },
       ...(force ? { danger: 'destructive' as const } : {}),
-      data: { host, tag: resolved, compose, wait, force }
+      data: { host, tag: resolved, newest, compose, wait, force }
     };
   },
 
-  async apply(ctx: Context, { host, tag, compose, wait, force }) {
+  async apply(ctx: Context, { host, tag, newest, compose, wait, force }) {
     const runs = await running(host);
     // A pause the user set stays; only one made here is lifted again
     const alreadyPaused = runs && (await succeeds(pathExists(host, PAUSED)));
@@ -285,7 +318,23 @@ export default defineCommand({
       }
     }
 
+    const hold = holdFor(tag, newest);
+    // The old tag, for the record; image.env is absent before a first deploy
+    let previous: string | null = null;
     try {
+      let first = false;
+      try {
+        previous =
+          parseImageEnv((await ssh(readImageEnv(host))).stdout) ?? null;
+      } catch (error) {
+        if (!(error instanceof CommandError && error.code === 1)) throw error;
+        first = true;
+      }
+      // Before the compose file and the tag are overwritten. A redeploy of the running tag keeps
+      // the older files, so a self-deploy still checking that tag rolls back to the one before it
+      if (!first && previous !== tag) {
+        for (const copy of keepPrevious(host)) await ssh(copy);
+      }
       await ctx.ui.task(
         'Uploading the compose file',
         () => ssh(uploadCompose(host, compose)),
@@ -348,11 +397,42 @@ export default defineCommand({
       throw failed(error, await lift());
     }
 
+    // Only once the tag runs: a hold left by a failed deploy would keep the host off main
+    try {
+      if (hold.kind === 'hold') await ssh(writeHold(host, hold.tag));
+      if (hold.kind === 'clear') await ssh(clearHold(host));
+    } catch (error) {
+      throw failed(error, await lift());
+    }
+
     let resumed = !created;
     // The new container reads the volume's paused file as it started
     for (let attempt = 0; created && !resumed && attempt < 3; attempt++) {
       if (attempt > 0) await sleep(2000);
       resumed = await succeeds(unpause(host)).catch(() => false);
+    }
+
+    // For the desk; the host's self-deploy sees the tag differ from its own and stands down
+    let recorded: string | undefined;
+    try {
+      if (await succeeds(isExecutable(host, DEPLOY_GATE))) {
+        await ssh(
+          recordDeploy(host, {
+            tag,
+            previous,
+            at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+            by: 'mac',
+            phase: 'ok',
+            reason: null,
+            failed: null
+          })
+        );
+      } else {
+        recorded = `The deploy was not recorded for the desk: the image has no ${DEPLOY_GATE} yet`;
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      recorded = `The deploy was not recorded for the desk: ${reason}`;
     }
 
     const { image, state } = parseReport((await ssh(report(host))).stdout);
@@ -377,7 +457,18 @@ export default defineCommand({
           : []),
         ...(alreadyPaused
           ? ['The queue was already paused and stays paused']
-          : [])
+          : []),
+        ...(hold.kind === 'hold'
+          ? [
+              `Held on ${hold.tag}: the host deploys again once main builds a newer one`
+            ]
+          : []),
+        ...(hold.kind === 'none'
+          ? [
+              `The newest build was not found, so ${REMOTE_HOLD} is left as it is`
+            ]
+          : []),
+        ...(recorded ? [recorded] : [])
       ],
       next: stuck
         ? [
@@ -388,6 +479,8 @@ export default defineCommand({
       json: {
         host,
         tag,
+        previous,
+        held: hold.kind === 'hold' ? hold.tag : null,
         image,
         state,
         resumed: created && resumed,

@@ -108,8 +108,8 @@ describe('agent deploy', () => {
     expect(at('up -d')).toBeGreaterThan(at('pull'));
     expect(at('rm -f')).toBeGreaterThan(at('up -d'));
     expect(at('State.Status')).toBeGreaterThan(at('rm -f'));
-    const tagCall = run.mock.calls.find((c) =>
-      c[1].includes('/opt/cdwr-agent/image.env')
+    const tagCall = run.mock.calls.find(
+      (c) => c[1].includes('tee') && c[1].includes('/opt/cdwr-agent/image.env')
     );
     expect(tagCall?.[2]?.input).toBe('AGENT_IMAGE_TAG=sha-abcdef0\n');
   });
@@ -409,7 +409,153 @@ describe('agent deploy', () => {
     await deploy(args);
     const steps = calls();
     const at = (needle: string) => steps.findIndex((s) => s.includes(needle));
-    expect(at('compose.yaml')).toBeGreaterThan(at('lock'));
-    expect(at('compose.yaml')).toBeLessThan(at('image.env'));
+    const upload = at('tee /opt/cdwr-agent/compose.yaml');
+    expect(upload).toBeGreaterThan(at('lock'));
+    expect(upload).toBeLessThan(at('tee /opt/cdwr-agent/image.env'));
+  });
+
+  describe('previous files, hold and record', () => {
+    const NEWEST = 'abcdef0123456789\n';
+    const GATE = '/opt/agent-queue/deploy-gate.sh';
+
+    /** A running, idle container; `env` is what image.env holds (undefined: absent), `gate` whether the image has deploy-gate.sh */
+    const host = (opts: {
+      newest?: string | null;
+      env?: string;
+      gate?: boolean;
+      recordFails?: boolean;
+    }) => {
+      const { newest = NEWEST, env, gate = true, recordFails } = opts;
+      run.mockImplementation(async (bin, a) => {
+        if (bin === 'gh') {
+          if (newest === null) throw fail(1);
+          return ok(newest);
+        }
+        const cmd = a.slice(3).join(' ');
+        if (cmd.includes('State.Running')) return ok('true\n');
+        if (cmd === 'cat /opt/cdwr-agent/image.env') {
+          if (env === undefined) throw fail(1);
+          return ok(env);
+        }
+        if (cmd.includes('test -e')) throw fail(1);
+        if (cmd.endsWith(`test -x ${GATE}`) && !gate) throw fail(1);
+        if (cmd.endsWith(`${GATE} record`) && recordFails) throw fail(3);
+        if (cmd.includes('State.Status')) return ok('sha256:abc=running\n');
+        return ok();
+      });
+    };
+
+    const inputOf = (needle: string) =>
+      run.mock.calls.find((c) => c[1].join(' ').includes(needle))?.[2]?.input;
+
+    it('copies image.env and compose.yaml before they are overwritten', async () => {
+      host({ env: 'AGENT_IMAGE_TAG=sha-1111111\n' });
+      expect(await deploy(args)).toBe(EXIT.ok);
+      const steps = calls();
+      const at = (needle: string) => steps.indexOf(needle);
+      const base = '/opt/cdwr-agent';
+      expect(
+        at(`cp -f ${base}/image.env ${base}/image.env.previous`)
+      ).toBeGreaterThan(at('cat /opt/cdwr-agent/image.env'));
+      expect(
+        at(`cp -f ${base}/compose.yaml ${base}/compose.yaml.previous`)
+      ).toBeLessThan(at(`tee ${base}/compose.yaml`));
+      expect(
+        at(`cp -f ${base}/image.env ${base}/image.env.previous`)
+      ).toBeLessThan(at(`tee ${base}/image.env`));
+    });
+
+    it('skips the copies on a first deploy', async () => {
+      host({});
+      expect(await deploy(args)).toBe(EXIT.ok);
+      expect(calls().some((s) => s.startsWith('cp -f'))).toBe(false);
+      expect(inputOf(`${GATE} record`)).toContain('"previous":null');
+    });
+
+    it('keeps the previous files on a redeploy of the running tag', async () => {
+      host({ env: 'AGENT_IMAGE_TAG=sha-abcdef0\n' });
+      expect(
+        await deploy(['--host', 'nuc', '--tag', 'sha-abcdef0', '--yes'])
+      ).toBe(EXIT.ok);
+      expect(calls().some((s) => s.startsWith('cp -f'))).toBe(false);
+    });
+
+    it('holds the newest build when an older tag is given', async () => {
+      host({ env: 'AGENT_IMAGE_TAG=sha-1111111\n' });
+      expect(
+        await deploy(['--host', 'nuc', '--tag', 'sha-2222222', '--yes'])
+      ).toBe(EXIT.ok);
+      const steps = calls();
+      const hold = steps.indexOf('tee /opt/cdwr-agent/hold');
+      // Once the tag runs, so a failed deploy leaves no hold behind
+      expect(hold).toBeGreaterThan(steps.findIndex((s) => s.includes('up -d')));
+      expect(inputOf('tee /opt/cdwr-agent/hold')).toBe('sha-abcdef0\n');
+      expect(steps.some((s) => s === 'rm -f /opt/cdwr-agent/hold')).toBe(false);
+    });
+
+    it('lifts the hold when the newest build is deployed', async () => {
+      host({ env: 'AGENT_IMAGE_TAG=sha-1111111\n' });
+      expect(
+        await deploy(['--host', 'nuc', '--tag', 'sha-abcdef0', '--yes'])
+      ).toBe(EXIT.ok);
+      const steps = calls();
+      expect(steps).toContain('rm -f /opt/cdwr-agent/hold');
+      expect(steps.some((s) => s.includes('tee /opt/cdwr-agent/hold'))).toBe(
+        false
+      );
+    });
+
+    it('lifts the hold when no tag is given', async () => {
+      host({ env: 'AGENT_IMAGE_TAG=sha-1111111\n' });
+      expect(await deploy(['--host', 'nuc', '--yes'])).toBe(EXIT.ok);
+      expect(calls()).toContain('rm -f /opt/cdwr-agent/hold');
+    });
+
+    it('leaves the hold alone and says so when the newest build cannot be found', async () => {
+      host({ newest: null, env: 'AGENT_IMAGE_TAG=sha-1111111\n' });
+      expect(await deploy(args)).toBe(EXIT.ok);
+      const steps = calls();
+      expect(steps.some((s) => s.includes('/opt/cdwr-agent/hold'))).toBe(false);
+      expect(JSON.stringify(ui.printed)).toContain(
+        'newest build was not found'
+      );
+    });
+
+    it('records the deploy in the container after the restart', async () => {
+      host({ env: 'AGENT_IMAGE_TAG=sha-1111111\n' });
+      expect(
+        await deploy(['--host', 'nuc', '--tag', 'sha-abcdef0', '--yes'])
+      ).toBe(EXIT.ok);
+      const steps = calls();
+      const record = steps.findIndex((s) =>
+        s.includes(`docker exec -i cdwr-agent ${GATE} record`)
+      );
+      expect(record).toBeGreaterThan(
+        steps.findIndex((s) => s.includes('up -d'))
+      );
+      const body = JSON.parse(inputOf(`${GATE} record`) ?? '{}');
+      expect(body).toMatchObject({
+        tag: 'sha-abcdef0',
+        previous: 'sha-1111111',
+        by: 'mac',
+        phase: 'ok',
+        reason: null,
+        failed: null
+      });
+      expect(body.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    });
+
+    it('says so and still succeeds when the image has no deploy-gate.sh', async () => {
+      host({ gate: false });
+      expect(await deploy(args)).toBe(EXIT.ok);
+      expect(calls().some((s) => s.endsWith(`${GATE} record`))).toBe(false);
+      expect(JSON.stringify(ui.printed)).toContain('not recorded');
+    });
+
+    it('does not fail the deploy when the record fails', async () => {
+      host({ recordFails: true });
+      expect(await deploy(args)).toBe(EXIT.ok);
+      expect(JSON.stringify(ui.printed)).toContain('not recorded');
+    });
   });
 });
