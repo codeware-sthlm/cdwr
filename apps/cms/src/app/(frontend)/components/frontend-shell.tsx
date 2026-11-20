@@ -44,7 +44,7 @@ export async function FrontendShell({
           nonce={nonce}
         >
           <header className="flex justify-end p-6 sm:p-8">
-            <ColorSchemeToggle />
+            <ColorSchemeToggle locale={lang} />
           </header>
           <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center p-6 sm:p-8">
             {children}
