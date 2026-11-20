@@ -1,11 +1,17 @@
 import { type Plan, defineCommand } from '../../cli/command';
+import { UsageError } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import { DEPLOYED, environmentInput } from '../../services/environment';
 import { readOwnSecrets, setInfisicalSecret } from '../../services/infisical';
 import { copyProblem } from '../agent/apply-list.logic';
 
-import { type CopyData, copyOutcome, copyState } from './copy-secret.logic';
-import { digest, guard, refuse, refuseChanged } from './secret-values.logic';
+import {
+  type CopyData,
+  copyOutcome,
+  copyState,
+  isAlreadyExists
+} from './copy-secret.logic';
+import { guard, refuse, refuseChanged, remember } from './secret-values.logic';
 
 export default defineCommand({
   summary: 'Copy one secret to another key in the same Infisical folder',
@@ -48,7 +54,7 @@ export default defineCommand({
         from,
         to,
         state,
-        read: digest(secrets[from])
+        read: remember(secrets[from])
       };
       if (state === 'same') {
         return {
@@ -85,14 +91,23 @@ export default defineCommand({
           `${to} at ${folder} changed in ${environment} since the plan; nothing written. Re-run to see the new plan`
         );
       }
-      await ctx.ui.task(`Writing ${to} at ${folder}`, () =>
-        setInfisicalSecret({
-          environment,
-          path: folder,
-          key: to,
-          value: source
-        })
-      );
+      await ctx.ui.task(`Writing ${to} at ${folder}`, async () => {
+        try {
+          await setInfisicalSecret({
+            environment,
+            path: folder,
+            key: to,
+            value: source,
+            createOnly: true
+          });
+        } catch (error) {
+          throw isAlreadyExists(error)
+            ? new UsageError(
+                `${to} at ${folder} was created since the plan; secret-copy never overwrites`
+              )
+            : error;
+        }
+      });
       const outcome = copyOutcome(data);
       return {
         summary: outcome,

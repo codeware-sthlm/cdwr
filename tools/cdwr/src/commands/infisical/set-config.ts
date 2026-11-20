@@ -4,7 +4,7 @@ import { DEPLOYED, environmentInput } from '../../services/environment';
 import { readOwnSecrets, setInfisicalSecret } from '../../services/infisical';
 import { setConfigProblem } from '../agent/apply-list.logic';
 
-import { digest, guard, refuse, refuseChanged } from './secret-values.logic';
+import { guard, refuse, refuseChanged, remember } from './secret-values.logic';
 import { type SetData, setOutcome, setState } from './set-config.logic';
 
 export default defineCommand({
@@ -49,7 +49,7 @@ export default defineCommand({
         key,
         value,
         state: setState(current, value),
-        read: digest(current)
+        read: remember(current)
       };
       if (data.state === 'same') {
         return { steps: [], nothing: 'already set', data, json: data };
