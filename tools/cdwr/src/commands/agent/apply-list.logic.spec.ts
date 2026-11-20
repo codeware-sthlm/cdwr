@@ -129,7 +129,8 @@ describe('validateItem', () => {
     'secret-set preview /apps/cms FEATURE_ON true',
     'secret-set production /apps/cms PUBLIC_URL https://example.com/path',
     'secret-set production /apps/cms POOL https://a.b/path',
-    'secret-rewrite production /apps/cms DATABASE_URL port=6543'
+    'secret-rewrite production /apps/cms DATABASE_URL port=6543',
+    'nuc-install'
   ])('accepts %s', (spec) => {
     expect(validateItem(first(`- [ ] ${spec}`), ctx)).toBeNull();
   });
@@ -288,7 +289,8 @@ describe('validateItem', () => {
     [
       'secret-set production /apps/cms SITE_URL 4',
       'SITE_URL must be an https url without credentials'
-    ]
+    ],
+    ['nuc-install abc', 'nuc-install takes 0 arguments']
   ])('refuses %s', (spec, why) => {
     expect(validateItem(first(`- [ ] ${spec}`), ctx)).toBe(why);
   });
