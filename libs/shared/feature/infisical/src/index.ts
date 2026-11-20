@@ -7,6 +7,7 @@ export {
   type FolderInspection,
   inspectInfisicalFolder
 } from './lib/inspect-infisical-folder';
+export { readOwnInfisicalSecrets } from './lib/read-own-infisical-secrets';
 export { deleteInfisicalSecret } from './lib/delete-infisical-secret';
 export { isNotFound, statusOf } from './lib/error-status';
 export {

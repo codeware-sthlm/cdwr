@@ -10,6 +10,7 @@ import {
   inspectInfisicalFolder as inspectFolder,
   listInfisicalSecretImports as listImports,
   withInfisical as readInfisical,
+  readOwnInfisicalSecrets as readOwn,
   setInfisicalSecret as setSecret
 } from '@codeware/shared/feature/infisical';
 import { ownDeployFlag } from '@codeware/shared/util/pure';
@@ -57,6 +58,17 @@ export async function readSecrets(
       secretKey,
       secretValue
     ])
+  );
+}
+
+/** The folder's own secrets as a record: references unexpanded, nothing imported */
+export async function readOwnSecrets(
+  environment: Environment,
+  path: string
+): Promise<Record<string, string>> {
+  const secrets = await muted(() => readOwn({ environment, path }));
+  return Object.fromEntries(
+    secrets.map(({ secretKey, secretValue }) => [secretKey, secretValue])
   );
 }
 
