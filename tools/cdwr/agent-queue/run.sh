@@ -218,6 +218,7 @@ query($n: Int!) {
   repository(owner: "codeware-sthlm", name: "cdwr") {
     pullRequest(number: $n) {
       id
+      title
       headRefName
       headRefOid
       state
@@ -1027,6 +1028,55 @@ record_activity() {
   return 0
 }
 
+# What the queue did on its own (a merge, its deploy, an apply item, a self-deploy), one event per
+# line in own.jsonl, kept 7 days and sent to own_actions each tick, so a failed send or a table not
+# yet migrated loses nothing. The daily review lists them. Not runs.jsonl: record keeps
+# only the run's last outcome, and implement.sh reads that file's 20 rows.
+OWN="$HOME_DIR/own.jsonl"
+# own_event <event json>: the event with its own deterministic event_id; host and at are filled in
+own_event() {
+  $check && return 0
+  jq -c --arg host "$(telemetry_host)" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+    {event_id, at: (.at // $at), host: $host, kind, ticket: (.ticket // null), pr: (.pr // null),
+     title: (.title // null), target: (.target // null), result, reason: (.reason // null)}' \
+    <<<"$1" >> "$OWN" 2>/dev/null || note "warn: own: an event was not kept"
+  return 0
+}
+# The NUC's self-deploy, once deploy.json settles on a tag and phase not yet recorded. deploy-gate.sh
+# writes the file from another process, so the comparison runs here, each tick, against the
+# deploy-recorded stamp.
+own_self_deploy() {
+  $check && return 0
+  setopt local_options no_err_exit
+  local file="$HOME_DIR/deploy.json" stamp="$HOME_DIR/deploy-recorded" ev key
+  [[ -r "$file" ]] || return 0
+  ev="$(jq -c 'select((.tag | type) == "string" and (.phase | IN("ok", "rolled-back", "stuck")))
+    | {event_id: "self-deploy:\(.tag):\(.phase)", kind: "self-deploy", target: .tag, result: .phase,
+       reason: (.reason // null),
+       at: (.at | if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T") then . else null end)}' "$file" 2>/dev/null)"
+  [[ -n "$ev" ]] || return 0
+  key="$(jq -r '.event_id' <<<"$ev")"
+  [[ "$(cat "$stamp" 2>/dev/null)" == "$key" ]] && return 0
+  own_event "$ev"
+  print -r -- "$key" > "$stamp"
+}
+# own.jsonl trimmed to its last 7 days, one line per event, and those sent; a row already in the
+# table is ignored. Detached, never waited for.
+own_send() {
+  $check && return 0
+  setopt local_options no_err_exit
+  [[ -s "$OWN" ]] || return 0
+  local rows
+  rows="$(jq -Rnc --argjson cut "$(( $(date +%s) - 7 * 86400 ))" '[inputs | fromjson? | objects
+    | select((.at // "" | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601? // 0) >= $cut)] | unique_by(.event_id)' "$OWN")" ||
+    { note "warn: own: own.jsonl not read"; return 0; }
+  jq -c '.[]' <<<"$rows" > "$OWN.tmp" && mv "$OWN.tmp" "$OWN"
+  telemetry_on || return 0
+  [[ "$rows" == "[]" ]] && return 0
+  ( supabase_upsert own_actions event_id "$rows" ignore ) &!
+  return 0
+}
+
 # One row for this run in the telemetry database, detached so it can't slow the exit.
 # --check starts nothing and sends nothing.
 record_run() {
@@ -1052,6 +1102,8 @@ on_exit() {
   # Activity first: its warn row belongs in this run's history
   record_usage
   record_activity
+  own_self_deploy
+  own_send
   keep_state
   job_state
   record_queue_state
@@ -1192,7 +1244,7 @@ watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
-  local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy
+  local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy ev
   gh_identity_or_note
   # The hold list sits beside watch.jq. Unread, no PR merges on its own
   holds="$(watch -Rsc 'include "watch"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
@@ -1252,7 +1304,7 @@ watch_prs() {
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --argjson holds "$holds" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
-      {id: $id, agentLabel: $agentLabel, pr: $pr, now: ($now | pr_state), prev: $state[$id],
+      {id: $id, agentLabel: $agentLabel, pr: $pr, title: ($now.title // null), now: ($now | pr_state), prev: $state[$id],
        handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
        apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null),
        merge: (if $holds == null then null else ($now | merge_verdict($node; $holds)) end)} | step')" ||
@@ -1262,6 +1314,7 @@ watch_prs() {
       note "watch: $level $msg"
       notice "$level" "$msg"
     done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
+    for ev in ${(f)"$(jq -c '.own[]?' <<<"$out")"}; do own_event "$ev"; done
     # GitHub's automatic review skips a PR the app opened, so a ticket parked on Copilot gets one
     # request per PR from here (step's askCopilot). The outcome stays on the entry and a failed try
     # is never repeated: Håkan has the desk's Copilot button for it.
@@ -1294,6 +1347,9 @@ watch_prs() {
         msg="$id: PR $pr could not join the merge queue: ${why:-GitHub refused}"
         note "watch: action $msg"
         notice action "$msg"
+        own_event "$(jq -nc --arg id "$id" --argjson pr "$pr" --arg oid "$oid" --arg why "${why:-GitHub refused}" \
+          --arg title "$(jq -r '.title // ""' <<<"$now")" '{event_id: "merge:\($id):\($pr):refused:\($oid)", kind: "merge",
+            ticket: $id, pr: $pr, title: (if $title == "" then null else $title end), result: "refused", reason: $why}')"
       fi
     fi
     if [[ "$(jq -r '.relabel' <<<"$out")" == true ]]; then
@@ -1302,7 +1358,14 @@ watch_prs() {
     fi
     # After a self-merge, the production deploy of the merge commit
     deploy="$(read_deploy "$(jq -c '.entry' <<<"$out")" "$id")"
-    [[ -n "$deploy" ]] && out="$(jq -c --argjson d "$deploy" '.entry.deploy = $d' <<<"$out")"
+    if [[ -n "$deploy" ]]; then
+      out="$(jq -c --argjson d "$deploy" '.entry.deploy = $d' <<<"$out")"
+      # A settled deploy is read once: read_deploy reads only a pending one
+      [[ "$(jq -r '.state' <<<"$deploy")" == pending ]] ||
+        own_event "$(jq -c --arg id "$id" --arg title "$(jq -r '.title // ""' <<<"$now")" '.entry
+          | {event_id: "deploy:\($id):\(.pr)", kind: "deploy", ticket: $id, pr, title: (if $title == "" then null else $title end),
+             target: ((.mergeCommit // "")[0:7] | if . == "" then null else . end), result: .deploy.state}' <<<"$out")"
+    fi
     state="$(jq -c --arg id "$id" --argjson e "$(jq -c '.entry' <<<"$out")" '.[$id] = $e' <<<"$state")"
   done
 
@@ -1500,6 +1563,8 @@ apply_list() {
     done
     entry="$(jq -c --arg bad "$bad" '.apply.checked = true
       | if $bad != "" then .apply.invalid = $bad | .apply.done = true else . end' <<<"$entry")"
+    [[ -n "$bad" ]] && own_event "$(jq -c --arg id "$id" --arg bad "$bad" '{event_id: "apply:\($id):\(.apply.commentId):invalid",
+      kind: "apply", ticket: $id, pr, target: "the apply list", result: "refused", reason: $bad}' <<<"$entry")"
   fi
   n="$(jq '.apply.items | length' <<<"$entry")"
   # A tick Linear did not take is tried again, never the item itself
@@ -1521,6 +1586,9 @@ apply_list() {
     if [[ "$res" == applied\ * ]]; then st=applied outcome="${res#applied }"
     else st=refused outcome="refused: ${res#refused }"; fi
     note "apply: $id $spec: $outcome"
+    own_event "$(jq -c --arg id "$id" --argjson i "$i" --arg spec "$spec" --arg st "$st" --arg why "${res#refused }" '
+      {event_id: "apply:\($id):\(.apply.commentId):\($i)", kind: "apply", ticket: $id, pr, target: $spec,
+       result: $st, reason: (if $st == "refused" then $why else null end)}' <<<"$entry")"
     entry="$(jq -c --argjson i "$i" --arg st "$st" --arg o "$outcome" '
       .apply.items[$i].status = $st | .apply.items[$i].outcome = $o
       | if $st == "refused" then .apply.done = true else . end' <<<"$entry")"

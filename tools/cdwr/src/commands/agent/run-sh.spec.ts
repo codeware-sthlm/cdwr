@@ -265,6 +265,280 @@ describe('run.sh', () => {
       exit.indexOf('  record_run')
     );
   });
+
+  // The own events keep what the activity row says about the run apart from them
+  it('keeps and sends the own events after the activity and before the queue state', () => {
+    const exit = SCRIPT.slice(SCRIPT.indexOf('on_exit() {'));
+    const at = (call: string) => exit.indexOf(`  ${call}\n`);
+    expect(at('own_self_deploy')).toBeGreaterThan(at('record_activity'));
+    expect(at('own_send')).toBeGreaterThan(at('own_self_deploy'));
+    expect(at('own_send')).toBeLessThan(at('record_queue_state'));
+  });
+});
+
+// What the queue did on its own: own.jsonl, kept 7 days and sent to own_actions
+describe('run.sh own events', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const canRun =
+    spawnSync('zsh', ['-c', 'true']).status === 0 &&
+    spawnSync('jq', ['--version']).status === 0;
+  let home: string;
+
+  const sleep = (ms: number) =>
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  const file = (name: string) =>
+    existsSync(join(home, name))
+      ? readFileSync(join(home, name), 'utf8')
+      : null;
+  const events = () =>
+    (file('own.jsonl') ?? '')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+  const put = (rows: (Record<string, unknown> | string)[]) =>
+    writeFileSync(
+      join(home, 'own.jsonl'),
+      rows
+        .map((r) => (typeof r === 'string' ? r : JSON.stringify(r)))
+        .join('\n') + '\n'
+    );
+
+  // Runs the body with the functions cut out of run.sh; supabase_upsert records its arguments
+  const sh = (
+    body: string[],
+    opts: { check?: boolean; telemetry?: boolean } = {}
+  ) =>
+    spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${home}"; OWN="${home}/own.jsonl"; check=${opts.check ?? false}`,
+          'telemetry_host() { print -r -- nuc; }',
+          `telemetry_on() { ${opts.telemetry === false ? 'return 1' : 'return 0'}; }`,
+          `supabase_upsert() { print -r -- "$1|$2|$3|$4" >> "${home}/upsert"; }`,
+          'note() { print -r -- "$*" >> "$HOME_DIR/notes"; }',
+          fn('own_event'),
+          fn('own_self_deploy'),
+          fn('own_send'),
+          ...body
+        ].join('\n')
+      ],
+      { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '', HOME: home } }
+    );
+  // The detached upsert: wait for its file, or for a moment when none is due
+  const upsert = () => {
+    for (let i = 0; i < 50 && !existsSync(join(home, 'upsert')); i++)
+      sleep(100);
+    const line = file('upsert');
+    if (line === null) return null;
+    const [table, key, rows, mode] = line.trim().split('|');
+    return {
+      table,
+      key,
+      mode,
+      rows: JSON.parse(rows as string) as Record<string, unknown>[]
+    };
+  };
+  const quiet = () => {
+    sleep(600);
+    return file('upsert');
+  };
+  const ago = (days: number) =>
+    new Date(Date.now() - days * 86_400_000).toISOString();
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'own-events-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  describe('own_event', () => {
+    it.skipIf(!canRun)('appends one line with the host and the time', () => {
+      const r = sh([
+        `own_event '{"event_id":"e1","kind":"merge","ticket":"COD-1","pr":5,"title":"t","target":"abc1234","result":"merged","reason":"why"}'`
+      ]);
+      expect(r.status).toBe(0);
+      const [e, ...rest] = events();
+      expect(rest).toEqual([]);
+      expect(e).toMatchObject({
+        event_id: 'e1',
+        host: 'nuc',
+        kind: 'merge',
+        ticket: 'COD-1',
+        pr: 5,
+        title: 't',
+        target: 'abc1234',
+        result: 'merged',
+        reason: 'why'
+      });
+      expect(e?.['at']).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    });
+
+    it.skipIf(!canRun)('keeps a given time and nulls what is missing', () => {
+      sh([
+        `own_event '{"event_id":"e2","kind":"deploy","result":"ok","at":"2026-01-02T03:04:05Z"}'`
+      ]);
+      expect(events()).toEqual([
+        {
+          event_id: 'e2',
+          at: '2026-01-02T03:04:05Z',
+          host: 'nuc',
+          kind: 'deploy',
+          ticket: null,
+          pr: null,
+          title: null,
+          target: null,
+          result: 'ok',
+          reason: null
+        }
+      ]);
+    });
+
+    it.skipIf(!canRun)('does nothing with --check', () => {
+      sh([`own_event '{"event_id":"e3","kind":"merge","result":"merged"}'`], {
+        check: true
+      });
+      expect(file('own.jsonl')).toBeNull();
+    });
+  });
+
+  describe('own_self_deploy', () => {
+    const deploy = (d: Record<string, unknown>) =>
+      writeFileSync(join(home, 'deploy.json'), JSON.stringify(d));
+    const tag = 'sha-abc';
+
+    it.skipIf(!canRun)('records a settled deploy once and stamps it', () => {
+      deploy({
+        tag,
+        phase: 'rolled-back',
+        reason: 'health check failed',
+        at: '2026-11-20T07:12:00Z'
+      });
+      sh(['own_self_deploy']);
+      expect(events()).toEqual([
+        {
+          event_id: `self-deploy:${tag}:rolled-back`,
+          at: '2026-11-20T07:12:00Z',
+          host: 'nuc',
+          kind: 'self-deploy',
+          ticket: null,
+          pr: null,
+          title: null,
+          target: tag,
+          result: 'rolled-back',
+          reason: 'health check failed'
+        }
+      ]);
+      expect(file('deploy-recorded')?.trim()).toBe(
+        `self-deploy:${tag}:rolled-back`
+      );
+      sh(['own_self_deploy']);
+      expect(events()).toHaveLength(1);
+    });
+
+    it.skipIf(!canRun).each(['ok', 'stuck'])('records phase %s', (phase) => {
+      deploy({ tag, phase });
+      sh(['own_self_deploy']);
+      expect(events()).toMatchObject([
+        { event_id: `self-deploy:${tag}:${phase}`, result: phase, reason: null }
+      ]);
+    });
+
+    it.skipIf(!canRun)('takes the time only when it looks like one', () => {
+      deploy({ tag, phase: 'ok', at: 'yesterday' });
+      sh(['own_self_deploy']);
+      expect(events()[0]?.['at']).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(events()[0]?.['at']).not.toBe('yesterday');
+    });
+
+    it.skipIf(!canRun).each(['checking', 'superseded'])(
+      'records nothing for phase %s',
+      (phase) => {
+        deploy({ tag, phase });
+        sh(['own_self_deploy']);
+        expect(file('own.jsonl')).toBeNull();
+        expect(file('deploy-recorded')).toBeNull();
+      }
+    );
+
+    it.skipIf(!canRun)('records a new phase of the same tag again', () => {
+      deploy({ tag, phase: 'stuck' });
+      sh(['own_self_deploy']);
+      deploy({ tag, phase: 'ok' });
+      sh(['own_self_deploy']);
+      expect(events().map((e) => e['event_id'])).toEqual([
+        `self-deploy:${tag}:stuck`,
+        `self-deploy:${tag}:ok`
+      ]);
+    });
+
+    it.skipIf(!canRun)('does nothing without a deploy.json', () => {
+      sh(['own_self_deploy']);
+      expect(file('own.jsonl')).toBeNull();
+    });
+  });
+
+  describe('own_send', () => {
+    const row = (id: string, at: string) => ({
+      event_id: id,
+      at,
+      host: 'nuc',
+      kind: 'merge',
+      result: 'merged'
+    });
+
+    it.skipIf(!canRun)(
+      'trims old rows and bad lines, dedupes, and upserts with ignore',
+      () => {
+        put([
+          row('old', ago(8)),
+          'not json',
+          row('b', ago(1)),
+          row('a', ago(2)),
+          row('b', ago(1))
+        ]);
+        sh(['own_send']);
+        const sent = upsert();
+        expect(sent).toMatchObject({
+          table: 'own_actions',
+          key: 'event_id',
+          mode: 'ignore'
+        });
+        expect(sent?.rows.map((r) => r['event_id']).sort()).toEqual(['a', 'b']);
+        expect(
+          events()
+            .map((e) => e['event_id'])
+            .sort()
+        ).toEqual(['a', 'b']);
+      }
+    );
+
+    it.skipIf(!canRun)(
+      'still trims with telemetry off, and sends nothing',
+      () => {
+        put([row('old', ago(8)), row('new', ago(1))]);
+        sh(['own_send'], { telemetry: false });
+        expect(quiet()).toBeNull();
+        expect(events().map((e) => e['event_id'])).toEqual(['new']);
+      }
+    );
+
+    it.skipIf(!canRun)('sends nothing when every row is old', () => {
+      put([row('old', ago(9))]);
+      sh(['own_send']);
+      expect(quiet()).toBeNull();
+      expect(events()).toEqual([]);
+    });
+
+    it.skipIf(!canRun)('sends nothing for an empty file', () => {
+      writeFileSync(join(home, 'own.jsonl'), '');
+      sh(['own_send']);
+      expect(quiet()).toBeNull();
+    });
+  });
 });
 
 // The queue reads its state from the telemetry tables; Linear documents are no longer written
@@ -4351,10 +4625,14 @@ describe('run.sh apply list', () => {
           'gh() { return 0; }',
           'note() { :; }',
           'record() { :; }',
+          `own_event() { print -r -- "$1" >> "${home}/own.calls"; }`,
           `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`
         ]
       );
       return {
+        own: lines('own.calls').map(
+          (l) => JSON.parse(l) as Record<string, unknown>
+        ),
         out: JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as {
           apply: {
             done: boolean;
@@ -4425,6 +4703,55 @@ describe('run.sh apply list', () => {
       expect(r.notices[0]).toMatch(
         /^action\|COD-9: apply list stopped at restart cdwr-cms: nope/
       );
+    });
+
+    describe('own events', () => {
+      it.skipIf(!canRun)('records an invalid list as one refused event', () => {
+        const bad = item('restart', ['cdwr-cms;rm']);
+        const r = list([a, bad], { [a.spec]: 'applied x' });
+        expect(r.own).toEqual([
+          {
+            event_id: 'apply:COD-9:c1:invalid',
+            kind: 'apply',
+            ticket: 'COD-9',
+            pr: 5,
+            target: 'the apply list',
+            result: 'refused',
+            reason: 'restart cdwr-cms;rm: not in the vocabulary'
+          }
+        ]);
+      });
+
+      it.skipIf(!canRun)('records an applied and a refused item', () => {
+        const r = list([a, b], {
+          [a.spec]: 'applied 2026-11-20T07:12Z',
+          [b.spec]: 'refused nope'
+        });
+        expect(r.own).toEqual([
+          {
+            event_id: 'apply:COD-9:c1:0',
+            kind: 'apply',
+            ticket: 'COD-9',
+            pr: 5,
+            target: a.spec,
+            result: 'applied',
+            reason: null
+          },
+          {
+            event_id: 'apply:COD-9:c1:1',
+            kind: 'apply',
+            ticket: 'COD-9',
+            pr: 5,
+            target: b.spec,
+            result: 'refused',
+            reason: 'nope'
+          }
+        ]);
+      });
+
+      it.skipIf(!canRun)('records nothing for a waiting item', () => {
+        expect(list([a], { [a.spec]: 'wait' }).own).toEqual([]);
+      });
     });
 
     it.skipIf(!canRun)('is done with a summary when all applied', () => {

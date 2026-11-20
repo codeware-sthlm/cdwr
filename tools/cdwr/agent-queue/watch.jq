@@ -232,6 +232,7 @@ def pr_state:
 # that first sees the PR merged with pending items snapshots them into entry.apply, with the merge
 # commit, and sends no merge notice: run.sh sends one when the list has run (apply_summary). Once
 # stored, entry.apply is kept while the PR stays the same, as copilotAsked is.
+# $in.title is the PR's title, carried only into own: the events run.sh keeps in own.jsonl.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr
@@ -291,8 +292,20 @@ def step:
      elif $now.state == "closed" then [ { level: "info", message: "\($id): PR #\($pr) closed without merging" } ]
      else [] end) as $change
   | (if $heldNow then [ { level: "action", message: "\($id): PR #\($pr) held: \($mv.verdict)" } ] else [] end) as $held
+  # What the watch did on its own, for own_actions: a PR it enqueued first seen merged, its removal
+  # from the queue, and a claimed merge it held. Each event_id is the same on a repeated step.
+  | ((if $now.state == "merged" and $prev.state != "merged" and ($am0.tries // 0) >= 1
+      then [ { event_id: "merge:\($id):\($pr):merged", result: "merged", reason: null } ] else [] end)
+     + (if $removed and $am0 != null
+        then [ { event_id: "merge:\($id):\($pr):left:\($now.removedAt)", result: "left-queue",
+                 reason: (if $retry then "\($why), retrying once" else $why end) } ] else [] end)
+     + (if $heldNow
+        then [ { event_id: "merge:\($id):\($pr):held:\($now.oid // "")", result: "held", reason: $mv.verdict } ]
+        else [] end)
+     | map({ kind: "merge", ticket: $id, pr: $pr, title: ($in.title // null), target: null, at: $in.at } + .)) as $own
   | {
       notices: ($removal + $change + $held),
+      own: $own,
       relabel: ($now.state == "merged" and ($review | not) and ($prev.relabelled != true)),
       # run.sh enqueues with the node id and head oid of the verdict. On success the entry's
       # autoMerge stands; on failure run.sh stores autoMergeFailed instead, so that head is not tried again.

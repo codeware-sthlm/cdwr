@@ -8126,11 +8126,19 @@ describe('step with merge', () => {
     prev?: Record<string, unknown> | null;
     merge?: Record<string, unknown> | null;
     label?: string;
+    title?: string;
   };
-  const step = ({ now = {}, prev = null, merge = OK, label }: Over = {}) =>
+  const step = ({
+    now = {},
+    prev = null,
+    merge = OK,
+    label,
+    title
+  }: Over = {}) =>
     run('step', {
       id: 'COD-9',
       pr: 5,
+      ...(title === undefined ? {} : { title }),
       now: {
         state: 'open',
         removedAt: null,
@@ -8144,6 +8152,7 @@ describe('step with merge', () => {
       merge,
       agentLabel: label ?? 'agent:review'
     }) as {
+      own: Array<Record<string, unknown>>;
       notices: Array<{ level: string; message: string }>;
       enqueue: boolean;
       autoMergeFailed: AutoMerge | null;
@@ -8386,6 +8395,111 @@ describe('step with merge', () => {
 
     it('is silent outside agent:review', () => {
       expect(step({ merge: HELD, label: 'agent:working' }).notices).toEqual([]);
+    });
+  });
+
+  describe('own events', () => {
+    const base = {
+      kind: 'merge',
+      ticket: 'COD-9',
+      pr: 5,
+      target: null,
+      at: AT
+    };
+    const queued = (over: Record<string, unknown> = {}) =>
+      prev({
+        state: 'queued',
+        autoMerge: { at: AT, tries: 1, oid: 'h1' },
+        ...over
+      });
+    const removed = {
+      state: 'open',
+      removedAt: '2026-04-01T00:00:00Z',
+      removedReason: 'CHECKS_FAILED'
+    };
+
+    it('is empty on an ordinary open step', () => {
+      expect(step({ merge: null }).own).toEqual([]);
+    });
+
+    it('records a merge after the watch enqueued it, with the title', () => {
+      const r = step({
+        now: { state: 'merged' },
+        merge: null,
+        title: 'feat: a thing',
+        prev: queued()
+      });
+      expect(r.own).toEqual([
+        {
+          ...base,
+          title: 'feat: a thing',
+          event_id: 'merge:COD-9:5:merged',
+          result: 'merged',
+          reason: null
+        }
+      ]);
+    });
+
+    it('has a null title when none is passed', () => {
+      const r = step({ now: { state: 'merged' }, merge: null, prev: queued() });
+      expect(r.own[0]).toMatchObject({ title: null });
+    });
+
+    it('records no merge the watch never enqueued', () => {
+      expect(
+        step({
+          now: { state: 'merged' },
+          merge: null,
+          prev: prev({ state: 'open' })
+        }).own
+      ).toEqual([]);
+    });
+
+    it('records the merge once, not on the next step', () => {
+      expect(
+        step({
+          now: { state: 'merged' },
+          merge: null,
+          prev: queued({ state: 'merged' })
+        }).own
+      ).toEqual([]);
+    });
+
+    it('records a first fixable removal with the retry', () => {
+      const r = step({ now: removed, merge: null, prev: queued() });
+      expect(r.own).toEqual([
+        {
+          ...base,
+          title: null,
+          event_id: 'merge:COD-9:5:left:2026-04-01T00:00:00Z',
+          result: 'left-queue',
+          reason: 'checks failed, retrying once'
+        }
+      ]);
+    });
+
+    it('records a removal no session can fix with the bare reason', () => {
+      const r = step({
+        now: { ...removed, removedReason: 'QUEUE_CLEARED' },
+        merge: null,
+        prev: queued()
+      });
+      expect(r.own).toMatchObject([
+        { result: 'left-queue', reason: 'queue cleared' }
+      ]);
+    });
+
+    it('records the held merge with the verdict', () => {
+      const r = step({ merge: HELD });
+      expect(r.own).toEqual([
+        {
+          ...base,
+          title: null,
+          event_id: 'merge:COD-9:5:held:h1',
+          result: 'held',
+          reason: HELD.verdict
+        }
+      ]);
     });
   });
 });
