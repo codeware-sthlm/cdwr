@@ -806,7 +806,7 @@ job_line() {
   elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
-  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh deploy-gate.sh linear-tools.txt; do
+  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh deploy-gate.sh linear-tools.txt hold-paths.txt; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · $kind unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")

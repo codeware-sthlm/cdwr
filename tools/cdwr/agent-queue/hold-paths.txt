@@ -1,0 +1,18 @@
+# The hold list: a green agent PR that changes a file matching one of these globs waits for
+# Håkan instead of merging on its own (watch.jq `hold_globs`, `merge_verdict`). One glob per
+# line, `<glob>  # <reason>`. `**` matches any path, `*` any run without `/`, `?` one character.
+# The watch reads the installed copy, which matches main, so a PR can't drop a glob for itself.
+
+apps/cms/src/migrations/**  # one-way on tenant data
+libs/app-cms/util/access/**  # access control
+libs/app-cms/ui/auth/**  # cms login screens
+apps/cms/src/collections/users/**  # login, TOTP, throttle, email verification
+apps/cms/src/collections/tenants/**  # tenant API-key auth
+libs/app-cms/data-access/src/lib/login-member.ts  # member login
+libs/shared/util/csp/**  # the cms CSP
+libs/app-headless/feature/security/**  # headless CSP and the site gate
+.github/workflows/fly-deployment.yml  # production deploy
+packages/fly-deployment-action/**  # production deploy
+apps/agent-host/nuc/**  # the NUC's root installer and units
+tools/cdwr/agent-queue/implement.sh  # the implementing session's guardrails
+tools/cdwr/agent-queue/hold-paths.txt  # this list

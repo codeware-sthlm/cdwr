@@ -2268,7 +2268,8 @@ describe('run.sh job.json', () => {
     'checkin.sh',
     'telemetry.sh',
     'deploy-gate.sh',
-    'linear-tools.txt'
+    'linear-tools.txt',
+    'hold-paths.txt'
   ];
   let root: string;
   let repo: string;
