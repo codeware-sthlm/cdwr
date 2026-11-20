@@ -608,6 +608,23 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
       expect(body.state).toBeNull();
       expect(body.detail).toBeNull();
     });
+
+    it('fails a failed send only when strict', async () => {
+      status = 500;
+      const lax = await zsh(configured(), `telemetry_session abc implement`);
+      expect(lax.stdout).toBe('rc=0');
+      const strict = await zsh(
+        configured(),
+        `telemetry_session abc implement working '' strict`
+      );
+      expect(strict.stdout).toBe('rc=1');
+      status = 201;
+      const good = await zsh(
+        configured(),
+        `telemetry_session abc implement working '' strict`
+      );
+      expect(good.stdout).toBe('rc=0');
+    });
   });
 
   describe('telemetry_host_metrics', () => {
