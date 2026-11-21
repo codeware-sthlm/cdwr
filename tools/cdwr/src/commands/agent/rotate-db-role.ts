@@ -286,14 +286,15 @@ function adminUrlOf(target: DbRoleTarget, given: string): string {
 /**
  * Postgres keeps one password per role, so the old url stops working the
  * moment the role is altered. The whole run holds the host deploy lock and
- * keeps the queue paused and idle from before the alter to the restart. The
+ * keeps the queue paused and idle from before the alter until the new url
+ * logs in. The
  * password reaches the server only as a SCRAM verifier, on psql's stdin. A run
  * that stops part way is fixed by running it again: the admin can always set
  * a new password, so there is no stage to resume.
  */
 export default defineCommand({
   summary: 'A new password for an agent-host database role',
-  description: `Sets a generated password on the role behind an agent-host database url (${TARGET_NAMES.map((t) => `${t}: ${DB_ROLE_TARGETS[t].key}`).join(', ')}) over an admin connection, logs in with the new url, writes it to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container with the queue idle, all under the host deploy lock, and checks that the container holds the new url (by hash). The admin url of the platform and backup roles defaults to the cms's ${CMS_ADMIN_SECRET.key}; the desk role needs the agent-queue Supabase owner url. No url or password is ever printed.`,
+  description: `Sets a generated password on the role behind an agent-host database url (${TARGET_NAMES.map((t) => `${t}: ${DB_ROLE_TARGETS[t].key}`).join(', ')}) over an admin connection, writes the new url to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container and logs in with the new url, with the queue idle and all under the host deploy lock, and checks that the container holds the new url (by hash). The admin url of the platform and backup roles defaults to the cms's ${CMS_ADMIN_SECRET.key}; the desk role needs the agent-queue Supabase owner url. No url or password is ever printed.`,
   danger: 'destructive',
   needs: ['psql'],
   inputs: {
@@ -312,7 +313,7 @@ export default defineCommand({
     adminUrl: input.secret({
       prompt:
         'Admin url of the database (the owner, or a role that may alter the target)?',
-      description: `A postgres:// url that may alter the role; \`${CMS_ADMIN}\` (the default for platform and backup) is the cms's ${CMS_ADMIN_SECRET.key}. Prefer the prompt: a flag lands in shell history`,
+      description: `A postgres:// url that may alter the role; \`${CMS_ADMIN}\` (the default for platform and backup) is the cms's ${CMS_ADMIN_SECRET.key}. Give a Supabase pooler url: the direct host is IPv6 only. Prefer the prompt: a flag lands in shell history`,
       short: 'a',
       default: (resolved) =>
         CMS_TARGETS.includes(resolved['target'] as DbRoleTarget)
@@ -483,10 +484,10 @@ export default defineCommand({
         },
         {
           label: `Restart ${CONTAINER} on ${host}`,
-          detail: 'then resume the queue'
+          detail: 'the queue stays paused'
         },
         {
-          label: `Log in as "${role}" with the new url`,
+          label: `Log in as "${role}" with the new url, then resume the queue`,
           detail: `retried for up to ${(LOGIN_TRIES * LOGIN_PAUSE_MS) / 1000} s while a pooler catches up`
         },
         {
