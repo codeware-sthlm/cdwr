@@ -1,6 +1,7 @@
 'use client';
 
 import { CopyButton } from '@codeware/shared/ui/copy-button';
+import { Badge } from '@codeware/shared/ui/shadcn/components/badge';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { Input } from '@codeware/shared/ui/shadcn/components/input';
 import { Label } from '@codeware/shared/ui/shadcn/components/label';
@@ -14,10 +15,9 @@ import {
   SheetTrigger
 } from '@codeware/shared/ui/shadcn/components/sheet';
 import {
-  Tabs,
-  TabsList,
-  TabsTrigger
-} from '@codeware/shared/ui/shadcn/components/tabs';
+  ToggleGroup,
+  ToggleGroupItem
+} from '@codeware/shared/ui/shadcn/components/toggle-group';
 import {
   Tooltip,
   TooltipContent,
@@ -57,6 +57,15 @@ import {
 import { createContext, useContext, useId, useMemo, useState } from 'react';
 
 import { ContrastReport } from './ContrastReport';
+import {
+  type DroppedOverrides,
+  countOverrides,
+  describeRecipeChange,
+  dropDerivedOverrides,
+  droppedNames,
+  mergeDropped,
+  restoreDropped
+} from './derived-overrides';
 import { OverridePanel, type ThemeOverrides } from './OverridePanel';
 import { previewCss, previewScope } from './preview-css';
 import { ThemePreview } from './ThemePreview';
@@ -342,6 +351,8 @@ type ThemeStudioProps = {
   recipe?: ThemeRecipe;
   /** Hand-edited tokens to restore alongside the recipe */
   overrides?: ThemeOverrides;
+  /** Which scheme the preview opens on; the admin shows both */
+  initialScheme?: 'light' | 'dark' | 'both';
   onSelect?: (result: ThemeStudioResult) => void;
   onClose?: () => void;
 };
@@ -371,7 +382,7 @@ function SwatchGroups({
     <div className="space-y-2">
       {groups.map(({ label, families }) => (
         <div key={label} className="space-y-1">
-          <p className="text-muted-foreground/70 text-[10px] tracking-wide uppercase">
+          <p className="text-muted-foreground text-[10px] tracking-wide uppercase">
             {label}
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -494,10 +505,15 @@ export function ThemeStudio({
   selectLabel = 'Use this theme',
   recipe: initialRecipe,
   overrides: initialOverrides,
+  initialScheme = 'both',
   onSelect,
   onClose
 }: ThemeStudioProps = {}) {
   const scope = useId().replace(/:/g, '');
+  // On a page the studio is not the view: the page owns the one `main` and
+  // the `complementary` landmark, so the studio's panes are plain containers
+  const Main = fit === 'content' ? 'div' : 'main';
+  const Aside = fit === 'content' ? 'div' : 'aside';
   // Who may choose a licensed face, narrowed to what this deployment may show
   const offeredFonts = useMemo(
     () => ({
@@ -518,7 +534,12 @@ export function ThemeStudio({
   const [overrides, setOverrides] = useState<ThemeOverrides>(
     initialOverrides ?? NO_OVERRIDES
   );
-  const [scheme, setScheme] = useState<'light' | 'dark' | 'both'>('both');
+  // What the last recipe change took from the overrides, until restored or
+  // dismissed
+  const [dropped, setDropped] = useState<DroppedOverrides | null>(null);
+  const [scheme, setScheme] = useState<'light' | 'dark' | 'both'>(
+    initialScheme
+  );
   const [optionsOpen, setOptionsOpen] = useState(true);
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   // Seeded from the open theme, not left at a placeholder. The name is not
@@ -580,8 +601,7 @@ export function ThemeStudio({
     contrast.dark.filter(({ passes }) => !passes).length +
     broken.length;
 
-  const overrideCount =
-    Object.keys(overrides.light).length + Object.keys(overrides.dark).length;
+  const overrideCount = countOverrides(overrides);
 
   const files = useMemo(
     () => themeFiles(exportName, recipe, overrides),
@@ -677,8 +697,30 @@ export function ThemeStudio({
     );
 
   const ids = previewScope(scope);
+
+  // The one way the recipe changes: an override whose token the new recipe
+  // derives differently would otherwise keep pinning it, and the change would
+  // not show
+  const changeRecipe = (next: ThemeRecipe, cause?: string) => {
+    const { kept, dropped: taken } = dropDerivedOverrides(
+      overrides,
+      generated,
+      buildThemeTokens(next)
+    );
+
+    if (countOverrides(taken) > 0) {
+      setOverrides(kept);
+      setDropped((earlier) =>
+        mergeDropped(earlier, {
+          cause: cause ?? describeRecipeChange(recipe, next),
+          tokens: taken
+        })
+      );
+    }
+    setRecipe(next);
+  };
   const update = (patch: Partial<ThemeRecipe>) =>
-    setRecipe((current) => ({ ...current, ...patch }));
+    changeRecipe({ ...recipe, ...patch });
 
   return (
     <TooltipProvider>
@@ -695,7 +737,7 @@ export function ThemeStudio({
           </style>
 
           {optionsOpen && (
-            <aside className="border-border bg-muted/30 flex min-h-0 w-72 shrink-0 flex-col border-r">
+            <Aside className="border-border bg-muted/30 flex min-h-0 w-72 shrink-0 flex-col border-r">
               <div className="flex h-12 shrink-0 flex-col justify-center border-b px-4">
                 <h2 className="text-sm font-semibold">
                   {themeName ?? 'Theme studio'}
@@ -708,7 +750,16 @@ export function ThemeStudio({
               </div>
 
               <div className={optionsPane({ fit })}>
-                <div className={optionsBody({ fit })}>
+                <div
+                  className={optionsBody({ fit })}
+                  // Taken out of the flow on a page, so it scrolls on its own
+                  // and a keyboard needs to reach it to scroll it
+                  {...(fit === 'content' && {
+                    tabIndex: 0,
+                    role: 'group',
+                    'aria-label': 'Theme options'
+                  })}
+                >
                   <div className="space-y-2">
                     <Label className="text-xs">Base colour</Label>
                     <p className="text-muted-foreground text-[11px]">
@@ -921,6 +972,11 @@ export function ThemeStudio({
                         <Button variant="outline" size="sm" className="w-full">
                           Fine-tune tokens
                           {overrideCount > 0 && ` (${overrideCount})`}
+                          {dropped && (
+                            <Badge variant="warning">
+                              {droppedNames(dropped.tokens).length} dropped
+                            </Badge>
+                          )}
                         </Button>
                       </SheetTrigger>
                       <SheetContent
@@ -932,8 +988,9 @@ export function ThemeStudio({
                         <SheetHeader className="p-0">
                           <SheetTitle>Fine-tune tokens</SheetTitle>
                           <SheetDescription>
-                            An edited token stops following the recipe, so
-                            changing the brand or base later leaves it behind.
+                            An edited token stops following the recipe until a
+                            change to the recipe derives it again, which drops
+                            the edit. Restore brings it back.
                           </SheetDescription>
                         </SheetHeader>
                         <OverridePanel
@@ -941,6 +998,16 @@ export function ThemeStudio({
                           container={root}
                           overrides={overrides}
                           issues={issues}
+                          dropped={dropped}
+                          onRestore={() => {
+                            if (dropped) {
+                              setOverrides(
+                                restoreDropped(overrides, dropped.tokens)
+                              );
+                            }
+                            setDropped(null);
+                          }}
+                          onDismiss={() => setDropped(null)}
                           onChange={setOverrides}
                         />
                       </SheetContent>
@@ -1143,10 +1210,10 @@ export function ThemeStudio({
                   </div>
                 </div>
               </div>
-            </aside>
+            </Aside>
           )}
 
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <header className="border-border flex h-12 shrink-0 items-center justify-between gap-3 border-b px-5">
               <div className="flex items-center gap-3">
                 <Hint label={optionsOpen ? 'Hide options' : 'Show options'}>
@@ -1165,30 +1232,35 @@ export function ThemeStudio({
                 </Hint>
 
                 {/* Lives here rather than in the panel, so it survives collapsing */}
-                <Hint label="Feeling lucky — rolls a recipe that passes contrast. Any fine-tuned tokens are kept.">
+                <Hint label="Feeling lucky — rolls a recipe that passes contrast. Fine-tuned tokens the new recipe derives are dropped.">
                   <Button
                     size="icon"
                     variant="ghost"
                     className="size-8"
-                    onClick={() => setRecipe(randomRecipe())}
+                    onClick={() => changeRecipe(randomRecipe(), 'The shuffle')}
                     aria-label="Shuffle the theme"
                   >
                     <DicesIcon className="size-4" />
                   </Button>
                 </Hint>
 
-                <Tabs
+                <ToggleGroup
+                  type="single"
                   value={scheme}
+                  // Radix clears the value when the active item is pressed
+                  // again, and there is no "no scheme" to fall back to
                   onValueChange={(value) =>
-                    setScheme(value as 'light' | 'dark' | 'both')
+                    value && setScheme(value as 'light' | 'dark' | 'both')
                   }
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  aria-label="Preview scheme"
                 >
-                  <TabsList>
-                    <TabsTrigger value="light">Light</TabsTrigger>
-                    <TabsTrigger value="dark">Dark</TabsTrigger>
-                    <TabsTrigger value="both">Both</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                  <ToggleGroupItem value="light">Light</ToggleGroupItem>
+                  <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+                  <ToggleGroupItem value="both">Both</ToggleGroupItem>
+                </ToggleGroup>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1242,7 +1314,7 @@ export function ThemeStudio({
                 {scheme !== 'light' && <ThemePreview id={ids.dark} dark />}
               </div>
             </div>
-          </main>
+          </Main>
         </div>
       </PortalContainer.Provider>
     </TooltipProvider>

@@ -1,0 +1,15 @@
+# Only what the build reaches gets into the context: the desk and the root files its install
+# and its vite build read
+*
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/patches
+!/tsconfig.base.json
+!/apps/desk
+# The shared components the desk renders with, and what they import
+!/libs/shared/ui/shadcn/src
+!/libs/shared/util/ui/src
+!/libs/shared/util/agent-review/src
+/apps/desk/src-tauri/target
+/apps/desk/node_modules

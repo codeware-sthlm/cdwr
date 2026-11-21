@@ -31,6 +31,8 @@ export default defineCommand({
   inputs: {
     shots: input.multiselect<string>({
       prompt: 'Which shots? Each one costs money.',
+      description: 'Shots to generate; each one is billed',
+      short: 's',
       min: 1,
       initial: SHOTS.map((shot) => shot.name),
       choices: () =>
@@ -42,6 +44,8 @@ export default defineCommand({
     }),
     model: input.select<string>({
       prompt: 'Which tier?',
+      description: 'Model tier to generate with',
+      short: 'm',
       initial: MODELS[0]?.id,
       choices: () =>
         MODELS.map(({ id, label, hint }) => ({ value: id, label, hint }))
@@ -49,6 +53,8 @@ export default defineCommand({
     customModel: input.optional(
       input.string({
         prompt: 'Model reference',
+        description: 'Replicate model reference for the custom tier',
+        short: 'c',
         placeholder: 'owner/name or owner/name:version',
         schema: z
           .string()

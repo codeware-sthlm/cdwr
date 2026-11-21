@@ -35,6 +35,8 @@ export interface RunOptions {
   timeout?: number;
   /** Bytes of output to keep; commands that dump SQL need more than the default */
   maxBuffer?: number;
+  /** Written to the child's stdin, which is then closed */
+  input?: string;
 }
 
 /** An exec failure that keeps both streams, so the caller can show them */
@@ -61,6 +63,8 @@ export function run(
   options: RunOptions = {}
 ): Promise<Output> {
   return new Promise((resolve, reject) => {
+    // A child that exits without reading its stdin makes the write fail with EPIPE
+    let stdinError: NodeJS.ErrnoException | undefined;
     const child = execFile(
       binary,
       args,
@@ -72,17 +76,18 @@ export function run(
         encoding: 'utf8'
       },
       (error, stdout, stderr) => {
-        if (error) {
+        const failure = error ?? stdinError;
+        if (failure) {
           const code =
-            'code' in error && error.code !== undefined
-              ? (error.code as number | string)
+            'code' in failure && failure.code !== undefined
+              ? (failure.code as number | string)
               : null;
           reject(
             new CommandError(
               [binary, ...args].join(' '),
               stdout,
               stderr,
-              error.killed ? 'killed' : code
+              error?.killed ? 'killed' : code
             )
           );
           return;
@@ -90,6 +95,12 @@ export function run(
         resolve({ stdout, stderr });
       }
     );
+    if (options.input !== undefined) {
+      child.stdin?.on('error', (error: NodeJS.ErrnoException) => {
+        stdinError ??= error;
+      });
+      child.stdin?.end(options.input);
+    }
     track(child);
   });
 }
@@ -146,6 +157,80 @@ export function runStreaming(
             code ?? signal
           )
         );
+    });
+  });
+}
+
+/**
+ * Run a binary on the terminal, stdio inherited, and resolve its exit code
+ * (null when a signal ended it). Rejects with the spawn error, such as ENOENT.
+ * Ctrl-C and Ctrl-\ reach the child alone while it runs, as with system(3):
+ * left to their default here they would end this process under it.
+ */
+export function runInteractive(
+  binary: string,
+  args: string[],
+  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
+): Promise<number | null> {
+  const ignore = (): void => undefined;
+  process.on('SIGINT', ignore);
+  process.on('SIGQUIT', ignore);
+  const restore = (): void => {
+    process.off('SIGINT', ignore);
+    process.off('SIGQUIT', ignore);
+  };
+  // A prompt before may have left stdin raw or flowing; the child reads it alone
+  if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  process.stdin.pause();
+  return new Promise<number | null>((resolve, reject) => {
+    const child = track(spawn(binary, args, { ...options, stdio: 'inherit' }));
+    child.once('error', reject);
+    child.once('exit', (code) => resolve(code));
+  }).finally(restore);
+}
+
+/**
+ * Start a binary that holds something while it runs, such as an ssh to
+ * `flock … cat`, and resolve once it prints the `ready` line. The release
+ * closes its stdin and resolves when it has exited. Rejects with a
+ * CommandError carrying the exit code when it exits before it is ready.
+ */
+export function hold(
+  binary: string,
+  args: string[],
+  ready: string
+): Promise<() => Promise<void>> {
+  return new Promise((resolve, reject) => {
+    const child = track(
+      spawn(binary, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    );
+    let held = false;
+    let stdout = '';
+    let stderr = '';
+    const exited = new Promise<void>((done) => child.once('close', done));
+    child.stdin?.on('error', () => undefined);
+    child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (held) return;
+      stdout += chunk.toString();
+      if (!stdout.split(/\r?\n/).slice(0, -1).includes(ready)) return;
+      held = true;
+      resolve(async () => {
+        child.stdin?.end();
+        await exited;
+      });
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      if (held) return;
+      reject(
+        new CommandError(
+          [binary, ...args].join(' '),
+          stdout,
+          stderr,
+          code ?? signal
+        )
+      );
     });
   });
 }

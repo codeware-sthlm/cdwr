@@ -1,0 +1,285 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createAdapter } from '../data';
+import type { Issue, IssueDetail } from '../linear';
+import { SupabaseError, toRuns } from '../supabase';
+
+import { createLoader, prAttachment } from './load';
+import { createState } from './state';
+
+const issue = (id: string, labels: string[] = []): Issue => ({
+  id,
+  title: id,
+  priority: { value: 2 },
+  status: 'x',
+  statusType: 'started',
+  labels,
+  createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
+  url: `https://linear.app/${id}`,
+  completedAt: null,
+  canceledAt: null,
+  prReady: false
+});
+
+const detail: IssueDetail = {
+  description: '',
+  relations: { blockedBy: [] },
+  attachments: []
+};
+
+const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
+  const linear = {
+    listOpen: vi.fn(() =>
+      Promise.resolve({
+        triage: [],
+        backlog: [],
+        unstarted: [],
+        started: [issue('COD-1', ['agent:ready'])]
+      })
+    ),
+    listIdeas: vi.fn(() => Promise.resolve([])),
+    listClosed: vi.fn(() => Promise.resolve([])),
+    getIssue: vi.fn(getIssue),
+    getIssueSummary: vi.fn(() => Promise.resolve(null)),
+    listComments: vi.fn(() => Promise.resolve({ comments: [] }))
+  };
+  const supabase = {
+    read: vi.fn(() =>
+      Promise.resolve({
+        runs: toRuns([], []),
+        usage: {
+          updated: '',
+          windowDays: 30,
+          total: 0,
+          pricesDate: '',
+          unpriced: [],
+          models: [],
+          days: [],
+          tickets: []
+        },
+        activity: null
+      })
+    ),
+    readHostMetrics: vi.fn(() => Promise.resolve([])),
+    readPlanUsage: vi.fn(() => Promise.resolve([])),
+    readUsageHours: vi.fn(() => Promise.resolve([])),
+    readGithubEvents: vi.fn(() => Promise.resolve([])),
+    readSessions: vi.fn(() => Promise.resolve([])),
+    readDeskCommands: vi.fn(() => Promise.resolve([])),
+    readSnoozes: vi.fn(() => Promise.resolve([])),
+    readReviews: vi.fn(() => Promise.resolve(null)),
+    readDismissals: vi.fn(() => Promise.resolve([])),
+    readTenants: vi.fn(() => Promise.resolve({ rows: [], main: null })),
+    subscribe: vi.fn(() => () => Promise.resolve())
+  };
+  const adapter = createAdapter({
+    linear,
+    supabase,
+    events: { onFocus: () => () => undefined }
+  });
+  const state = createState();
+  const render = vi.fn();
+  const loader = createLoader({ adapter, state, render });
+  return { adapter, linear, supabase, state, render, loader };
+};
+
+// Lets the watches answer and the details timer fire
+const settle = () => vi.advanceTimersByTimeAsync(1000);
+
+describe('createLoader', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('loads the details of the agent tickets', async () => {
+    const { loader, state, render } = setup(() => Promise.resolve(detail));
+    loader.watchAll();
+    await settle();
+    expect(state.details.has('COD-1')).toBe(true);
+    expect(render).toHaveBeenCalled();
+    loader.stop();
+  });
+
+  it('writes nothing once stopped, even for an answer on its way', async () => {
+    let answer: (d: IssueDetail) => void = () => undefined;
+    const { loader, state, render, linear } = setup(
+      () => new Promise((resolve) => (answer = resolve))
+    );
+    loader.watchAll();
+    await settle();
+    expect(linear.getIssue).toHaveBeenCalledWith('COD-1');
+    loader.stop();
+    const renders = render.mock.calls.length;
+    answer(detail);
+    await settle();
+    expect(state.details.size).toBe(0);
+    expect(render).toHaveBeenCalledTimes(renders);
+  });
+
+  it('drops a failure that arrives after stop', async () => {
+    let fail: (e: Error) => void = () => undefined;
+    const { loader, state, render } = setup(
+      () => new Promise((_resolve, reject) => (fail = reject))
+    );
+    loader.watchAll();
+    await settle();
+    loader.stop();
+    const renders = render.mock.calls.length;
+    fail(new Error('late'));
+    await settle();
+    expect(state.errors.has('detail:COD-1')).toBe(false);
+    expect(render).toHaveBeenCalledTimes(renders);
+  });
+
+  it('ignores watch events after stop', async () => {
+    const { loader, state, render, adapter } = setup(() =>
+      Promise.resolve(detail)
+    );
+    loader.watchAll();
+    await settle();
+    loader.stop();
+    state.data.buckets.clear();
+    const renders = render.mock.calls.length;
+    await adapter.invalidate('Linear');
+    await settle();
+    expect(state.data.buckets.size).toBe(0);
+    expect(render).toHaveBeenCalledTimes(renders);
+  });
+
+  it('refresh after stop writes nothing', async () => {
+    const { loader, state, render } = setup(() => Promise.resolve(detail));
+    loader.watchAll();
+    await settle();
+    loader.stop();
+    state.details.clear();
+    const renders = render.mock.calls.length;
+    await loader.refresh();
+    expect(state.details.size).toBe(0);
+    expect(render).toHaveBeenCalledTimes(renders);
+  });
+
+  it('keeps the plan and hourly usage rows, and drops them on a failure that cannot be trusted', async () => {
+    const { loader, state, supabase, adapter } = setup(() =>
+      Promise.resolve(detail)
+    );
+    loader.watchAll();
+    await settle();
+    expect(state.data.planUsage).toEqual([]);
+    expect(state.data.usageHours).toEqual([]);
+    expect(state.errors.has('planUsage')).toBe(false);
+
+    supabase.readPlanUsage.mockRejectedValueOnce(
+      new SupabaseError('bad_response', 'relation does not exist')
+    );
+    supabase.readUsageHours.mockRejectedValueOnce(
+      new SupabaseError('network', 'offline')
+    );
+    await adapter.invalidate('Supabase');
+    await settle();
+    expect(state.data.planUsage).toBeNull();
+    expect(state.errors.get('planUsage')?.code).toBe('bad_response');
+    // A network failure keeps what is shown
+    expect(state.data.usageHours).toEqual([]);
+    expect(state.errors.get('usageHours')?.code).toBe('network');
+    loader.stop();
+  });
+
+  it('drops the errors of tickets no longer requested on the next load', async () => {
+    const { loader, state, adapter } = setup(() => Promise.resolve(detail));
+    loader.watchAll();
+    await settle();
+    const failure = { code: 'network', message: 'x' };
+    state.errors.set('detail:COD-9', failure);
+    state.errors.set('handoffs:COD-9', failure);
+    state.errors.set('reason:COD-9', failure);
+    state.errors.set('runs', failure);
+    await adapter.invalidate('Linear');
+    await settle();
+    expect([...state.errors.keys()]).toEqual(['runs']);
+    loader.stop();
+  });
+
+  it('drops what a superseded load answers', async () => {
+    let fail: (e: Error) => void = () => undefined;
+    const { loader, state, adapter, linear } = setup(
+      () => new Promise((_resolve, reject) => (fail = reject))
+    );
+    loader.watchAll();
+    await settle();
+    // COD-1 leaves the agent's tickets, so the next load no longer asks for it
+    linear.listOpen.mockResolvedValue({
+      triage: [],
+      backlog: [],
+      unstarted: [],
+      started: [issue('COD-1')]
+    });
+    await adapter.invalidate('Linear');
+    await settle();
+    fail(new Error('late'));
+    await settle();
+    expect(state.errors.has('detail:COD-1')).toBe(false);
+    loader.stop();
+  });
+
+  it('keeps the PR attachment and when Linear last synced it', async () => {
+    const { loader, state } = setup(() =>
+      Promise.resolve({
+        ...detail,
+        attachments: [
+          {
+            url: 'https://github.com/codeware-sthlm/cdwr/pull/42',
+            updatedAt: '2026-11-02T10:00:00.000Z'
+          }
+        ]
+      })
+    );
+    loader.watchAll();
+    await settle();
+    expect(state.details.get('COD-1')).toMatchObject({
+      pr: 42,
+      prAt: Date.parse('2026-11-02T10:00:00.000Z')
+    });
+    loader.stop();
+  });
+
+  it('refresh clears the errors of per-ticket requests', async () => {
+    const { loader, state } = setup(() => Promise.resolve(detail));
+    loader.watchAll();
+    await settle();
+    const failure = { code: 'network', message: 'x' };
+    state.errors.set('detail:COD-9', failure);
+    state.errors.set('handoffs:COD-9', failure);
+    state.errors.set('reason:COD-9', failure);
+    state.errors.set('other', failure);
+    await loader.refresh();
+    expect([...state.errors.keys()]).toEqual(['other']);
+    loader.stop();
+  });
+});
+
+describe('prAttachment', () => {
+  const at = '2026-11-02T10:00:00.000Z';
+
+  it('takes the first cdwr PR and skips other links', () => {
+    expect(
+      prAttachment([
+        { url: 'https://github.com/o/r/pull/9', updatedAt: at },
+        { url: 'https://github.com/codeware-sthlm/cdwr/pull/7', updatedAt: at }
+      ])
+    ).toEqual({ pr: 7, at: Date.parse(at) });
+  });
+
+  it('has neither without a PR, and no time when it does not parse', () => {
+    expect(prAttachment([])).toEqual({ pr: null, at: null });
+    expect(
+      prAttachment([
+        { url: 'https://github.com/codeware-sthlm/cdwr/pull/7', updatedAt: '' }
+      ])
+    ).toEqual({ pr: 7, at: null });
+  });
+});

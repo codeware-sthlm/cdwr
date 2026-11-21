@@ -12,13 +12,22 @@ const customTranslationsSchema = z.object({
   authentication: z.object({
     cannotAssignToWorkspace: z.string(),
     cannotRemoveFromWorkspace: z.string(),
-    crossTenantDenied: z.string()
+    createSite: z.string(),
+    crossTenantDenied: z.string(),
+    newHere: z.string(),
+    passwordBreached: z.string(),
+    passwordTooLong: z.string(),
+    passwordTooShort: z.string(),
+    tooManyLoginAttempts: z.string()
   }),
   collection: z.object({
     cardWithSuffix: z.string(),
+    singleDocMissing: z.string(),
     socialMediaWithSuffix: z.string()
   }),
   customComponents: z.object({
+    inputRequired: z.string(),
+    newInput: z.string(),
     propRequired: z.string(),
     propsLoadFailed: z.string(),
     propsLoading: z.string(),
@@ -30,6 +39,9 @@ const customTranslationsSchema = z.object({
     badgeDraft: z.string(),
     badgeNew: z.string(),
     badgePublished: z.string(),
+    buildSiteBody: z.string(),
+    buildSiteCta: z.string(),
+    buildSiteTitle: z.string(),
     contentLead: z.string(),
     continueEditing: z.string(),
     emptyActivitySub: z.string(),
@@ -46,6 +58,13 @@ const customTranslationsSchema = z.object({
     limitLabel: z.string(),
     newButton: z.string(),
     openToEdit: z.string(),
+    pendingSiteMeanwhile: z.string(),
+    pendingSiteMeanwhileLabel: z.string(),
+    pendingSiteNext: z.string(),
+    pendingSiteNextLabel: z.string(),
+    pendingSiteNow: z.string(),
+    pendingSiteNowLabel: z.string(),
+    pendingSiteTitle: z.string(),
     recentActivity: z.string(),
     tabAllContent: z.string(),
     tabHome: z.string(),
@@ -70,15 +89,13 @@ const customTranslationsSchema = z.object({
     apexAddressesPending: z.string(),
     apexNote: z.string(),
     check: z.string(),
+    challengeHelp: z.string(),
     checkedAt: z.string(),
     compareResolvers: z.string(),
     copyRecord: z.string(),
+    details: z.string(),
+    detailsSub: z.string(),
     dnsLede: z.string(),
-    dnsNameHint: z.string(),
-    dnsOwnershipLede: z.string(),
-    dnsSettledLede: z.string(),
-    dnsTrafficLede: z.string(),
-    dnsValidationLede: z.string(),
     hasIssues: z.string(),
     heading: z.string(),
     issuedBy: z.string(),
@@ -89,10 +106,21 @@ const customTranslationsSchema = z.object({
     mismatchForceLogout: z.string(),
     mismatchHeading: z.string(),
     mismatchOpenExpected: z.string(),
+    moreInfo: z.string(),
+    nameHelp: z.string(),
+    nameHelpApex: z.string(),
     neverChecked: z.string(),
+    nextStepCreate: z.string(),
+    nextStepIssues: z.string(),
+    nextStepIssuing: z.string(),
+    nextStepNameServers: z.string(),
+    nextStepSpreading: z.string(),
+    nextStepWaitFly: z.string(),
     notRequested: z.string(),
+    optionalHeading: z.string(),
     ownerPlatform: z.string(),
     ownerWorkspace: z.string(),
+    ownershipHelp: z.string(),
     paused: z.string(),
     pending: z.string(),
     rateLimited: z.string(),
@@ -101,12 +129,67 @@ const customTranslationsSchema = z.object({
     resolversAgree: z.string(),
     resolversDisagree: z.string(),
     resolversHeading: z.string(),
+    resolversNameServers: z.string(),
     resolversNegativeCache: z.string(),
     resolversNoAnswer: z.string(),
     resolversUnreachable: z.string(),
     restart: z.string(),
     restartHint: z.string(),
-    saveFirst: z.string()
+    saveFirst: z.string(),
+    subdomainNote: z.string(),
+    verdictBlocking: z.string(),
+    verdictMatch: z.string(),
+    verdictMatchDetail: z.string(),
+    verdictMissing: z.string(),
+    verdictMissingDetail: z.string(),
+    verdictMissingIpv4: z.string(),
+    verdictMissingIpv6: z.string(),
+    verdictWrong: z.string(),
+    verdictWrongDetail: z.string(),
+    wildcardAdvice: z.string(),
+    wildcardFound: z.string()
+  }),
+  firstSite: z.object({
+    back: z.string(),
+    backToDashboard: z.string(),
+    create: z.string(),
+    creating: z.string(),
+    errorBody: z.string(),
+    errorTitle: z.string(),
+    hasPagesBody: z.string(),
+    hasPagesTitle: z.string(),
+    heading: z.string(),
+    next: z.string(),
+    pageAbout: z.string(),
+    pageAboutHint: z.string(),
+    pageContact: z.string(),
+    pageContactHint: z.string(),
+    pageHome: z.string(),
+    pageHomeHint: z.string(),
+    pageNews: z.string(),
+    pageNewsHint: z.string(),
+    pagePrivacy: z.string(),
+    pagePrivacyHint: z.string(),
+    pagesTitle: z.string(),
+    purposeAssociation: z.string(),
+    purposeAssociationHint: z.string(),
+    purposeBusiness: z.string(),
+    purposeBusinessHint: z.string(),
+    purposePortfolio: z.string(),
+    purposePortfolioHint: z.string(),
+    purposeTitle: z.string(),
+    retry: z.string(),
+    siteName: z.string(),
+    stepOf: z.string(),
+    summaryNote: z.string(),
+    summaryPages: z.string(),
+    summaryPurpose: z.string(),
+    summarySite: z.string(),
+    summaryTheme: z.string(),
+    summaryTitle: z.string(),
+    themeTitle: z.string(),
+    unavailableBody: z.string(),
+    unavailableTitle: z.string()
   }),
   forms: z.object({
     notificationRecipient: z.string(),
@@ -144,6 +227,12 @@ const customTranslationsSchema = z.object({
     manageFaq: z.string(),
     openHelp: z.string()
   }),
+  inviteCodes: z.object({
+    codeCopy: z.string(),
+    codeHint: z.string(),
+    generate: z.string(),
+    regenerate: z.string()
+  }),
   media: z.object({
     calloutDescriptions: z.string(),
     calloutTitle: z.string()
@@ -156,7 +245,6 @@ const customTranslationsSchema = z.object({
     colorSchemeLight: z.string(),
     contentLocale: z.string(),
     contentLocaleAria: z.string(),
-    create: z.string(),
     expandSidebar: z.string(),
     home: z.string(),
     interfaceLanguage: z.string(),
@@ -171,6 +259,36 @@ const customTranslationsSchema = z.object({
     searchPlaceholder: z.string(),
     themeLibrary: z.string(),
     uploadMedia: z.string()
+  }),
+  onboarding: z.object({
+    accountBody: z.string(),
+    accountTitle: z.string(),
+    back: z.string(),
+    dialogDescription: z.string(),
+    dialogTitle: z.string(),
+    draftsBody: z.string(),
+    draftsTitle: z.string(),
+    end: z.string(),
+    finish: z.string(),
+    moreBody: z.string(),
+    moreTitle: z.string(),
+    navigationBody: z.string(),
+    navigationTitle: z.string(),
+    next: z.string(),
+    pagesBody: z.string(),
+    pagesTitle: z.string(),
+    readMore: z.string(),
+    resume: z.string(),
+    searchHelpBody: z.string(),
+    searchHelpTitle: z.string(),
+    showMe: z.string(),
+    siteSettingsBody: z.string(),
+    siteSettingsTitle: z.string(),
+    skip: z.string(),
+    statisticsBody: z.string(),
+    statisticsTitle: z.string(),
+    stepLabel: z.string(),
+    takeTour: z.string()
   }),
   platform: z.object({
     buildTitle: z.string(),
@@ -254,6 +372,97 @@ const customTranslationsSchema = z.object({
     stateUnreadable: z.string(),
     title: z.string()
   }),
+  relatedContent: z.object({
+    categoryDescription: z.string(),
+    open: z.string(),
+    tab: z.string(),
+    tagDescription: z.string(),
+    unsaved: z.string(),
+    workspaceDescription: z.string()
+  }),
+  statistics: z.object({
+    bounceRate: z.string(),
+    countries: z.string(),
+    dailyVisitors: z.string(),
+    detailNoTrend: z.string(),
+    detailTrend: z.string(),
+    devices: z.string(),
+    empty: z.string(),
+    emptyBody: z.string(),
+    emptyTitle: z.string(),
+    getLogin: z.string(),
+    getLoginBody: z.string(),
+    listsTitle: z.string(),
+    loading: z.string(),
+    loginCancel: z.string(),
+    loginConfirm: z.string(),
+    loginFailed: z.string(),
+    loginSent: z.string(),
+    metricUnit: z.string(),
+    metricUnitOne: z.string(),
+    month: z.string(),
+    openDashboard: z.string(),
+    openLabel: z.string(),
+    pages: z.string(),
+    pageviews: z.string(),
+    perDay: z.string(),
+    period: z.string(),
+    referrers: z.string(),
+    resetLogin: z.string(),
+    resetLoginBody: z.string(),
+    sheetSub: z.string(),
+    title: z.string(),
+    unavailable: z.string(),
+    unconfiguredSystem: z.string(),
+    unreachable: z.string(),
+    visitors: z.string(),
+    visits: z.string(),
+    waking: z.string(),
+    week: z.string()
+  }),
+  themeLibrary: z.object({
+    cardDescription: z.string(),
+    couldNotSave: z.string(),
+    couldNotSaveStatus: z.string(),
+    extra: z.string(),
+    extraTitle: z.string(),
+    fineTuned: z.string(),
+    fineTunedTitle: z.string(),
+    forkAction: z.string(),
+    forkFailed: z.string(),
+    forkLabel: z.string(),
+    forkName: z.string(),
+    introAfter: z.string(),
+    introBefore: z.string(),
+    issues: z.string(),
+    issuesOne: z.string(),
+    issuesTitle: z.string(),
+    notPortable: z.string(),
+    notPortableNote: z.string(),
+    notPortableTitle: z.string(),
+    openInStudio: z.string(),
+    primaryColour: z.string(),
+    primaryColourTitle: z.string(),
+    refusal: z.string(),
+    title: z.string()
+  }),
+  themesList: z.object({
+    baseTitle: z.string(),
+    bodyFontTitle: z.string(),
+    brandTitle: z.string(),
+    headingFontTitle: z.string(),
+    overridesNoneTitle: z.string(),
+    overridesTitle: z.string(),
+    surfaceTitle: z.string()
+  }),
+  totpReset: z.object({
+    button: z.string(),
+    title: z.string(),
+    description: z.string(),
+    confirm: z.string(),
+    done: z.string(),
+    failed: z.string()
+  }),
   tourSignups: z.object({
     anonymize: z.string(),
     anonymizeConfirm: z.string(),
@@ -269,8 +478,6 @@ const customTranslationsSchema = z.object({
     fillSummary: z.string(),
     filterByTour: z.string(),
     full: z.string(),
-    heading: z.string(),
-    moveDown: z.string(),
     moveUp: z.string(),
     name: z.string(),
     notes: z.string(),
@@ -288,9 +495,7 @@ const customTranslationsSchema = z.object({
     reorderHint: z.string(),
     restore: z.string(),
     saveFailed: z.string(),
-    saved: z.string(),
     seatsFreeWithQueue: z.string(),
-    seatsLeft: z.string(),
     signedUp: z.string(),
     starterFailed: z.string(),
     starterLede: z.string(),
@@ -321,6 +526,9 @@ const customTranslationsSchema = z.object({
     domainTaken: z.string(),
     fontRestricted: z.string(),
     formNeedsRecipient: z.string(),
+    inviteCodeImmutable: z.string(),
+    inviteCodeInvalid: z.string(),
+    inviteCodeWholeNumber: z.string(),
     labelNameTaken: z.string(),
     labelNotFound: z.string(),
     labelWrongType: z.string(),
@@ -329,6 +537,9 @@ const customTranslationsSchema = z.object({
     phoneNumber: z.string(),
     platformSettingsSingleton: z.string(),
     signupWouldOverbook: z.string(),
+    statsShareIdInvalid: z.string(),
+    statsTeamIdInvalid: z.string(),
+    statsWebsiteIdInvalid: z.string(),
     svgCode: z.string(),
     componentSlugInvalid: z.string(),
     componentSlugRequired: z.string(),
@@ -354,14 +565,26 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
         "You don't have permission to assign users to this workspace.",
       cannotRemoveFromWorkspace:
         "You don't have permission to remove users from this workspace.",
+      createSite: 'Create a site',
       crossTenantDenied:
-        'Access denied. This workspace is not accessible without proper tenant access.'
+        'Access denied. This workspace is not accessible without proper tenant access.',
+      newHere: 'New here?',
+      passwordBreached:
+        'This password has appeared in a data breach elsewhere. Choose another one.',
+      passwordTooLong: 'Use at most {{count}} characters.',
+      passwordTooShort: 'Use at least {{count}} characters.',
+      tooManyLoginAttempts:
+        'Too many sign-in attempts from your network. Try again in a few minutes.'
     },
     collection: {
       cardWithSuffix: 'Card {{suffix}}',
+      singleDocMissing:
+        'This collection holds a single document, and it has not been created yet.',
       socialMediaWithSuffix: 'Social Media {{suffix}}'
     },
     customComponents: {
+      inputRequired: 'required',
+      newInput: 'New input',
       propRequired: 'Required',
       propsLoadFailed:
         'The inputs could not be loaded. Edit the values as JSON instead.',
@@ -375,6 +598,10 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       badgeDraft: 'Draft',
       badgeNew: 'New',
       badgePublished: 'Published',
+      buildSiteBody:
+        "Answer a few questions and we'll create a starter site you can edit.",
+      buildSiteCta: 'Start the guide',
+      buildSiteTitle: "Let's build your site",
       contentLead:
         'Everything on your site, grouped by what it does. Open a card to manage its content, or create something new right away.',
       continueEditing: 'Continue editing',
@@ -393,6 +620,14 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       limitLabel: 'Number of items to show',
       newButton: 'New',
       openToEdit: 'Open to edit',
+      pendingSiteMeanwhile:
+        'Go ahead and edit your pages and posts. Your work is saved.',
+      pendingSiteMeanwhileLabel: 'In the meantime',
+      pendingSiteNext: "Your site goes live once it's ready.",
+      pendingSiteNextLabel: 'Next',
+      pendingSiteNow: "We're preparing your site's own address and deployment.",
+      pendingSiteNowLabel: 'Right now',
+      pendingSiteTitle: 'Your site is being set up',
       recentActivity: 'Recent activity',
       tabAllContent: 'All content',
       tabHome: 'Home',
@@ -418,21 +653,15 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
         'No addresses known yet. Press Check now to fetch them; if none appear, the app has no public address and needs one allocated in Fly.',
       apexNote:
         'This is the domain itself rather than a subdomain, so a CNAME is not allowed — it needs A and AAAA records pointing at the app’s IP addresses.',
+      challengeHelp:
+        'Lets Fly issue the certificate before the domain points here. Only worth adding then; the records on the card are what make the domain answer.',
       check: 'Check now',
       checkedAt: 'Checked {{when}}',
       compareResolvers: 'Compare resolvers',
       copyRecord: 'Copy the DNS target',
+      details: 'Details',
+      detailsSub: 'What Fly and the public resolvers say about this domain.',
       dnsLede: 'Create this record where the domain’s DNS is managed:',
-      dnsNameHint:
-        'Record names are written in full — a registrar that appends the domain itself only wants the part before it.',
-      dnsOwnershipLede:
-        'Only needed if the app has no IPv6 address, or if traffic reaches it through a CDN or proxy:',
-      dnsSettledLede:
-        'These are the records the domain runs on. They stay needed — remove one and the domain stops answering, certificate or not:',
-      dnsTrafficLede:
-        'Point the domain at the app, where the domain’s DNS is managed. Without this record the domain answers nowhere, certificate or not:',
-      dnsValidationLede:
-        'Optional, and only worth adding to have the certificate issued before the domain points here:',
       hasIssues: 'has issues',
       heading: 'Certificates',
       issuedBy: 'Issued by',
@@ -446,10 +675,29 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       mismatchForceLogout: 'Clear the session and sign in again',
       mismatchHeading: 'This is not the address the app answers as',
       mismatchOpenExpected: 'Open the address it answers as',
+      moreInfo: 'More about this',
+      nameHelp:
+        'In full: {{name}}. A registrar that appends the domain itself wants only {{label}}.',
+      nameHelpApex:
+        'The domain itself, {{name}}. Most registrars write it as @; some want the name left empty.',
       neverChecked: 'never checked',
+      nextStepCreate:
+        'Create these records where DNS for {{zone}} is served, then press Check now.',
+      nextStepIssues: 'Fly reports a problem with this domain. See Details.',
+      nextStepIssuing:
+        'Fly sees the records and is issuing the certificate. Press Check now in a minute or two.',
+      nextStepNameServers:
+        'DNS for {{zone}} is served by {{servers}}, which doesn’t answer with these records yet. Create or change them there, then press Check now.',
+      nextStepSpreading:
+        'The public resolvers don’t agree yet, so the records are still spreading. Give it time, then press Check now.',
+      nextStepWaitFly:
+        'Public DNS answers as expected; Fly has not confirmed it yet. Press Check now.',
       notRequested: 'No certificate yet',
+      optionalHeading: 'Optional records',
       ownerPlatform: 'the platform',
       ownerWorkspace: 'the workspace',
+      ownershipHelp:
+        'Only needed if the app has no IPv6 address, or if traffic reaches it through a CDN or proxy.',
       paused: 'Paused',
       pending: 'Waiting for DNS',
       rateLimited:
@@ -460,6 +708,7 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       resolversDisagree:
         'The resolvers do not agree yet, which is what a record still spreading looks like. Give it time rather than changing anything.',
       resolversHeading: 'What the public resolvers see',
+      resolversNameServers: 'DNS for {{zone}} is served by {{servers}}.',
       resolversNegativeCache:
         'This zone tells resolvers to remember a “does not exist” answer for up to {{seconds}} seconds, so a record created recently can stay invisible that long.',
       resolversNoAnswer: 'no record yet',
@@ -468,7 +717,72 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       restart: 'Restart app',
       restartHint:
         'A newly validated domain only takes effect after the app restarts.',
-      saveFirst: 'Save to request a certificate for this domain.'
+      saveFirst: 'Save to request a certificate for this domain.',
+      subdomainNote:
+        'A subdomain points at the app with this CNAME, or with A and AAAA records at the app’s addresses, which Fly accepts too. A CNAME cannot sit beside other records on the same name.',
+      verdictBlocking:
+        'Remove what {{name}} has now first: a CNAME cannot sit beside other records. Or point its A and AAAA records at the app’s addresses instead.',
+      verdictMatch: 'Answers as expected',
+      verdictMatchDetail:
+        'Public DNS answers as expected; Fly has not confirmed it yet. Press Check now.',
+      verdictMissing: 'Record missing',
+      verdictMissingDetail:
+        'Public DNS has no {{type}} record for {{name}} yet.',
+      verdictMissingIpv4: 'Missing IPv4 record',
+      verdictMissingIpv6: 'Missing IPv6 record',
+      verdictWrong: 'Points at the wrong server',
+      verdictWrongDetail: 'Answers {{actual}}, should be {{expected}}.',
+      wildcardAdvice:
+        'A * record answers for every subdomain nobody created. It doesn’t affect the names on this card, since an exact record wins, but it sends every other subdomain wherever it points; pointed at the app, they reach it without a certificate. Remove * unless the site needs it.',
+      wildcardFound: 'A * record answers {{values}}.'
+    },
+    firstSite: {
+      back: 'Back',
+      backToDashboard: 'Back to the dashboard',
+      create: 'Create my site',
+      creating: 'Creating your site…',
+      errorBody:
+        'Nothing was lost. Try again, and if it keeps failing, contact support.',
+      errorTitle: 'Your site could not be created',
+      hasPagesBody:
+        'This guide only helps with an empty site. Open the pages from the dashboard to keep editing.',
+      hasPagesTitle: 'Your site already has pages',
+      heading: "Let's build your site",
+      next: 'Next',
+      pageAbout: 'About',
+      pageAboutHint: 'Tell visitors who you are',
+      pageContact: 'Contact',
+      pageContactHint: 'A form whose messages go to your email address',
+      pageHome: 'Home',
+      pageHomeHint: 'Always included',
+      pageNews: 'News',
+      pageNewsHint: 'A page that lists your posts',
+      pagePrivacy: 'Privacy',
+      pagePrivacyHint:
+        "From the platform's template. Review it before publishing",
+      pagesTitle: 'Which pages do you want?',
+      purposeAssociation: 'Association or club',
+      purposeAssociationHint: 'For members, activities and news',
+      purposeBusiness: 'Business',
+      purposeBusinessHint:
+        'Present what you offer and make it easy to get in touch',
+      purposePortfolio: 'Portfolio or personal',
+      purposePortfolioHint: 'Show your work or tell your own story',
+      purposeTitle: 'What is the site for?',
+      retry: 'Try again',
+      siteName: 'Site: {{name}}',
+      stepOf: 'Step {{step}} of {{total}}',
+      summaryNote:
+        'Everything is created as a draft you can edit. Nothing is published yet.',
+      summaryPages: 'Pages',
+      summaryPurpose: 'Purpose',
+      summarySite: 'Site',
+      summaryTheme: 'Theme',
+      summaryTitle: 'Here is what we will create',
+      themeTitle: 'Pick a theme',
+      unavailableBody:
+        'The guide is only available to the administrator of a site that has no pages.',
+      unavailableTitle: 'Not available'
     },
     forms: {
       notificationRecipient:
@@ -512,6 +826,13 @@ export const customTranslations: Record<'en' | 'sv', CustomTranslations> = {
       manageFaq: 'Manage FAQ',
       openHelp: 'Help'
     },
+    inviteCodes: {
+      codeCopy: 'Copy invite code',
+      codeHint:
+        'Copy it now. Only its hash is stored, so it cannot be shown again.',
+      generate: 'Generate code',
+      regenerate: 'Generate another'
+    },
     media: {
       calloutDescriptions: `Tags can be used to organize your files and be displayed in the web site file area.
 You can assign multiple tags to a file.`,
@@ -525,7 +846,6 @@ You can assign multiple tags to a file.`,
       colorSchemeLight: 'Light mode',
       contentLocale: 'Content',
       contentLocaleAria: 'Content language',
-      create: 'Create',
       expandSidebar: 'Expand sidebar',
       home: 'Home',
       interfaceLanguage: 'Interface language',
@@ -540,6 +860,43 @@ You can assign multiple tags to a file.`,
       searchPlaceholder: 'Filter menu…',
       themeLibrary: 'Theme library',
       uploadMedia: 'Upload media'
+    },
+    onboarding: {
+      accountBody:
+        'Change your password, set up the authenticator app on a new phone, or pick the language of the admin.',
+      accountTitle: 'Account & sign-in',
+      back: 'Back',
+      dialogDescription: 'The five things that get you going',
+      dialogTitle: 'Take a tour',
+      draftsBody:
+        'Your changes are saved as a draft while you write. Visitors see nothing until you press Publish. Every save keeps a version, so you can bring back an earlier one.',
+      draftsTitle: 'Drafts & versions',
+      end: 'End tour',
+      finish: 'Done',
+      moreBody: 'Two more things worth knowing.',
+      moreTitle: 'More to discover',
+      navigationBody:
+        'The menu is what visitors use to find their way around your site. A new page shows up there once you add it in Navigation.',
+      navigationTitle: 'Menu',
+      next: 'Next',
+      pagesBody:
+        'A page is built from blocks: a heading with a picture, a text, a form. Add blocks, move them up or down, and use Live Preview to see the page on a phone.',
+      pagesTitle: 'Pages',
+      readMore: 'Read more',
+      resume: 'Continue the tour',
+      searchHelpBody:
+        'Cmd+K / Ctrl+K finds every page, post and setting. Help in the top bar answers common questions, and you can take this tour again from there.',
+      searchHelpTitle: 'Search & help',
+      showMe: 'Show me',
+      siteSettingsBody:
+        "Your site's name and icon, the contact details in the footer and how the site looks are all set here.",
+      siteSettingsTitle: 'Site settings',
+      skip: 'Skip',
+      statisticsBody:
+        'See how many people visit your site. Open Visitors on the start page to get your own statistics login.',
+      statisticsTitle: 'Statistics',
+      stepLabel: 'Step {{step}} of {{total}}',
+      takeTour: 'Take the tour'
     },
     platform: {
       buildTitle: 'Environment & build',
@@ -632,6 +989,113 @@ You can assign multiple tags to a file.`,
       stateUnreadable: 'Cannot read',
       title: 'Infisical setup'
     },
+    relatedContent: {
+      categoryDescription:
+        'Content that uses this category. Each count opens the list filtered on it.',
+      open: 'Open list',
+      tab: 'Content',
+      tagDescription:
+        'Content that uses this tag. Each count opens the list filtered on it.',
+      unsaved: 'Save the document to see its content.',
+      workspaceDescription:
+        'Documents that belong to this workspace. Each count opens the list filtered on it.'
+    },
+    statistics: {
+      bounceRate: 'Bounce rate',
+      countries: 'Countries',
+      dailyVisitors: 'Visitors per day',
+      detailNoTrend: 'Last 7 days',
+      detailTrend: '{{trend}} on the previous 7 days',
+      devices: 'Devices',
+      empty: 'Nothing to list yet',
+      emptyBody:
+        'Figures appear here once the site has had its first visitors.',
+      emptyTitle: 'No visitors yet',
+      getLogin: 'Get a statistics login',
+      getLoginBody:
+        'A login to the statistics in Umami is created for you. The username and password are emailed to your address.',
+      listsTitle: 'Most visited',
+      loading: 'Loading…',
+      loginCancel: 'Cancel',
+      loginConfirm: 'Email me the login',
+      loginFailed: 'The login could not be sent. Try again in a moment.',
+      loginSent: 'The login is on its way to your inbox',
+      metricUnit: '{{count}} visitors',
+      metricUnitOne: '1 visitor',
+      month: 'Last 30 days',
+      openDashboard: 'Open in Umami',
+      openLabel: 'Show visitor statistics',
+      pages: 'Top pages',
+      pageviews: 'Page views',
+      perDay: 'per day',
+      period: 'Period',
+      referrers: 'Referrers',
+      resetLogin: 'Reset my statistics password',
+      resetLoginBody:
+        'Your password to the statistics in Umami is replaced by a new one, emailed to your address. The old password stops working.',
+      sheetSub: 'Visitors to your site, counted without cookies.',
+      title: 'Visitors',
+      unavailable: 'Not available yet',
+      unconfiguredSystem:
+        'Visitor statistics are not set up. Add the Umami credentials in Infisical.',
+      unreachable: 'Statistics could not be loaded right now',
+      visitors: 'Visitors',
+      visits: 'Visits',
+      waking: 'Statistics are waking up…',
+      week: 'Last 7 days'
+    },
+    themeLibrary: {
+      cardDescription: '{{brand}} on {{base}}, {{surface}}',
+      couldNotSave: 'Could not save',
+      couldNotSaveStatus: 'Could not save ({{status}})',
+      extra: '{{count}} extra',
+      extraTitle:
+        'Colours this theme declares itself, outside the standard token set. A fork keeps them.',
+      fineTuned: '{{count}} fine-tuned',
+      fineTunedTitle:
+        'Tokens set by hand, departing from what the recipe generates',
+      forkAction: 'Fork',
+      forkFailed: 'The fork was not saved',
+      forkLabel: 'Fork {{label}}',
+      forkName: '{{label}} fork',
+      introAfter:
+        'it from inside the studio to get an editable copy of your own. The built-in stays as it is.',
+      introBefore:
+        'The themes built into the platform. Open one to see the decisions behind it, then',
+      issues: '{{count}} issues',
+      issuesOne: '1 issue',
+      issuesTitle:
+        'Contrast pairs below WCAG AA, or aliases leading nowhere. The studio marks which tokens.',
+      notPortable: '{{count}} not portable',
+      notPortableNote: 'Those tokens fall back to the recipe in a fork.',
+      notPortableTitle:
+        'Values resolved when the CSS is compiled, or aliases pointing at nothing. A fork cannot carry these.',
+      openInStudio: 'Open in studio',
+      primaryColour: 'Primary colour {{colour}}',
+      primaryColourTitle: 'Primary colour — {{colour}}',
+      refusal: 'Platform themes are managed by system administrators.',
+      title: 'Theme library'
+    },
+    themesList: {
+      baseTitle: 'Base colour — surfaces, borders, neutral text',
+      bodyFontTitle: 'Body typeface',
+      brandTitle: 'Brand colour — buttons, focus rings, links',
+      headingFontTitle: 'Heading typeface',
+      overridesNoneTitle:
+        'No hand-edited tokens — this theme is exactly what its recipe generates',
+      overridesTitle:
+        'Tokens hand-edited in the studio, departing from the recipe',
+      surfaceTitle: 'Page surface — whether content sits on its own layer'
+    },
+    totpReset: {
+      button: 'Reset two-factor',
+      title: 'Reset two-factor login?',
+      description:
+        "{{name}}'s authenticator setup is removed and they are signed out everywhere. If two-factor login is required for them, the next sign-in asks them to set it up again.",
+      confirm: 'Reset',
+      done: 'Two-factor login reset for {{name}}.',
+      failed: 'Could not reset two-factor login.'
+    },
     tourSignups: {
       anonymize: 'Clear passenger data',
       anonymizeConfirm:
@@ -648,11 +1112,9 @@ You can assign multiple tags to a file.`,
       fillSummary: '{{booked}} of {{max}} places taken',
       filterByTour: 'Filter by tour',
       full: 'Full',
-      heading: 'Signups',
       legalDraft: 'draft, not published',
       legalMissing: 'not set',
       legalSettingsLink: 'Set up in Site Settings',
-      moveDown: 'Move down the queue',
       moveUp: 'Move up the queue',
       name: 'Name',
       notes: 'Notes',
@@ -668,10 +1130,8 @@ You can assign multiple tags to a file.`,
         'Drag to set the order you will offer places in. Signup times stay as they were.',
       restore: 'Restore signup',
       saveFailed: 'Could not save the change.',
-      saved: 'Saved',
       seatsFreeWithQueue:
         '{{count}} places are free and {{name}} is first in the waiting list. New signups join the queue, so a place is only filled when you promote someone.',
-      seatsLeft: '{{count}} places left',
       signedUp: 'Signed up',
       starterFailed: 'Could not create the page.',
       starterLede:
@@ -715,6 +1175,11 @@ You can assign multiple tags to a file.`,
         '{{fonts}} is licensed to the platform and can only be set by a system administrator.',
       formNeedsRecipient:
         'One of the notification emails has no "Email To", and this workspace has no generic recipient set. Add one here, set a generic recipient in Site Settings → Forms, or remove this notification email if none is wanted.',
+      inviteCodeImmutable:
+        'An invite code cannot be changed. Create a new one instead.',
+      inviteCodeInvalid:
+        'Enter a valid invite code, such as ABCD-EFGH-JKMN-PQRS.',
+      inviteCodeWholeNumber: 'Enter a whole number, 1 or more.',
       labelNameTaken: 'A "{{type}}" label named "{{name}}" already exists.',
       labelNotFound: 'The selected label no longer exists.',
       labelWrongType: 'Expected a "{{expected}}" label but got "{{actual}}".',
@@ -726,6 +1191,12 @@ Supported locales: {{locales}}`,
         'Platform settings already exist. Edit the existing document instead of creating another.',
       signupWouldOverbook:
         'Only {{available}} of {{max}} places are left and this signup needs {{people}}. Cancel a booking or raise the maximum first.',
+      statsShareIdInvalid:
+        'The share link must be letters, digits, "-" and "_", at most 50 characters.',
+      statsTeamIdInvalid:
+        'The statistics team id must be a UUID, for example 123e4567-e89b-12d3-a456-426614174000.',
+      statsWebsiteIdInvalid:
+        'The statistics website id must be a UUID, for example 123e4567-e89b-12d3-a456-426614174000.',
       svgCode: 'Enter SVG code, starting with <svg>.',
       componentSlugInvalid:
         'Use lowercase letters, numbers and single dashes, starting with a letter, e.g. "price-table".',
@@ -753,20 +1224,32 @@ Supported locales: {{locales}}`,
         'Du har inte behörighet att tilldela användare till den här arbetsytan.',
       cannotRemoveFromWorkspace:
         'Du har inte behörighet att ta bort användare från den här arbetsytan.',
+      createSite: 'Skapa en webbplats',
       crossTenantDenied:
-        'Åtkomst nekad. Den här arbetsytan är inte tillgänglig utan rätt behörighet.'
+        'Åtkomst nekad. Den här arbetsytan är inte tillgänglig utan rätt behörighet.',
+      newHere: 'Ny här?',
+      passwordBreached:
+        'Lösenordet finns med i en dataläcka någon annanstans. Välj ett annat lösenord.',
+      passwordTooLong: 'Använd högst {{count}} tecken.',
+      passwordTooShort: 'Använd minst {{count}} tecken.',
+      tooManyLoginAttempts:
+        'För många inloggningsförsök från ditt nätverk. Försök igen om några minuter.'
     },
     collection: {
       cardWithSuffix: 'Kort {{suffix}}',
+      singleDocMissing:
+        'Den här samlingen har ett enda dokument, och det har inte skapats än.',
       socialMediaWithSuffix: 'Sociala Medier {{suffix}}'
     },
     customComponents: {
-      propRequired: 'Required',
+      inputRequired: 'obligatorisk',
+      newInput: 'Ny indata',
+      propRequired: 'Obligatorisk',
       propsLoadFailed:
-        'Inputs kunde inte läsas in. Redigera värdena som JSON i stället.',
-      propsLoading: 'Läser in inputs…',
-      propsNone: 'Den här komponenten har inga inputs.',
-      propsPickComponent: 'Välj en komponent för att fylla i dess inputs.',
+        'Indata kunde inte läsas in. Redigera värdena som JSON i stället.',
+      propsLoading: 'Läser in indata…',
+      propsNone: 'Den här komponenten har ingen indata.',
+      propsPickComponent: 'Välj en komponent för att fylla i dess indata.',
       propsUndeclared:
         'Sparade men visas inte, eftersom komponenten inte längre deklarerar dem: {{names}}'
     },
@@ -774,6 +1257,10 @@ Supported locales: {{locales}}`,
       badgeDraft: 'Utkast',
       badgeNew: 'Ny',
       badgePublished: 'Publicerad',
+      buildSiteBody:
+        'Svara på några frågor så skapar vi en webbplats att utgå från som du kan redigera.',
+      buildSiteCta: 'Starta guiden',
+      buildSiteTitle: 'Låt oss bygga din webbplats',
       contentLead:
         'Allt på din webbplats, grupperat efter funktion. Öppna ett kort för att hantera innehållet, eller skapa något nytt direkt.',
       continueEditing: 'Fortsätt redigera',
@@ -792,6 +1279,15 @@ Supported locales: {{locales}}`,
       limitLabel: 'Antal poster som visas',
       newButton: 'Ny',
       openToEdit: 'Öppna för att redigera',
+      pendingSiteMeanwhile:
+        'Fortsätt gärna redigera dina sidor och inlägg. Allt du gör sparas.',
+      pendingSiteMeanwhileLabel: 'Under tiden',
+      pendingSiteNext: 'Din webbplats går live så snart den är klar.',
+      pendingSiteNextLabel: 'Sedan',
+      pendingSiteNow:
+        'Vi förbereder din webbplats egen adress och driftsättning.',
+      pendingSiteNowLabel: 'Just nu',
+      pendingSiteTitle: 'Din webbplats görs i ordning',
       recentActivity: 'Senaste aktivitet',
       tabAllContent: 'Allt innehåll',
       tabHome: 'Hem',
@@ -817,21 +1313,15 @@ Supported locales: {{locales}}`,
         'Inga adresser är kända ännu. Tryck på Kontrollera nu för att hämta dem. Om inga adresser visas har appen ingen publik adress, och en adress behöver tilldelas i Fly.',
       apexNote:
         'Det här är själva domänen och inte en underdomän, så CNAME är inte tillåtet — den behöver A- och AAAA-poster som pekar på appens IP-adresser.',
+      challengeHelp:
+        'Låter Fly utfärda certifikatet innan domänen pekar hit. Bara värd att lägga till då; posterna på kortet är det som får domänen att svara.',
       check: 'Kontrollera nu',
       checkedAt: 'Kontrollerad {{when}}',
       compareResolvers: 'Jämför DNS-servrar',
       copyRecord: 'Kopiera DNS-målet',
+      details: 'Detaljer',
+      detailsSub: 'Vad Fly och de publika DNS-servrarna säger om domänen.',
       dnsLede: 'Skapa den här posten där domänens DNS hanteras:',
-      dnsNameHint:
-        'Postnamnen skrivs fullständigt — hos en registrar som lägger till domänen själv anges bara delen före den.',
-      dnsOwnershipLede:
-        'Behövs bara om appen saknar IPv6-adress, eller om trafiken når den via ett CDN eller en proxy:',
-      dnsSettledLede:
-        'Det här är posterna domänen vilar på. De behövs fortsatt — tas någon bort slutar domänen svara, certifikat eller inte:',
-      dnsTrafficLede:
-        'Peka domänen mot appen, där domänens DNS hanteras. Utan den här posten svarar domänen ingenstans, certifikat eller inte:',
-      dnsValidationLede:
-        'Valfri, och behövs bara för att få certifikatet utfärdat innan domänen pekar hit:',
       hasIssues: 'har problem',
       heading: 'Certifikat',
       issuedBy: 'Utfärdat av',
@@ -845,10 +1335,29 @@ Supported locales: {{locales}}`,
       mismatchForceLogout: 'Rensa sessionen och logga in igen',
       mismatchHeading: 'Det här är inte adressen appen svarar som',
       mismatchOpenExpected: 'Öppna adressen den svarar som',
+      moreInfo: 'Mer om det här',
+      nameHelp:
+        'Fullständigt: {{name}}. En registrar som lägger till domänen själv vill bara ha {{label}}.',
+      nameHelpApex:
+        'Själva domänen, {{name}}. De flesta registrarer skriver den som @; vissa vill att namnet lämnas tomt.',
       neverChecked: 'aldrig kontrollerad',
+      nextStepCreate:
+        'Skapa posterna där DNS för {{zone}} hanteras, och tryck sedan på Kontrollera nu.',
+      nextStepIssues: 'Fly rapporterar ett problem med domänen. Se Detaljer.',
+      nextStepIssuing:
+        'Fly ser posterna och utfärdar certifikatet. Tryck på Kontrollera nu om en minut eller två.',
+      nextStepNameServers:
+        'DNS för {{zone}} hanteras av {{servers}}, som inte svarar med de här posterna ännu. Skapa eller ändra dem där, och tryck sedan på Kontrollera nu.',
+      nextStepSpreading:
+        'De publika resolvrarna är inte överens ännu, så posterna sprids fortfarande. Ge det tid, och tryck sedan på Kontrollera nu.',
+      nextStepWaitFly:
+        'Publik DNS svarar som väntat, men Fly har inte bekräftat det ännu. Tryck på Kontrollera nu.',
       notRequested: 'Inget certifikat ännu',
+      optionalHeading: 'Valfria poster',
       ownerPlatform: 'plattformen',
       ownerWorkspace: 'arbetsytan',
+      ownershipHelp:
+        'Behövs bara om appen saknar IPv6-adress, eller om trafiken når den via ett CDN eller en proxy.',
       paused: 'Pausat',
       pending: 'Väntar på DNS',
       rateLimited:
@@ -859,6 +1368,7 @@ Supported locales: {{locales}}`,
       resolversDisagree:
         'DNS-servrarna är inte överens ännu, vilket är precis hur en post som fortfarande sprids ser ut. Vänta hellre än att ändra något.',
       resolversHeading: 'Vad de publika DNS-servrarna ser',
+      resolversNameServers: 'DNS för {{zone}} hanteras av {{servers}}.',
       resolversNegativeCache:
         'Zonen ber DNS-servrar minnas ett ”finns inte”-svar i upp till {{seconds}} sekunder, så en nyss skapad post kan vara osynlig så länge.',
       resolversNoAnswer: 'ingen post ännu',
@@ -867,7 +1377,74 @@ Supported locales: {{locales}}`,
       restart: 'Starta om app',
       restartHint:
         'En nyligen validerad domän börjar gälla först efter att appen har startats om.',
-      saveFirst: 'Spara för att begära ett certifikat för domänen.'
+      saveFirst: 'Spara för att begära ett certifikat för domänen.',
+      subdomainNote:
+        'En underdomän pekar på appen med den här CNAME-posten, eller med A- och AAAA-poster mot appens adresser, vilket Fly också godtar. En CNAME kan inte ligga bredvid andra poster på samma namn.',
+      verdictBlocking:
+        'Ta först bort det {{name}} har nu: en CNAME kan inte ligga bredvid andra poster. Eller peka dess A- och AAAA-poster mot appens adresser i stället.',
+      verdictMatch: 'Svarar som väntat',
+      verdictMatchDetail:
+        'Publik DNS svarar som väntat, men Fly har inte bekräftat det ännu. Tryck på Kontrollera nu.',
+      verdictMissing: 'Posten saknas',
+      verdictMissingDetail:
+        'Publik DNS har ingen {{type}}-post för {{name}} ännu.',
+      verdictMissingIpv4: 'IPv4-post saknas',
+      verdictMissingIpv6: 'IPv6-post saknas',
+      verdictWrong: 'Pekar på fel server',
+      verdictWrongDetail: 'Svarar {{actual}}, borde vara {{expected}}.',
+      wildcardAdvice:
+        'En *-post svarar för varje underdomän som ingen har skapat. Den påverkar inte namnen på kortet, eftersom en exakt post vinner, men den skickar alla andra underdomäner dit den pekar; pekar den på appen når de den utan certifikat. Ta bort * om inte webbplatsen behöver den.',
+      wildcardFound: 'En *-post svarar {{values}}.'
+    },
+    firstSite: {
+      back: 'Tillbaka',
+      backToDashboard: 'Tillbaka till startsidan',
+      create: 'Skapa min webbplats',
+      creating: 'Skapar din webbplats…',
+      errorBody:
+        'Inget gick förlorat. Försök igen, och kontakta supporten om det fortsätter att misslyckas.',
+      errorTitle: 'Din webbplats kunde inte skapas',
+      hasPagesBody:
+        'Den här guiden hjälper bara till med en tom webbplats. Öppna sidorna från startsidan för att fortsätta redigera.',
+      hasPagesTitle: 'Din webbplats har redan sidor',
+      heading: 'Låt oss bygga din webbplats',
+      next: 'Nästa',
+      pageAbout: 'Om oss',
+      pageAboutHint: 'Berätta för besökarna vem du är',
+      pageContact: 'Kontakt',
+      pageContactHint:
+        'Ett formulär vars meddelanden går till din e-postadress',
+      pageHome: 'Startsida',
+      pageHomeHint: 'Ingår alltid',
+      pageNews: 'Nyheter',
+      pageNewsHint: 'En sida som listar dina inlägg',
+      pagePrivacy: 'Integritet',
+      pagePrivacyHint:
+        'Från plattformens mall. Gå igenom texten innan du publicerar',
+      pagesTitle: 'Vilka sidor vill du ha?',
+      purposeAssociation: 'Förening eller klubb',
+      purposeAssociationHint: 'För medlemmar, aktiviteter och nyheter',
+      purposeBusiness: 'Företag',
+      purposeBusinessHint:
+        'Presentera vad du erbjuder och gör det enkelt att ta kontakt',
+      purposePortfolio: 'Portfolio eller personlig',
+      purposePortfolioHint:
+        'Visa upp ditt arbete eller berätta din egen historia',
+      purposeTitle: 'Vad ska webbplatsen användas till?',
+      retry: 'Försök igen',
+      siteName: 'Webbplats: {{name}}',
+      stepOf: 'Steg {{step}} av {{total}}',
+      summaryNote:
+        'Allt skapas som utkast som du kan redigera. Ingenting är publicerat ännu.',
+      summaryPages: 'Sidor',
+      summaryPurpose: 'Syfte',
+      summarySite: 'Webbplats',
+      summaryTheme: 'Tema',
+      summaryTitle: 'Det här skapar vi',
+      themeTitle: 'Välj ett tema',
+      unavailableBody:
+        'Guiden är bara tillgänglig för administratören av en webbplats som inte har några sidor.',
+      unavailableTitle: 'Inte tillgänglig'
     },
     forms: {
       notificationRecipient:
@@ -912,6 +1489,13 @@ Supported locales: {{locales}}`,
       manageFaq: 'Hantera vanliga frågor',
       openHelp: 'Hjälp'
     },
+    inviteCodes: {
+      codeCopy: 'Kopiera inbjudningskod',
+      codeHint:
+        'Kopiera den nu. Bara dess hash sparas, så den kan inte visas igen.',
+      generate: 'Skapa kod',
+      regenerate: 'Skapa en annan'
+    },
     media: {
       calloutDescriptions: `Använd etiketter för att organisera dina filer och då kunna visa dem på webbplatsens filyta.
 Du kan tilldela flera etiketter till en fil.`,
@@ -925,7 +1509,6 @@ Du kan tilldela flera etiketter till en fil.`,
       colorSchemeLight: 'Ljust läge',
       contentLocale: 'Innehåll',
       contentLocaleAria: 'Innehållsspråk',
-      create: 'Skapa',
       expandSidebar: 'Expandera sidofältet',
       home: 'Hem',
       interfaceLanguage: 'Gränssnittsspråk',
@@ -940,6 +1523,43 @@ Du kan tilldela flera etiketter till en fil.`,
       searchPlaceholder: 'Filtrera menyn…',
       themeLibrary: 'Temabibliotek',
       uploadMedia: 'Ladda upp media'
+    },
+    onboarding: {
+      accountBody:
+        'Byt lösenord, ställ in autentiseringsappen på en ny mobil eller välj vilket språk administrationen visas på.',
+      accountTitle: 'Konto & inloggning',
+      back: 'Tillbaka',
+      dialogDescription: 'Fem saker som hjälper dig att komma igång',
+      dialogTitle: 'Ta en rundtur',
+      draftsBody:
+        'Dina ändringar sparas som utkast medan du skriver. Besökarna ser ingenting förrän du trycker på Publicera. Varje gång du sparar behålls en version, så du kan ta tillbaka en tidigare.',
+      draftsTitle: 'Utkast & versioner',
+      end: 'Avsluta rundturen',
+      finish: 'Klar',
+      moreBody: 'Två saker till som är bra att känna till.',
+      moreTitle: 'Mer att upptäcka',
+      navigationBody:
+        'Menyn är det besökarna använder för att hitta på din webbplats. En ny sida syns där när du har lagt till den i Navigation.',
+      navigationTitle: 'Menyn',
+      next: 'Nästa',
+      pagesBody:
+        'En sida byggs av block: en rubrik med bild, en text, ett formulär. Lägg till block, flytta dem upp eller ner, och se hur sidan ser ut på en mobil med Förhandsgranskning.',
+      pagesTitle: 'Sidor',
+      readMore: 'Läs mer',
+      resume: 'Fortsätt rundturen',
+      searchHelpBody:
+        'Cmd+K / Ctrl+K hittar alla sidor, inlägg och inställningar. Hjälp i verktygsfältet svarar på vanliga frågor, och där kan du ta rundturen igen.',
+      searchHelpTitle: 'Sök & hjälp',
+      showMe: 'Visa mig',
+      siteSettingsBody:
+        'Här ställer du in webbplatsens namn och ikon, kontaktuppgifterna i sidfoten och hur webbplatsen ser ut.',
+      siteSettingsTitle: 'Webbplatsinställningar',
+      skip: 'Hoppa över',
+      statisticsBody:
+        'Se hur många som besöker din webbplats. Öppna Besökare på startsidan för att skaffa en egen inloggning till statistiken.',
+      statisticsTitle: 'Statistik',
+      stepLabel: 'Steg {{step}} av {{total}}',
+      takeTour: 'Ta rundturen'
     },
     platform: {
       buildTitle: 'Miljö & bygge',
@@ -1032,6 +1652,113 @@ Du kan tilldela flera etiketter till en fil.`,
       stateUnreadable: 'Kan inte läsas',
       title: 'Konfiguration i Infisical'
     },
+    relatedContent: {
+      categoryDescription:
+        'Innehåll som använder den här kategorin. Varje antal öppnar listan filtrerad på den.',
+      open: 'Öppna listan',
+      tab: 'Innehåll',
+      tagDescription:
+        'Innehåll som använder den här etiketten. Varje antal öppnar listan filtrerad på den.',
+      unsaved: 'Spara dokumentet för att se dess innehåll.',
+      workspaceDescription:
+        'Dokument som hör till den här arbetsytan. Varje antal öppnar listan filtrerad på den.'
+    },
+    statistics: {
+      bounceRate: 'Avvisningsfrekvens',
+      countries: 'Länder',
+      dailyVisitors: 'Besökare per dag',
+      detailNoTrend: 'Senaste 7 dagarna',
+      detailTrend: '{{trend}} jämfört med de 7 dagarna före',
+      devices: 'Enheter',
+      empty: 'Inget att lista ännu',
+      emptyBody:
+        'Siffror visas här när webbplatsen har fått sina första besökare.',
+      emptyTitle: 'Inga besökare ännu',
+      getLogin: 'Skaffa en inloggning till statistiken',
+      getLoginBody:
+        'En inloggning till statistiken i Umami skapas åt dig. Användarnamn och lösenord mejlas till din e-postadress.',
+      listsTitle: 'Mest besökt',
+      loading: 'Laddar…',
+      loginCancel: 'Avbryt',
+      loginConfirm: 'Mejla inloggningen till mig',
+      loginFailed: 'Inloggningen kunde inte skickas. Försök igen om en stund.',
+      loginSent: 'Inloggningen är på väg till din inkorg.',
+      metricUnit: '{{count}} besökare',
+      metricUnitOne: '1 besökare',
+      month: 'Senaste 30 dagarna',
+      openDashboard: 'Öppna i Umami',
+      openLabel: 'Visa besöksstatistik',
+      pages: 'Mest besökta sidor',
+      pageviews: 'Sidvisningar',
+      perDay: 'per dag',
+      period: 'Period',
+      referrers: 'Hänvisningar',
+      resetLogin: 'Återställ mitt lösenord till statistiken',
+      resetLoginBody:
+        'Ditt lösenord till statistiken i Umami ersätts av ett nytt, som mejlas till din e-postadress. Det gamla lösenordet slutar fungera.',
+      sheetSub: 'Besökare på er webbplats, räknade utan cookies.',
+      title: 'Besökare',
+      unavailable: 'Inte tillgänglig ännu',
+      unconfiguredSystem:
+        'Besöksstatistiken är inte konfigurerad. Lägg till Umami-uppgifterna i Infisical.',
+      unreachable: 'Statistiken kunde inte hämtas just nu',
+      visitors: 'Besökare',
+      visits: 'Besök',
+      waking: 'Statistiktjänsten startar…',
+      week: 'Senaste 7 dagarna'
+    },
+    themeLibrary: {
+      cardDescription: '{{brand}} på {{base}}, {{surface}}',
+      couldNotSave: 'Kunde inte spara',
+      couldNotSaveStatus: 'Kunde inte spara ({{status}})',
+      extra: '{{count}} extra',
+      extraTitle:
+        'Färger som temat deklarerar själv, utanför standarduppsättningen av tokens. En kopia behåller dem.',
+      fineTuned: '{{count}} finjusterade',
+      fineTunedTitle:
+        'Tokens som satts för hand och avviker från vad receptet genererar',
+      forkAction: 'Kopiera',
+      forkFailed: 'Kopian sparades inte',
+      forkLabel: 'Kopiera {{label}}',
+      forkName: '{{label}} (kopia)',
+      introAfter:
+        'det inifrån studion för att få en egen kopia att redigera. Det inbyggda temat förblir som det är.',
+      introBefore:
+        'Temana som är inbyggda i plattformen. Öppna ett för att se besluten bakom det, och',
+      issues: '{{count}} problem',
+      issuesOne: '1 problem',
+      issuesTitle:
+        'Kontrastpar under WCAG AA, eller alias som inte leder någonstans. Studion markerar vilka tokens.',
+      notPortable: '{{count}} inte portabla',
+      notPortableNote: 'I en kopia faller de tokens tillbaka på receptet.',
+      notPortableTitle:
+        'Värden som räknas fram när CSS:en kompileras, eller alias som pekar på ingenting. En kopia kan inte ta med dem.',
+      openInStudio: 'Öppna i studion',
+      primaryColour: 'Primärfärg {{colour}}',
+      primaryColourTitle: 'Primärfärg — {{colour}}',
+      refusal: 'Plattformens teman hanteras av systemadministratörer.',
+      title: 'Temabibliotek'
+    },
+    themesList: {
+      baseTitle: 'Basfärg — ytor, kanter, neutral text',
+      bodyFontTitle: 'Typsnitt för brödtext',
+      brandTitle: 'Varumärkesfärg — knappar, fokusringar, länkar',
+      headingFontTitle: 'Typsnitt för rubriker',
+      overridesNoneTitle:
+        'Inga handredigerade tokens — temat är exakt vad receptet genererar',
+      overridesTitle:
+        'Tokens som redigerats för hand i studion och avviker från receptet',
+      surfaceTitle: 'Sidyta — om innehållet ligger på ett eget lager'
+    },
+    totpReset: {
+      button: 'Återställ tvåstegsinloggning',
+      title: 'Återställ tvåstegsinloggning?',
+      description:
+        'Kopplingen till autentiseringsappen tas bort för {{name}}, som också loggas ut överallt. Om tvåstegsinloggning krävs får {{name}} ställa in den på nytt vid nästa inloggning.',
+      confirm: 'Återställ',
+      done: 'Tvåstegsinloggningen är återställd för {{name}}.',
+      failed: 'Det gick inte att återställa tvåstegsinloggningen.'
+    },
     tourSignups: {
       anonymize: 'Rensa passageraruppgifter',
       anonymizeConfirm:
@@ -1048,12 +1775,10 @@ Du kan tilldela flera etiketter till en fil.`,
       fillSummary: '{{booked}} av {{max}} platser tagna',
       filterByTour: 'Filtrera på resa',
       full: 'Fullbokad',
-      heading: 'Anmälningar',
       legalDraft: 'utkast, ej publicerad',
       legalMissing: 'inte vald',
       legalSettingsLink: 'Ställ in i Webbplatsinställningar',
-      moveDown: 'Flytta ned i kön',
-      moveUp: 'Flytta upp i kön',
+      moveUp: 'Flytta upp på väntelistan',
       name: 'Namn',
       notes: 'Anteckningar',
       partySize: 'Antal personer',
@@ -1063,15 +1788,13 @@ Du kan tilldela flera etiketter till en fil.`,
       phone: 'Telefon',
       peopleOne: '1 person',
       promote: 'Gör till bokad',
-      queuePosition: 'Köplats',
+      queuePosition: 'Plats på väntelistan',
       reorderHint:
         'Dra för att ställa in i vilken ordning du erbjuder platser. Anmälningstiderna påverkas inte.',
       restore: 'Återställ anmälan',
       saveFailed: 'Det gick inte att spara ändringen.',
-      saved: 'Sparat',
       seatsFreeWithQueue:
-        '{{count}} platser är lediga och {{name}} står först i kön. Nya anmälningar hamnar i kön, så en plats fylls bara när du flyttar upp någon.',
-      seatsLeft: '{{count}} platser kvar',
+        '{{count}} platser är lediga och {{name}} står först på väntelistan. Nya anmälningar hamnar på väntelistan, så en plats fylls bara när du flyttar upp någon.',
       signedUp: 'Anmäld',
       starterFailed: 'Det gick inte att skapa sidan.',
       starterLede:
@@ -1082,7 +1805,7 @@ Du kan tilldela flera etiketter till en fil.`,
       statusChanged: 'Status ändrad',
       termsAccepted: 'Villkor godkända',
       waiting: 'Väntelista',
-      waitingCount: '+{{count}} i kö',
+      waitingCount: '+{{count}} på väntelistan',
       waitingHeading: 'Väntelista',
       overbooked: 'Överbokad'
     },
@@ -1115,6 +1838,11 @@ Du kan tilldela flera etiketter till en fil.`,
         '{{fonts}} är licensierat till plattformen och kan bara väljas av en systemadministratör.',
       formNeedsRecipient:
         'Ett av notismejlen saknar "E-post till", och arbetsytan har ingen allmän mottagare inställd. Ange en här, ange en allmän mottagare i Webbplatsinställningar → Formulär, eller ta bort det här notismejlet om inget behövs.',
+      inviteCodeImmutable:
+        'En inbjudningskod kan inte ändras. Skapa en ny istället.',
+      inviteCodeInvalid:
+        'Ange en giltig inbjudningskod, till exempel ABCD-EFGH-JKMN-PQRS.',
+      inviteCodeWholeNumber: 'Ange ett heltal, 1 eller mer.',
       labelNameTaken:
         'Det finns redan en etikett av typen "{{type}}" med namnet "{{name}}".',
       labelNotFound: 'Den valda etiketten finns inte längre.',
@@ -1128,6 +1856,12 @@ Språk som stöds: {{locales}}`,
         'Plattformsinställningar finns redan. Redigera det befintliga dokumentet istället för att skapa ett nytt.',
       signupWouldOverbook:
         'Endast {{available}} av {{max}} platser återstår och anmälan behöver {{people}}. Avboka någon eller höj maxantalet först.',
+      statsShareIdInvalid:
+        'Delningslänken får bara innehålla bokstäver, siffror, "-" och "_", högst 50 tecken.',
+      statsTeamIdInvalid:
+        'Statistik-team-id:t måste vara ett UUID, till exempel 123e4567-e89b-12d3-a456-426614174000.',
+      statsWebsiteIdInvalid:
+        'Statistik-id:t måste vara ett UUID, till exempel 123e4567-e89b-12d3-a456-426614174000.',
       svgCode: 'Ange SVG-kod som börjar med <svg>.',
       componentSlugInvalid:
         'Använd små bokstäver, siffror och enkla bindestreck, och börja med en bokstav, t.ex. "pristabell".',
@@ -1137,7 +1871,7 @@ Språk som stöds: {{locales}}`,
       propNameDuplicate:
         'Varje input behöver ett eget namn. Upprepade: {{names}}.',
       propsNotObject: 'Inputs måste vara ett JSON-objekt.',
-      propsRequiredMissing: 'Fyll i de obligatoriska inputs: {{names}}.',
+      propsRequiredMissing: 'Fyll i obligatorisk indata: {{names}}.',
       themeNameBuiltIn:
         '"{{name}}" är redan ett inbyggt tema. Välj ett annat namn.',
       themeNameInvalid:

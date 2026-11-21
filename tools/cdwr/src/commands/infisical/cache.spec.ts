@@ -14,7 +14,8 @@ vi.mock('@codeware/shared/util/infisical-cli', () => ({
     values: { A: 'one', B: 'two' },
     paths: ['/apps/cms', '/apps/cms/signature']
   }),
-  offlineCacheFile: (root: string) => `${root}/apps/cms/.env.offline`,
+  offlineCacheFile: (root: string, _path: string, app = 'cms') =>
+    `${root}/apps/${app}/.env.offline`,
   writeOfflineCache: vi.fn()
 }));
 
@@ -79,5 +80,25 @@ describe('infisical cache', () => {
       ['/apps/cms', '/apps/cms/signature']
     );
     expect(stdout[0]).not.toContain('one');
+  });
+
+  it('writes the given app cache instead of the path app', async () => {
+    const { code, stdout } = await run([
+      '--path',
+      '/apps/cms',
+      '--app',
+      'headless',
+      '--yes',
+      '--json'
+    ]);
+    expect(code).toBe(EXIT.ok);
+    expect(lib.writeOfflineCache).toHaveBeenCalledWith(
+      '/repo/apps/headless/.env.offline',
+      expect.anything()
+    );
+    const payload = JSON.parse(stdout[0] ?? '{}') as {
+      result: { file: string };
+    };
+    expect(payload.result.file).toBe('apps/headless/.env.offline');
   });
 });

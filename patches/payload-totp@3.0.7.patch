@@ -1,0 +1,152 @@
+diff --git a/dist/components/Field/Setup.js b/dist/components/Field/Setup.js
+--- a/dist/components/Field/Setup.js
++++ b/dist/components/Field/Setup.js
+@@ -5,7 +5,6 @@
+     let url = formatAdminURL({
+         adminRoute: payload.config.routes.admin,
+         path: '/setup-totp',
+-        serverURL: payload.config.serverURL
+     });
+     if (backUrl) {
+         // `req.url` is absolute and, without a `serverURL`, always `http://<host>`, so on an HTTPS
+diff --git a/dist/components/Provider/index.js b/dist/components/Provider/index.js
+--- a/dist/components/Provider/index.js
++++ b/dist/components/Provider/index.js
+@@ -24,9 +24,11 @@
+         'api-key',
+         'totp'
+     ].includes(user._strategy ?? '') && normalizedPathname !== normalizedVerifyUrl) {
+-        redirect(`${payload.config.serverURL}${verifyUrl}?back=${encodeURIComponent(pathname)}`);
++        // Relative here and in the views and forms: the session cookie belongs to the page's
++        // origin, and serverURL may be another one (an adopted domain, reached on the Fly url)
++        redirect(`${verifyUrl}?back=${encodeURIComponent(pathname)}`);
+     } else if (user && !user.hasTotp && pluginOptions.forceSetup && normalizedPathname !== normalizedSetupUrl && user._strategy !== 'api-key') {
+-        redirect(`${payload.config.serverURL}${setupUrl}?back=${encodeURIComponent(pathname)}`);
++        redirect(`${setupUrl}?back=${encodeURIComponent(pathname)}`);
+     } else {
+         return /*#__PURE__*/ _jsx(TOTPProviderClient, {
+             forceSetup: pluginOptions.forceSetup,
+diff --git a/dist/components/QRCode/index.d.ts b/dist/components/QRCode/index.d.ts
+--- a/dist/components/QRCode/index.d.ts
++++ b/dist/components/QRCode/index.d.ts
+@@ -1,7 +1,8 @@
+ import type { TOTP } from 'otpauth';
+ type Args = {
+     forceWhiteBackgroundOnQrCode?: boolean;
++    image?: string;
+     totp: TOTP;
+ };
+-export default function QRCode({ forceWhiteBackgroundOnQrCode, totp }: Args): Promise<import("react").JSX.Element>;
++export default function QRCode({ forceWhiteBackgroundOnQrCode, image, totp }: Args): Promise<import("react").JSX.Element>;
+ export {};
+diff --git a/dist/components/QRCode/index.js b/dist/components/QRCode/index.js
+--- a/dist/components/QRCode/index.js
++++ b/dist/components/QRCode/index.js
+@@ -2,8 +2,10 @@
+ import { toDataURL } from 'qrcode';
+ import { cn } from '../../utilities/cn.js';
+ import styles from './index.module.css';
+-export default async function QRCode({ forceWhiteBackgroundOnQrCode, totp }) {
+-    const src = await toDataURL(totp.toString(), {
++export default async function QRCode({ forceWhiteBackgroundOnQrCode, image, totp }) {
++    // Not in the Key URI Format, but read by the authenticator apps that show an icon
++    const uri = image ? `${totp.toString()}&image=${encodeURIComponent(image)}` : totp.toString();
++    const src = await toDataURL(uri, {
+         color: {
+             dark: '#fff',
+             light: '#000'
+diff --git a/dist/components/views/Remove/Form.js b/dist/components/views/Remove/Form.js
+--- a/dist/components/views/Remove/Form.js
++++ b/dist/components/views/Remove/Form.js
+@@ -16,7 +16,7 @@
+         event.stopPropagation();
+         setIsPending(true);
+         const formData = new FormData(event.target);
+-        const res = await fetch(`${serverURL}${apiRoute}/remove-totp`, {
++        const res = await fetch(`${apiRoute}/remove-totp`, {
+             body: JSON.stringify(Object.fromEntries(formData)),
+             credentials: 'include',
+             headers: {
+diff --git a/dist/components/views/Setup/Form.js b/dist/components/views/Setup/Form.js
+--- a/dist/components/views/Setup/Form.js
++++ b/dist/components/views/Setup/Form.js
+@@ -17,7 +17,7 @@
+         event.stopPropagation();
+         setIsPending(true);
+         const formData = new FormData(event.target);
+-        const res = await fetch(`${serverURL}${apiRoute}/setup-totp`, {
++        const res = await fetch(`${apiRoute}/setup-totp`, {
+             body: JSON.stringify(Object.fromEntries(formData)),
+             credentials: 'include',
+             headers: {
+diff --git a/dist/components/views/Setup/index.js b/dist/components/views/Setup/index.js
+--- a/dist/components/views/Setup/index.js
++++ b/dist/components/views/Setup/index.js
+@@ -15,15 +15,13 @@
+         const url = formatAdminURL({
+             adminRoute,
+             path: '/login',
+-            serverURL
+         });
+         redirect(url);
+     }
+     if (user.hasTotp) {
+         const url = formatAdminURL({
+             adminRoute,
+             path: '/',
+-            serverURL
+         });
+         redirect(url);
+     }
+@@ -56,6 +54,7 @@
+                 children: [
+                     /*#__PURE__*/ _jsx(QRCode, {
+                         forceWhiteBackgroundOnQrCode: pluginOptions.forceWhiteBackgroundOnQrCode,
++                        image: pluginOptions.totp?.image,
+                         totp: totp
+                     }),
+                     /*#__PURE__*/ _jsx(ShowSecret, {
+diff --git a/dist/components/views/Verify/Form.js b/dist/components/views/Verify/Form.js
+--- a/dist/components/views/Verify/Form.js
++++ b/dist/components/views/Verify/Form.js
+@@ -17,7 +17,7 @@
+         event.stopPropagation();
+         setIsPending(true);
+         const formData = new FormData(event.target);
+-        const res = await fetch(`${serverURL}${apiRoute}/verify-totp`, {
++        const res = await fetch(`${apiRoute}/verify-totp`, {
+             body: JSON.stringify(Object.fromEntries(formData)),
+             credentials: 'include',
+             headers: {
+diff --git a/dist/components/views/Verify/index.js b/dist/components/views/Verify/index.js
+--- a/dist/components/views/Verify/index.js
++++ b/dist/components/views/Verify/index.js
+@@ -12,15 +12,13 @@
+         const url = formatAdminURL({
+             adminRoute,
+             path: '/login',
+-            serverURL
+         });
+         redirect(url);
+     }
+     if (!user.hasTotp || user.hasTotp && user._strategy === 'totp') {
+         const url = formatAdminURL({
+             adminRoute,
+             path: '/',
+-            serverURL
+         });
+         redirect(url);
+     }
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -6,5 +6,8 @@
+     disabled?: boolean;
+     forceSetup?: boolean;
+     forceWhiteBackgroundOnQrCode?: boolean;
+-    totp?: Partial<Pick<TOTP, 'algorithm' | 'digits' | 'issuer' | 'period'>>;
++    totp?: Partial<Pick<TOTP, 'algorithm' | 'digits' | 'issuer' | 'period'>> & {
++        /** An icon url for the entry, added to the QR code as the `image` parameter */
++        image?: string;
++    };
+ };

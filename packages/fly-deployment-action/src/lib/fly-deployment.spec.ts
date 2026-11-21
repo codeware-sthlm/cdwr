@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import type { context } from '@actions/github';
 import { type DeployAppOptions, Fly } from '@cdwr/fly-node';
+import { fetchDeployments } from '@codeware/shared/feature/tenancy';
 import * as coreAction from '@codeware/shared/util/github';
 import type { PullRequestEvent } from '@octokit/webhooks-types';
 import { vol } from 'memfs';
@@ -9,6 +10,7 @@ import { vol } from 'memfs';
 import { flyDeployment } from './fly-deployment';
 import type { ActionInputs } from './schemas/action-inputs.schema';
 import { ActionOutputs } from './schemas/action-outputs.schema';
+import { checkReleaseOrder } from './utils/release-order';
 
 type WebhookPayload = (typeof context)['payload'];
 
@@ -40,6 +42,12 @@ vi.mock('@codeware/shared/util/github', async () => ({
   getRepositoryDefaultBranch: vi.fn()
 }));
 vi.mock('@cdwr/fly-node');
+vi.mock('./utils/release-order', () => ({
+  checkReleaseOrder: vi.fn()
+}));
+vi.mock('@codeware/shared/feature/tenancy', () => ({
+  fetchDeployments: vi.fn()
+}));
 
 describe('flyDeployment', () => {
   // Save environment variables before tests
@@ -58,6 +66,7 @@ describe('flyDeployment', () => {
   const mockCoreWarning = vi.mocked(core.warning);
   const mockGithubContext = vi.mocked(github.context);
   const mockFly = vi.mocked(Fly);
+  const mockCheckReleaseOrder = vi.mocked(checkReleaseOrder);
 
   /**
    * Helper to get the mocked Fly instance to interact and spy on methods
@@ -142,8 +151,14 @@ describe('flyDeployment', () => {
         TEST_FLY_POSTGRES_PREVIEW?: string | null;
         TEST_FLY_POSTGRES_PRODUCTION?: string | null;
       };
+      /**
+       * The `http_service` section `fly config show` returns, for health probes.
+       * @default undefined (no check, no probe)
+       */
+      httpService?: Record<string, unknown>;
     } = {}
   ) => {
+    const { httpService } = overrides;
     const { flyApps, envFlyPostgres } = {
       flyApps: overrides.flyApps || [{ name: 'app-one' }, { name: 'app-two' }],
       envFlyPostgres: overrides.envFlyPostgres || {
@@ -215,7 +230,8 @@ describe('flyDeployment', () => {
           show: vi.fn().mockImplementation(({ config }) =>
             Promise.resolve({
               // App name from fly.toml is '{app-name}-config'
-              app: config.replace(/\/apps\/([^/]+)\/.*/, '$1-config')
+              app: config.replace(/\/apps\/([^/]+)\/.*/, '$1-config'),
+              ...(httpService && { httpService })
             })
           )
         },
@@ -326,6 +342,9 @@ describe('flyDeployment', () => {
 
     setupMocks();
     setContext('push-main-branch');
+
+    // A commit that holds the newest release, unless a test says otherwise
+    mockCheckReleaseOrder.mockResolvedValue({ deploy: true });
   });
 
   describe('start up', () => {
@@ -1120,6 +1139,295 @@ describe('flyDeployment', () => {
     );
   });
 
+  describe('release order', () => {
+    const sha = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    beforeEach(() => {
+      mockGithubContext.sha = sha;
+    });
+
+    afterEach(() => {
+      mockGithubContext.sha = '';
+    });
+
+    it('should skip an app older than its newest release and deploy the others', async () => {
+      setupMocks();
+      mockCheckReleaseOrder.mockImplementation(async (project) =>
+        project === 'app-one'
+          ? { deploy: false, reason: 'abcdef1 is older than app-one-1.0.0' }
+          : { deploy: true }
+      );
+
+      const result = await flyDeployment(setupTest(), true);
+
+      expect(mockCheckReleaseOrder).toHaveBeenCalledWith('app-one', sha);
+      expect(mockCheckReleaseOrder).toHaveBeenCalledWith('app-two', sha);
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-two-config' })
+      );
+      expect(result.projects).toEqual([
+        {
+          action: 'skipped',
+          appOrProject: 'app-one',
+          reason: 'abcdef1 is older than app-one-1.0.0'
+        },
+        expect.objectContaining({ action: 'deploy', app: 'app-two-config' })
+      ]);
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping app-one')
+      );
+    });
+
+    it('should deploy nothing when the check of a later app throws', async () => {
+      setupMocks();
+      mockCheckReleaseOrder.mockImplementation(async (project) => {
+        if (project === 'app-two') throw new Error('git boom');
+        return { deploy: true };
+      });
+
+      await expect(flyDeployment(setupTest(), true)).rejects.toThrow(
+        'Release order check failed for app-two, nothing deployed: git boom'
+      );
+      expect(getMockFly().deploy).not.toHaveBeenCalled();
+    });
+
+    it('should deploy as before when the commit holds the newest release', async () => {
+      setupMocks();
+
+      const result = await flyDeployment(setupTest(), true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
+      expect(result.projects.map((p) => p.action)).toEqual([
+        'deploy',
+        'deploy'
+      ]);
+    });
+
+    it('should not check the order of a preview deployment', async () => {
+      setContext('pr-opened');
+      setupMocks();
+
+      await flyDeployment(setupTest({}, 'preview'), true);
+
+      expect(mockCheckReleaseOrder).not.toHaveBeenCalled();
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('tenant secrets', () => {
+    const infisical = {
+      infisicalClientId: 'client-id',
+      infisicalClientSecret: 'client-secret',
+      infisicalProjectId: 'project-id'
+    };
+
+    const mockFetchDeployments = vi.mocked(fetchDeployments);
+
+    const fetched = (
+      secrets: Record<string, string>
+    ): Awaited<ReturnType<typeof fetchDeployments>> => ({
+      deployments: {
+        'app-one': [{}, { tenant: 'demo', secrets }]
+      },
+      skipped: []
+    });
+
+    it('should deploy a tenant with the secret values read from Infisical', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      mockFetchDeployments.mockResolvedValue(
+        fetched({ API_KEY: 'api-key-value', OTHER: 'other-value' })
+      );
+
+      const config = setupTest({
+        ...infisical,
+        apps: [getDefaultApps()[0]],
+        appDetails: {
+          'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
+        }
+      });
+      await flyDeployment(config, true);
+
+      expect(mockFetchDeployments).toHaveBeenCalledWith(
+        expect.objectContaining({ environment: 'production', site: 'eu' }),
+        ['app-one']
+      );
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(2);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app: 'app-one-config-demo',
+          secrets: { API_KEY: 'api-key-value' }
+        })
+      );
+      expect(core.setSecret).toHaveBeenCalledWith('api-key-value');
+    });
+
+    it('should report a tenant as failed without deploying it when a named secret is missing', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      mockFetchDeployments.mockResolvedValue(fetched({ OTHER: 'other-value' }));
+
+      const config = setupTest({
+        ...infisical,
+        apps: [getDefaultApps()[0]],
+        appDetails: {
+          'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
+        }
+      });
+      const result = await flyDeployment(config, true);
+
+      // Only the host was deployed
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config' })
+      );
+      expect(result.projects).toEqual([
+        expect.objectContaining({ action: 'deploy', app: 'app-one-config' }),
+        {
+          action: 'failed',
+          appOrProject: 'app-one (demo)',
+          error: expect.stringContaining('API_KEY')
+        }
+      ]);
+    });
+
+    it('should report only the tenant as failed, and deploy the host, when credentials are missing', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: {
+          'app-one': [{}, { tenant: 'demo', secretNames: ['API_KEY'] }]
+        }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(mockFetchDeployments).not.toHaveBeenCalled();
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config' })
+      );
+      expect(result.projects).toEqual([
+        expect.objectContaining({ action: 'deploy', app: 'app-one-config' }),
+        {
+          action: 'failed',
+          appOrProject: 'app-one (demo)',
+          error: expect.stringContaining('Infisical credentials are required')
+        }
+      ]);
+    });
+  });
+
+  describe('health probe', () => {
+    const httpService = { checks: [{ path: '/api/health' }] };
+    const mockFetch = vi.fn();
+
+    beforeEach(() => {
+      mockFetch.mockReset();
+      vi.stubGlobal('fetch', mockFetch);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('should report deploy when the probe answers 200', async () => {
+      setContext('push-main-branch');
+      setupMocks({ httpService });
+      mockFetch.mockResolvedValue({ status: 200 });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://app-one-config.fly.dev/api/health',
+        expect.objectContaining({ redirect: 'manual' })
+      );
+      expect(result.projects).toEqual([
+        {
+          action: 'deploy',
+          app: 'app-one-config',
+          name: 'app-one',
+          projectName: 'app-one',
+          url: 'https://app-one-config.fly.dev'
+        }
+      ]);
+    });
+
+    it('should report failed with the reason when the probe answers 503', async () => {
+      setContext('push-main-branch');
+      setupMocks({ httpService });
+      mockFetch.mockResolvedValue({ status: 503 });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(result.projects).toEqual([
+        {
+          action: 'failed',
+          appOrProject: 'app-one',
+          error: expect.stringContaining('answered 503')
+        }
+      ]);
+    });
+
+    it('should not probe when the app has no health check', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(result.projects).toEqual([
+        expect.objectContaining({ action: 'deploy', app: 'app-one-config' })
+      ]);
+      expect(mockCoreInfo).toHaveBeenCalledWith(
+        expect.stringContaining('No health probe')
+      );
+    });
+
+    it('should skip tenants when the host probe fails', async () => {
+      setContext('push-main-branch');
+      setupMocks({ httpService });
+      mockFetch.mockResolvedValue({ status: 503 });
+
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{ tenant: 'demo' }, {}] }
+      });
+      const result = await flyDeployment(config, true);
+
+      // Only the host was deployed and probed
+      expect(getMockFly().deploy).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(result.projects).toEqual([
+        {
+          action: 'failed',
+          appOrProject: 'app-one',
+          error: expect.stringContaining('answered 503')
+        },
+        {
+          action: 'failed',
+          appOrProject: 'app-one (demo)',
+          error: 'Skipped: host deployment failed'
+        }
+      ]);
+    });
+  });
+
   describe('workflow_dispatch event', () => {
     it('should deploy using environment input for production', async () => {
       setContext('push-main-branch', {
@@ -1180,6 +1488,31 @@ describe('flyDeployment', () => {
       );
     });
 
+    it('should set GIT_SHA from the workflow commit', async () => {
+      setContext('push-main-branch', {
+        eventName: 'workflow_dispatch',
+        payload: { ref: 'refs/heads/main' }
+      });
+      const sha = 'e3b25eff0123456789abcdef0123456789abcdef';
+      mockGithubContext.sha = sha;
+      setupMocks();
+      const config = setupTest(
+        { environment: 'preview', prNumber: 42 },
+        'preview'
+      );
+      try {
+        await flyDeployment(config, true);
+      } finally {
+        mockGithubContext.sha = '';
+      }
+
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: expect.objectContaining({ GIT_SHA: sha })
+        })
+      );
+    });
+
     it('should fail preview deployment when no pull request can be resolved', async () => {
       setContext('push-main-branch', {
         eventName: 'workflow_dispatch',
@@ -1208,54 +1541,6 @@ describe('flyDeployment', () => {
       expect(getMockFly().deploy).toHaveBeenCalledWith(
         expect.objectContaining({
           env: expect.objectContaining({ PR_NUMBER: '99' })
-        })
-      );
-    });
-  });
-
-  describe('workflow_run event', () => {
-    it('should deploy to preview using PR number from workflow_run pull_requests', async () => {
-      setContext('push-main-branch', {
-        eventName: 'workflow_run',
-        payload: {
-          workflow_run: {
-            event: 'pull_request',
-            pull_requests: [{ number: 42 }]
-          }
-        }
-      });
-      setupMocks();
-      const config = setupTest({}, 'preview');
-      const result = await flyDeployment(config, true);
-
-      expect(result.environment).toBe('preview');
-      expect(getMockFly().deploy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          app: 'app-one-config-pr-42',
-          environment: 'preview'
-        })
-      );
-    });
-
-    it('should deploy to production when workflow_run is triggered by a push event', async () => {
-      setContext('push-main-branch', {
-        eventName: 'workflow_run',
-        payload: {
-          workflow_run: {
-            event: 'push',
-            pull_requests: []
-          }
-        }
-      });
-      setupMocks();
-      const config = setupTest({ environment: 'production' });
-      const result = await flyDeployment(config, true);
-
-      expect(result.environment).toBe('production');
-      expect(getMockFly().deploy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          app: 'app-one-config',
-          environment: 'production'
         })
       );
     });
@@ -1310,6 +1595,30 @@ describe('flyDeployment', () => {
             INFISICAL_CLIENT_ID: 'client-id'
           }
         })
+      );
+    });
+
+    it('should withhold the shared secrets from an app with sharedSecrets false', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      const config = setupTest({
+        apps: getDefaultApps().map((app) =>
+          app.name === 'app-two'
+            ? { ...app, githubConfig: { sharedSecrets: false } }
+            : app
+        ),
+        secrets: ['INFISICAL_CLIENT_ID=client-id']
+      });
+      await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app: 'app-one-config',
+          secrets: { INFISICAL_CLIENT_ID: 'client-id' }
+        })
+      );
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-two-config', secrets: {} })
       );
     });
 

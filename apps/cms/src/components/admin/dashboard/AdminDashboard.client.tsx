@@ -14,6 +14,8 @@ import {
 import { useTranslation } from '@payloadcms/ui';
 import React from 'react';
 
+import { useOnboardingTour } from '../onboarding/use-onboarding-tour';
+
 import { AllContentTab } from './AllContentTab.client';
 import { HomeTab } from './HomeTab.client';
 import { PlatformTab } from './PlatformTab.client';
@@ -42,10 +44,14 @@ export const AdminDashboard: React.FC<DashboardData> = ({
   recentDocs,
   drafts,
   initialActiveTab,
-  platform
+  platform,
+  showBuildSite,
+  pendingSite
 }) => {
   const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const { activeTab, changeTab } = useActiveTab(initialActiveTab);
+  // On the dashboard as a whole, not the Home tab: a remembered tab must not hide the tour
+  useOnboardingTour(showBuildSite);
 
   return (
     /* `codeware-admin` is a structural marker only (scopes payload-retheme
@@ -94,6 +100,8 @@ export const AdminDashboard: React.FC<DashboardData> = ({
             taskCounts={taskCounts}
             recentDocs={recentDocs}
             drafts={drafts}
+            showBuildSite={showBuildSite}
+            pendingSite={pendingSite}
           />
         </TabsContent>
         <TabsContent

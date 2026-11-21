@@ -1,5 +1,7 @@
 /** Swedish counterpart of {@link termsEn} */
-export const termsSv = `> **Utkast — läs igenom innan du publicerar.** Texten beskriver hur anmälan fungerar på den här webbplatsen. De kommersiella delarna är markerade och måste fyllas i med era egna villkor. Den är en utgångspunkt, inte juridisk rådgivning.
+export const termsSv = `{{^published}}
+> **Utkast — läs igenom innan du publicerar.** Texten beskriver hur anmälan fungerar på den här webbplatsen. De kommersiella delarna är markerade och måste fyllas i med era egna villkor. Den är en utgångspunkt, inte juridisk rådgivning.
+{{/published}}
 
 # Villkor för anmälan
 

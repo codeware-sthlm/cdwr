@@ -31,6 +31,10 @@ export type CspOptions = {
 
 export const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
 
+/** Storage holding the block gallery's example imagery, which any site can render */
+export const SHOWCASE_STORAGE_ORIGIN =
+  'https://tiuqdqnfadzjngucaatb.supabase.co';
+
 /** Response headers; the enforced policy is always present */
 export type CspHeaders = {
   'Content-Security-Policy': string;
@@ -141,7 +145,13 @@ export function cspPolicies(options: Omit<CspOptions, 'enforce'>): CspPolicies {
       ...(site ? [TURNSTILE_ORIGIN] : [])
     ],
     'style-src': ["'self'", "'unsafe-inline'", ...(sources?.style ?? [])],
-    'img-src': ["'self'", 'data:', 'blob:', ...(sources?.img ?? [])],
+    'img-src': [
+      "'self'",
+      'data:',
+      'blob:',
+      ...(sources?.img ?? []),
+      ...(site ? [SHOWCASE_STORAGE_ORIGIN] : [])
+    ],
     'font-src': ["'self'", 'data:', ...(sources?.font ?? [])],
     'connect-src': ["'self'", ...(sources?.connect ?? [])],
     'frame-src': [

@@ -5,20 +5,29 @@ import { type InputSpec, type Inputs, flagOf } from './inputs';
 
 export const GLOBAL_FLAGS = {
   yes: { type: 'boolean', short: 'y', description: 'Skip confirmations' },
-  'dry-run': { type: 'boolean', description: 'Show the plan and stop' },
+  'dry-run': {
+    type: 'boolean',
+    short: 'd',
+    description: 'Show the plan and stop'
+  },
   json: {
     type: 'boolean',
-    description: 'Machine output; implies --non-interactive'
+    short: 'j',
+    description: 'Machine output; never prompts'
   },
-  'non-interactive': {
+  interactive: {
     type: 'boolean',
-    description: 'Never prompt; a missing input is an error'
+    short: 'i',
+    description: 'Ask for what is missing, even with inputs given'
   },
   verbose: { type: 'boolean', short: 'v', description: 'Show more' },
   help: { type: 'boolean', short: 'h', description: 'Show help' }
 } as const;
 
 export type GlobalFlag = keyof typeof GLOBAL_FLAGS;
+
+/** The letters the global flags already use */
+export type GlobalShort = (typeof GLOBAL_FLAGS)[GlobalFlag]['short'];
 
 export interface ParsedArgs {
   globals: Record<GlobalFlag, boolean>;
@@ -41,13 +50,28 @@ export function parseCommandArgs(
   for (const [name, spec] of Object.entries(GLOBAL_FLAGS)) {
     options[name] = {
       type: spec.type,
-      ...('short' in spec ? { short: spec.short } : {})
+      short: spec.short
     };
   }
+  const shorts = new Map<string, string>(
+    Object.entries(GLOBAL_FLAGS).map(([name, spec]) => [
+      spec.short,
+      `--${name}`
+    ])
+  );
   for (const [key, spec] of Object.entries(inputs)) {
     const flag = flagOf(key, spec);
     if (flag in options) {
-      throw new Error(`Input '${key}' collides with the global --${flag} flag`);
+      throw new Error(`Input '${key}' collides with the --${flag} flag`);
+    }
+    if (spec.short) {
+      const taken = shorts.get(spec.short);
+      if (taken) {
+        throw new Error(
+          `Input '${key}' takes -${spec.short}, which ${taken} already uses`
+        );
+      }
+      shorts.set(spec.short, `--${flag}`);
     }
     byFlag.set(flag, key);
     if (spec.positional) positionalKeys.push(key);
@@ -101,6 +125,19 @@ export function parseCommandArgs(
 
   return { globals, values };
 }
+
+/**
+ * Split argv at the first `--`: the flags before it are the command's own, and
+ * everything after it is handed over untouched, global flags included
+ */
+export const splitRest = (
+  argv: string[]
+): { own: string[]; rest: string[] } => {
+  const at = argv.indexOf('--');
+  return at === -1
+    ? { own: argv, rest: [] }
+    : { own: argv.slice(0, at), rest: argv.slice(at + 1) };
+};
 
 /** Split a comma-joined or repeated multiselect flag into values */
 export const splitMulti = (value: string | string[]): string[] =>

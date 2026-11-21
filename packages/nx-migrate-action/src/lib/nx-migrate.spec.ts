@@ -219,12 +219,16 @@ describe('nxMigrate', () => {
       const config = setupTest('up-to-date');
       await nxMigrate(config, true);
 
-      expect(execMock).toHaveBeenCalledWith('git', [
-        'remote',
-        'set-url',
-        'origin',
-        'https://x-access-token:token@github.com/owner/repo.git'
-      ]);
+      expect(execMock).toHaveBeenCalledWith(
+        'git',
+        [
+          'remote',
+          'set-url',
+          'origin',
+          'https://x-access-token:token@github.com/owner/repo.git'
+        ],
+        { silent: true }
+      );
     });
 
     it('should fail migrate when token is missing', async () => {
@@ -445,12 +449,16 @@ describe('nxMigrate', () => {
       });
       await nxMigrate(config, true);
 
-      expect(execMock).toHaveBeenCalledWith('git', [
-        'remote',
-        'set-url',
-        'origin',
-        'https://x-access-token:token@github.com/owner/repo.git'
-      ]);
+      expect(execMock).toHaveBeenCalledWith(
+        'git',
+        [
+          'remote',
+          'set-url',
+          'origin',
+          'https://x-access-token:token@github.com/owner/repo.git'
+        ],
+        { silent: true }
+      );
     });
 
     it('should create/reset feature branch from latest main commit without tracking', async () => {

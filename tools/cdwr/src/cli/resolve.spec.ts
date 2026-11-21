@@ -43,7 +43,13 @@ describe('an empty answer', () => {
 
   it('is refused when the input has no default', async () => {
     await expect(
-      ask(input.string({ prompt: 'Which tenant?' }))
+      ask(
+        input.string({
+          prompt: 'Which tenant?',
+          description: 'Test input',
+          short: 'a'
+        })
+      )
     ).rejects.toThrow('A value is required');
   });
 
@@ -55,7 +61,14 @@ describe('an empty answer', () => {
     await expect(
       resolveInputs(
         ctx,
-        { x: input.string({ prompt: 'Which workspace?', optional: true }) },
+        {
+          x: input.string({
+            prompt: 'Which workspace?',
+            description: 'Test input',
+            short: 'b',
+            optional: true
+          })
+        },
         {}
       )
     ).resolves.toEqual({ x: '' });
@@ -64,7 +77,14 @@ describe('an empty answer', () => {
 
   it('is accepted when a default says the input is optional', async () => {
     await expect(
-      ask(input.string({ prompt: 'Slug?', default: '' }))
+      ask(
+        input.string({
+          prompt: 'Slug?',
+          description: 'Test input',
+          short: 'c',
+          default: ''
+        })
+      )
     ).resolves.toEqual({ x: '' });
   });
 
@@ -74,7 +94,13 @@ describe('an empty answer', () => {
     await expect(
       resolveInputs(
         ctx,
-        { x: input.string({ prompt: 'Which tenant?' }) },
+        {
+          x: input.string({
+            prompt: 'Which tenant?',
+            description: 'Test input',
+            short: 'e'
+          })
+        },
         {
           x: ''
         }
@@ -92,6 +118,8 @@ describe('an empty answer', () => {
         {
           x: input.multiselect({
             prompt: 'Which locales?',
+            description: 'Test input',
+            short: 'f',
             min: 1,
             choices: () => [{ value: 'en' }]
           })
@@ -104,7 +132,17 @@ describe('an empty answer', () => {
   it('is refused for a secret, which has no default either', async () => {
     const { ctx } = context(['']);
     await expect(
-      resolveInputs(ctx, { x: input.secret({ prompt: 'Token?' }) }, {})
+      resolveInputs(
+        ctx,
+        {
+          x: input.secret({
+            prompt: 'Token?',
+            description: 'Test input',
+            short: 'g'
+          })
+        },
+        {}
+      )
     ).rejects.toThrow('A value is required');
   });
 });
@@ -112,10 +150,16 @@ describe('an empty answer', () => {
 describe('a flag its condition rules out', () => {
   const inputs = {
     environment: input.enum(['development', 'production'], {
-      prompt: 'Which environment?'
+      prompt: 'Which environment?',
+      description: 'Test input',
+      short: 'k'
     }),
     fresh: input.optional(
-      input.boolean({ prompt: 'Start fresh?' }),
+      input.boolean({
+        prompt: 'Start fresh?',
+        description: 'Test input',
+        short: 'l'
+      }),
       (r) => r['environment'] === 'development',
       'applies only in development'
     )
@@ -144,7 +188,11 @@ describe('a flag its condition rules out', () => {
     const bare = {
       environment: inputs.environment,
       fresh: input.optional(
-        input.boolean({ prompt: 'Start fresh?' }),
+        input.boolean({
+          prompt: 'Start fresh?',
+          description: 'Test input',
+          short: 'm'
+        }),
         (r) => r['environment'] === 'development'
       )
     };
@@ -175,11 +223,15 @@ describe('resolveInputs', () => {
   const inputs = {
     environment: input.enum(['preview', 'production'], {
       prompt: 'Which environment?',
+      description: 'Test input',
+      short: 'n',
       remember: true
     }),
     app: input.optional(
       input.select({
         prompt: 'Which app?',
+        description: 'Test input',
+        short: 'o',
         choices: (_ctx, r) => [
           { value: `${r['environment']}-app` },
           { value: 'other' }
@@ -187,8 +239,18 @@ describe('resolveInputs', () => {
       }),
       (r) => r['environment'] === 'preview'
     ),
-    count: input.number({ prompt: 'How many?', default: 2 }),
-    token: input.secret({ prompt: 'Token?', schema: z.string().min(3) })
+    count: input.number({
+      prompt: 'How many?',
+      description: 'Test input',
+      short: 'q',
+      default: 2
+    }),
+    token: input.secret({
+      prompt: 'Token?',
+      description: 'Test input',
+      short: 'r',
+      schema: z.string().min(3)
+    })
   };
 
   it('takes flags without prompting', async () => {
@@ -276,7 +338,11 @@ describe('resolveInputs', () => {
         ctx,
         {
           count: inputs.count,
-          force: input.boolean({ prompt: 'Force?' }),
+          force: input.boolean({
+            prompt: 'Force?',
+            description: 'Test input',
+            short: 's'
+          }),
           app: inputs.app
         },
         {}
@@ -288,7 +354,14 @@ describe('resolveInputs', () => {
       const { ctx } = context([], { interactive: false });
       const values = await resolveInputs(
         ctx,
-        { defer: input.boolean({ prompt: 'Defer?', initial: true }) },
+        {
+          defer: input.boolean({
+            prompt: 'Defer?',
+            description: 'Test input',
+            short: 't',
+            initial: true
+          })
+        },
         {}
       );
       expect(values).toEqual({ defer: true });
@@ -306,8 +379,12 @@ describe('resolveInputs', () => {
 describe('publicInputs', () => {
   it('drops secrets and absent values', () => {
     const inputs = {
-      token: input.secret({ prompt: '' }),
-      name: input.string({ prompt: '' })
+      token: input.secret({
+        prompt: '',
+        description: 'Test input',
+        short: 'u'
+      }),
+      name: input.string({ prompt: '', description: 'Test input', short: 'w' })
     };
     expect(
       publicInputs(inputs, { token: 'x', name: 'demo', extra: undefined })

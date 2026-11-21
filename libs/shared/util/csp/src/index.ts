@@ -4,6 +4,7 @@ export {
   cspHeaders,
   cspPolicies,
   sentryCspReportUri,
+  SHOWCASE_STORAGE_ORIGIN,
   toOrigin,
   TURNSTILE_ORIGIN
 } from './lib/csp';

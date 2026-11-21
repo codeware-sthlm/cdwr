@@ -135,6 +135,20 @@ export const BLOCK_IMAGES: Record<string, BlockImages> = {
     ],
     icon: ['m18 16 4-4-4-4', 'm6 8-4 4 4 4', 'm14.5 4-5 16']
   },
+  'coming-soon': {
+    thumbnail: [
+      ...ring(240, 76, 22),
+      ...avatar(240, 76, 8),
+      ...eyebrow(210, 118, 60),
+      ...heading(150, 142, 180),
+      ...textLines(170, 174, 140, 2),
+      ...button(192, 222, 96, 36)
+    ],
+    icon: [
+      'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
+      'M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'
+    ]
+  },
   content: {
     thumbnail: [28, 178, 328].flatMap((x) => [
       ...heading(x, 56, 90),
@@ -217,6 +231,24 @@ export const BLOCK_IMAGES: Record<string, BlockImages> = {
       'M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1',
       'M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1',
       'M9 6v12'
+    ]
+  },
+  gallery: {
+    thumbnail: [
+      ...eyebrow(28, 44, 56),
+      ...heading(28, 72, 190),
+      // A collage: one tall and one wide among the rest
+      ...imageBox(28, 112, 96, 172),
+      ...imageBox(136, 112, 96, 80),
+      ...imageBox(244, 112, 96, 80),
+      ...imageBox(352, 112, 100, 80),
+      ...imageBox(136, 204, 204, 80),
+      ...imageBox(352, 204, 100, 80)
+    ],
+    icon: [
+      roundRect(3, 3, 8, 8, 1),
+      roundRect(13, 3, 8, 8, 1),
+      roundRect(3, 13, 18, 8, 1)
     ]
   },
   hero: {

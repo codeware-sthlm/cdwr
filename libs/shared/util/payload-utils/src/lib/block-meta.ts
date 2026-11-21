@@ -198,8 +198,21 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'showLink',
+        type: 'checkbox',
+        label: {
+          en: 'Show a button',
+          sv: 'Visa en knapp'
+        },
+        description: {
+          en: 'Uncheck for a band that says something without asking for a click.',
+          sv: 'Avmarkera för ett band som säger något utan att be om ett klick.'
+        }
+      },
+      {
         name: 'link',
         type: 'group',
+        conditional: true,
         fields: [
           {
             name: 'type',
@@ -464,6 +477,123 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       }
     ]
   },
+  'coming-soon': {
+    slug: 'coming-soon',
+    label: {
+      en: 'Coming soon',
+      sv: 'Kommer snart'
+    },
+    availableIn: ['pages'],
+    fields: [
+      {
+        name: 'badge',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Badge',
+          sv: 'Etikett'
+        },
+        description: {
+          en: 'A short line above the heading, such as "Opening soon".',
+          sv: 'En kort rad ovanför rubriken, till exempel "Öppnar snart".'
+        }
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        required: true,
+        localized: true,
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
+      },
+      {
+        name: 'message',
+        type: 'textarea',
+        localized: true,
+        label: {
+          en: 'Message',
+          sv: 'Meddelande'
+        }
+      },
+      {
+        name: 'openingDate',
+        type: 'date',
+        label: {
+          en: 'Opening date',
+          sv: 'Öppningsdatum'
+        },
+        description: {
+          en: 'Optional. Shown as "Opening <date>" in the site’s language.',
+          sv: 'Valfritt. Visas som "Öppnar <datum>" på sidans språk.'
+        }
+      },
+      {
+        name: 'contactEmail',
+        type: 'email',
+        label: {
+          en: 'Contact email',
+          sv: 'Kontakt-e-post'
+        }
+      },
+      {
+        name: 'contactPhone',
+        type: 'text',
+        label: {
+          en: 'Contact phone',
+          sv: 'Kontakttelefon'
+        }
+      },
+      {
+        name: 'notifyLabel',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Notify button',
+          sv: 'Aviseringsknapp'
+        },
+        description: {
+          en: 'The label of a button that opens a form, such as "Notify me". Empty means no button.',
+          sv: 'Texten på en knapp som öppnar ett formulär, till exempel "Avisera mig". Tomt betyder ingen knapp.'
+        }
+      },
+      {
+        name: 'notifyAnchor',
+        type: 'text',
+        conditional: true,
+        label: {
+          en: 'Form anchor',
+          sv: 'Formulärets ankare'
+        },
+        description: {
+          en: 'The anchor of a Form block on this page set to Overlay. The button opens that form.',
+          sv: 'Ankaret för ett formulärblock på den här sidan som är satt till Överlägg. Knappen öppnar det formuläret.'
+        }
+      },
+      {
+        name: 'showIllustration',
+        type: 'checkbox',
+        label: {
+          en: 'Show a drawing',
+          sv: 'Visa en teckning'
+        }
+      },
+      {
+        name: 'illustration',
+        type: 'textarea',
+        conditional: true,
+        label: {
+          en: 'Illustration',
+          sv: 'Illustration'
+        },
+        description: {
+          en: 'SVG code drawn in place of the built-in drawing of the site’s pages coming home. Empty keeps the built-in one. Colours can use the theme, such as var(--brand-500).',
+          sv: 'SVG-kod som ritas i stället för den inbyggda teckningen av webbplatsens sidor som kommer hem. Tomt behåller den inbyggda. Färger kan hämtas från temat, till exempel var(--brand-500).'
+        }
+      }
+    ]
+  },
   content: {
     slug: 'content',
     label: {
@@ -541,11 +671,11 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         type: 'json',
         label: {
           en: 'Inputs',
-          sv: 'Inputs'
+          sv: 'Indata'
         },
         description: {
           en: 'The values for the inputs the component declares.',
-          sv: 'Värdena för de inputs komponenten deklarerar.'
+          sv: 'Värdena för komponentens indata.'
         }
       },
       {
@@ -1014,6 +1144,155 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'display',
+        type: 'select',
+        label: {
+          en: 'Display',
+          sv: 'Visning'
+        },
+        description: {
+          en: 'On the page draws the form where the block sits. Overlay keeps it hidden until a link to #anchor opens it beside the page, as a panel on a wide screen and a sheet from the bottom on a phone.',
+          sv: 'På sidan ritar formuläret där blocket ligger. Överlägg håller det dolt tills en länk till #ankare öppnar det bredvid sidan, som en panel på bred skärm och ett ark nedifrån på en telefon.'
+        }
+      },
+      {
+        name: 'anchor',
+        type: 'text',
+        label: {
+          en: 'Anchor',
+          sv: 'Ankare'
+        },
+        description: {
+          en: 'What a link reaches the form by, as #anchor. Lowercase letters, digits and dashes.',
+          sv: 'Det en länk når formuläret genom, som #ankare. Små bokstäver, siffror och bindestreck.'
+        }
+      },
+      {
+        name: 'overlayTitle',
+        type: 'text',
+        conditional: true,
+        localized: true,
+        label: {
+          en: 'Overlay title',
+          sv: 'Överläggets rubrik'
+        },
+        description: {
+          en: 'The heading of the panel. Empty means the form’s own title.',
+          sv: 'Panelens rubrik. Tomt betyder formulärets egen titel.'
+        }
+      },
+      {
+        name: 'band',
+        type: 'select',
+        label: {
+          en: 'Background',
+          sv: 'Bakgrund'
+        },
+        description: {
+          en: 'Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.',
+          sv: 'Lyfter fram blocket med en bakgrund över hela sidan. Kraftig visar det i webbplatsens mörka färger och Färgtoning i en djup toning av dess profilfärg, båda även i ljust läge.'
+        }
+      }
+    ]
+  },
+  gallery: {
+    slug: 'gallery',
+    label: {
+      en: 'Gallery',
+      sv: 'Galleri'
+    },
+    availableIn: ['pages', 'reusable-content'],
+    fields: [
+      {
+        name: 'eyebrow',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
+      },
+      {
+        name: 'intro',
+        type: 'textarea',
+        localized: true,
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
+      },
+      {
+        name: 'layout',
+        type: 'select',
+        label: {
+          en: 'Layout',
+          sv: 'Layout'
+        },
+        description: {
+          en: 'Collage lays the photos out like a scrapbook, each a little askew, sized by the item. Row lines them up evenly, with a caption under each.',
+          sv: 'Kollage lägger bilderna som i en klippbok, lite på sned, i den storlek varje bild anger. Rad radar upp dem jämnt, med en bildtext under var och en.'
+        }
+      },
+      {
+        name: 'items',
+        type: 'array',
+        label: {
+          en: 'Photos',
+          sv: 'Bilder'
+        },
+        fields: [
+          {
+            name: 'image',
+            type: 'upload',
+            required: true,
+            label: {
+              en: 'Image',
+              sv: 'Bild'
+            }
+          },
+          {
+            name: 'size',
+            type: 'select',
+            conditional: true,
+            label: {
+              en: 'Size',
+              sv: 'Storlek'
+            },
+            description: {
+              en: 'Wide takes two columns, tall two rows.',
+              sv: 'Bred tar två kolumner, hög två rader.'
+            }
+          },
+          {
+            name: 'caption',
+            type: 'text',
+            conditional: true,
+            localized: true,
+            label: {
+              en: 'Caption',
+              sv: 'Bildtext'
+            }
+          }
+        ]
+      },
+      {
         name: 'band',
         type: 'select',
         label: {
@@ -1073,8 +1352,33 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'layout',
+        type: 'select',
+        label: {
+          en: 'Layout',
+          sv: 'Layout'
+        },
+        description: {
+          en: 'Standard sets the text to the left with a visual beneath. Fill centres the text and makes the block fill the screen under the header, with no visual.',
+          sv: 'Standard placerar texten till vänster med en bild under. Fyll centrerar texten och låter blocket fylla skärmen under sidhuvudet, utan bild.'
+        }
+      },
+      {
+        name: 'decoration',
+        type: 'select',
+        label: {
+          en: 'Decoration',
+          sv: 'Dekoration'
+        },
+        description: {
+          en: 'A static drawing in the theme’s own colour along the bottom of the block, fading upward.',
+          sv: 'En stillbild i temats egen färg längs blockets nederkant, som tonar uppåt.'
+        }
+      },
+      {
         name: 'media',
         type: 'upload',
+        conditional: true,
         label: {
           en: 'Visual',
           sv: 'Bild'
@@ -1087,6 +1391,7 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       {
         name: 'illustration',
         type: 'textarea',
+        conditional: true,
         label: {
           en: 'Illustration',
           sv: 'Illustration'

@@ -10,6 +10,10 @@ export type PostData = Pick<
   /** Optional, unlike on the document, so existing callers state neither */
   heroImage?: Post['heroImage'];
   visibility?: Post['visibility'];
+  /** The SEO fields; left unset when the definition states none */
+  meta?: Post['meta'];
+  /** Defaults to published, like the demo content */
+  draft?: boolean;
 };
 
 /**
@@ -33,10 +37,12 @@ export async function ensurePost(
   const { locale, transactionID, managedBy } = options;
   const {
     authors,
+    draft,
     categories,
     content,
     createdAt,
     heroImage,
+    meta,
     slug,
     tenant,
     title,
@@ -74,13 +80,14 @@ export async function ensurePost(
       content,
       createdAt,
       heroImage,
+      ...(meta ? { meta } : {}),
       slug,
       tenant,
       title,
       // Public unless the caller says otherwise: seeded demo content is
       // public, but a definition may state a members-only post
       visibility: visibility ?? 'public',
-      _status: 'published'
+      _status: draft ? 'draft' : 'published'
     },
     context: { seedAction: true },
     locale,

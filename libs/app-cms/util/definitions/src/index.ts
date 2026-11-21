@@ -6,6 +6,7 @@ export {
   type CodeLanguage,
   type MonacoLanguage
 } from './lib/code-languages';
+export { type FaqTopic, FAQ_TOPICS, isFaqTopic } from './lib/faq-topics';
 export {
   type GlobalCollectionSlug,
   globalCollectionSlugs,
@@ -19,11 +20,23 @@ export {
 export { type MimeTypeSlug, getMimeTypes } from './lib/mime-types';
 export {
   type PlatformCollectionSlug,
+  type SystemCollectionSlug,
   isPlatformCollectionSlug,
-  platformCollectionSlugs
+  platformCollectionSlugs,
+  systemCollectionSlugs
 } from './lib/platform-collections';
 export {
   type TenantCollectionSlug,
   isTenantCollectionSlug,
   tenantCollectionSlugs
 } from './lib/tenant-collections';
+export {
+  type StarterPage,
+  type StarterPurpose,
+  STARTER_PAGES,
+  STARTER_PURPOSES
+} from './lib/starter-choices';
+export {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH
+} from './lib/password-policy';

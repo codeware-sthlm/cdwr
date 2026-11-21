@@ -5,7 +5,7 @@ export default defineConfig({
   root: import.meta.dirname,
   cacheDir:
     '../../../../node_modules/.vite/libs/app-cms/util/content-templates',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })],
   test: {
     name: 'app-cms-util-content-templates',
     watch: false,

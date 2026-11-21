@@ -22,24 +22,32 @@ import {
 
 import {
   type AppState,
+  type FlyFailure,
   GATE_KEY,
   MIN_PASSWORD_LENGTH,
   type OnFly,
   describeOnFly,
+  flyErrorOf,
   generatePassword,
+  partialReason,
   prChoices,
   pullRequestChoices,
   targetFlyApp,
-  tenantHint
+  tenantHint,
+  unreadApps
 } from './gate.logic';
 
 /** Whether the deployed app carries the gate password; unreachable is reported rather than assumed open */
-async function readFlyState(flyApp: string): Promise<OnFly> {
+async function readFlyState(
+  flyApp: string
+): Promise<{ onFly: OnFly; flyError?: string }> {
   try {
     const secrets = await fly().secrets.list({ app: flyApp });
-    return secrets.some(({ name }) => name === GATE_KEY) ? 'set' : 'missing';
-  } catch {
-    return 'unreachable';
+    return {
+      onFly: secrets.some(({ name }) => name === GATE_KEY) ? 'set' : 'missing'
+    };
+  } catch (error) {
+    return { onFly: 'unreachable', flyError: flyErrorOf(error) };
   }
 }
 
@@ -54,16 +62,18 @@ export default defineCommand({
     'Infisical decides what the next deploy sets; the Fly secret decides what the running app does right now. Both are kept in step.',
   danger: 'mutate',
   confirm: 'always',
-  needs: ['fly', 'infisical'],
+  needs: ['fly', 'infisical', 'gh'],
   inputs: {
     action: input.enum(['open', 'close'] as const, {
       prompt: 'Open or close the site?',
+      description: 'Open or close the site',
       positional: true
     }),
     environment: environmentInput(DEPLOYED),
     pullRequest: input.optional(
       input.select<string>({
         prompt: 'Which pull request?',
+        short: 'p',
         description: 'Preview only; picks which deployment to gate',
         choices: async (ctx) => {
           const apps = await listPreviewCmsApps();
@@ -76,6 +86,8 @@ export default defineCommand({
     ),
     tenant: input.select<string>({
       prompt: 'Which tenant?',
+      description: 'Tenant whose site to gate',
+      short: 't',
       choices: async (ctx, resolved) => {
         const environment = resolved['environment'] as Environment;
         const deployments = await readTenantDeployments(environment);
@@ -87,11 +99,15 @@ export default defineCommand({
     }),
     generate: input.boolean({
       prompt: 'Generate a password?',
+      description: 'Generate a password for visitors',
+      short: 'g',
       when: (r) => r['action'] === 'close'
     }),
     password: input.optional(
       input.secret({
         prompt: 'Password visitors will be given:',
+        description: 'Password visitors will be given',
+        short: 'P',
         schema: z
           .string()
           .min(
@@ -128,7 +144,9 @@ export default defineCommand({
               secretPath: `/tenants/${tenant}/apps/${app}`,
               inInfisical: GATE_KEY in secrets,
               flyApp,
-              onFly: flyApp ? await readFlyState(flyApp) : 'unreachable'
+              ...(flyApp
+                ? await readFlyState(flyApp)
+                : { onFly: 'unreachable' as const })
             };
           })
         ),
@@ -149,11 +167,36 @@ export default defineCommand({
           : 'Infisical is cleared first, then the running apps, for the same reason.'
       ],
       target: { environment, name: tenant },
+      // Never the password: a dry run's JSON is read by scripts and the desk
+      json: {
+        tenant,
+        environment,
+        apps: states.map(({ app, flyApp, inInfisical, onFly, flyError }) => ({
+          app,
+          flyApp,
+          inInfisical,
+          onFly,
+          ...(flyError ? { flyError } : {})
+        }))
+      },
       data: { action, environment, tenant, states, value }
     };
   },
 
   async apply(ctx, { action, environment, tenant, states, value }) {
+    // Infisical is written for these too, but Fly could not be read to act on them
+    const unread = unreadApps(states);
+    const unreadNames = unread.map(({ flyApp }) => flyApp);
+    const notRead = unread.length
+      ? `: ${unreadNames.join(', ')} not read on Fly`
+      : '';
+    const unreadJson = unread.length
+      ? {
+          unread: unread.map(({ flyApp, flyError }) => ({ flyApp, flyError })),
+          reason: partialReason(unread)
+        }
+      : undefined;
+
     if (action === 'open') {
       for (const { secretPath } of states) {
         await ctx.ui.task(
@@ -168,7 +211,7 @@ export default defineCommand({
         );
       }
 
-      const failed: string[] = [];
+      const stillClosed: FlyFailure[] = [];
       for (const { flyApp } of states.filter(({ onFly }) => onFly === 'set')) {
         try {
           await ctx.ui.task(`Opening ${flyApp}`, async () => {
@@ -177,18 +220,25 @@ export default defineCommand({
           });
         } catch (error) {
           ctx.ui.warn(`${flyApp} is still closed: ${messageOf(error)}`);
-          failed.push(flyApp);
+          stillClosed.push({ flyApp, flyError: flyErrorOf(error) });
         }
       }
+      const failed = stillClosed.map(({ flyApp }) => flyApp);
 
-      if (failed.length) {
+      if (failed.length || unread.length) {
         return {
-          summary: `${tenant} in ${environment} is only partly open`,
+          summary: `${tenant} in ${environment} is only partly open${notRead}`,
           partial: true,
-          next: failed.map(
+          next: [...failed, ...unreadNames].map(
             (app) => `fly secrets unset ${GATE_KEY} --app ${app}`
           ),
-          json: { tenant, environment, failed }
+          json: {
+            tenant,
+            environment,
+            failed,
+            ...unreadJson,
+            reason: partialReason(unread, stillClosed)
+          }
         };
       }
       return {
@@ -212,6 +262,8 @@ export default defineCommand({
     const live = states
       .filter(({ onFly }) => onFly !== 'unreachable')
       .map(({ flyApp }) => flyApp);
+    const closeCommand = (app: string) =>
+      `fly secrets set ${GATE_KEY}=${value} --app ${app} && fly secrets deploy --app ${app}`;
 
     try {
       for (const flyApp of live) {
@@ -241,13 +293,10 @@ export default defineCommand({
         'Staging incomplete'
       );
       return {
-        summary: `${tenant} in ${environment} is only partly closed`,
+        summary: `${tenant} in ${environment} is only partly closed${notRead}`,
         partial: true,
-        next: live.map(
-          (app) =>
-            `fly secrets set ${GATE_KEY}=${value} --app ${app} && fly secrets deploy --app ${app}`
-        ),
-        json: { tenant, environment, password: value }
+        next: [...live, ...unreadNames].map(closeCommand),
+        json: { tenant, environment, password: value, ...unreadJson }
       };
     }
 
@@ -261,6 +310,15 @@ export default defineCommand({
       ],
       'Share this with whoever should see the site'
     );
+
+    if (unreadJson) {
+      return {
+        summary: `${tenant} in ${environment} is only partly closed${notRead}`,
+        partial: true,
+        next: unreadNames.map(closeCommand),
+        json: { tenant, environment, password: value, ...unreadJson }
+      };
+    }
 
     return {
       summary: `${tenant} is closed in ${environment}`,

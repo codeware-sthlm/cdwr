@@ -16,6 +16,11 @@ export const ActionInputsSchema = z.object({
   flyTraceCli: z.boolean().optional(),
   flyConsoleLogs: z.boolean().optional(),
   images: z.record(z.string(), z.string()).optional(),
+  // Read the values of the secrets a tenant deployment names
+  infisicalClientId: z.string().optional(),
+  infisicalClientSecret: z.string().optional(),
+  infisicalProjectId: z.string().optional(),
+  infisicalSite: z.enum(['eu', 'us']).optional(),
   optOutDepotBuilder: z.boolean().optional(),
   // Takes precedence over the event payload; required for preview
   prNumber: z.number().int().positive().optional(),

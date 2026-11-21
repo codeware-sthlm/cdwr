@@ -16,6 +16,12 @@
     }
   ],
   "appDetails": {},
+  "infisical": {
+    "clientId": "infisical-client-id",
+    "clientSecret": "infisical-client-secret",
+    "projectId": "infisical-project-id",
+    "site": "eu"
+  },
   "fly": {
     "token": "fly-token",
     "org": "company",

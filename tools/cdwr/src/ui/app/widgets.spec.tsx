@@ -1,6 +1,6 @@
 import { render } from 'ink-testing-library';
 
-import { Confirm, MultiSelect, Select, Table, TextInput } from './widgets';
+import { Confirm, MultiSelect, Select, TextInput } from './widgets';
 
 const DOWN = '\u001b[B';
 const ENTER = '\r';
@@ -115,21 +115,5 @@ describe('Confirm', () => {
     stdin.write('y');
     await tick();
     expect(onSubmit).toHaveBeenCalledWith(true);
-  });
-});
-
-describe('Table', () => {
-  it('pads columns to the widest cell', () => {
-    const { lastFrame } = render(
-      <Table
-        head={['app', 'state']}
-        rows={[
-          ['cdwr-cms', 'started'],
-          ['x', 'stopped']
-        ]}
-      />
-    );
-    expect(lastFrame()).toContain('cdwr-cms  started');
-    expect(lastFrame()).toContain('x         stopped');
   });
 });

@@ -1,12 +1,14 @@
 import type { ThemeRecipe, ThemeTokens } from '@codeware/shared/util/color';
 import type {
   CalloutBlock,
+  CodeBlock,
   ContentBlock,
   CustomComponent,
   CustomComponentBlock,
   FeatureSectionBlock,
   FileAreaBlock,
   FormBlock,
+  GalleryBlock,
   HeroBlock,
   ImageBlock,
   Page,
@@ -65,6 +67,7 @@ type ReferencingBlock =
   | FeatureSectionBlock
   | FileAreaBlock
   | FormBlock
+  | GalleryBlock
   | HeroBlock
   | ImageBlock
   | PillListBlock
@@ -76,8 +79,8 @@ type ReferencingBlock =
  *
  * Nothing in these blocks refers to another document, so there is nothing to
  * resolve and no reason to restate them here — `about`, `block-gallery`,
- * `card`, `code`, `feature-cards`, `posts`, `showcase`, `social-media`,
- * `spacing`, `theme-studio` and `tours`.
+ * `card`, `code`, `coming-soon`, `feature-cards`, `posts`, `showcase`,
+ * `social-media`, `spacing`, `theme-studio` and `tours`.
  */
 export type PlainBlockDefinition = Authored<
   Exclude<LayoutBlock, ReferencingBlock>
@@ -89,6 +92,7 @@ type PlainBlockType =
   | 'block-gallery'
   | 'card'
   | 'code'
+  | 'coming-soon'
   | 'feature-cards'
   | 'posts'
   | 'showcase'
@@ -192,15 +196,17 @@ export type ReusableContentBlockDefinition = WithRef<
 /**
  * Columns of body text.
  *
- * `blocks` is deliberately left out: a column can nest a form, an image or
- * reusable content, and each of those needs its own reference treatment before
- * a definition could state one. Omitting it makes the attempt a type error
- * rather than a database id smuggled into a nested block.
+ * `blocks` takes only blocks without a document reference, for now code. A
+ * column can also nest a form, an image or reusable content, and each of those
+ * needs its own reference treatment before a definition could state one.
+ * Leaving them out makes the attempt a type error rather than a database id
+ * smuggled into a nested block.
  */
 export type ContentBlockDefinition = Omit<Authored<ContentBlock>, 'columns'> & {
   columns?: Array<{
     size?: NonNullable<ContentBlock['columns']>[number]['size'];
     richText?: RichTextRef | null;
+    blocks?: Array<Authored<CodeBlock>> | null;
   }> | null;
 };
 
@@ -241,6 +247,18 @@ export type PillListBlockDefinition = Omit<Authored<PillListBlock>, 'items'> & {
   > | null;
 };
 
+type GalleryItem = NonNullable<GalleryBlock['items']>[number];
+
+/**
+ * A gallery's photos each point at a media document, stated by filename.
+ *
+ * `size` and `caption` are kept as authored; `id` is left out, as on every
+ * array row a definition states.
+ */
+export type GalleryBlockDefinition = Omit<Authored<GalleryBlock>, 'items'> & {
+  items: Array<Omit<GalleryItem, 'id' | 'image'> & { image: MediaRef }>;
+};
+
 /** Any block a definition may place on a page. */
 export type BlockDefinition =
   | PlainBlockDefinition
@@ -249,6 +267,7 @@ export type BlockDefinition =
   | ImageBlockDefinition
   | FeatureSectionBlockDefinition
   | FormBlockDefinition
+  | GalleryBlockDefinition
   | CustomComponentBlockDefinition
   | ContentBlockDefinition
   | ReusableContentBlockDefinition
@@ -298,10 +317,25 @@ export type TagDefinition = {
 };
 export type CategoryDefinition = { name: string; slug: string };
 
+/**
+ * What search engines and link previews show for a page or post.
+ *
+ * Lives in the definition, not in the admin, so a fresh apply that recreates
+ * the document never loses it. Written to the SEO fields `meta.*`.
+ */
+export type MetaDefinition = {
+  title?: string;
+  description?: string;
+  image?: MediaRef;
+};
+
 export type PageDefinition = Pick<Page, 'name'> & {
   slug: string;
   header?: Page['header'];
   visibility?: Page['visibility'];
+  meta?: MetaDefinition;
+  /** Created unpublished, so an editor reviews it before visitors see it */
+  draft?: boolean;
   layout: Array<BlockDefinition>;
 };
 
@@ -310,6 +344,9 @@ export type PostDefinition = Pick<Post, 'title'> & {
   /** Markdown, converted to Lexical on apply — as the seed already does */
   content: string;
   visibility?: Post['visibility'];
+  meta?: MetaDefinition;
+  /** Created unpublished, so an editor reviews it before visitors see it */
+  draft?: boolean;
   categories?: Array<{ lookupSlug: string }>;
   heroImage?: MediaRef;
   /** Resolved against the tenant's users, who a definition never states */
@@ -404,18 +441,31 @@ export type NavigationItemDefinition =
   NavigationLinkDefinition | NavigationGroupDefinition;
 
 /**
- * A contact form, as the platform builds one.
+ * One field of a form that states its own, narrowed to what the form
+ * builder's text-like blocks accept.
+ */
+export type FormFieldDefinition = {
+  blockType: 'text' | 'textarea' | 'email' | 'number';
+  name: string;
+  label: string;
+  placeholder?: string;
+  /** Columns of six the field spans; six is full width */
+  width?: number;
+  required?: boolean;
+};
+
+/**
+ * A form, as the platform builds one.
  *
- * Deliberately narrow: `ensureForm` makes a single-email-field contact form and
- * nothing else, so a definition can only state what that accepts. A richer form
- * is a change to the platform before it is a change to this type — promising
- * one here would produce a definition the apply cannot honour.
+ * Either the single-email-field contact form (`emailLabel` and
+ * `emailPlaceholder`), or one with `fields` of its own. A form with `fields`
+ * must have exactly one `email` field named `email`, since the notification
+ * subject reads `{{email}}`. The rest of the form builder (selects, checkboxes,
+ * dates) is a change to the platform before it is a change to this type.
  */
 export type FormDefinition = {
   /** Stable lookup key, and what a `form` block points at */
   title: string;
-  emailLabel: string;
-  emailPlaceholder: string;
   submitLabel: string;
   /** Shown after a successful send */
   confirmation: string;
@@ -430,7 +480,14 @@ export type FormDefinition = {
    * settings exist.
    */
   emailTo?: string;
-};
+} & (
+  | { emailLabel: string; emailPlaceholder: string; fields?: never }
+  | {
+      fields: Array<FormFieldDefinition>;
+      emailLabel?: never;
+      emailPlaceholder?: never;
+    }
+);
 
 /**
  * A custom component, as an editor would save it.
@@ -488,6 +545,14 @@ export type SiteSettingsDefinition = {
     > & { source: 'svg'; svgCode: string };
   };
   footer?: SiteSetting['footer'];
+  forms?: {
+    /**
+     * Days a form submission is kept before the nightly sweep deletes it, at
+     * least 1. The privacy page states this period, so state it here whenever
+     * the page is rendered with the same number.
+     */
+    retentionDays?: number;
+  };
   legal?: {
     privacyPage?: { lookupSlug: string };
     termsPage?: { lookupSlug: string };

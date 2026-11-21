@@ -1,0 +1,8 @@
+{
+  "name": "app-headless-util-env-schema",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/app-headless/util/env-schema/src",
+  "projectType": "library",
+  "tags": ["scope:app-headless", "type:util"],
+  "targets": {}
+}

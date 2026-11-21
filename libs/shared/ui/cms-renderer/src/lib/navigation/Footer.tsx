@@ -393,8 +393,7 @@ export function Footer({
 }: {
   footer: FooterData | null;
   /**
-   * Sign in / sign out slot. Omitted on a site with no members-only content,
-   * and by `apps/web`, which does not own those routes.
+   * Sign in / sign out slot. Omitted on a site with no members-only content.
    */
   session?: MemberSessionData;
 }) {

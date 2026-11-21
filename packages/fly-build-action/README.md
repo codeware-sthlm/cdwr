@@ -61,6 +61,8 @@ build:
         app-details: ${{ needs.pre-deploy.outputs.app-tenants }}
 ```
 
+`app-details` carries no secret values, only secret names.
+
 ### Build Arguments
 
 Use `build-args` to pass values that need to be embedded in the Docker image at build time (e.g., `NEXT_PUBLIC_*` variables, source map upload tokens).

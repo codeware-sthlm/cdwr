@@ -34,6 +34,18 @@ describe('offlineCacheFile', () => {
     expect(offlineCacheFile(ws, path)).toBe(join(ws, expected));
   });
 
+  it('uses the given app instead of the path app', () => {
+    expect(offlineCacheFile(ws, '/apps/cms/signature', 'web')).toBe(
+      join(ws, 'apps/web/.env.offline')
+    );
+  });
+
+  it.each(['unknown', '..', 'a/b'])('rejects app %s', (app) => {
+    expect(() => offlineCacheFile(ws, '/apps/cms', app)).toThrow(
+      `Unknown app: ${app}`
+    );
+  });
+
   it.each(['/', '/tenants/moon', '/apps', '/apps/unknown', '/apps/../x'])(
     'rejects %s',
     (path) => {
@@ -42,6 +54,12 @@ describe('offlineCacheFile', () => {
       );
     }
   );
+
+  it('rejects an unknown path app even with a valid app', () => {
+    expect(() => offlineCacheFile(ws, '/apps/unknown', 'web')).toThrow(
+      'Infisical path must be under /apps/<app>: /apps/unknown'
+    );
+  });
 });
 
 describe('offline cache file', () => {

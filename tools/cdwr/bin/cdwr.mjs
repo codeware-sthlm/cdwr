@@ -3,8 +3,10 @@
 // (`cdwr setup` does it), or run it through `pnpm cdwr`.
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { refreshCompletion } from './completion-check.mjs';
 
 const BIN = join('tools', 'cdwr', 'bin', 'cdwr.mjs');
 
@@ -18,7 +20,9 @@ const checkoutOf = (dir) => {
 };
 
 const here = dirname(realpathSync(fileURLToPath(import.meta.url)));
-const root = checkoutOf(process.cwd()) ?? join(here, '..', '..', '..');
+// The checkout this shim file lives in: the linked one when run through the symlink
+const own = resolve(here, '..', '..', '..');
+const root = checkoutOf(process.cwd()) ?? own;
 const tsx = join(root, 'node_modules', '.bin', 'tsx');
 const tsconfig = join(root, 'tools', 'cdwr', 'tsconfig.lib.json');
 const main = join(root, 'tools', 'cdwr', 'src', 'main.ts');
@@ -30,6 +34,11 @@ if (!existsSync(tsx)) {
   process.exit(1);
 }
 
+// Ctrl-C and Ctrl-\ go to the whole foreground group; the CLI decides what they
+// do, so this launcher must not die under it (an interactive session it starts
+// would lose its terminal to the shell)
+for (const signal of ['SIGINT', 'SIGQUIT']) process.on(signal, () => undefined);
+
 const result = spawnSync(
   tsx,
   ['--tsconfig', tsconfig, main, ...process.argv.slice(2)],
@@ -40,4 +49,6 @@ if (result.error) {
   console.error(`cdwr: ${result.error.message}`);
   process.exit(1);
 }
+// After the command, so its output and exit code are untouched
+refreshCompletion(own);
 process.exit(result.status ?? 1);

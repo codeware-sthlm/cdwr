@@ -1,0 +1,163 @@
+/* Layout: one screen. A header, then the session and what waits on you as two cards that wrap to one column on a phone; small tiles open the rest as side sheets. Dark only, as the design's boards. */
+/* What stays here is what cannot be a utility on one component: the palette and spacing tokens, the page, and the rules for bare elements. Every component draws itself with utilities, its shared strings in components/*-ui.ts. */
+:root {
+  /* Surfaces */
+  --bg: #121110;
+  --surface: #1b1917;
+  --raised: #201e1b;
+  --control: #24211d;
+  --sunk: #171513;
+  --line: #2c2925;
+  --line-strong: #38342e;
+  /* Text */
+  --fg: #edeae3;
+  --muted: #a6a299;
+  --faint: #938e84;
+  /* Status */
+  --live: #7fc98f;
+  --attended: #8fb8e8;
+  --ok: #7fc98f;
+  --ok-soft: #17261a;
+  --work: #8fb8e8;
+  --work-soft: #15202b;
+  --wait: #e8a33d;
+  --wait-soft: #2a2212;
+  --wait-card: #241d10;
+  --wait-line: #4a3a16;
+  --wait-dash: #8a6a28;
+  --review: #c99bec;
+  --review-soft: #2f1f3d;
+  --block: #f08a7e;
+  --block-soft: #3a1c18;
+  --alert-bg: #3a1714;
+  --alert-line: #6b2a23;
+  --alert-fg: #fbd5cf;
+  --alert-sub: #f0b3aa;
+  --problem-bg: #1f1513;
+  --problem-line: #5a2a24;
+  --unknown-line: #6b6358;
+  --unknown: repeating-linear-gradient(
+    135deg,
+    var(--faint) 0 2px,
+    transparent 2px 4px
+  );
+  --accent: #8fb8e8;
+  --accent-soft: #15202b;
+  --bar: #8fb8e8;
+  /* Spend roles: dataviz categorical slots 1-3, validated dark on #1c1924 */
+  --r-planning: #3987e5;
+  --r-orchestrating: #d95926;
+  --r-implementing: #199e70;
+  /* Radii: card, tile, row, pill */
+  --r-card: 12px;
+  --r-tile: 11px;
+  --r-row: 10px;
+  --r-pill: 999px;
+  /* Spacing: page block and inline padding, section and card gaps; the phone's below */
+  --pad-block: 24px;
+  --pad-inline: 32px;
+  --gap: 22px;
+  --gap-card: 16px;
+  --tap: 44px;
+  --scrim: rgba(12, 11, 10, 0.6);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --font-ui: 'Space Grotesk', 'Avenir Next', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: dark;
+}
+@media (max-width: 600px) {
+  :root {
+    --pad-block: 16px;
+    --pad-inline: 16px;
+    --gap: 12px;
+    --gap-card: 12px;
+  }
+}
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.45 var(--font-ui);
+}
+/* The page padding, grown to the phone's safe areas when standalone; the alert band cancels it.
+   On #root, not body: a sheet's scroll lock rewrites body's padding with an unlayered rule */
+#root {
+  --pad-top: max(var(--pad-block), env(safe-area-inset-top));
+  --pad-bottom: max(calc(var(--pad-block) + 8px), env(safe-area-inset-bottom));
+  --pad-left: max(var(--pad-inline), env(safe-area-inset-left));
+  --pad-right: max(var(--pad-inline), env(safe-area-inset-right));
+  padding: var(--pad-top) var(--pad-right) var(--pad-bottom) var(--pad-left);
+}
+/* The bare elements: a button looks like the desk's unless a utility says otherwise, and so do code and lists */
+button {
+  font: 500 0.85rem var(--font-ui);
+  color: var(--fg);
+  background: var(--control);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-row);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--muted);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Buttons drawn entirely with utilities start from nothing, not from the button rules above: the
+   card's pill (`open`), the limits meter (`cap-btn`) and the health check's problem link. The
+   utilities on them win over this reset. */
+.card-top .open,
+.cap-btn,
+.pf-problem {
+  all: unset;
+}
+code {
+  font: 0.82rem var(--font-mono);
+  background: var(--raised);
+  color: var(--fg);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+/* iOS zooms the page when a field under 16px takes focus */
+@media (max-width: 600px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+ol,
+ul {
+  display: grid;
+  gap: 6px;
+}
+
+/* The chart sits in an SVG, which a utility cannot reach per child: only the hit bands take the pointer; the highlight and the bars drawn over them would swallow the hover */
+.chart svg * {
+  pointer-events: none;
+}
+.chart svg .hit {
+  pointer-events: all;
+}
+
+/* The pulses of the session card and the alert band's frozen label */
+@keyframes beat {
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

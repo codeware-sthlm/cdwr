@@ -1,21 +1,21 @@
-import { ImageResponse } from 'next/og';
-
-import { payloadRuntime } from '../../../security/payload-runtime';
 import {
   faviconSvg,
   fitMark,
+  parseIconSize,
   svgDataUri,
   svgMark
-} from '../../../utils/site-icon';
+} from '@codeware/shared/util/pure';
+import { ImageResponse } from 'next/og';
 
-const SIZE = 32;
+import { payloadRuntime } from '../../../security/payload-runtime';
 
 /**
  * The mark as a PNG, for a browser that will not take an SVG favicon.
  *
- * A bitmap cannot follow the tab's scheme, so it is drawn in the light one.
+ * `?size=` picks the side in pixels, 16 to 256. A bitmap cannot follow the tab's scheme, so it is drawn in the light one.
  */
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
+  const size = parseIconSize(new URL(request.url).searchParams.get('size'));
   const runtime = await payloadRuntime({ asVisitor: true });
   const mark = svgMark(runtime.tenantConfig?.icon ?? null);
   const svg = mark ? faviconSvg(mark, 'light') : null;
@@ -34,11 +34,11 @@ export async function GET(): Promise<Response> {
         justifyContent: 'center'
       }}
     >
-      <img src={svgDataUri(svg)} {...fitMark(svg, SIZE)} alt="" />
+      <img src={svgDataUri(svg)} {...fitMark(svg, size)} alt="" />
     </div>,
     {
-      width: SIZE,
-      height: SIZE,
+      width: size,
+      height: size,
       headers: { 'cache-control': 'public, max-age=3600' }
     }
   );

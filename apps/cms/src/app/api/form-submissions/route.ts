@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 import { refuseUnlessHuman } from '../../../security/public-submit';
+import { errorKind } from '../../../utils/error-kind';
 
 type Body = FormSubmission & {
   humanCheck?: HumanCheckFields;
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       id
     });
   } catch (error) {
-    console.error('Form submission error:', error);
+    console.error(`Form submission error (${errorKind(error)})`);
 
     return NextResponse.json(
       {

@@ -6,6 +6,8 @@ import { editableTokens, parseThemeTokens } from '@codeware/shared/util/color';
 import type { ThemeStudioBlock } from '@codeware/shared/util/payload-types';
 import { useMemo } from 'react';
 
+import { usePayload } from '../../providers/PayloadProvider';
+
 /**
  * The heavy half of the block: the studio, the colour engine it derives with
  * and the committed token map it opens from.
@@ -18,6 +20,9 @@ import { useMemo } from 'react';
 export default function ThemeStudioEmbed({
   startFrom
 }: Pick<ThemeStudioBlock, 'startFrom'>) {
+  // The page has one theme on screen, so the studio opens on that scheme
+  // rather than a side-by-side the visitor did not ask for
+  const { resolvedColorScheme } = usePayload();
   // Opened exactly as the admin opens a platform theme: the recipe read back
   // from the committed tokens, plus what the recipe cannot express. The recipe
   // alone would redraw the theme's own surfaces and charts from defaults, so
@@ -38,6 +43,7 @@ export default function ThemeStudioEmbed({
       fit="content"
       recipe={opened?.recipe}
       overrides={opened?.overrides}
+      initialScheme={resolvedColorScheme ?? 'light'}
       themeName={themeLabel(startFrom)}
       themeSlug={startFrom}
       canExport={false}

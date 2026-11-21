@@ -1,12 +1,18 @@
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { t } from '@codeware/shared/util/i18n';
 import { resolveReturnPath } from '@codeware/shared/util/site-gate';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 import {
+  MEMBER_LOGIN_CODE_STEP,
   MEMBER_LOGIN_SUBMIT_PATH,
-  type MemberLoginError
+  type MemberLoginError,
+  TOTP_VERIFY_PATH
 } from '../../../utils/member-login';
+
+import { MemberCodeForm } from './MemberCodeForm.client';
 
 /** A sign-in form has nothing to offer a search engine */
 export const metadata: Metadata = {
@@ -18,6 +24,7 @@ type Props = {
   searchParams: Promise<{
     error?: string | Array<string>;
     from?: string | Array<string>;
+    step?: string | Array<string>;
   }>;
 };
 
@@ -30,8 +37,8 @@ type Props = {
  * shadowed by this route — worth knowing before naming one that.
  */
 export default async function MemberLoginPage({ searchParams }: Props) {
-  const { error, from } = await searchParams;
-  const { tenantConfig } = await payloadRuntime();
+  const { error, from, step } = await searchParams;
+  const { payload, tenantConfig } = await payloadRuntime();
 
   const locale = tenantConfig?.locale ?? 'en';
   const returnTo = resolveReturnPath(
@@ -39,17 +46,50 @@ export default async function MemberLoginPage({ searchParams }: Props) {
   );
 
   const reason = (Array.isArray(error) ? error[0] : error) as
-    | MemberLoginError
-    | undefined;
+    MemberLoginError | undefined;
 
   // Coarse on purpose: a wrong password and an unknown address read the same,
   // so the form cannot be used to discover who belongs to this workspace
   const message =
     reason === 'throttled'
       ? t(locale, 'memberLogin.tooManyAttempts')
-      : reason
-        ? t(locale, 'memberLogin.failed')
-        : null;
+      : reason === 'setup'
+        ? t(locale, 'memberLogin.setupRequired')
+        : reason
+          ? t(locale, 'memberLogin.failed')
+          : null;
+
+  // The code step only for a session that actually owes one; anyone else,
+  // including a visitor who typed the address, gets the password form
+  const askForCode =
+    (Array.isArray(step) ? step[0] : step) === MEMBER_LOGIN_CODE_STEP &&
+    isSecondFactorPending(
+      (await payload.auth({ headers: await headers() })).user
+    );
+
+  if (askForCode) {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-16">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold">
+            {t(locale, 'memberLogin.heading')}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {t(locale, 'memberLogin.codeIntro')}
+          </p>
+        </div>
+        <MemberCodeForm
+          returnTo={returnTo}
+          verifyPath={TOTP_VERIFY_PATH}
+          labels={{
+            code: t(locale, 'memberLogin.code'),
+            submit: t(locale, 'memberLogin.codeSubmit'),
+            failed: t(locale, 'memberLogin.codeFailed')
+          }}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-16">

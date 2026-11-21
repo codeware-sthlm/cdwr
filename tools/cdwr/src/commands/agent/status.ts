@@ -1,40 +1,83 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { z } from 'zod';
+
 import { defineCommand, readOnly } from '../../cli/command';
+import type { Context } from '../../cli/context';
+import { CliError } from '../../cli/errors';
 import {
   checkRun,
   implementReport,
   jobState,
-  keyPresent,
+  linearAuthSourceOf,
   lockAge,
+  mirrorTargetOf,
   paths,
   readQueueSources,
   readText,
-  requireMac,
+  requireHost,
   worktreeOf
 } from '../../services/agent-queue';
 import { symbols, theme } from '../../ui/theme';
 
 import {
+  DEFAULT_QUEUE_LIMIT,
+  IMPLEMENT_BUDGET_USD,
+  KEYCHAIN_CLIENT_ID_SERVICE,
+  KEYCHAIN_CLIENT_SECRET_SERVICE,
+  LINEAR_CLIENT_ID_ENV,
+  LINEAR_CLIENT_SECRET_ENV,
+  RUN_FALLBACK_SECONDS,
   RUN_INTERVAL_SECONDS,
   byFile,
   filesDrift,
+  formatBlocked,
+  formatDeployHold,
+  formatGaps,
   formatHeld,
   formatImplement,
   formatNext,
   formatParked,
+  formatRefused,
+  formatRenovate,
   formatTable,
   formatWatching,
   lastSchedulerLine,
-  latestRunLog,
   lockState,
   parseAttended,
   parseCheck,
+  parseDevlog,
+  parseLinear,
   parseNotifyLevel,
   parseQueueView,
-  parseWatchState
+  parseReview,
+  parseSuggest,
+  parseWatchSource,
+  parseWatchState,
+  queueLimit,
+  schedulerHere,
+  summarizeSchedulerLine
 } from './agent.logic';
+import { hostInput, sshCdwr } from './remote';
+import {
+  type RemoteReport,
+  STATUS_ARGS,
+  attendedSummary,
+  checkRepoOf,
+  formatContainerJob,
+  formatLimit,
+  parseListener,
+  parseRemoteStatus,
+  rmLockCommand,
+  schedulerRow,
+  showsRow,
+  skewedStatus,
+  staleScriptsHint,
+  statusSummary,
+  unreadableStatus,
+  watchRow
+} from './status.logic';
 
 export default defineCommand({
   summary:
@@ -42,67 +85,32 @@ export default defineCommand({
   description:
     'Reads the launchd job, the pause flag, the Keychain item, the installed script, the worktree and the logs. Nothing is changed and no secret is read.',
   danger: 'read',
-  inputs: {},
-
-  async plan(ctx) {
-    requireMac();
-    const queue = paths(ctx.env);
-    const worktree = worktreeOf(ctx);
-
-    const report = await ctx.ui.task(
-      'Reading the agent queue',
-      async () => {
-        const [job, key] = await Promise.all([jobState(), keyPresent()]);
-        const installed = byFile((file) => readText(queue.files[file]));
-        const sources = readQueueSources(ctx.root);
-        const runLog = latestRunLog(
-          existsSync(queue.logs) ? readdirSync(queue.logs) : []
-        );
-        // Before the check, which logs its own skip and busy lines
-        const lastScheduled =
-          lastSchedulerLine(readText(queue.schedulerLog) ?? '') ?? null;
-        const checked = await checkRun(queue, worktree, ctx.env).catch(
-          (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
-            decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
-          })
-        );
-        return {
-          job,
-          paused: existsSync(queue.paused),
-          notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
-          keyPresent: key,
-          script:
-            'source' in sources
-              ? filesDrift(installed, sources.source)
-              : ('no-source' as const),
-          installedAny: Object.values(installed).some(
-            (text) => text !== undefined
-          ),
-          watching: parseWatchState(readText(queue.watchState)),
-          worktree: { path: worktree, exists: existsSync(worktree) },
-          lastScheduled,
-          lockState: lockState(lockAge(queue.lock), job.loaded && job.running),
-          lock: queue.lock,
-          implement: implementReport(queue, ctx.env),
-          lastRunLog: runLog ? join(queue.logs, runLog) : null,
-          next: checked === undefined ? null : parseCheck(checked.decision),
-          attended:
-            checked?.attended === undefined
-              ? null
-              : parseAttended(checked.attended),
-          queueView:
-            checked?.queueView === undefined
-              ? null
-              : (parseQueueView(checked.queueView) ?? ('malformed' as const))
-        };
-      },
-      () => 'Read the agent queue'
-    );
-    return readOnly(report);
+  inputs: {
+    host: hostInput(
+      'Read the status of the queue in the agent container over ssh on this host instead of locally'
+    )
   },
 
-  async apply(ctx, report) {
+  async plan(ctx, { host: sshHost }) {
+    if (sshHost) {
+      const remote = await ctx.ui.task(
+        `Reading the agent queue on ${sshHost}`,
+        () => remoteReport(sshHost),
+        () => `Read the agent queue on ${sshHost}`
+      );
+      return readOnly(remote);
+    }
+    return readOnly(await localReport(ctx));
+  },
+
+  async apply(ctx, report, { host: sshHost }) {
     const { job } = report;
+    const containerJob = formatContainerJob(
+      report.listener,
+      new Date(),
+      RUN_INTERVAL_SECONDS / 60,
+      RUN_FALLBACK_SECONDS / 60
+    );
     const row = (ok: boolean | 'warn', check: string, detail: string) => [
       ok === 'warn' ? symbols.warn : ok ? symbols.ok : symbols.fail,
       check,
@@ -115,28 +123,34 @@ export default defineCommand({
         ? job.intervalSeconds
         : undefined;
 
-    const rows = [
-      job.loaded
-        ? row(
-            (job.lastExitCode === undefined || job.lastExitCode === 0) &&
-              staleInterval === undefined
-              ? true
-              : 'warn',
-            'job',
-            [
-              job.running ? 'running' : 'loaded',
-              job.runs === undefined ? undefined : `${job.runs} run(s)`,
-              job.lastExitCode === undefined
-                ? undefined
-                : `last exit ${job.lastExitCode}`,
-              staleInterval === undefined
-                ? undefined
-                : `every ${staleInterval} s; re-run \`cdwr agent install\``
-            ]
-              .filter(Boolean)
-              .join(', ')
-          )
-        : row(false, 'job', 'not loaded; `cdwr agent install`'),
+    const where = schedulerRow(report.mirror);
+    const allRows = [
+      ...(report.scheduler === 'elsewhere'
+        ? [row(where.ok, 'scheduler', where.detail)]
+        : []),
+      report.host === 'container'
+        ? row(containerJob.ok, 'job', containerJob.detail)
+        : job.loaded
+          ? row(
+              (job.lastExitCode === undefined || job.lastExitCode === 0) &&
+                staleInterval === undefined
+                ? true
+                : 'warn',
+              'job',
+              [
+                job.running ? 'running' : 'loaded',
+                job.runs === undefined ? undefined : `${job.runs} run(s)`,
+                job.lastExitCode === undefined
+                  ? undefined
+                  : `last exit ${job.lastExitCode}`,
+                staleInterval === undefined
+                  ? undefined
+                  : `every ${staleInterval} s; re-run \`cdwr agent install\``
+              ]
+                .filter(Boolean)
+                .join(', ')
+            )
+          : row(false, 'job', 'not loaded; `cdwr agent install`'),
       report.paused
         ? row('warn', 'paused', 'yes; `cdwr agent resume`')
         : row(true, 'paused', 'no'),
@@ -147,18 +161,35 @@ export default defineCommand({
           ? 'action (only what needs you)'
           : report.notifyLevel
       ),
-      report.keyPresent
-        ? row(true, 'Linear key', 'in the Keychain')
-        : row(
-            false,
-            'Linear key',
-            'not in the Keychain (service linear-agent-queue)'
-          ),
+      report.linearAuth === 'app'
+        ? row(
+            true,
+            'Linear auth',
+            report.linearAuthSource === 'app-env'
+              ? "the queue's Linear app, from the environment"
+              : report.linearAuthSource === 'app-file'
+                ? "the queue's Linear app, from its file"
+                : "the queue's Linear app"
+          )
+        : report.linearAuth === 'key'
+          ? row(
+              'warn',
+              'Linear auth',
+              `the personal key (fallback); the app's client id and secret are missing (${linearAppPlaces(report.host)})`
+            )
+          : row(
+              false,
+              'Linear auth',
+              `not set (${linearAppPlaces(report.host)})`
+            ),
+      ...(report.mirror === null
+        ? []
+        : [row(true, 'Heartbeat mirror', report.mirror)]),
       report.script === 'current'
         ? row(true, 'scripts', 'current')
         : report.script === 'stale' ||
             (report.script === 'missing' && report.installedAny)
-          ? row('warn', 'scripts', 're-run `cdwr agent install`')
+          ? row('warn', 'scripts', staleScriptsHint(report.host))
           : row(
               false,
               'scripts',
@@ -173,28 +204,51 @@ export default defineCommand({
         ? row(
             true,
             'last run',
-            `${report.lastScheduled.at} ${report.lastScheduled.message}`
+            `${report.lastScheduled.at} ${summarizeSchedulerLine(report.lastScheduled.message)}`
           )
         : row('warn', 'last run', 'nothing logged yet'),
       ...(report.watching.length > 0
         ? [row(true, 'watching', formatWatching(report.watching))]
+        : []),
+      ...(report.scheduler === 'elsewhere'
+        ? [
+            row(
+              watchRow(report.watchSource).ok,
+              'watch',
+              watchRow(report.watchSource).detail
+            )
+          ]
         : []),
       ...(report.lockState === 'stale'
         ? [
             row(
               false,
               'lock',
-              `left by a run that did not finish; \`rmdir ${report.lock}\``
+              `left by a run that did not finish; \`${rmLockCommand(report.lock, sshHost || undefined)}\``
             )
           ]
         : []),
       row(
-        report.implement.spent === undefined ? 'warn' : true,
+        report.implement.spent === undefined ||
+          report.implement.spent >= report.implement.cap ||
+          report.implement.limitedUntil !== undefined
+          ? 'warn'
+          : true,
         'implement',
         formatImplement(
           report.implement.spent,
           report.implement.cap,
-          report.implement.last
+          report.implement.last,
+          report.implement.budget ?? IMPLEMENT_BUDGET_USD,
+          report.implement.capSource,
+          report.implement.limitedUntil
+        )
+      ),
+      row(
+        true,
+        'limit',
+        formatLimit(
+          report.limit ?? { value: DEFAULT_QUEUE_LIMIT, source: 'default' }
         )
       ),
       report.next
@@ -206,6 +260,39 @@ export default defineCommand({
             report.next.text
           )
         : row('warn', 'next run', 'unknown; script not installed'),
+      report.suggest
+        ? row(
+            report.suggest.kind === 'skipped' ||
+              report.suggest.kind === 'unknown'
+              ? 'warn'
+              : true,
+            'suggest',
+            report.suggest.text
+          )
+        : row('warn', 'suggest', 'unknown; no verdict from the script'),
+      // Absent from a container on an older image: no row rather than a warning
+      ...(report.devlog === undefined
+        ? []
+        : [
+            report.devlog
+              ? row(
+                  report.devlog.kind === 'unknown' ? 'warn' : true,
+                  'devlog',
+                  report.devlog.text
+                )
+              : row('warn', 'devlog', 'unknown; no verdict from the script')
+          ]),
+      ...(report.review === undefined
+        ? []
+        : [
+            report.review
+              ? row(
+                  report.review.kind === 'unknown' ? 'warn' : true,
+                  'review',
+                  report.review.text
+                )
+              : row('warn', 'review', 'unknown; no verdict from the script')
+          ]),
       report.attended
         ? row(
             report.attended.kind === 'run' || report.attended.kind === 'unknown'
@@ -215,6 +302,13 @@ export default defineCommand({
             report.attended.text
           )
         : row('warn', 'attended', 'unknown; no verdict from the script'),
+      report.linear
+        ? row(
+            report.linear.kind === 'ok' ? true : 'warn',
+            'linear tools',
+            report.linear.text
+          )
+        : row('warn', 'linear tools', 'unknown; no verdict from the script'),
       ...(report.queueView === null
         ? [row('warn', 'queue view', 'unknown; no queue view from the script')]
         : report.queueView === 'malformed'
@@ -226,20 +320,182 @@ export default defineCommand({
                 'held',
                 formatHeld(report.queueView)
               ),
+              row(true, 'blocked', formatBlocked(report.queueView)),
+              row(
+                report.queueView.refused.length > 0 ? 'warn' : true,
+                'refused',
+                formatRefused(report.queueView)
+              ),
+              row(
+                report.queueView.deployHold.length > 0 ? 'warn' : true,
+                'deploy hold',
+                formatDeployHold(report.queueView)
+              ),
               row(true, 'parked', formatParked(report.queueView)),
+              row(true, 'renovate', formatRenovate(report.queueView)),
               row(true, 'on your table', formatTable(report.queueView))
             ])
     ];
-    ctx.ui.table(['', 'check', 'detail'], rows);
+    const shown = allRows.filter((r) =>
+      showsRow(report.scheduler, r[1] ?? '', report.installedAny)
+    );
+    ctx.ui.table(['', 'check', 'detail'], shown);
+    if (typeof report.queueView === 'object' && report.queueView !== null) {
+      const gaps = formatGaps(report.queueView);
+      if (gaps.length > 0) ctx.ui.note(gaps, `Gaps (${gaps.length})`);
+    }
 
-    const problems = rows.filter((r) => r[0] === symbols.fail).length;
-    const warnings = rows.filter((r) => r[0] === symbols.warn).length;
-    const summary =
-      problems > 0
-        ? `${problems} thing(s) need attention`
-        : warnings > 0
-          ? `Loaded, with ${warnings} thing(s) worth a look`
-          : 'The queue is healthy';
+    const problems = shown.filter((r) => r[0] === symbols.fail).length;
+    const warnings = shown.filter((r) => r[0] === symbols.warn).length;
+    const summary = statusSummary(
+      report.scheduler,
+      report.mirror,
+      problems,
+      warnings
+    );
     return { summary, partial: problems > 0, json: report };
   }
 });
+
+/** The report of the queue on this machine */
+async function localReport(ctx: Context): Promise<RemoteReport> {
+  const host = requireHost(['launchd', 'container'], ctx.env);
+  const queue = paths(ctx.env);
+  const worktree = worktreeOf(ctx);
+
+  return ctx.ui.task(
+    'Reading the agent queue',
+    async () => {
+      const [job, auth] = await Promise.all([
+        host === 'container'
+          ? Promise.resolve({ loaded: false as const })
+          : jobState(),
+        linearAuthSourceOf(ctx.env)
+      ]);
+      const installed = byFile((file) => readText(queue.files[file]));
+      const sources = readQueueSources(ctx.root);
+      // Before the check, which logs its own skip and busy lines
+      const lastScheduled =
+        lastSchedulerLine(readText(queue.schedulerLog) ?? '') ?? null;
+      const scheduler = schedulerHere(host, job, existsSync(queue.plist))
+        ? ('here' as const)
+        : ('elsewhere' as const);
+      // Attended-only with no planner checkout: this checkout still answers the verdicts
+      const checkRepo = checkRepoOf(
+        scheduler,
+        { path: worktree, exists: existsSync(worktree) },
+        ctx.root
+      );
+      // The installed scripts are the scheduler's, refreshed by `install`; an attended-only
+      // machine has none to keep current, so its check runs this checkout's, which `attend`
+      // keeps on main (a planner checkout left behind by `uninstall` could be stale)
+      const checkQueue =
+        scheduler === 'elsewhere'
+          ? {
+              ...queue,
+              script: join(ctx.root, 'tools', 'cdwr', 'agent-queue', 'run.sh')
+            }
+          : queue;
+      const checked = await checkRun(checkQueue, checkRepo, ctx.env).catch(
+        (error: unknown): Awaited<ReturnType<typeof checkRun>> => ({
+          decision: `skip: check failed (${error instanceof Error ? error.message : String(error)})`
+        })
+      );
+      return {
+        job,
+        paused: existsSync(queue.paused),
+        notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
+        host,
+        linearAuth: auth.auth,
+        linearAuthSource: auth.source,
+        mirror: mirrorTargetOf(queue),
+        scheduler,
+        script:
+          'source' in sources
+            ? filesDrift(installed, sources.source)
+            : ('no-source' as const),
+        installedAny: Object.values(installed).some(
+          (text) => text !== undefined
+        ),
+        watching: parseWatchState(
+          checked?.watchState ?? readText(queue.watchState)
+        ),
+        watchSource:
+          checked?.watchSource === undefined
+            ? null
+            : parseWatchSource(checked.watchSource, new Date()),
+        worktree: { path: worktree, exists: existsSync(worktree) },
+        lastScheduled,
+        // Without launchd the lock owner cannot be checked, so a held lock counts as a run
+        lockState: lockState(
+          lockAge(queue.lock),
+          host === 'container' || (job.loaded && job.running)
+        ),
+        lock: queue.lock,
+        implement: implementReport(queue, ctx.env),
+        limit: queueLimit(readText(queue.limit)),
+        listener:
+          host === 'container'
+            ? parseListener(readText(join(queue.home, 'listener.json')))
+            : null,
+        next: checked === undefined ? null : parseCheck(checked.decision),
+        attended:
+          checked?.attended === undefined
+            ? null
+            : parseAttended(checked.attended),
+        linear:
+          checked?.linear === undefined ? null : parseLinear(checked.linear),
+        suggest:
+          checked?.suggest === undefined ? null : parseSuggest(checked.suggest),
+        // Absent, not null, when the script has no devlog line: an older image shows no row
+        ...(checked?.devlog === undefined
+          ? {}
+          : { devlog: parseDevlog(checked.devlog) }),
+        ...(checked?.review === undefined
+          ? {}
+          : { review: parseReview(checked.review) }),
+        queueView:
+          checked?.queueView === undefined
+            ? null
+            : (parseQueueView(checked.queueView) ?? ('malformed' as const))
+      };
+    },
+    () => 'Read the agent queue'
+  );
+}
+
+/** Where the app's client id and secret are read from on this host */
+const linearAppPlaces = (host: 'launchd' | 'container'): string =>
+  host === 'container'
+    ? `${LINEAR_CLIENT_ID_ENV} and ${LINEAR_CLIENT_SECRET_ENV}`
+    : `the Keychain services ${KEYCHAIN_CLIENT_ID_SERVICE} and ${KEYCHAIN_CLIENT_SECRET_SERVICE}`;
+
+/** The remote check alone may take 90 s (`checkRun`); ssh and the vault fetch come on top */
+const REMOTE_TIMEOUT_MS = 150_000;
+
+/** The report of the queue in the agent container on `host`, over ssh; a queue with problems exits non-zero but still answers */
+async function remoteReport(host: string): Promise<RemoteReport> {
+  const { stdout } = await sshCdwr(host, STATUS_ARGS, z.unknown(), {
+    timeoutMs: REMOTE_TIMEOUT_MS,
+    what: 'read the status'
+  });
+  return fromAnswer(host, parseRemoteStatus(stdout), stdout);
+}
+
+/** The report, or the error the remote's answer explains, whatever ssh exited with */
+function fromAnswer(
+  host: string,
+  answer: ReturnType<typeof parseRemoteStatus>,
+  stdout: string
+): RemoteReport {
+  switch (answer.kind) {
+    case 'report':
+      return answer.report;
+    case 'failed':
+      throw new CliError(`${host}: ${answer.message}`, undefined, answer.hint);
+    case 'skew':
+      throw new CliError(skewedStatus(host, answer.paths, answer.line));
+    case 'none':
+      throw new CliError(unreadableStatus(host, stdout));
+  }
+}

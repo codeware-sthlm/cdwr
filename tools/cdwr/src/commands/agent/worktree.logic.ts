@@ -9,6 +9,14 @@ export const REPO = 'codeware-sthlm/cdwr';
 export const isTicket = (value: string): boolean => TICKET.test(value);
 
 /** The checkout of a ticket: a sibling of the workspace, `codeware-cod-529` */
+/**
+ * The checkout the ticket worktrees are linked to: the one the command runs from, unless
+ * AGENT_QUEUE_WORKTREE_REPO names another. In the container the implement sessions run as a
+ * user that must not write the queue's checkout, so their worktrees hang off a clone of their own.
+ */
+export const worktreeRepo = (env: NodeJS.ProcessEnv, root: string): string =>
+  env['AGENT_QUEUE_WORKTREE_REPO'] || root;
+
 export const worktreePath = (root: string, ticket: string): string =>
   join(dirname(root), `codeware-${ticket.toLowerCase()}`);
 
@@ -42,6 +50,45 @@ export const parseWorktreeList = (text: string): WorktreeEntry[] =>
           };
     })
     .filter((entry) => entry !== undefined);
+
+export interface OrphanProcess {
+  pid: number;
+  /** The `codeware-cod-<n>` checkout the process runs from, which no longer exists */
+  path: string;
+}
+
+/**
+ * Nx daemons and their plugin workers (`ps -eo pid=,args=`) that run from a
+ * `codeware-cod-<n>` checkout beside the main one whose worktree is gone
+ */
+export const orphanDaemons = (
+  psOutput: string,
+  existingWorktreePaths: string[],
+  siblingDir: string
+): OrphanProcess[] => {
+  const escaped = siblingDir
+    .replace(/\/+$/, '')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const checkout = new RegExp(`(${escaped}/codeware-cod-\\d+)/`);
+  const existing = existingWorktreePaths.map((path) =>
+    path.replace(/\/+$/, '')
+  );
+  return psOutput.split('\n').flatMap((line) => {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (!match) return [];
+    const [, pid, args] = match;
+    if (
+      !args.includes('/daemon/server/start.js') &&
+      !args.includes('plugin-worker')
+    ) {
+      return [];
+    }
+    const path = checkout.exec(args)?.[1];
+    return path === undefined || existing.includes(path)
+      ? []
+      : [{ pid: Number(pid), path }];
+  });
+};
 
 export const PR_STATES = ['OPEN', 'MERGED', 'CLOSED'] as const;
 export type PrState = (typeof PR_STATES)[number];

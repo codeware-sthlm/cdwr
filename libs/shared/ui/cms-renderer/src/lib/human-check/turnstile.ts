@@ -29,6 +29,16 @@ const SCRIPT_URL =
 let loading: Promise<TurnstileApi | null> | null = null;
 
 /**
+ * The page's CSP nonce, read from a script the server nonced. Browsers hide the
+ * attribute but keep the property, so the attribute selector still matches.
+ */
+export function pageNonce(): string | undefined {
+  const nonce =
+    document.querySelector<HTMLScriptElement>('script[nonce]')?.nonce;
+  return nonce ? nonce : undefined;
+}
+
+/**
  * Fetch Cloudflare's widget script, once per page.
  *
  * Resolves `null` when there is no browser to load it into, or when the script
@@ -52,6 +62,9 @@ export function loadTurnstile(): Promise<TurnstileApi | null> {
   loading = new Promise<TurnstileApi | null>((resolve) => {
     const script = document.createElement('script');
     script.src = SCRIPT_URL;
+    // Under 'strict-dynamic' only a nonce is sure to let the script in
+    const nonce = pageNonce();
+    if (nonce) script.nonce = nonce;
     script.async = true;
     script.defer = true;
     script.addEventListener('load', () => resolve(window.turnstile ?? null));

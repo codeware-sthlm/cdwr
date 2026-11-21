@@ -6,14 +6,15 @@ import {
   editorTenantRoles,
   getUserTenantIDs,
   hasRole,
+  isAgent,
   isUser
 } from '@codeware/app-cms/util/misc';
-import { verifySignature } from '@codeware/shared/util/signature';
 import type { Access, Where } from 'payload';
 
 import { setSentryTenantTag } from '../utils/set-sentry-tenant-tag';
 
 import { resolveScopedTenant } from './resolve-scoped-tenant';
+import { verifyHostSignature } from './verify-host-signature';
 
 /**
  * Published documents, plus legacy ones created before versioning was enabled.
@@ -192,30 +193,21 @@ export const userOrApiKeyAccess =
       return { tenant: { in: getUserTenantIDs(user, editorTenantRoles) } };
     }
 
+    // Everything below treats the identity as a tenant api key and scopes by
+    // its id. An agent's id is no tenant id, so it is refused here; the
+    // collections that grant an agent anything check for it first.
+    if (isAgent(user)) {
+      return false;
+    }
+
     // The identity is the tenant itself, so its slug attributes any error raised
     // while serving this request — the only tenant signal a host deployment has.
     if ('slug' in user && typeof user.slug === 'string') {
       setSentryTenantTag(user.slug);
     }
 
-    // cms host mode
-    if (APP_MODE.type === 'host') {
-      // Detect if this is an external REST API request vs internal Local API operation
-      const isExternalRequest = headers.has('host');
-
-      // Only verify signature for external REST API requests
-      if (isExternalRequest) {
-        const { success, error } = verifySignature({
-          headers,
-          secret: APP_MODE.signatureSecrets
-        });
-
-        if (!success) {
-          payload.logger.info(`Tenant denied, invalid signature:\n${error}`);
-          return false;
-        }
-      }
-      // Internal Local API operations (no 'host' header) skip signature verification
+    if (!verifyHostSignature({ headers, payload }, 'Tenant')) {
+      return false;
     }
 
     // Restrict access to the tenant scope

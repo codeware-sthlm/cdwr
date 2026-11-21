@@ -13,7 +13,7 @@ import {
 import { symbols, theme } from '../../ui/theme';
 
 import { applyInPayload } from './apply-site';
-import { type ApplyReport, extraMeaning } from './apply-site.logic';
+import { type ApplyReport, extraMeaning, metaLines } from './apply-site.logic';
 
 /**
  * How a tenant's site stands against a definition.
@@ -23,9 +23,9 @@ import { type ApplyReport, extraMeaning } from './apply-site.logic';
  * This is the read-only half — it writes nothing and offers nothing, it just
  * says what the two have to say about each other.
  *
- * Field-level drift is not detected yet. A page that exists reads as present
+ * Field-level drift is mostly not detected. A page that exists reads as present
  * however far its contents have wandered, so this answers "is it there", not
- * "is it the same".
+ * "is it the same" — SEO meta being the one field it compares.
  */
 export default defineCommand<
   {
@@ -46,6 +46,7 @@ export default defineCommand<
     previewApp: previewAppInput(),
     tenant: input.string({
       prompt: 'Which tenant?',
+      short: 't',
       description: 'The workspace to compare. It must already exist'
     }),
     definition: definitionInput('Compare it against which definition?')
@@ -80,8 +81,9 @@ export default defineCommand<
     const missing = report.outcomes.filter(
       ({ action }) => action === 'created'
     );
+    // The landing page a fresh apply would rewrite is in the tenant too
     const present = report.outcomes.filter(
-      ({ action }) => action === 'existed'
+      ({ action }) => action !== 'created'
     );
     const { extra } = report;
 
@@ -91,6 +93,14 @@ export default defineCommand<
         collection,
         identifier,
         'named by the definition, not in the tenant'
+      ]),
+      // A document that exists is not touched by an apply, so a difference in
+      // its meta is drift worth naming. A missing one shows what it would get
+      ...metaLines(report.outcomes).map(({ collection, identifier, text }) => [
+        theme.warn('meta'),
+        collection,
+        identifier,
+        text
       ]),
       ...extra.map((document) => [
         theme.muted('extra'),

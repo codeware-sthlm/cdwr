@@ -1,6 +1,6 @@
 {
   "name": "@cdwr/fly-node",
-  "version": "0.3.2",
+  "version": "0.3.5",
   "description": "The flyctl node wrapper for programmatic deployments to fly.io.",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
   },
   "type": "module",
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "dotenv": "^16.4.7",

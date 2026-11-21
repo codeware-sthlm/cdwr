@@ -3,18 +3,6 @@
     "linear": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.linear.app/mcp"]
-    },
-    "sentry": {
-      "command": "infisical",
-      "args": [
-        "run",
-        "--env=production",
-        "--path=apps/cms/sentry",
-        "--",
-        "npx",
-        "-y",
-        "@sentry/mcp-server@0.31.0"
-      ]
     }
   }
 }

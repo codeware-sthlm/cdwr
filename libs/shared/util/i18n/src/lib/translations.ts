@@ -12,6 +12,8 @@ export type TranslationKey =
   | 'colorScheme.select'
   | 'colorScheme.switchTo'
   | 'colorScheme.system'
+  | 'comingSoon.contact'
+  | 'comingSoon.opening'
   | 'error.contactAdmin'
   | 'error.landingPageNotFound'
   | 'error.landingPageNotFoundDescription'
@@ -102,11 +104,16 @@ export type TranslationKey =
   | 'navigation.close'
   | 'navigation.footer'
   | 'navigation.menu'
+  | 'memberLogin.code'
+  | 'memberLogin.codeFailed'
+  | 'memberLogin.codeIntro'
+  | 'memberLogin.codeSubmit'
   | 'memberLogin.email'
   | 'memberLogin.failed'
   | 'memberLogin.heading'
   | 'memberLogin.intro'
   | 'memberLogin.password'
+  | 'memberLogin.setupRequired'
   | 'memberLogin.signOut'
   | 'memberLogin.submit'
   | 'memberLogin.tooManyAttempts'
@@ -116,6 +123,64 @@ export type TranslationKey =
   | 'notFound.goHome'
   | 'notFound.title'
   | 'posts.readMore'
+  | 'signup.title'
+  | 'signup.intro'
+  | 'signup.closed'
+  | 'signup.code'
+  | 'signup.name'
+  | 'signup.email'
+  | 'signup.password'
+  | 'signup.passwordHint'
+  | 'signup.siteName'
+  | 'signup.submit'
+  | 'signup.submitting'
+  | 'signup.successTitle'
+  | 'signup.successBody'
+  | 'signup.resend.title'
+  | 'signup.resend.intro'
+  | 'signup.resend.submit'
+  | 'signup.resend.submitting'
+  | 'signup.resend.done'
+  | 'signup.resend.link'
+  | 'signup.resend.formPrompt'
+  | 'signup.resend.formLink'
+  | 'signup.backToLogin'
+  | 'signup.section.invite'
+  | 'signup.section.you'
+  | 'signup.section.site'
+  | 'signup.section.inviteHelp'
+  | 'signup.section.youHelp'
+  | 'signup.section.siteHelp'
+  | 'signup.verify.confirmTitle'
+  | 'signup.verify.confirmBody'
+  | 'signup.verify.confirm'
+  | 'signup.verify.verifiedTitle'
+  | 'signup.verify.verifiedBody'
+  | 'signup.verify.signIn'
+  | 'signup.verify.invalidTitle'
+  | 'signup.verify.invalidBody'
+  | 'signup.verify.newLink'
+  | 'language.label'
+  | 'signup.inviteCodeHelp'
+  | 'signup.addressPreview'
+  | 'signup.availability.checking'
+  | 'signup.availability.available'
+  | 'signup.error.invalid'
+  | 'signup.error.password'
+  | 'signup.error.password-breached'
+  | 'signup.error.deployment'
+  | 'signup.error.code'
+  | 'signup.error.closed'
+  | 'signup.error.throttled'
+  | 'signup.error.email-taken'
+  | 'signup.error.deployment-taken'
+  | 'signup.error.name-taken'
+  | 'signup.error.failed'
+  | 'signup.issue.empty'
+  | 'signup.issue.characters'
+  | 'signup.issue.hyphens'
+  | 'signup.issue.reserved'
+  | 'signup.issue.too-long'
   | 'siteGate.heading'
   | 'siteGate.intro'
   | 'siteGate.password'
@@ -170,6 +235,54 @@ export type TranslationKey =
   | 'tourSignupEmail.termsLink'
   | 'tourSignupEmail.tourLabel'
   | 'tourSignupEmail.waitingBody'
+  | 'forgotPasswordEmail.body'
+  | 'forgotPasswordEmail.button'
+  | 'forgotPasswordEmail.greeting'
+  | 'forgotPasswordEmail.greetingNamed'
+  | 'forgotPasswordEmail.ignore'
+  | 'forgotPasswordEmail.subject'
+  | 'statsAccountEmail.body'
+  | 'statsAccountEmail.button'
+  | 'statsAccountEmail.changePassword'
+  | 'statsAccountEmail.heading'
+  | 'statsAccountEmail.passwordLabel'
+  | 'statsAccountEmail.subject'
+  | 'statsAccountEmail.usernameLabel'
+  | 'accountExists.subject'
+  | 'accountExists.body'
+  | 'accountExists.signIn'
+  | 'accountExists.reset'
+  | 'accountExists.ignore'
+  | 'verifyEmail.afterConfirm'
+  | 'verifyEmail.body'
+  | 'verifyEmail.button'
+  | 'verifyEmail.greeting'
+  | 'verifyEmail.greetingNamed'
+  | 'verifyEmail.ignore'
+  | 'verifyEmail.subject'
+  | 'signupNotice.body'
+  | 'signupNotice.button'
+  | 'signupNotice.deploymentLabel'
+  | 'signupNotice.detailsHeading'
+  | 'signupNotice.emailLabel'
+  | 'signupNotice.nameLabel'
+  | 'signupNotice.nextStep'
+  | 'signupNotice.siteLabel'
+  | 'signupNotice.subject'
+  | 'signupNotice.workspaceLabel'
+  | 'idleWorkspaceSummary.body'
+  | 'idleWorkspaceSummary.button'
+  | 'idleWorkspaceSummary.deleted'
+  | 'idleWorkspaceSummary.detailsHeading'
+  | 'idleWorkspaceSummary.provisioned'
+  | 'idleWorkspaceSummary.subject'
+  | 'idleWorkspaceSummary.unwarnedMailFailed'
+  | 'idleWorkspaceSummary.unwarnedNoAdmin'
+  | 'idleWorkspaceSummary.warned'
+  | 'idleWorkspaceWarning.body'
+  | 'idleWorkspaceWarning.button'
+  | 'idleWorkspaceWarning.ignore'
+  | 'idleWorkspaceWarning.subject'
   | 'tourSignup.acceptTerms'
   | 'tourSignup.acceptTermsRequired'
   | 'tourSignup.dataNotice'
@@ -220,6 +333,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'colorScheme.select': 'Select appearance',
     'colorScheme.switchTo': 'Switch to {{colorScheme}} appearance',
     'colorScheme.system': 'system preference',
+    'comingSoon.contact': 'Get in touch',
+    'comingSoon.opening': 'Opening {{date}}',
     'error.contactAdmin':
       'Please contact the administrator if the problem persists.',
     'error.landingPageNotFound': 'Landing page was not found',
@@ -321,12 +436,20 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'navigation.close': 'Close menu',
     'navigation.footer': 'Footer',
     'navigation.menu': 'Menu',
+    'memberLogin.code': 'Code',
+    'memberLogin.codeFailed':
+      'That code did not work. Enter the current one from your authenticator app.',
+    'memberLogin.codeIntro':
+      'Enter the six-digit code from your authenticator app.',
+    'memberLogin.codeSubmit': 'Continue',
     'memberLogin.email': 'Email',
     'memberLogin.failed': 'Check your email and password, then try again.',
     'memberLogin.heading': 'Sign in',
     'memberLogin.intro':
       'Sign in to read the parts of this site kept for members.',
     'memberLogin.password': 'Password',
+    'memberLogin.setupRequired':
+      'Your account needs an authenticator app. Set it up in the admin, then sign in here.',
     'memberLogin.signOut': 'Sign out',
     'memberLogin.submit': 'Sign in',
     'memberLogin.tooManyAttempts':
@@ -338,6 +461,76 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.goHome': 'Go back home',
     'notFound.title': 'Page not found',
     'posts.readMore': 'Read more',
+    'signup.title': 'Create your site',
+    'signup.intro': 'Fill in the details below to get your own site.',
+    'signup.closed': 'Signup is not open right now. Please check back later.',
+    'signup.code': 'Invite code',
+    'signup.name': 'Your name',
+    'signup.email': 'Email address',
+    'signup.password': 'Password',
+    'signup.passwordHint': 'At least 12 characters.',
+    'signup.siteName': 'Site name',
+    'signup.submit': 'Create site',
+    'signup.submitting': 'Creating site...',
+    'signup.successTitle': 'Check your email to confirm your address',
+    'signup.successBody':
+      'We have sent a message to the address you gave. Open the link in it to confirm the address; your site is set up after that.',
+    'signup.resend.title': 'Send the confirmation email again',
+    'signup.resend.intro': 'Enter the email address you signed up with.',
+    'signup.resend.submit': 'Send again',
+    'signup.resend.submitting': 'Sending...',
+    'signup.resend.done':
+      "If this address has an account that hasn't been confirmed yet, we've sent a new confirmation link.",
+    'signup.resend.link': "Didn't get the email? Send it again",
+    'signup.resend.formPrompt':
+      "Already signed up but didn't get the confirmation email?",
+    'signup.resend.formLink': 'Send it again',
+    'signup.backToLogin': 'Back to sign in',
+    'signup.section.invite': 'Your invite',
+    'signup.section.you': 'You',
+    'signup.section.site': 'Your site',
+    'signup.section.inviteHelp':
+      'The code you were given decides that you may sign up.',
+    'signup.section.youHelp':
+      'Your own account; you sign in with this address and password.',
+    'signup.section.siteHelp':
+      'The name your visitors see; the address follows from it.',
+    'signup.verify.confirmTitle': 'Confirm your email address',
+    'signup.verify.confirmBody': 'One click and your account is ready.',
+    'signup.verify.confirm': 'Confirm',
+    'signup.verify.verifiedTitle': 'Your address is confirmed',
+    'signup.verify.verifiedBody': 'Your account is ready. Sign in to continue.',
+    'signup.verify.signIn': 'Sign in',
+    'signup.verify.invalidTitle': 'The link is not valid',
+    'signup.verify.invalidBody': 'This link has expired or was already used.',
+    'signup.verify.newLink': 'Send a new link',
+    'language.label': 'Language',
+    'signup.inviteCodeHelp':
+      'Signup is by invitation. You get an invite code from Codeware; ask the person who pointed you here, or write to us.',
+    'signup.addressPreview': 'A custom domain can be connected later.',
+    'signup.availability.checking': 'Checking…',
+    'signup.availability.available': 'Available',
+    'signup.error.invalid':
+      'Some details are missing or not valid. Check the form and try again.',
+    'signup.error.password':
+      'The password must be between 12 and 128 characters.',
+    'signup.error.password-breached':
+      'This password has appeared in a data breach elsewhere. Choose another one.',
+    'signup.error.deployment': 'This name cannot be used.',
+    'signup.error.code': "This invite code can't be used.",
+    'signup.error.closed': "Signup isn't open right now.",
+    'signup.error.throttled': 'Too many attempts. Try again later.',
+    'signup.error.email-taken':
+      'There is already an account with this email address.',
+    'signup.error.deployment-taken':
+      'A site with a very similar name already exists. Try another name.',
+    'signup.error.name-taken': 'That name is already taken. Try another.',
+    'signup.error.failed': 'Something went wrong. Try again in a moment.',
+    'signup.issue.empty': 'The name needs at least one letter or digit.',
+    'signup.issue.characters': 'The name needs at least one letter or digit.',
+    'signup.issue.hyphens': 'The name needs at least one letter or digit.',
+    'signup.issue.reserved': 'This name is reserved. Try another.',
+    'signup.issue.too-long': 'The name is too long. Try a shorter one.',
     'siteGate.heading': 'This site is not open',
     'siteGate.intro': 'Enter the password to continue.',
     'siteGate.password': 'Password',
@@ -403,6 +596,68 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.tourLabel': 'Tour',
     'tourSignupEmail.waitingBody':
       '{{tour}} is fully booked, so you are on the waiting list. We will be in touch as soon as a place opens up — nothing is charged and you are free to change your mind.',
+    'forgotPasswordEmail.body':
+      'Someone asked to reset the password for your account at {{brand}}.',
+    'forgotPasswordEmail.button': 'Choose a new password',
+    'forgotPasswordEmail.greeting': 'Hi,',
+    'forgotPasswordEmail.greetingNamed': 'Hi {{name}},',
+    'forgotPasswordEmail.ignore':
+      'If you did not ask for this, you can ignore this email. Your password stays unchanged.',
+    'forgotPasswordEmail.subject': 'Reset your password',
+    'statsAccountEmail.body':
+      'Here is your login to the website statistics for {{brand}}.',
+    'statsAccountEmail.button': 'Log in',
+    'statsAccountEmail.changePassword':
+      'Change the password under your profile in Umami once you have signed in.',
+    'statsAccountEmail.heading': 'Your statistics login',
+    'statsAccountEmail.passwordLabel': 'Password',
+    'statsAccountEmail.subject': 'Your statistics login',
+    'statsAccountEmail.usernameLabel': 'Username',
+    'accountExists.subject': 'You already have an account',
+    'accountExists.body':
+      'Someone tried to create a new account with this email address. You already have an account, so you can sign in, or reset your password if you have forgotten it.',
+    'accountExists.signIn': 'Sign in',
+    'accountExists.reset': 'Reset your password',
+    'accountExists.ignore': "If it wasn't you, you can ignore this email.",
+    'verifyEmail.afterConfirm':
+      'Once the address is confirmed, you can sign in and start building your new site.',
+    'verifyEmail.body':
+      'Welcome to {{brand}}! Confirm your email address to finish setting up your new site.',
+    'verifyEmail.button': 'Confirm your email address',
+    'verifyEmail.greeting': 'Hi,',
+    'verifyEmail.greetingNamed': 'Hi {{name}},',
+    'verifyEmail.ignore': 'If you did not sign up, you can ignore this email.',
+    'verifyEmail.subject': 'Confirm your email address',
+    'signupNotice.body': 'Someone signed up for a new workspace.',
+    'signupNotice.button': 'Open the workspace in the admin',
+    'signupNotice.deploymentLabel': 'Deployment',
+    'signupNotice.detailsHeading': 'Signup',
+    'signupNotice.emailLabel': 'Email',
+    'signupNotice.nameLabel': 'Name',
+    'signupNotice.nextStep': 'To take it live, run: {{command}}',
+    'signupNotice.siteLabel': 'Site address',
+    'signupNotice.subject': 'New self-serve signup: {{tenantName}}',
+    'signupNotice.workspaceLabel': 'Workspace',
+    'idleWorkspaceSummary.body':
+      'The nightly cleanup of workspaces that never got a page found the following.',
+    'idleWorkspaceSummary.button': 'Open the admin',
+    'idleWorkspaceSummary.deleted': 'Deleted, with {{users}} user(s) removed',
+    'idleWorkspaceSummary.detailsHeading': 'Workspaces',
+    'idleWorkspaceSummary.provisioned':
+      'Has provisioning traces; deprovision by hand',
+    'idleWorkspaceSummary.subject': 'Idle workspace cleanup',
+    'idleWorkspaceSummary.unwarnedMailFailed':
+      'Could not warn: the warning mail failed; will retry tomorrow',
+    'idleWorkspaceSummary.unwarnedNoAdmin':
+      'Could not warn: no verified admin; handle by hand',
+    'idleWorkspaceSummary.warned': 'Warned, deletes on {{date}}',
+    'idleWorkspaceWarning.body':
+      'Your workspace {{name}} has no pages yet. It will be deleted on {{date}} unless a page is added before then.',
+    'idleWorkspaceWarning.button': 'Open the admin',
+    'idleWorkspaceWarning.ignore':
+      'If you no longer want the workspace, there is nothing you need to do.',
+    'idleWorkspaceWarning.subject':
+      'Your workspace {{name}} will be deleted on {{date}}',
     'tourSignup.acceptTerms': 'I accept the terms',
     'tourSignup.acceptTermsRequired': 'Please accept the terms to sign up',
     'tourSignup.dataNotice':
@@ -461,6 +716,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'colorScheme.select': 'Välj utseende',
     'colorScheme.switchTo': 'Byt till {{colorScheme}} utseende',
     'colorScheme.system': 'systeminställning',
+    'comingSoon.contact': 'Kontakta oss',
+    'comingSoon.opening': 'Öppnar {{date}}',
     'error.contactAdmin': 'Kontakta administratören om problemet kvarstår.',
     'error.landingPageNotFound': 'Startsida hittades inte',
     'error.landingPageNotFoundDescription':
@@ -562,6 +819,12 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'navigation.close': 'Stäng menyn',
     'navigation.footer': 'Sidfot',
     'navigation.menu': 'Meny',
+    'memberLogin.code': 'Kod',
+    'memberLogin.codeFailed':
+      'Koden fungerade inte. Ange den aktuella koden från din autentiseringsapp.',
+    'memberLogin.codeIntro':
+      'Ange den sexsiffriga koden från din autentiseringsapp.',
+    'memberLogin.codeSubmit': 'Fortsätt',
     'memberLogin.email': 'E-post',
     'memberLogin.failed':
       'Kontrollera e-postadressen och lösenordet och försök igen.',
@@ -569,6 +832,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'memberLogin.intro':
       'Logga in för att läsa de delar av webbplatsen som är till för medlemmar.',
     'memberLogin.password': 'Lösenord',
+    'memberLogin.setupRequired':
+      'Ditt konto behöver en autentiseringsapp. Lägg till den i administrationen och logga sedan in här.',
     'memberLogin.signOut': 'Logga ut',
     'memberLogin.submit': 'Logga in',
     'memberLogin.tooManyAttempts':
@@ -579,6 +844,82 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.goHome': 'Gå tillbaka till startsidan',
     'notFound.title': 'Sidan hittades inte',
     'posts.readMore': 'Läs mer',
+    'signup.title': 'Skapa din webbplats',
+    'signup.intro': 'Fyll i uppgifterna nedan för att få din egen webbplats.',
+    'signup.closed':
+      'Registreringen är inte öppen just nu. Titta in igen senare.',
+    'signup.code': 'Inbjudningskod',
+    'signup.name': 'Ditt namn',
+    'signup.email': 'E-postadress',
+    'signup.password': 'Lösenord',
+    'signup.passwordHint': 'Minst 12 tecken.',
+    'signup.siteName': 'Webbplatsens namn',
+    'signup.submit': 'Skapa webbplats',
+    'signup.submitting': 'Skapar webbplatsen...',
+    'signup.successTitle': 'Kolla din e-post för att bekräfta adressen',
+    'signup.successBody':
+      'Vi har skickat ett meddelande till e-postadressen du angav. Öppna länken i meddelandet för att bekräfta adressen, så görs webbplatsen i ordning därefter.',
+    'signup.resend.title': 'Skicka bekräftelsemejlet igen',
+    'signup.resend.intro': 'Ange e-postadressen du registrerade dig med.',
+    'signup.resend.submit': 'Skicka igen',
+    'signup.resend.submitting': 'Skickar...',
+    'signup.resend.done':
+      'Om adressen har ett konto som ännu inte är bekräftat har vi skickat en ny bekräftelselänk.',
+    'signup.resend.link': 'Fick du inget mejl? Skicka det igen',
+    'signup.resend.formPrompt':
+      'Har du redan registrerat dig men inte fått bekräftelsemejlet?',
+    'signup.resend.formLink': 'Skicka det igen',
+    'signup.backToLogin': 'Tillbaka till inloggningen',
+    'signup.section.invite': 'Din inbjudan',
+    'signup.section.you': 'Du',
+    'signup.section.site': 'Din webbplats',
+    'signup.section.inviteHelp':
+      'Koden du har fått avgör att du får registrera dig.',
+    'signup.section.youHelp':
+      'Ditt eget konto. Du loggar in med den här adressen och det här lösenordet.',
+    'signup.section.siteHelp':
+      'Namnet som dina besökare ser. Adressen följer av namnet.',
+    'signup.verify.confirmTitle': 'Bekräfta din e-postadress',
+    'signup.verify.confirmBody': 'Ett klick så är kontot klart.',
+    'signup.verify.confirm': 'Bekräfta',
+    'signup.verify.verifiedTitle': 'Din e-postadress är bekräftad',
+    'signup.verify.verifiedBody':
+      'Ditt konto är klart. Logga in för att fortsätta.',
+    'signup.verify.signIn': 'Logga in',
+    'signup.verify.invalidTitle': 'Länken fungerar inte',
+    'signup.verify.invalidBody':
+      'Länken har slutat gälla eller har redan använts.',
+    'signup.verify.newLink': 'Skicka en ny länk',
+    'language.label': 'Språk',
+    'signup.inviteCodeHelp':
+      'Registreringen sker via inbjudan. Inbjudningskoden får du av Codeware. Fråga den som hänvisade dig hit, eller skriv till oss.',
+    'signup.addressPreview':
+      'En egen domän kan kopplas till webbplatsen senare.',
+    'signup.availability.checking': 'Kontrollerar…',
+    'signup.availability.available': 'Ledig',
+    'signup.error.invalid':
+      'Några uppgifter saknas eller är ogiltiga. Kontrollera formuläret och försök igen.',
+    'signup.error.password': 'Lösenordet måste vara mellan 12 och 128 tecken.',
+    'signup.error.password-breached':
+      'Lösenordet finns med i en dataläcka någon annanstans. Välj ett annat lösenord.',
+    'signup.error.deployment': 'Det här namnet kan inte användas.',
+    'signup.error.code': 'Den här inbjudningskoden kan inte användas.',
+    'signup.error.closed': 'Registreringen är inte öppen just nu.',
+    'signup.error.throttled': 'För många försök. Försök igen senare.',
+    'signup.error.email-taken':
+      'Det finns redan ett konto med den här e-postadressen.',
+    'signup.error.deployment-taken':
+      'Det finns redan en webbplats med ett mycket liknande namn. Prova ett annat namn.',
+    'signup.error.name-taken': 'Namnet är redan upptaget. Prova ett annat.',
+    'signup.error.failed': 'Något gick fel. Försök igen om en stund.',
+    'signup.issue.empty':
+      'Namnet måste innehålla minst en bokstav eller siffra.',
+    'signup.issue.characters':
+      'Namnet måste innehålla minst en bokstav eller siffra.',
+    'signup.issue.hyphens':
+      'Namnet måste innehålla minst en bokstav eller siffra.',
+    'signup.issue.reserved': 'Det här namnet är reserverat. Prova ett annat.',
+    'signup.issue.too-long': 'Namnet är för långt. Prova ett kortare.',
     'siteGate.heading': 'Webbplatsen är inte öppen',
     'siteGate.intro': 'Ange lösenordet för att fortsätta.',
     'siteGate.password': 'Lösenord',
@@ -623,13 +964,13 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.promotedBody':
       'En plats har blivit ledig på {{tour}} och den är din. Din anmälan är nu bekräftad.',
     'tourSignupEmail.questions': 'Svara på det här mejlet om något är oklart.',
-    'tourSignupEmail.firstInQueueLabel': 'Först i kön',
+    'tourSignupEmail.firstInQueueLabel': 'Först på väntelistan',
     'tourSignupEmail.openTour': 'Öppna resan',
     'tourSignupEmail.seatsFreeLabel': 'Lediga platser',
     'tourSignupEmail.seatsFreedAction':
-      'Nya anmälningar hamnar i kön istället för att ta platserna, så resan fylls igen först när du flyttar upp någon.',
+      'Nya anmälningar hamnar på väntelistan istället för att ta platserna, så resan fylls igen först när du flyttar upp någon.',
     'tourSignupEmail.seatsFreedBody':
-      '{{count}} platser är lediga på {{tour}}. {{name}} står först i kön, för {{people}} personer.',
+      '{{count}} platser är lediga på {{tour}}. {{name}} står först på väntelistan, för {{people}} personer.',
     'tourSignupEmail.subjectSeatsFreed': 'Lediga platser på {{tour}}',
     'tourSignupEmail.statusLabel': 'Status',
     'tourSignupEmail.statusBooked': 'Bekräftad',
@@ -637,11 +978,76 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignupEmail.subjectBooked': 'Din plats på {{tour}} är bekräftad',
     'tourSignupEmail.subjectNotification': 'Ny anmälan till {{tour}}',
     'tourSignupEmail.subjectPromoted': 'En plats har blivit ledig på {{tour}}',
-    'tourSignupEmail.subjectWaiting': 'Du står i kön till {{tour}}',
+    'tourSignupEmail.subjectWaiting': 'Du står på väntelistan till {{tour}}',
     'tourSignupEmail.termsLink': 'Villkor',
     'tourSignupEmail.tourLabel': 'Resa',
     'tourSignupEmail.waitingBody':
-      '{{tour}} är fullbokad, så du står i kön. Vi hör av oss så snart en plats blir ledig — inget debiteras och du kan ändra dig när du vill.',
+      '{{tour}} är fullbokad, så du står på väntelistan. Vi hör av oss så snart en plats blir ledig — inget debiteras och du kan ändra dig när du vill.',
+    'forgotPasswordEmail.body':
+      'Någon har bett om att återställa lösenordet för ditt konto hos {{brand}}.',
+    'forgotPasswordEmail.button': 'Välj ett nytt lösenord',
+    'forgotPasswordEmail.greeting': 'Hej,',
+    'forgotPasswordEmail.greetingNamed': 'Hej {{name}},',
+    'forgotPasswordEmail.ignore':
+      'Om det inte var du kan du bortse från det här mejlet. Ditt lösenord ändras inte.',
+    'forgotPasswordEmail.subject': 'Återställ ditt lösenord',
+    'statsAccountEmail.body':
+      'Här är din inloggning till webbplatsstatistiken för {{brand}}.',
+    'statsAccountEmail.button': 'Logga in',
+    'statsAccountEmail.changePassword':
+      'Byt lösenord under din profil i Umami när du har loggat in.',
+    'statsAccountEmail.heading': 'Din inloggning till statistiken',
+    'statsAccountEmail.passwordLabel': 'Lösenord',
+    'statsAccountEmail.subject': 'Din inloggning till statistiken',
+    'statsAccountEmail.usernameLabel': 'Användarnamn',
+    'accountExists.subject': 'Du har redan ett konto',
+    'accountExists.body':
+      'Någon försökte skapa ett nytt konto med den här e-postadressen. Du har redan ett konto, så du kan logga in eller återställa lösenordet om du har glömt det.',
+    'accountExists.signIn': 'Logga in',
+    'accountExists.reset': 'Återställ lösenordet',
+    'accountExists.ignore':
+      'Om det inte var du kan du bortse från det här mejlet.',
+    'verifyEmail.afterConfirm':
+      'När e-postadressen är bekräftad kan du logga in och börja bygga din nya webbplats.',
+    'verifyEmail.body':
+      'Välkommen till {{brand}}! Bekräfta din e-postadress för att slutföra uppsättningen av din nya webbplats.',
+    'verifyEmail.button': 'Bekräfta din e-postadress',
+    'verifyEmail.greeting': 'Hej,',
+    'verifyEmail.greetingNamed': 'Hej {{name}},',
+    'verifyEmail.ignore':
+      'Om du inte har registrerat dig kan du bortse från det här mejlet.',
+    'verifyEmail.subject': 'Bekräfta din e-postadress',
+    'signupNotice.body': 'Någon har registrerat en ny arbetsyta.',
+    'signupNotice.button': 'Öppna arbetsytan i admin',
+    'signupNotice.deploymentLabel': 'Driftsättning',
+    'signupNotice.detailsHeading': 'Registrering',
+    'signupNotice.emailLabel': 'E-post',
+    'signupNotice.nameLabel': 'Namn',
+    'signupNotice.nextStep': 'Kör detta för att sätta den i drift: {{command}}',
+    'signupNotice.siteLabel': 'Webbplatsadress',
+    'signupNotice.subject': 'Ny självregistrering: {{tenantName}}',
+    'signupNotice.workspaceLabel': 'Arbetsyta',
+    'idleWorkspaceSummary.body':
+      'Den nattliga städningen av arbetsytor som aldrig fick någon sida hittade följande.',
+    'idleWorkspaceSummary.button': 'Öppna administrationen',
+    'idleWorkspaceSummary.deleted':
+      'Borttagen, med {{users}} användare borttagna',
+    'idleWorkspaceSummary.detailsHeading': 'Arbetsytor',
+    'idleWorkspaceSummary.provisioned':
+      'Har spår av driftsättning; avetablera för hand',
+    'idleWorkspaceSummary.subject': 'Städning av overksamma arbetsytor',
+    'idleWorkspaceSummary.unwarnedMailFailed':
+      'Kunde inte varnas: varningsmejlet misslyckades; försöker igen i morgon',
+    'idleWorkspaceSummary.unwarnedNoAdmin':
+      'Kunde inte varnas: ingen verifierad administratör; hantera för hand',
+    'idleWorkspaceSummary.warned': 'Varnad, tas bort den {{date}}',
+    'idleWorkspaceWarning.body':
+      'Din arbetsyta {{name}} har inga sidor ännu. Arbetsytan tas bort den {{date}} om ingen sida har lagts till före dess.',
+    'idleWorkspaceWarning.button': 'Öppna administrationen',
+    'idleWorkspaceWarning.ignore':
+      'Om du inte längre vill ha arbetsytan behöver du inte göra något.',
+    'idleWorkspaceWarning.subject':
+      'Din arbetsyta {{name}} tas bort den {{date}}',
     'tourSignup.acceptTerms': 'Jag godkänner villkoren',
     'tourSignup.acceptTermsRequired': 'Godkänn villkoren för att anmäla dig',
     'tourSignup.dataNotice':
@@ -659,10 +1065,10 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignup.queueOnlyCountOne':
       '1 plats kvar — erbjuds först till väntelistan',
     'tourSignup.queueOnlyLede':
-      'Andra väntar redan på plats på den här resan, så anmälningar ställs i kön i tur och ordning. Vi hör av oss när det är din tur.',
+      'Andra väntar redan på plats på den här resan, så nya anmälningar hamnar på väntelistan i tur och ordning. Vi hör av oss när det är din tur.',
     'tourSignup.fullLede':
-      'Ställ dig i kön så hör vi av oss om en plats blir ledig.',
-    'tourSignup.joinWaitingList': 'Ställ mig i kön',
+      'Ställ dig på väntelistan så hör vi av oss om en plats blir ledig.',
+    'tourSignup.joinWaitingList': 'Ställ mig på väntelistan',
     'tourSignup.name': 'Namn',
     'tourSignup.people': 'Antal resenärer',
     'tourSignup.peopleHelp': 'Inklusive dig själv.',
@@ -677,7 +1083,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'tourSignup.successBooked':
       'Tack! Din anmälan är registrerad och vi har skickat en bekräftelse.',
     'tourSignup.successWaiting':
-      'Tack! Du står i kön och vi hör av oss om en plats blir ledig.',
+      'Tack! Du står på väntelistan och vi hör av oss om en plats blir ledig.',
     'tourSignup.title': 'Anmäl dig',
     'tourSignup.tooManyPeople': 'Ange ett antal mellan 1 och {{max}}',
     'tours.registerInterest': 'Intresseanmälan',

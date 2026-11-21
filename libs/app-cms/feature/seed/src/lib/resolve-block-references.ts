@@ -6,7 +6,7 @@ import type { BlockDefinition } from '@codeware/shared/util/seed';
  * Resolved **per block type** rather than by walking for anything shaped like a
  * reference. `lookupTitle` means a form on one block and a reusable-content
  * document on another, so a generic walker would have to guess, and would guess
- * silently. Nine blocks carry references and the list is closed — being
+ * silently. Ten blocks carry references and the list is closed — being
  * explicit costs a switch and removes the guessing.
  */
 export type ReferenceResolver = {
@@ -90,6 +90,27 @@ export function resolveBlockReferences(
         ...source,
         ...swap('image', 'lookupFilename', resolver.media)
       };
+
+    case 'gallery': {
+      // Each photo carries its own image reference, reported by its index
+      const items = Array.isArray(source['items'])
+        ? source['items']
+        : undefined;
+      return {
+        ...source,
+        ...(items
+          ? {
+              items: items.map((item, index) => ({
+                ...item,
+                ...swap('image', 'lookupFilename', resolver.media, {
+                  values: item as AnyBlock,
+                  path: `items[${index}].image`
+                })
+              }))
+            }
+          : {})
+      };
+    }
 
     case 'form':
       return { ...source, ...swap('form', 'lookupTitle', resolver.form) };

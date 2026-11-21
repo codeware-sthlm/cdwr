@@ -35,11 +35,13 @@ const blocks: Record<BlockSlug, boolean> = {
   'theme-studio': false,
   // Unsupported blocks
   callout: false,
+  'coming-soon': false,
   content: false,
   'feature-cards': false,
   'feature-section': false,
   'file-area': false,
   form: false,
+  gallery: false,
   hero: false,
   'pill-list': false,
   posts: false,
@@ -92,6 +94,7 @@ const tours: CollectionConfig<'tours'> = {
         }
       }
     },
+    slugField({ sourceField: 'title', required: true }),
     {
       type: 'tabs',
       tabs: [
@@ -473,7 +476,7 @@ const tours: CollectionConfig<'tours'> = {
           label: { en: 'Tour signups', sv: 'Anmälningar' },
           description: {
             en: 'Who has signed up, and who is waiting. The same signups are listed under Tour signups, where you can search across every tour.',
-            sv: 'Vilka som har anmält sig och vilka som står i kö. Samma anmälningar finns under Reseanmälningar, där du kan söka över alla resor.'
+            sv: 'Vilka som har anmält sig och vilka som står på väntelistan. Samma anmälningar finns under Reseanmälningar, där du kan söka över alla resor.'
           },
           fields: [
             {
@@ -490,7 +493,6 @@ const tours: CollectionConfig<'tours'> = {
         }
       ]
     },
-    slugField({ sourceField: 'title', required: true }),
     // Capacity as the site needs it: derived on read by `populateTourCapacity`,
     // never stored. Virtual so no column exists to drift from the signups.
     {

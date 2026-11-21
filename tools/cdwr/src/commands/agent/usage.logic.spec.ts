@@ -7,10 +7,17 @@ import {
   dedupeReplies,
   encodeProjectPath,
   familyBase,
+  hourOf,
+  hourRows,
+  localDay,
+  marksIn,
   normaliseModel,
-  renderUsageDocument,
   roleOf,
-  ticketOf
+  ticketAt,
+  ticketOf,
+  usageRows,
+  wholeDaysSince,
+  wholeHoursSince
 } from './usage.logic';
 
 const tokens = (over: Partial<Tokens> = {}): Tokens => ({
@@ -64,13 +71,61 @@ describe('countsDir', () => {
 
 describe('roleOf', () => {
   it.each([
-    ['-x-codeware-agent', false, 'planning'],
-    ['-x-codeware-agent', true, 'planning'],
-    ['-x-codeware-cod-533', true, 'implementing'],
-    ['-x-codeware-cod-533', false, 'orchestrating'],
-    ['-x-codeware', false, 'orchestrating']
-  ])('%s subagent=%s → %s', (dirName, subagent, expected) => {
-    expect(roleOf({ dirName, base: '/x/codeware', subagent })).toBe(expected);
+    // A plan-only run in the planner checkout, and its subagents
+    ['-x-codeware-agent', false, false, 'planning'],
+    ['-x-codeware-agent', true, false, 'planning'],
+    // The NUC runs queue sessions in the planner checkout too
+    ['-x-codeware-agent', false, true, 'orchestrating'],
+    ['-x-codeware-agent', true, true, 'implementing'],
+    // The Mac's ticket worktrees and attended checkout
+    ['-x-codeware-cod-533', true, false, 'implementing'],
+    ['-x-codeware-cod-533', false, false, 'orchestrating'],
+    ['-x-codeware', false, false, 'orchestrating'],
+    ['-x-codeware-queue', true, true, 'implementing']
+  ])(
+    '%s subagent=%s registered=%s → %s',
+    (dirName, subagent, registered, expected) => {
+      expect(
+        roleOf({ dirName, base: '/x/codeware', subagent, registered })
+      ).toBe(expected);
+    }
+  );
+});
+
+describe('marksIn', () => {
+  it.each([
+    ['registered work-queue session', { registered: true }],
+    ['work-queue ticket COD-7', { registered: false, ticket: 'COD-7' }],
+    ['work-queue ticket -', { registered: false, ticket: null }],
+    [
+      'work-queue ticket COD-1\nwork-queue ticket COD-2',
+      { registered: false, ticket: 'COD-2' }
+    ],
+    ['echo work-queue ticket COD-7', { registered: false }],
+    ['work-queue ticket cod-7', { registered: false }]
+  ])('%j → %j', (stdout, expected) => {
+    expect(marksIn(stdout)).toEqual(expected);
+  });
+});
+
+describe('ticketAt', () => {
+  const marks = [
+    { timestamp: '2026-10-06T10:00:00.000Z', ticket: 'COD-1' },
+    { timestamp: '2026-10-06T11:00:00.000Z', ticket: null },
+    { timestamp: '2026-10-06T12:00:00.000Z', ticket: 'COD-2' }
+  ];
+  it.each([
+    ['2026-10-06T09:59:00.000Z', undefined],
+    ['2026-10-06T10:00:00.000Z', 'COD-1'],
+    ['2026-10-06T10:30:00.000Z', 'COD-1'],
+    ['2026-10-06T11:30:00.000Z', null],
+    ['2026-10-06T13:00:00.000Z', 'COD-2']
+  ])('%s → %s', (timestamp, expected) => {
+    expect(ticketAt(marks, timestamp)).toBe(expected);
+  });
+
+  it('is undefined without markers', () => {
+    expect(ticketAt([], '2026-10-06T10:00:00.000Z')).toBeUndefined();
   });
 });
 
@@ -226,80 +281,144 @@ describe('aggregate dayOf', () => {
   });
 });
 
-describe('renderUsageDocument', () => {
-  const since = new Date('2026-10-01T00:00:00.000Z');
-  const result = aggregate(
-    [
-      reply({ ticket: 'COD-2', role: 'planning' }), // 25
-      reply({
-        ticket: 'COD-2',
-        role: 'implementing',
-        model: 'claude-sonnet-5'
-      }), // 10
-      reply({ ticket: 'unattributed', timestamp: '2026-10-05T12:00:00.000Z' }), // 25, older day
-      reply({
-        ticket: 'COD-1',
-        tokens: tokens({ output: 2_000_000, cacheRead: 3 })
-      }) // 50
-    ],
-    { since }
-  );
-  const doc = renderUsageDocument(result, {
-    updated: '2026-10-07 00:13',
-    windowDays: 30
+describe('usageRows', () => {
+  it('splits by day, ticket, model and role, with input as everything read', () => {
+    const since = new Date('2026-10-01T00:00:00.000Z');
+    const rows = usageRows(
+      [
+        reply({
+          ticket: 'COD-1',
+          tokens: tokens({ input: 1, cacheRead: 2, cacheWrite5m: 3, output: 4 })
+        }),
+        reply({ ticket: 'COD-1', tokens: tokens({ input: 10, output: 1 }) }),
+        reply({
+          ticket: 'COD-2',
+          timestamp: '2026-10-07T12:00:00.000Z',
+          tokens: tokens({ output: 5 })
+        }),
+        reply({ ticket: 'unattributed', model: 'mystery' })
+      ],
+      { since, host: 'mac' }
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      day: '2026-10-06',
+      ticket: 'COD-1',
+      input_tokens: 16,
+      output_tokens: 5,
+      cache_read_tokens: 2,
+      cache_write_tokens: 3,
+      host: 'mac'
+    });
+    expect(rows[1]).toMatchObject({ ticket: 'COD-2', day: '2026-10-07' });
+    expect(rows[2]).toMatchObject({
+      ticket: null,
+      model: 'mystery',
+      cost_usd: 0
+    });
   });
+});
 
-  it('starts with the lines the Desk reads', () => {
-    expect(doc.split('\n\n').slice(0, 2)).toEqual([
-      'Updated: 2026-10-07 00:13 · last 30 days · 110.00 USD',
-      'Prices: 2026-09-25'
+describe('wholeDaysSince', () => {
+  it('starts on local midnight, so the oldest day is never partial', () => {
+    const now = new Date(2026, 9, 27, 14, 0);
+    const since = wholeDaysSince(now, 3);
+    expect(since).toEqual(new Date(2026, 9, 24, 0, 0));
+    const at = (day: number, hour: number) =>
+      new Date(2026, 9, day, hour).toISOString();
+    const rows = usageRows(
+      [
+        reply({ timestamp: at(23, 20) }),
+        reply({ timestamp: at(24, 9) }),
+        reply({ timestamp: at(27, 13) })
+      ],
+      { since, host: 'mac', dayOf: localDay }
+    );
+    // Oct 24 09:00 is before now-3d (14:00) yet its day is whole
+    expect(rows.map((r) => r.day)).toEqual(['2026-10-24', '2026-10-27']);
+  });
+});
+
+describe('usageRows other', () => {
+  it('drops replies from projects outside the repo', () => {
+    const rows = usageRows(
+      [reply(), reply({ role: 'other', ticket: 'COD-2' })],
+      { since: new Date('2026-10-01T00:00:00Z'), host: 'h' }
+    );
+    expect(rows.map((r) => r.ticket)).toEqual(['COD-1']);
+  });
+});
+
+describe('hourOf', () => {
+  it('zeroes minutes, seconds and milliseconds in UTC', () => {
+    expect(hourOf('2026-10-29T23:59:59.999Z')).toBe('2026-10-29T23:00:00.000Z');
+    expect(hourOf('2026-10-30T01:30:00+02:00')).toBe(
+      '2026-10-29T23:00:00.000Z'
+    );
+  });
+});
+
+describe('wholeHoursSince', () => {
+  it('floors now to the hour, then steps back', () => {
+    expect(
+      wholeHoursSince(new Date('2026-10-30T10:42:17.500Z'), 6).toISOString()
+    ).toBe('2026-10-30T04:00:00.000Z');
+  });
+});
+
+describe('hourRows', () => {
+  const since = new Date('2026-10-06T10:00:00.000Z');
+  const opts = { since, host: 'h' };
+
+  it('buckets by hour, model and role and sums', () => {
+    const rows = hourRows(
+      [
+        reply({
+          timestamp: '2026-10-06T12:10:00.000Z',
+          tokens: tokens({
+            input: 100,
+            output: 5,
+            cacheRead: 10,
+            cacheWrite5m: 4,
+            cacheWrite1h: 1
+          })
+        }),
+        reply({
+          timestamp: '2026-10-06T12:50:00.000Z',
+          tokens: tokens({ input: 200, output: 7 })
+        }),
+        reply({ timestamp: '2026-10-06T13:00:00.000Z', role: 'other' }),
+        reply({ timestamp: '2026-10-06T12:20:00.000Z', role: 'implementing' })
+      ],
+      opts
+    );
+    expect(rows.map((r) => [r.hour, r.role])).toEqual([
+      ['2026-10-06T12:00:00.000Z', 'implementing'],
+      ['2026-10-06T12:00:00.000Z', 'orchestrating'],
+      ['2026-10-06T13:00:00.000Z', 'other']
     ]);
+    expect(rows[1]).toMatchObject({
+      host: 'h',
+      input_tokens: 315,
+      output_tokens: 12,
+      cache_read_tokens: 10,
+      cache_write_tokens: 5
+    });
   });
 
-  it('writes one daily row per day, by role', () => {
-    expect(doc).toContain(
-      '| Day | Planning | Orchestrating | Implementing | Total |'
+  it('costs an unpriced model at 0 and honours since', () => {
+    const rows = hourRows(
+      [
+        reply({ model: 'mystery', tokens: tokens({ output: 9 }) }),
+        reply({ timestamp: '2026-10-06T09:59:00.000Z' })
+      ],
+      opts
     );
-    expect(doc).toContain('| 2026-10-05 | 0.00 | 25.00 | 0.00 | 25.00 |');
-    expect(doc).toContain('| 2026-10-06 | 25.00 | 50.00 | 10.00 | 85.00 |');
-  });
-
-  it('lists tickets by cost, unattributed last', () => {
-    const tickets = doc
-      .split('## Tickets')[1]
-      .split('\n')
-      .filter((line) => /^\| (COD|unattributed)/.test(line));
-    expect(tickets).toEqual([
-      '| COD-1 | 0.00 | 50.00 | 0.00 | 50.00 | 2000000 | 3 |',
-      '| COD-2 | 25.00 | 0.00 | 10.00 | 35.00 | 2000000 | 0 |',
-      '| unattributed | 0.00 | 25.00 | 0.00 | 25.00 | 1000000 | 0 |'
-    ]);
-  });
-
-  it('rounds after summing, so sub-cent rows add up to the total', () => {
-    const tiny = tokens({ output: 160 }); // $0.004 on claude-opus-5
-    const doc = renderUsageDocument(
-      aggregate(
-        [
-          reply({ tokens: tiny }),
-          reply({ tokens: tiny, model: 'claude-opus-4-8' })
-        ],
-        { since }
-      ),
-      { updated: 'x', windowDays: 1 }
-    );
-    expect(doc).toContain('· 0.01 USD');
-    expect(doc).toContain('| 2026-10-06 | 0.00 | 0.01 | 0.00 | 0.01 |');
-  });
-
-  it('shows an unpriced cost as ? and names the model', () => {
-    const unpriced = renderUsageDocument(
-      aggregate([reply({ model: 'claude-mystery' })], { since }),
-      { updated: 'x', windowDays: 1 }
-    );
-    expect(unpriced).toContain(
-      'Prices: 2026-09-25 · not priced: claude-mystery'
-    );
-    expect(unpriced).toContain('| claude-mystery | 0 | 1000000 | 0 | 0 | ? |');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      model: 'mystery',
+      output_tokens: 9,
+      cost_usd: 0
+    });
   });
 });

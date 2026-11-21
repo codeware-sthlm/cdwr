@@ -79,7 +79,7 @@ Fly CLI node wrapper for programmatic deployments to [Fly.io](https://fly.io).
 ## Development
 
 Local setup, the CMS host/tenant modes, database and seed commands, dev email and the admin
-import-map rule are documented in [CLAUDE.md](CLAUDE.md), which is kept current as the
+import-map rule are documented in [apps/cms/DEVELOPMENT.md](apps/cms/DEVELOPMENT.md), which is kept current as the
 workspace changes. It is the single source for how to run things here — this file deliberately
 does not repeat it.
 

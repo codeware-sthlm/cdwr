@@ -45,7 +45,7 @@ inputs:
   app-details:
     description: >
       Optional JSON object mapping apps to their deployment details, when needed.
-      Each app maps to an array of objects with optional tenant, env, and secrets.
+      Each app maps to an array of objects with optional tenant, env, and secretNames (names only, no secret values).
       Example: {"web":[{"tenant":"acme"}]}
       Used to determine which apps are multi-tenant so a single image is built per app.
       Defaults to an empty object.

@@ -191,6 +191,26 @@ describe('SiteDefinitionSchema', () => {
       expect(errorsOf(definition)).toEqual([]);
     });
 
+    it('refuses a gallery photo naming media it does not state', () => {
+      const definition = {
+        ...minimal,
+        pages: [
+          {
+            name: 'Home',
+            slug: 'home',
+            layout: [
+              {
+                blockType: 'gallery',
+                items: [{ image: { lookupFilename: 'missing.jpg' } }]
+              }
+            ]
+          }
+        ]
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain('missing.jpg');
+    });
+
     it('refuses media tagged with a tag it does not state', () => {
       const definition = {
         ...minimal,
@@ -240,6 +260,54 @@ describe('SiteDefinitionSchema', () => {
       };
 
       expect(errorsOf(definition).join(' ')).toContain("tag 'absent'");
+    });
+  });
+
+  describe('meta', () => {
+    const withMeta = (meta: unknown) => ({
+      ...minimal,
+      pages: [{ name: 'Home', slug: 'home', layout: [], meta }]
+    });
+
+    it('accepts a title and description on a page and a post', () => {
+      expect(
+        errorsOf({
+          ...withMeta({ title: 'Home', description: 'Welcome' }),
+          posts: [
+            {
+              title: 'Hi',
+              slug: 'hi',
+              content: '',
+              meta: { title: 'Hi', description: 'A post' }
+            }
+          ]
+        })
+      ).toEqual([]);
+    });
+
+    it('refuses a key it does not know', () => {
+      expect(errorsOf(withMeta({ descripton: 'typo' })).length).toBeGreaterThan(
+        0
+      );
+    });
+
+    it('refuses an empty title', () => {
+      expect(errorsOf(withMeta({ title: '' })).length).toBeGreaterThan(0);
+    });
+
+    it('refuses an image the definition does not state', () => {
+      expect(
+        errorsOf(withMeta({ image: { lookupFilename: 'x.png' } }))
+      ).toEqual(["No media named 'x.png' in this definition"]);
+    });
+
+    it('accepts an image the definition states', () => {
+      expect(
+        errorsOf({
+          ...withMeta({ image: { lookupFilename: 'x.png' } }),
+          media: [{ filename: 'x.png', alt: 'x', filePath: 'x.png' }]
+        })
+      ).toEqual([]);
     });
   });
 
@@ -336,10 +404,98 @@ describe('SiteDefinitionSchema', () => {
     expect(errors).toContainEqual("No form named 'Nowhere' in this definition");
   });
 
+  describe('a form with fields of its own', () => {
+    const base = {
+      title: 'Interest',
+      submitLabel: 'Send',
+      confirmation: 'Thanks',
+      subject: 'From {{email}}'
+    };
+    const email = { blockType: 'email', name: 'email', label: 'Email' };
+
+    it('accepts the single-email shape and the fields shape', () => {
+      expect(
+        errorsOf({
+          ...minimal,
+          forms: [{ ...base, emailLabel: 'Email', emailPlaceholder: 'a@b.se' }]
+        })
+      ).toEqual([]);
+      expect(
+        errorsOf({
+          ...minimal,
+          forms: [
+            {
+              ...base,
+              fields: [
+                { blockType: 'text', name: 'name', label: 'Name', width: 6 },
+                email
+              ]
+            }
+          ]
+        })
+      ).toEqual([]);
+    });
+
+    it.each([
+      [
+        'both shapes',
+        { emailLabel: 'E', emailPlaceholder: 'p', fields: [email] }
+      ],
+      ['neither shape', {}],
+      ['only an emailLabel', { emailLabel: 'E' }]
+    ])('refuses a form with %s', (_case, shape) => {
+      expect(errorsOf({ ...minimal, forms: [{ ...base, ...shape }] })).toEqual([
+        expect.stringMatching(/^A form (states either|needs either)/)
+      ]);
+    });
+
+    it.each([
+      ['no label', { blockType: 'text', name: 'name' }],
+      ['an empty label', { blockType: 'text', name: 'name', label: '' }],
+      ['a width of 0', { ...email, width: 0 }],
+      ['a width of 7', { ...email, width: 7 }],
+      ['a fractional width', { ...email, width: 2.5 }]
+    ])('refuses a field with %s', (_case, field) => {
+      const fields = field.blockType === 'email' ? [field] : [field, email];
+
+      expect(
+        errorsOf({ ...minimal, forms: [{ ...base, fields }] }).length
+      ).toBeGreaterThan(0);
+    });
+
+    it.each([
+      ['no email field', [{ blockType: 'text', name: 'name', label: 'Name' }]],
+      ['an email field not named email', [{ ...email, name: 'mail' }]],
+      ['two email fields', [email, email]],
+      [
+        'a second email field under another name',
+        [email, { ...email, name: 'alternateEmail' }]
+      ]
+    ])('refuses fields with %s', (_case, fields) => {
+      expect(errorsOf({ ...minimal, forms: [{ ...base, fields }] })).toContain(
+        "A form with its own fields needs exactly one email field named 'email'"
+      );
+    });
+
+    it('refuses two fields with one name', () => {
+      const fields = [email, { blockType: 'text', name: 'email', label: 'E' }];
+
+      expect(errorsOf({ ...minimal, forms: [{ ...base, fields }] })).toContain(
+        'Each field of a form needs a name of its own'
+      );
+    });
+  });
+
   it('accepts a form reference the definition states', () => {
     const errors = errorsOf({
       ...minimal,
-      forms: [{ title: 'Contact', confirmation: 'Thanks' }],
+      forms: [
+        {
+          title: 'Contact',
+          emailLabel: 'Email',
+          emailPlaceholder: 'a@b.se'
+        }
+      ],
       pages: [
         {
           name: 'Home',

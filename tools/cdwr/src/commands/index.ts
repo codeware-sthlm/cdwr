@@ -18,6 +18,8 @@ export const GROUPS: Group[] = [
   { name: 'signature', summary: 'Request signing between web and cms' },
   { name: 'builder', summary: 'The component build service' },
   { name: 'media', summary: 'Showcase imagery' },
+  { name: 'storybook', summary: 'Storybook: story snapshots for review' },
+  { name: 'devlog', summary: 'Agent-drafted devlog posts for cdwr.io' },
   { name: 'agent', summary: 'The scheduled agent queue on this machine' }
 ];
 
@@ -70,6 +72,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./fly/restart').then((m) => m.default)
   },
   {
+    path: ['fly', 'scale'],
+    summary: 'Set how many machines a Fly app runs',
+    danger: 'mutate',
+    load: () => import('./fly/scale').then((m) => m.default)
+  },
+  {
     path: ['fly', 'deploy'],
     summary: 'Deploy an app to Fly through the deployment workflow',
     danger: 'mutate',
@@ -92,6 +100,13 @@ export const ENTRIES: Entry[] = [
     summary: "Screenshots of a site's pages in each theme, scheme and screen",
     danger: 'read',
     load: () => import('./tenant/snapshot').then((m) => m.default)
+  },
+  {
+    path: ['tenant', 'audit'],
+    summary:
+      "Audit a site's pages: status, console errors, axe, links, OG tags, 404",
+    danger: 'read',
+    load: () => import('./tenant/audit').then((m) => m.default)
   },
   {
     path: ['tenant', 'create'],
@@ -130,6 +145,18 @@ export const ENTRIES: Entry[] = [
     load: () => import('./tenant/gate').then((m) => m.default)
   },
   {
+    path: ['tenant', 'stats-teams'],
+    summary: "Give each workspace's statistics website its own Umami team",
+    danger: 'mutate',
+    load: () => import('./tenant/stats-teams').then((m) => m.default)
+  },
+  {
+    path: ['tenant', 'stats-accounts'],
+    summary: "Compare the statistics teams' members with the workspace admins",
+    danger: 'read',
+    load: () => import('./tenant/stats-accounts').then((m) => m.default)
+  },
+  {
     path: ['infisical', 'tenants'],
     summary: 'Tenant folders per app and their deploy switch',
     danger: 'read',
@@ -160,6 +187,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./infisical/resolve').then((m) => m.default)
   },
   {
+    path: ['infisical', 'delete-folder'],
+    summary: 'Delete one Infisical folder in one environment',
+    danger: 'destructive',
+    load: () => import('./infisical/delete-folder').then((m) => m.default)
+  },
+  {
     path: ['infisical', 'session'],
     summary: 'Whether the Infisical CLI is installed and logged in',
     danger: 'read',
@@ -184,6 +217,24 @@ export const ENTRIES: Entry[] = [
     load: () => import('./media/generate-images').then((m) => m.default)
   },
   {
+    path: ['storybook', 'snapshot'],
+    summary: 'Render Storybook stories to PNG for review',
+    danger: 'read',
+    load: () => import('./storybook/snapshot').then((m) => m.default)
+  },
+  {
+    path: ['devlog', 'draft'],
+    summary: 'Post a devlog draft to the cms as the agent',
+    danger: 'mutate',
+    load: () => import('./devlog/draft').then((m) => m.default)
+  },
+  {
+    path: ['devlog', 'covered'],
+    summary: 'Which drafted posts were published, kept or deleted',
+    danger: 'read',
+    load: () => import('./devlog/covered').then((m) => m.default)
+  },
+  {
     path: ['agent', 'status'],
     summary:
       'Whether the scheduled planner is loaded, healthy and what it would take next',
@@ -197,17 +248,60 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/logs').then((m) => m.default)
   },
   {
+    path: ['agent', 'exec'],
+    summary:
+      'Run a cdwr command in the agent container, with its vault secrets',
+    danger: 'mutate',
+    load: () => import('./agent/exec').then((m) => m.default)
+  },
+  {
     path: ['agent', 'usage'],
     summary: 'What the agent workflow spent, by day, role, model and ticket',
     danger: 'read',
     load: () => import('./agent/usage').then((m) => m.default)
   },
   {
+    path: ['agent', 'usage-record'],
+    summary: 'Send the agent workflow spend to the telemetry database',
+    danger: 'mutate',
+    load: () => import('./agent/usage-record').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'platform-record'],
+    summary: 'Send the platform state to the telemetry database',
+    danger: 'mutate',
+    load: () => import('./agent/platform-record').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'backup'],
+    summary: 'Dump the production CMS database into the agent-queue home',
+    danger: 'mutate',
+    load: () => import('./agent/backup').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'listen'],
+    summary: 'Wake the scheduler when issue or GitHub events arrive',
+    danger: 'read',
+    load: () => import('./agent/listen').then((m) => m.default)
+  },
+  {
     path: ['agent', 'activity'],
     summary:
-      "The activity document from Linear's issue history and the runs file",
+      "Who did what to which ticket, from Linear's history and the runs file",
     danger: 'read',
     load: () => import('./agent/activity').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'review-check'],
+    summary: 'Check a review file and print the reviews row for it',
+    danger: 'read',
+    load: () => import('./agent/review-check').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'apply-list', 'check'],
+    summary: 'Check the apply list in a PR-ready comment',
+    danger: 'read',
+    load: () => import('./agent/apply-list').then((m) => m.default)
   },
   {
     path: ['agent', 'run'],
@@ -228,6 +322,18 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/resume').then((m) => m.default)
   },
   {
+    path: ['agent', 'deploy'],
+    summary: 'Update the agent container on a host to a new image',
+    danger: 'mutate',
+    load: () => import('./agent/deploy').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'supabase-migrate'],
+    summary: 'Apply a queue migration to the agent-queue database, once',
+    danger: 'mutate',
+    load: () => import('./agent/supabase-migrate').then((m) => m.default)
+  },
+  {
     path: ['agent', 'notify'],
     summary: 'Which notices the queue sends: all, or only what needs you',
     danger: 'mutate',
@@ -240,6 +346,18 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/install').then((m) => m.default)
   },
   {
+    path: ['agent', 'uninstall'],
+    summary: 'Remove the scheduled planner from this machine',
+    danger: 'mutate',
+    load: () => import('./agent/uninstall').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'attend'],
+    summary: 'Refresh the checkout an attended session runs from',
+    danger: 'mutate',
+    load: () => import('./agent/attend').then((m) => m.default)
+  },
+  {
     path: ['agent', 'worktree', 'add'],
     summary: 'Create the checkout for a ticket, beside this one',
     danger: 'mutate',
@@ -250,6 +368,31 @@ export const ENTRIES: Entry[] = [
     summary: 'Remove the checkouts of tickets whose pull request is done',
     danger: 'mutate',
     load: () => import('./agent/worktree-prune').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'desk', 'install'],
+    summary: 'Install the CDWR Desk from a CI build',
+    danger: 'mutate',
+    load: () => import('./agent/desk-install').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'mirror', 'set'],
+    summary: 'Mirror attended session files into the agent container',
+    danger: 'mutate',
+    load: () => import('./agent/mirror-set').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'mirror', 'clear'],
+    summary: 'Stop mirroring attended session files',
+    danger: 'mutate',
+    load: () => import('./agent/mirror-clear').then((m) => m.default)
+  },
+  {
+    path: ['agent', 'statusline', 'install'],
+    summary:
+      "Show the plan's usage in the Claude status line and send it to the desk; never replaces a status line that isn't this one",
+    danger: 'mutate',
+    load: () => import('./agent/statusline-install').then((m) => m.default)
   },
   {
     path: ['release'],

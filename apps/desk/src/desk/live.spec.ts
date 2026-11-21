@@ -1,0 +1,1412 @@
+import { describe, expect, it } from 'vitest';
+
+import type {
+  GithubEventRow,
+  HostMetricRow,
+  RunsPayload,
+  SessionRow
+} from '../supabase';
+
+import {
+  HOST_METRICS_MINUTES,
+  HOST_SPACING_SAMPLES,
+  SESSION_HANDBACK_MIN,
+  WEBHOOK_GRACE_MIN
+} from './constants';
+import { dayKey, dayLabel, dayTime, hhmm } from './format';
+import {
+  type CheckName,
+  type HealthCheck,
+  type HostHeartbeat,
+  type PrActivity,
+  type Problem,
+  agentPrs,
+  checkProblems,
+  feed,
+  frozenAt,
+  handBack,
+  health,
+  heartbeatOk,
+  hostHeartbeats,
+  hostSessions,
+  missedEvent,
+  prState,
+  problemKey,
+  problemOf,
+  problems,
+  pulse,
+  sampleMinutes,
+  silentAfter
+} from './live';
+import type { Connection } from './state';
+import type { DeployState, QueueView, SessionState } from './types';
+
+const NOW = new Date('2026-10-29T12:00:00.000Z');
+const MIN = 6e4;
+
+/** The ISO time `min` minutes before NOW */
+const ago = (min: number): string =>
+  new Date(NOW.getTime() - min * MIN).toISOString();
+
+const connection = (over: Partial<Connection> = {}): Connection => ({
+  live: true,
+  retries: 0,
+  upSince: NOW.getTime() - 60 * MIN,
+  downSince: null,
+  status: null,
+  nextAt: null,
+  lastIssue: null,
+  ...over
+});
+
+const event = (over: Partial<GithubEventRow> = {}): GithubEventRow => ({
+  subject: 'pull/10',
+  pr: 10,
+  action: 'pull_request:opened',
+  updated_at: ago(5),
+  ...over
+});
+
+const session = (over: Partial<SessionRow> = {}): SessionRow => ({
+  id: 's1',
+  host: 'mac',
+  kind: 'attended',
+  last_seen: ago(1),
+  state: null,
+  detail: null,
+  ...over
+});
+
+const GIB = 2 ** 30;
+
+const sample = (min: number): HostMetricRow => ({
+  id: 1,
+  host: 'nuc',
+  at: ago(min),
+  cores: 4,
+  load1: 1,
+  load5: 1,
+  load15: 1,
+  mem_total: 8 * GIB,
+  mem_available: 6 * GIB,
+  swap_total: 2 * GIB,
+  swap_free: 2 * GIB,
+  disk_total: 100 * GIB,
+  disk_free: 60 * GIB,
+  cgroup_mem_current: null,
+  cgroup_mem_max: null,
+  exposed: []
+});
+
+const run = (
+  started: string,
+  finished: string | null = started
+): RunsPayload['rows'][number] => ({
+  when: '',
+  outcome: 'implemented',
+  ticket: '',
+  detail: '',
+  started,
+  finished
+});
+
+const goodView = (
+  at: string,
+  session: SessionState = { state: 'none' }
+): QueueView => ({
+  at,
+  limit: { used: 0, max: 5 },
+  session,
+  next: [],
+  held: { tickets: [], free: [] },
+  parked: [],
+  blocked: [],
+  renovate: [],
+  audit: [],
+  tree: [],
+  table: { before: [], label: [], after: [] }
+});
+
+const runs = (
+  at: string,
+  rows: RunsPayload['rows'] = [],
+  viewInvalid = false
+): RunsPayload => ({
+  last: null,
+  attended: null,
+  suggested: null,
+  job: null,
+  qv: null,
+  viewInvalid,
+  view: null,
+  viewIssues: [],
+  at,
+  host: 'nuc',
+  others: [],
+  watches: [],
+  deploys: [],
+  main: { image: null, desk: null, deskWeb: null },
+  rows
+});
+
+describe('prState', () => {
+  it.each([
+    ['pull_request:opened', 'checks running'],
+    ['pull_request:reopened', 'checks running'],
+    ['pull_request:synchronize', 'checks running'],
+    ['pull_request:ready_for_review', 'checks running'],
+    ['pull_request:review_requested', 'review requested'],
+    ['pull_request:enqueued', 'in merge queue'],
+    ['pull_request:dequeued', 'left merge queue'],
+    ['pull_request:merged', 'merged'],
+    ['pull_request:closed', 'closed'],
+    ['check_suite:success', 'checks passed'],
+    ['check_suite:neutral', 'checks passed'],
+    ['check_suite:skipped', 'checks passed'],
+    ['check_suite:failure', 'checks failed'],
+    ['check_suite:timed_out', 'checks failed'],
+    ['check_suite:cancelled', 'checks finished'],
+    ['check_suite:stale', 'checks finished'],
+    ['check_suite:completed', 'checks finished'],
+    ['pull_request_review:copilot', 'Copilot reviewed'],
+    ['pull_request_review:submitted', 'reviewed'],
+    ['pull_request_review_comment:created', 'reviewed']
+  ])('%s -> %s', (action, state) => {
+    expect(prState(action)).toBe(state);
+  });
+
+  it.each([
+    'push',
+    'pull_request:labeled',
+    'pull_request',
+    'check_suite',
+    'issues:opened',
+    ''
+  ])('does not know %j', (action) => {
+    expect(prState(action)).toBeNull();
+  });
+});
+
+describe('agentPrs', () => {
+  const tickets = new Map([
+    [10, 'COD-1'],
+    [11, 'COD-2']
+  ]);
+  const title = (id: string): string => `Title of ${id}`;
+
+  it('is empty without events', () => {
+    expect(agentPrs(null, tickets, title)).toEqual([]);
+    expect(agentPrs([], tickets, title)).toEqual([]);
+  });
+
+  it('drops events without a PR or a ticket for it', () => {
+    const out = agentPrs(
+      [
+        event({ pr: null, subject: 'branch/x' }),
+        event({ pr: 99, subject: 'pull/99' }),
+        event({ pr: 10 })
+      ],
+      tickets,
+      title
+    );
+    expect(out.map((p) => p.pr)).toEqual([10]);
+  });
+
+  it('takes the title from the callback and lists the newest event first', () => {
+    const out = agentPrs(
+      [
+        event({
+          pr: 10,
+          action: 'pull_request:opened',
+          updated_at: ago(30)
+        }),
+        event({
+          pr: 11,
+          subject: 'pull/11',
+          action: 'check_suite:success',
+          updated_at: ago(5)
+        })
+      ],
+      tickets,
+      title
+    );
+    expect(out).toEqual([
+      {
+        pr: 11,
+        ticket: 'COD-2',
+        title: 'Title of COD-2',
+        state: 'checks passed',
+        action: 'check_suite:success',
+        at: NOW.getTime() - 5 * MIN
+      },
+      {
+        pr: 10,
+        ticket: 'COD-1',
+        title: 'Title of COD-1',
+        state: 'checks running',
+        action: 'pull_request:opened',
+        at: NOW.getTime() - 30 * MIN
+      }
+    ]);
+  });
+
+  it('keeps an action the desk does not know, without a state', () => {
+    const out = agentPrs([event({ action: 'push' })], tickets, title);
+    expect(out[0]).toMatchObject({ state: null, action: 'push' });
+  });
+});
+
+describe('sampleMinutes', () => {
+  it('falls back without two samples', () => {
+    expect(sampleMinutes([])).toBe(HOST_METRICS_MINUTES);
+    expect(sampleMinutes([sample(0)])).toBe(HOST_METRICS_MINUTES);
+    // Two samples at the same instant have no spacing
+    expect(sampleMinutes([sample(3), sample(3)])).toBe(HOST_METRICS_MINUTES);
+  });
+
+  it('is the median of the spacings', () => {
+    expect(sampleMinutes([sample(20), sample(10), sample(0)])).toBeCloseTo(10);
+    // Spacings 1 and 2 minutes
+    expect(sampleMinutes([sample(3), sample(2), sample(0)])).toBeCloseTo(1.5);
+    // Spacings 1, 1 and 8: the odd one out does not count
+    expect(
+      sampleMinutes([sample(10), sample(9), sample(8), sample(0)])
+    ).toBeCloseTo(1);
+  });
+
+  it('does not depend on the order of the rows', () => {
+    expect(sampleMinutes([sample(0), sample(20), sample(10)])).toBeCloseTo(10);
+  });
+
+  it('reads only the newest samples', () => {
+    // An old stretch at 10 minutes, then one-minute samples
+    const old = Array.from({ length: 6 }, (_, i) => sample(200 - i * 10));
+    const recent = Array.from({ length: HOST_SPACING_SAMPLES + 1 }, (_, i) =>
+      sample(HOST_SPACING_SAMPLES - i)
+    );
+    expect(sampleMinutes([...old, ...recent])).toBeCloseTo(1);
+  });
+});
+
+describe('silentAfter', () => {
+  it('is three intervals', () => {
+    expect(silentAfter(10)).toBe(30);
+    expect(silentAfter(1)).toBe(3);
+  });
+});
+
+describe('hostSessions', () => {
+  it('is empty without rows', () => {
+    expect(hostSessions(null, NOW)).toEqual([]);
+    expect(hostSessions([], NOW)).toEqual([]);
+  });
+
+  it('drops sessions older than the hand-back window', () => {
+    const out = hostSessions(
+      [
+        session({ id: 'a', last_seen: ago(SESSION_HANDBACK_MIN) }),
+        session({ id: 'b', last_seen: ago(SESSION_HANDBACK_MIN + 1) })
+      ],
+      NOW
+    );
+    expect(out.flatMap((h) => h.sessions.map((s) => s.id))).toEqual(['a']);
+  });
+
+  it('drops an ended session at once, whatever its last_seen', () => {
+    const out = hostSessions(
+      [
+        session({ id: 'a', state: 'ended', last_seen: ago(0) }),
+        session({ id: 'b', state: 'working', last_seen: ago(1) })
+      ],
+      NOW
+    );
+    expect(out.flatMap((h) => h.sessions.map((x) => x.id))).toEqual(['b']);
+  });
+
+  it('keeps the window rule for a null state', () => {
+    const ids = (min: number) =>
+      hostSessions([session({ state: null, last_seen: ago(min) })], NOW).length;
+    expect(ids(SESSION_HANDBACK_MIN - 1)).toBe(1);
+    expect(ids(SESSION_HANDBACK_MIN + 1)).toBe(0);
+  });
+
+  it('groups by host, newest first, with ages in minutes', () => {
+    const out = hostSessions(
+      [
+        session({
+          id: 'n1',
+          host: 'nuc',
+          kind: 'implement',
+          last_seen: ago(10)
+        }),
+        session({ id: 'm1', last_seen: ago(8) }),
+        session({ id: 'm2', last_seen: ago(2) })
+      ],
+      NOW
+    );
+    expect(out.map((h) => h.host)).toEqual(['mac', 'nuc']);
+    expect(out[0].ageMin).toBeCloseTo(2);
+    expect(out[0].sessions.map((s) => s.id)).toEqual(['m2', 'm1']);
+    expect(out[0].sessions[0]).toMatchObject({ id: 'm2', kind: 'attended' });
+    expect(out[0].sessions[0].ageMin).toBeCloseTo(2);
+    expect(out[1].ageMin).toBeCloseTo(10);
+    expect(out[1].sessions).toHaveLength(1);
+  });
+});
+
+describe('handBack', () => {
+  it('is attended within five minutes of the Mac’s attended heartbeat', () => {
+    const h = handBack([session({ last_seen: ago(3) })], 'nuc', true, NOW);
+    expect(h).toMatchObject({ state: 'attended', host: 'mac' });
+    expect(h.ageMin).toBeCloseTo(3);
+    expect(
+      handBack([session({ last_seen: ago(5) })], 'nuc', true, NOW).state
+    ).toBe('attended');
+  });
+
+  it('ignores an ended attended session', () => {
+    const rows = [session({ state: 'ended', last_seen: ago(1) })];
+    expect(handBack(rows, 'nuc', false, NOW)).toMatchObject({
+      state: 'idle',
+      host: null,
+      ageMin: null
+    });
+  });
+
+  it('is handing back within thirty minutes', () => {
+    const h = handBack([session({ last_seen: ago(10) })], 'nuc', true, NOW);
+    expect(h).toMatchObject({ state: 'handing back', host: 'mac' });
+    expect(
+      handBack([session({ last_seen: ago(30) })], 'nuc', true, NOW).state
+    ).toBe('handing back');
+  });
+
+  it('is decided by the NUC’s heartbeat after that', () => {
+    const rows = [session({ last_seen: ago(45) })];
+    expect(handBack(rows, 'nuc', true, NOW)).toMatchObject({
+      state: 'handed back',
+      host: 'mac'
+    });
+    expect(handBack(rows, 'nuc', false, NOW).state).toBe('idle');
+  });
+
+  it('has no host or age without an attended session', () => {
+    expect(handBack(null, 'nuc', true, NOW)).toEqual({
+      state: 'handed back',
+      host: null,
+      ageMin: null
+    });
+    expect(handBack([], null, false, NOW).state).toBe('idle');
+  });
+
+  it('ignores the NUC’s own attended rows and the implement sessions', () => {
+    const h = handBack(
+      [
+        session({ id: 'a', host: 'nuc', kind: 'attended', last_seen: ago(1) }),
+        session({ id: 'b', host: 'mac', kind: 'implement', last_seen: ago(1) })
+      ],
+      'nuc',
+      false,
+      NOW
+    );
+    expect(h).toEqual({ state: 'idle', host: null, ageMin: null });
+  });
+
+  it('follows the newest attended heartbeat', () => {
+    const h = handBack(
+      [
+        session({ id: 'a', host: 'old-mac', last_seen: ago(20) }),
+        session({ id: 'b', host: 'mac', last_seen: ago(2) })
+      ],
+      'nuc',
+      true,
+      NOW
+    );
+    expect(h).toMatchObject({ state: 'attended', host: 'mac' });
+  });
+});
+
+describe('pulse', () => {
+  it('is null before any event', () => {
+    expect(pulse(null, connection())).toBeNull();
+    expect(pulse([], connection())).toBeNull();
+  });
+
+  it('names a PR as #n with its state', () => {
+    expect(
+      pulse([event({ pr: 719, action: 'check_suite:success' })], connection())
+    ).toEqual({
+      subject: '#719',
+      what: 'checks passed',
+      at: NOW.getTime() - 5 * MIN
+    });
+  });
+
+  it('names a branch by its subject and an unknown action as it is', () => {
+    expect(
+      pulse(
+        [event({ pr: null, subject: 'branch/x', action: 'push' })],
+        connection()
+      )
+    ).toMatchObject({ subject: 'branch/x', what: 'push' });
+  });
+
+  it('takes the newest GitHub event', () => {
+    const p = pulse(
+      [
+        event({ pr: 1, updated_at: ago(20) }),
+        event({ pr: 2, updated_at: ago(3) }),
+        event({ pr: 3, updated_at: ago(9) })
+      ],
+      connection()
+    );
+    expect(p?.subject).toBe('#2');
+  });
+
+  it('is the issue event alone without GitHub events', () => {
+    const lastIssue = {
+      issue_id: 'uuid-1',
+      identifier: 'COD-5',
+      action: 'update',
+      updated_at: ago(2)
+    };
+    expect(pulse([], connection({ lastIssue }))).toEqual({
+      subject: 'COD-5',
+      what: 'update',
+      at: NOW.getTime() - 2 * MIN
+    });
+    expect(
+      pulse([], connection({ lastIssue: { ...lastIssue, identifier: null } }))
+        ?.subject
+    ).toBe('uuid-1');
+  });
+
+  it('picks the newer of the GitHub event and the issue event', () => {
+    const lastIssue = {
+      issue_id: 'uuid-1',
+      identifier: 'COD-5',
+      action: 'update',
+      updated_at: ago(2)
+    };
+    expect(
+      pulse([event({ updated_at: ago(5) })], connection({ lastIssue }))?.subject
+    ).toBe('COD-5');
+    expect(
+      pulse([event({ updated_at: ago(1) })], connection({ lastIssue }))?.subject
+    ).toBe('#10');
+  });
+
+  it('skips an issue event without a time', () => {
+    const lastIssue = {
+      issue_id: 'uuid-1',
+      identifier: 'COD-5',
+      action: 'update',
+      updated_at: ''
+    };
+    expect(pulse([event()], connection({ lastIssue }))?.subject).toBe('#10');
+    expect(pulse([], connection({ lastIssue }))).toBeNull();
+  });
+});
+
+describe('feed', () => {
+  const lastIssue = {
+    issue_id: 'uuid-1',
+    identifier: 'COD-5',
+    action: 'update',
+    updated_at: ago(2)
+  };
+
+  it('is empty before any event', () => {
+    expect(feed(null, connection())).toEqual([]);
+  });
+
+  it('holds the newest of each table, newest first', () => {
+    const rows = feed(
+      [
+        event({ pr: 1, updated_at: ago(9) }),
+        event({ pr: 2, updated_at: ago(5) })
+      ],
+      connection({ lastIssue })
+    );
+    expect(rows.map((r) => r.subject)).toEqual(['COD-5', '#2']);
+    expect(
+      feed([event({ updated_at: ago(1) })], connection({ lastIssue })).map(
+        (r) => r.subject
+      )
+    ).toEqual(['#10', 'COD-5']);
+  });
+
+  it('holds one row when only one table brought an event', () => {
+    expect(feed([], connection({ lastIssue }))).toHaveLength(1);
+    expect(feed([event()], connection())).toHaveLength(1);
+  });
+});
+
+describe('problems', () => {
+  const host = {
+    host: 'nuc',
+    at: NOW.getTime() - 2 * MIN,
+    ageMin: 2,
+    silentMin: 30
+  };
+  const base = {
+    connection: connection(),
+    runs: runs(ago(5), [run(ago(10), ago(8))]),
+    runMinutes: 10,
+    host,
+    sessions: null,
+    now: NOW
+  };
+
+  it('finds nothing when all is well', () => {
+    expect(problems(base)).toEqual([]);
+    expect(problems({ ...base, runs: null, host: null })).toEqual([]);
+  });
+
+  it('says Realtime is down, with the drop count when there is one', () => {
+    const none = problems({
+      ...base,
+      connection: connection({ live: false, downSince: NOW.getTime() - 60e3 })
+    });
+    expect(none).toHaveLength(1);
+    expect(none[0].kind).toBe('connection');
+    expect(none[0].text).toContain('not connected');
+    const dropped = problems({
+      ...base,
+      connection: connection({ live: false, retries: 3 })
+    });
+    expect(dropped[0].kind).toBe('connection');
+    expect(dropped[0].text).toContain('dropped 3×');
+  });
+
+  it('carries the connection details', () => {
+    const downSince = NOW.getTime() - 60e3;
+    const nextAt = NOW.getTime() + 15e3;
+    const [p] = problems({
+      ...base,
+      connection: connection({
+        live: false,
+        retries: 2,
+        downSince,
+        status: 'TIMED_OUT',
+        nextAt
+      })
+    });
+    expect(p).toMatchObject({
+      kind: 'connection',
+      since: downSince,
+      retries: 2,
+      status: 'TIMED_OUT',
+      nextAt
+    });
+  });
+
+  it('waits out the startup grace before saying Realtime is down', () => {
+    const down = (over: Partial<Connection>): Connection =>
+      connection({ live: false, ...over });
+    const kinds = (c: Connection) =>
+      problems({ ...base, connection: c }).map((p) => p.kind);
+    expect(kinds(down({ downSince: NOW.getTime() - 5e3 }))).toEqual([]);
+    expect(kinds(down({ downSince: NOW.getTime() - 10e3 }))).toEqual([
+      'connection'
+    ]);
+    expect(kinds(down({ downSince: NOW.getTime() - 1e3, retries: 1 }))).toEqual(
+      ['connection']
+    );
+    expect(kinds(down({ downSince: null }))).toEqual([]);
+    const unstamped = problems({
+      ...base,
+      connection: down({ downSince: null, retries: 1 })
+    });
+    expect(unstamped[0]).toMatchObject({ since: NOW.getTime() });
+  });
+
+  it('clears the connection problem when the channel is live again', () => {
+    expect(
+      problems({ ...base, connection: connection({ retries: 3 }) })
+    ).toEqual([]);
+  });
+
+  it('flags a queue_state view that does not parse', () => {
+    const out = problems({ ...base, runs: runs(ago(5), [], true) });
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe('data');
+    expect(out[0].text).toContain('does not parse');
+  });
+
+  it('carries the parse details and the kept view time', () => {
+    const issues = [{ path: 'table', missing: true }];
+    const bad: RunsPayload = {
+      ...runs(ago(5), [], true),
+      view: { limit: 1 },
+      viewIssues: issues,
+      qv: goodView(ago(30))
+    };
+    expect(problems({ ...base, runs: bad })).toEqual([
+      expect.objectContaining({
+        kind: 'data',
+        reason: 'parse',
+        since: Date.parse(ago(30)),
+        goodAt: Date.parse(ago(30)),
+        rowAt: Date.parse(ago(5)),
+        view: { limit: 1 },
+        issues
+      })
+    ]);
+    const none = problems({ ...base, runs: runs(ago(5), [], true) });
+    expect(none[0]).toMatchObject({
+      goodAt: null,
+      since: Date.parse(ago(5)),
+      rowAt: Date.parse(ago(5))
+    });
+  });
+
+  it('keys a problem by its kind, and a data problem by its reason', () => {
+    const at = ago(60);
+    const started = new Date(Date.parse(at) + 21 * MIN).toISOString();
+    const stale = problems({
+      ...base,
+      runs: runs(at, [run(started, started)])
+    });
+    const parse = problems({ ...base, runs: runs(ago(5), [], true) });
+    const down = problems({
+      ...base,
+      connection: connection({ live: false, retries: 1 })
+    });
+    expect([...down, ...parse, ...stale].map(problemKey)).toEqual([
+      'connection',
+      'data-parse',
+      'data-stale'
+    ]);
+  });
+
+  it('flags a second host that wrote the queue lately', () => {
+    const other = (min: number, paused = true) => ({
+      host: 'mbp',
+      at: ago(min),
+      paused
+    });
+    const out = problems({
+      ...base,
+      runs: { ...runs(ago(5), [run(ago(10), ago(8))]), others: [other(30)] }
+    });
+    expect(out).toEqual([
+      expect.objectContaining({
+        kind: 'data',
+        reason: 'writers',
+        used: 'nuc',
+        others: [{ host: 'mbp', at: Date.parse(ago(30)), paused: true }],
+        text: `Two hosts publish the queue: nuc (used) and mbp (paused, last ${hhmm(Date.parse(ago(30)))})`
+      })
+    ]);
+    expect(out.map(problemKey)).toEqual(['data-writers']);
+    expect(problems(base)).toEqual([]);
+  });
+
+  it('drops a cached second writer once it is older than the window', () => {
+    const out = problems({
+      ...base,
+      runs: {
+        ...runs(ago(5), [run(ago(10), ago(8))]),
+        others: [{ host: 'mbp', at: ago(121), paused: true }]
+      }
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('clears the parse problem when the row parses', () => {
+    expect(problems({ ...base, runs: runs(ago(5)) })).toEqual([]);
+  });
+
+  it('flags a queue_state row older than the newest run by more than two intervals', () => {
+    const at = ago(60);
+    const startedAt = (min: number): string =>
+      new Date(Date.parse(at) + min * MIN).toISOString();
+    const late = problems({
+      ...base,
+      runs: runs(at, [run(startedAt(21), startedAt(22))])
+    });
+    expect(late).toHaveLength(1);
+    expect(late[0].kind).toBe('data');
+    expect(late[0].text).toContain('older than the newest run');
+    expect(late[0]).toMatchObject({
+      reason: 'stale',
+      since: Date.parse(at),
+      newestRun: Date.parse(startedAt(21))
+    });
+    expect(
+      problems({
+        ...base,
+        runs: runs(at, [run(startedAt(20), startedAt(21))])
+      })
+    ).toEqual([]);
+  });
+
+  it('calls the state unknown when a session is alive and the NUC is silent', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive' })
+    };
+    const out = problems({
+      ...base,
+      runs: open,
+      host: { ...host, ageMin: 31 }
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe('unknown');
+    expect(out[0]).toMatchObject({
+      since: host.at,
+      host: 'nuc',
+      ticket: null,
+      silentMin: 30,
+      started: null
+    });
+    // A live host, no session or no host at all leaves it known
+    expect(problems({ ...base, runs: open, host })).toEqual([]);
+    expect(problems({ ...base, runs: open, host: null })).toEqual([]);
+    expect(problems({ ...base, host: { ...host, ageMin: 31 } })).toEqual([]);
+  });
+
+  it("ignores a silent NUC when the alive session is another host's", () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive', id: 's1' })
+    };
+    const silentHost = { ...host, ageMin: 31 };
+    const args = { ...base, runs: open, host: silentHost };
+    expect(
+      problems({ ...args, sessions: [session({ id: 's1', host: 'mac' })] })
+    ).toEqual([]);
+    expect(
+      problems({ ...args, sessions: [session({ id: 's1', host: 'nuc' })] })
+    ).toHaveLength(1);
+    // A session the rows do not know keeps the NUC's silence meaning
+    expect(
+      problems({ ...args, sessions: [session({ id: 's2', host: 'mac' })] })
+    ).toHaveLength(1);
+  });
+
+  it('drops the unknown state once the session has ended', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive', id: 's1' })
+    };
+    const args = { ...base, runs: open, host: { ...host, ageMin: 31 } };
+    expect(
+      problems({
+        ...args,
+        sessions: [session({ id: 's1', host: 'nuc', state: 'ended' })]
+      })
+    ).toEqual([]);
+    expect(
+      problems({
+        ...args,
+        sessions: [session({ id: 's1', host: 'nuc', state: 'alive' })]
+      })
+    ).toHaveLength(1);
+  });
+
+  it('drops the unknown state once an abandon is applied after the snapshot', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive', id: 's1' })
+    };
+    const args = { ...base, runs: open, host: { ...host, ageMin: 31 } };
+    const abandon = (appliedAt: string) => ({
+      id: 1,
+      at: appliedAt,
+      host: open.host,
+      kind: 'abandon',
+      args: {},
+      actor: 'mac',
+      status: 'applied',
+      applied_at: appliedAt,
+      note: null
+    });
+    expect(
+      problems({ ...args, sessions: [], deskCommands: [abandon(ago(1))] })
+    ).toEqual([]);
+    expect(
+      problems({ ...args, sessions: [], deskCommands: [abandon(ago(10))] })
+    ).toHaveLength(1);
+    // A paused tick republishes the same view with a newer row time; the view's own time counts
+    const republished = { ...open, at: ago(0) };
+    expect(
+      problems({
+        ...args,
+        runs: republished,
+        sessions: [],
+        deskCommands: [abandon(ago(1))]
+      })
+    ).toEqual([]);
+  });
+});
+
+describe('problems of an alive session', () => {
+  it('names the ticket and when its open run started', () => {
+    const host = {
+      host: 'nuc',
+      at: NOW.getTime() - 40 * MIN,
+      ageMin: 40,
+      silentMin: 30
+    };
+    const open: RunsPayload = {
+      ...runs(ago(50), [
+        { ...run(ago(45), null), ticket: 'COD-9' },
+        { ...run(ago(90), ago(80)), ticket: 'COD-9' }
+      ]),
+      qv: goodView(ago(50), { state: 'alive', ticket: 'COD-9' })
+    };
+    const out = problems({
+      connection: connection(),
+      runs: open,
+      runMinutes: 10,
+      host,
+      sessions: null,
+      now: NOW
+    });
+    expect(out[0]).toMatchObject({
+      kind: 'unknown',
+      ticket: 'COD-9',
+      started: Date.parse(ago(45))
+    });
+  });
+
+  it('clears when the host has a fresh sample', () => {
+    const open: RunsPayload = {
+      ...runs(ago(5)),
+      qv: goodView(ago(5), { state: 'alive' })
+    };
+    const host = { host: 'nuc', at: NOW.getTime(), ageMin: 0, silentMin: 30 };
+    expect(
+      problems({
+        connection: connection(),
+        runs: open,
+        runMinutes: 10,
+        host,
+        sessions: null,
+        now: NOW
+      })
+    ).toEqual([]);
+  });
+});
+
+describe('frozenAt', () => {
+  it('is the earliest since, null without problems', () => {
+    const at = (since: number): Problem => ({
+      kind: 'unknown',
+      text: '',
+      since,
+      host: 'nuc',
+      ticket: null,
+      silentMin: 30,
+      started: null
+    });
+    expect(frozenAt([at(300), at(100), at(200)])).toBe(100);
+    expect(frozenAt([])).toBeNull();
+  });
+
+  it('ignores a connection problem: a down channel lags, it does not freeze', () => {
+    const conn: Problem = {
+      kind: 'connection',
+      text: '',
+      since: 50,
+      retries: 1,
+      status: null,
+      nextAt: null
+    };
+    const data: Problem = {
+      kind: 'data',
+      reason: 'stale',
+      text: '',
+      since: 200,
+      newestRun: 300
+    };
+    expect(frozenAt([conn])).toBeNull();
+    expect(frozenAt([conn, data])).toBe(200);
+  });
+
+  it('ignores a second writer: the picked row is still current', () => {
+    const writers: Problem = {
+      kind: 'data',
+      reason: 'writers',
+      text: '',
+      since: 50,
+      used: 'nuc',
+      others: [{ host: 'mbp', at: 40, paused: true }]
+    };
+    expect(frozenAt([writers])).toBeNull();
+  });
+});
+
+describe('health', () => {
+  const fresh = (): Parameters<typeof health>[0] => ({
+    connection: connection(),
+    runs: runs(ago(5)),
+    staleHours: 2,
+    nuc: {
+      host: 'nuc',
+      at: NOW.getTime() - 2 * MIN,
+      silentMin: 30,
+      exposed: []
+    },
+    heartbeats: [],
+    events: [event()],
+    activity: [],
+    storedAt: NOW.getTime() - 3 * MIN,
+    now: NOW
+  });
+
+  const mac = (
+    ageMin: number,
+    state: string | null = 'working'
+  ): HostHeartbeat => ({
+    host: 'mac',
+    state,
+    ageMin
+  });
+
+  it('lists the checks in the order the Agent health view shows them', () => {
+    const checks = health({ ...fresh(), heartbeats: [mac(2)] });
+    expect(checks.map((c) => c.name)).toEqual([
+      'Realtime',
+      'queue_state parses',
+      'Snapshot age',
+      'nuc heartbeat',
+      'nuc credentials',
+      'mac heartbeat',
+      'github_events last event',
+      'Linear poll'
+    ]);
+  });
+
+  describe('deploy', () => {
+    const deploy = (over: Partial<DeployState> = {}): DeployState => ({
+      tag: 'sha-b',
+      previous: 'sha-a',
+      at: ago(10),
+      by: 'self',
+      phase: 'ok',
+      reason: null,
+      failed: null,
+      ...over
+    });
+    const find = (d: DeployState) =>
+      health({ ...fresh(), deploys: [{ host: 'nuc', deploy: d }] }).find(
+        (c) => c.name === 'nuc deploy'
+      );
+
+    it('lists a host deploy after the heartbeats', () => {
+      const names = health({
+        ...fresh(),
+        deploys: [{ host: 'nuc', deploy: deploy() }]
+      }).map((c) => c.name);
+      expect(names).toEqual([
+        'Realtime',
+        'queue_state parses',
+        'Snapshot age',
+        'nuc heartbeat',
+        'nuc credentials',
+        'nuc deploy',
+        'github_events last event',
+        'Linear poll'
+      ]);
+    });
+
+    it('is ok with the tag, who deployed and when', () => {
+      expect(find(deploy())).toEqual({
+        name: 'nuc deploy',
+        ok: true,
+        at: Date.parse(ago(10)),
+        note: 'sha-b · by self'
+      });
+      expect(find(deploy({ by: 'mac' }))?.note).toBe('sha-b · by Mac');
+    });
+
+    it('says it is checking the first run', () => {
+      const c = find(deploy({ phase: 'checking' }));
+      expect(c?.ok).toBe(true);
+      expect(c?.note).toBe('sha-b · by self · checking first run');
+    });
+
+    it('fails on a rollback, naming both tags and the reason', () => {
+      const c = find(
+        deploy({
+          phase: 'rolled-back',
+          tag: 'sha-a',
+          previous: 'sha-b',
+          failed: 'sha-b',
+          reason: 'health check failed'
+        })
+      );
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('Rolled back sha-b to sha-a: health check failed');
+    });
+
+    it('fails when it is stuck with nothing to roll back to', () => {
+      const c = find(deploy({ phase: 'stuck', reason: 'not running' }));
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe(
+        'sha-b failed its check and was not rolled back: not running'
+      );
+    });
+  });
+
+  it('is ok throughout when everything is fresh, with nothing to note', () => {
+    const checks = health({ ...fresh(), heartbeats: [mac(2)] });
+    expect(checks.every((c) => c.ok)).toBe(true);
+    expect(checks.every((c) => c.at !== null)).toBe(true);
+    expect(checks.filter((c) => c.note !== null).map((c) => c.name)).toEqual([
+      'nuc credentials'
+    ]);
+  });
+
+  describe('credentials', () => {
+    const find = (exposed?: readonly string[] | null) =>
+      health({
+        ...fresh(),
+        nuc: {
+          host: 'nuc',
+          at: NOW.getTime() - 2 * MIN,
+          silentMin: 30,
+          exposed
+        }
+      }).find((c) => c.name === 'nuc credentials');
+
+    it('is ok for an empty list, dated from the sample', () => {
+      expect(find([])).toEqual({
+        name: 'nuc credentials',
+        ok: true,
+        at: NOW.getTime() - 2 * MIN,
+        note: "no write credential in the agent's environment"
+      });
+    });
+
+    it('fails with the names when something is exposed', () => {
+      const c = find(['GH_TOKEN', 'claude as agent (pid 42)']);
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('exposed: GH_TOKEN, claude as agent (pid 42)');
+    });
+
+    it('fails when the sample does not report it', () => {
+      const c = find(null);
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('not reported');
+    });
+
+    it('reads a row from before the column like a missing report', () => {
+      const c = find(undefined);
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('not reported');
+    });
+  });
+
+  it('fails each check that is stale, and says why', () => {
+    const checks = health({
+      connection: connection({ live: false, upSince: null, retries: 2 }),
+      runs: runs(ago(180), [], true),
+      staleHours: 2,
+      nuc: {
+        host: 'nuc',
+        at: NOW.getTime() - 45 * MIN,
+        silentMin: 30,
+        exposed: ['GH_TOKEN']
+      },
+      heartbeats: [mac(31)],
+      events: [],
+      activity: [{ pr: 7, ticket: 'COD-1', at: NOW.getTime() - 10 * MIN }],
+      storedAt: NOW.getTime() - 20 * MIN,
+      now: NOW
+    });
+    expect(
+      Object.fromEntries(checks.map((c) => [c.name, [c.ok, c.note]]))
+    ).toEqual({
+      Realtime: [false, 'dropped 2×'],
+      'queue_state parses': [false, 'does not parse'],
+      'Snapshot age': [false, 'older than 2 h'],
+      'nuc heartbeat': [false, 'no sample for 45 m, limit 30 m'],
+      'nuc credentials': [false, 'exposed: GH_TOKEN'],
+      'mac heartbeat': [
+        false,
+        'no heartbeat for 31 m while a turn was running'
+      ],
+      'github_events last event': [
+        false,
+        `PR #7 (COD-1) changed ${dayTime(NOW.getTime() - 10 * MIN, NOW.getTime())}, newest webhook event never`
+      ],
+      'Linear poll': [false, 'last stored 20 m ago, limit 15 m']
+    });
+    expect(checks.find((c) => c.name === 'github_events last event')?.at).toBe(
+      null
+    );
+  });
+
+  it('keeps Realtime ok within the connect grace, as the problems do', () => {
+    const grace = connection({ live: false, downSince: NOW.getTime() - 1000 });
+    const [rt] = health({ ...fresh(), connection: grace });
+    expect(rt.ok).toBe(true);
+    expect(problems({ ...problemArgs(), connection: grace })).toEqual([]);
+  });
+
+  it('fails what has no data yet', () => {
+    const checks = health({
+      ...fresh(),
+      runs: null,
+      nuc: null,
+      events: null,
+      storedAt: null
+    });
+    expect(checks.map((c) => [c.name, c.ok])).toEqual([
+      ['Realtime', true],
+      ['queue_state parses', false],
+      ['Snapshot age', false],
+      ['github_events last event', false],
+      ['Linear poll', false]
+    ]);
+  });
+
+  it('says not loaded when github_events could not be read', () => {
+    const check = health({ ...fresh(), events: null }).find(
+      (c) => c.name === 'github_events last event'
+    );
+    expect(check).toMatchObject({ ok: false, at: null, note: 'not loaded' });
+  });
+
+  it('dates a host heartbeat from its newest row', () => {
+    const macCheck = health({ ...fresh(), heartbeats: [mac(10)] }).find(
+      (c) => c.name === 'mac heartbeat'
+    );
+    expect(macCheck?.ok).toBe(true);
+    expect(macCheck?.at).toBe(NOW.getTime() - 10 * MIN);
+  });
+});
+
+describe('missedEvent', () => {
+  const at = (min: number) => NOW.getTime() - min * MIN;
+  const pr = (n: number, min: number): PrActivity => ({
+    pr: n,
+    ticket: `COD-${n}`,
+    at: at(min)
+  });
+  const check = (
+    events: GithubEventRow[],
+    activity: PrActivity[]
+  ): ReturnType<typeof missedEvent> =>
+    missedEvent(events, activity, NOW.getTime());
+
+  it('passes a quiet day with no activity, and says quiet', () => {
+    expect(check([event({ updated_at: ago(30 * 60) })], [])).toEqual({
+      ok: true,
+      at: at(30 * 60),
+      note: 'quiet'
+    });
+  });
+
+  it('passes a recent event with nothing to note', () => {
+    expect(check([event()], [pr(1, 60)])).toEqual({
+      ok: true,
+      at: at(5),
+      note: null
+    });
+  });
+
+  it('fails when a PR changed after the newest event, beyond the grace', () => {
+    const late = WEBHOOK_GRACE_MIN + 1;
+    expect(
+      check([event({ updated_at: ago(120) })], [pr(1, 200), pr(2, 120 - late)])
+    ).toEqual({
+      ok: false,
+      at: at(120),
+      note: `PR #2 (COD-2) changed ${dayTime(at(120 - late), NOW.getTime())}, newest webhook event ${dayTime(at(120), NOW.getTime())}`
+    });
+  });
+
+  it('dates a newest event from an earlier day', () => {
+    const out = check([event({ updated_at: ago(3 * 24 * 60) })], [pr(1, 30)]);
+    expect(out.note).toContain(
+      `newest webhook event ${dayLabel(dayKey(at(3 * 24 * 60)))} ${hhmm(at(3 * 24 * 60))}`
+    );
+  });
+
+  it('names the newest missed PR', () => {
+    const out = check(
+      [event({ updated_at: ago(120) })],
+      [pr(1, 60), pr(2, 30)]
+    );
+    expect(out.note).toMatch(/^PR #2 \(COD-2\)/);
+  });
+
+  it('passes activity within the grace of the newest event', () => {
+    expect(
+      check([event({ updated_at: ago(120) })], [pr(1, 120 - WEBHOOK_GRACE_MIN)])
+        .ok
+    ).toBe(true);
+  });
+
+  it('passes activity older than the newest event, and reads quiet past a day', () => {
+    expect(
+      check([event({ updated_at: ago(26 * 60) })], [pr(1, 30 * 60)])
+    ).toEqual({ ok: true, at: at(26 * 60), note: 'quiet' });
+  });
+
+  it('passes no events without activity, and fails no events with activity', () => {
+    expect(check([], [])).toEqual({ ok: true, at: null, note: 'quiet' });
+    expect(check([], [pr(3, 600)])).toEqual({
+      ok: false,
+      at: null,
+      note: `PR #3 (COD-3) changed ${dayTime(at(600), NOW.getTime())}, newest webhook event never`
+    });
+  });
+
+  it('reads quiet through health() before any details load', () => {
+    const row = health({
+      connection: connection(),
+      runs: runs(ago(5)),
+      staleHours: 2,
+      nuc: null,
+      heartbeats: [],
+      events: [],
+      activity: [],
+      storedAt: NOW.getTime(),
+      now: NOW
+    }).find((c) => c.name === 'github_events last event');
+    expect(row).toMatchObject({ ok: true, note: 'quiet' });
+  });
+});
+
+const problemArgs = (): Parameters<typeof problems>[0] => ({
+  connection: connection(),
+  runs: runs(ago(5)),
+  runMinutes: 10,
+  host: null,
+  sessions: [],
+  now: NOW
+});
+
+describe('hostHeartbeats', () => {
+  it("takes each host's newest row, ended included, and leaves the NUC out", () => {
+    const out = hostHeartbeats(
+      [
+        session({ id: 'a', state: 'working', last_seen: ago(50) }),
+        session({ id: 'b', state: 'ended', last_seen: ago(5) }),
+        session({ id: 'c', host: 'nuc', kind: 'implement', last_seen: ago(1) }),
+        session({
+          id: 'd',
+          host: 'laptop',
+          state: 'stopped',
+          last_seen: ago(9)
+        })
+      ],
+      'nuc',
+      NOW
+    );
+    expect(out).toEqual([
+      { host: 'mac', state: 'ended', ageMin: 5 },
+      { host: 'laptop', state: 'stopped', ageMin: 9 }
+    ]);
+  });
+
+  it('is empty without rows', () => {
+    expect(hostHeartbeats(null, 'nuc', NOW)).toEqual([]);
+  });
+});
+
+describe('heartbeatOk', () => {
+  const at = (state: string | null, ageMin: number) =>
+    heartbeatOk({ host: 'mac', state, ageMin });
+  const OLD = SESSION_HANDBACK_MIN + 1;
+
+  it('passes a host whose newest session ended, at any age', () => {
+    expect(at('ended', 1)).toEqual({ ok: true, note: 'no session' });
+    expect(at('ended', 600)).toEqual({ ok: true, note: 'no session' });
+  });
+
+  it('passes a session idle at its prompt, however quiet', () => {
+    for (const state of ['stopped', 'waiting', 'polling'])
+      expect(at(state, 600)).toEqual({ ok: true, note: 'idle' });
+  });
+
+  it('passes a working session within the window and fails one quiet past it', () => {
+    expect(at('working', SESSION_HANDBACK_MIN)).toEqual({
+      ok: true,
+      note: null
+    });
+    expect(at('working', OLD)).toEqual({
+      ok: false,
+      note: `no heartbeat for ${OLD} m while a turn was running`
+    });
+  });
+
+  it('reads a row without a state as ended once it is old', () => {
+    expect(at(null, 5)).toEqual({ ok: true, note: null });
+    expect(at(null, OLD)).toEqual({ ok: true, note: 'no session' });
+  });
+});
+
+describe('checkProblems', () => {
+  const failing = (name: CheckName): HealthCheck => ({
+    name,
+    ok: false,
+    at: NOW.getTime() - 40 * MIN,
+    note: `${name} broke`
+  });
+
+  // Every name health() can emit, a NUC and another host included
+  const NAMES: CheckName[] = [
+    'Realtime',
+    'queue_state parses',
+    'Snapshot age',
+    'nuc heartbeat',
+    'nuc credentials',
+    'mac heartbeat',
+    'nuc deploy',
+    'github_events last event',
+    'Linear poll'
+  ];
+
+  it('gives every failing check a problem', () => {
+    for (const name of NAMES) {
+      const found: Problem[] = [];
+      const all = [...found, ...checkProblems([failing(name)], found)];
+      expect(problemOf(all, name), name).toBeDefined();
+    }
+  });
+
+  it('adds a check problem only where no other problem explains the check', () => {
+    const down = problems({
+      ...problemArgs(),
+      connection: connection({
+        live: false,
+        retries: 1,
+        downSince: NOW.getTime()
+      })
+    });
+    const out = checkProblems(
+      [failing('Realtime'), failing('mac heartbeat')],
+      down
+    );
+    expect(out).toEqual([
+      {
+        kind: 'check',
+        name: 'mac heartbeat',
+        text: 'mac heartbeat broke',
+        since: NOW.getTime() - 40 * MIN
+      }
+    ]);
+  });
+
+  it('keeps a check that was never true without a since', () => {
+    const [p] = checkProblems([{ ...failing('Linear poll'), at: null }], []);
+    expect(p).toMatchObject({ kind: 'check', since: null });
+  });
+
+  it('leaves passing checks alone', () => {
+    expect(
+      checkProblems([{ ...failing('Linear poll'), ok: true }], [])
+    ).toEqual([]);
+  });
+
+  it('never freezes the numbers', () => {
+    expect(frozenAt(checkProblems([failing('Linear poll')], []))).toBe(null);
+  });
+});

@@ -184,7 +184,9 @@ export const SocialLinks: React.FC<SocialLinksProps> = ({
                       />
                     )}
                     {item.withLabel && (
-                      <span>
+                      // Below `sm` only the icon shows, and the label stays
+                      // the button's accessible name
+                      <span className="sr-only sm:not-sr-only">
                         {isCopied ? t(locale, 'social.copied') : item.label}
                       </span>
                     )}

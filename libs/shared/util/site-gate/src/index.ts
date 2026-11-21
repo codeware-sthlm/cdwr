@@ -1,4 +1,5 @@
 export { resolveReturnPath } from './lib/return-path';
+export { SITE_GATE_FIELD_ID } from './lib/site-gate-field';
 export { isSecureRequest } from './lib/secure-request';
 export {
   SITE_GATE_COOKIE,

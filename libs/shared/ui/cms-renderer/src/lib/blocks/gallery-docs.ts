@@ -4,12 +4,14 @@ import { aboutGallery } from './about/AboutBlock.gallery';
 import { calloutGallery } from './callout/CalloutBlock.gallery';
 import { cardGallery } from './card/CardBlock.gallery';
 import { codeGallery } from './code/CodeBlock.gallery';
+import { comingSoonGallery } from './coming-soon/ComingSoonBlock.gallery';
 import { contentGallery } from './content/ContentBlock.gallery';
 import { customComponentGallery } from './custom-component/CustomComponentBlock.gallery';
 import { featureCardsGallery } from './feature-cards/FeatureCardsBlock.gallery';
 import { featureSectionGallery } from './feature-section/FeatureSectionBlock.gallery';
 import { fileAreaGallery } from './file-area/FileAreaBlock.gallery';
 import { formGallery } from './form/FormBlock.gallery';
+import { galleryGallery } from './gallery/GalleryBlock.gallery';
 import type { AnyBlockGalleryDoc } from './gallery-doc';
 import { heroGallery } from './hero/HeroBlock.gallery';
 import { imageGallery } from './image/ImageBlock.gallery';
@@ -40,12 +42,14 @@ export const galleryDocs: Partial<Record<BlockSlug, AnyBlockGalleryDoc>> = {
   callout: calloutGallery,
   card: cardGallery,
   code: codeGallery,
+  'coming-soon': comingSoonGallery,
   content: contentGallery,
   'custom-component': customComponentGallery,
   'feature-cards': featureCardsGallery,
   'file-area': fileAreaGallery,
   form: formGallery,
   'feature-section': featureSectionGallery,
+  gallery: galleryGallery,
   hero: heroGallery,
   image: imageGallery,
   'pill-list': pillListGallery,

@@ -7,11 +7,12 @@ import { LivePreview } from '../../../../components/LivePreview.client';
 
 type Props = {
   tour: Tour;
+  live: boolean;
 };
 
-export function TourPreview({ tour }: Props) {
+export function TourPreview({ tour, live }: Props) {
   return (
-    <LivePreview initialData={tour} depth={1}>
+    <LivePreview initialData={tour} depth={1} enabled={live}>
       {(data) => <RenderTour tour={data} />}
     </LivePreview>
   );

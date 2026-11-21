@@ -4,10 +4,12 @@ import {
   ClipboardDocumentListIcon,
   CodeBracketSquareIcon,
   Cog6ToothIcon,
+  CpuChipIcon,
   DocumentIcon,
   DocumentTextIcon,
   FolderIcon,
   InboxIcon,
+  KeyIcon,
   MapIcon,
   MapPinIcon,
   PaintBrushIcon,
@@ -26,12 +28,14 @@ import {
 import type { IconComponent } from './types';
 
 const SLUG_ICON: Record<CollectionSlug, IconComponent> = {
+  agents: CpuChipIcon,
   categories: RectangleGroupIcon,
   'custom-components': CodeBracketSquareIcon,
   'custom-themes': PaintBrushIcon,
   faq: QuestionMarkCircleIcon,
   forms: ClipboardDocumentListIcon,
   'form-submissions': InboxIcon,
+  'invite-codes': KeyIcon,
   pages: DocumentIcon,
   places: MapPinIcon,
   'platform-labels': SwatchIcon,

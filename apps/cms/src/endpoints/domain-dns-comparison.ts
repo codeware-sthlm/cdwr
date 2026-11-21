@@ -14,7 +14,7 @@ import {
   headersWithCors
 } from 'payload';
 
-type Body = { hostname?: unknown; isApex?: unknown };
+type Body = { hostname?: unknown };
 
 const fail = (status: StatusCodes, message?: string) =>
   Response.json({ error: message ?? getReasonPhrase(status) }, { status });
@@ -23,8 +23,8 @@ const fail = (status: StatusCodes, message?: string) =>
  * What the public resolvers currently say about a domain, side by side.
  *
  * Kept apart from the certificate endpoint on purpose. That one talks to Fly
- * and answers in well under a second; this one waits on three dns queries and
- * an SOA lookup, and can be slow for reasons that have nothing to do with the
+ * and answers in well under a second; this one waits on a dozen dns queries,
+ * an SOA walk and a name-server lookup, and can be slow for reasons that have nothing to do with the
  * domain. Folding them together would make a sluggish resolver look like a
  * broken Fly check, which is the opposite of what this is for.
  *
@@ -52,13 +52,7 @@ export const domainDnsComparisonEndpoint: Endpoint = {
     let comparison: ResolverComparison;
 
     try {
-      // Strict, because the body is `unknown`: `Boolean('false')` is true, and
-      // a wrong answer here silently swaps CNAME for A and reports on a record
-      // the domain was never asked about
-      comparison = await compareResolvers(
-        parsed.hostname,
-        body.isApex === true
-      );
+      comparison = await compareResolvers(parsed.hostname);
     } catch (error) {
       // Every per-resolver failure is already reported inside the comparison,
       // so reaching here means something broader — no outbound dns at all,

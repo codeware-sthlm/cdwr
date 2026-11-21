@@ -35,6 +35,11 @@
       "@codeware/app-cms/feature/seed": [
         "./libs/app-cms/feature/seed/src/index.ts"
       ],
+      "@codeware/app-cms/feature/site-stats": [
+        "./libs/app-cms/feature/site-stats/src/index.ts"
+      ],
+      "@codeware/app-cms/ui/auth": ["./libs/app-cms/ui/auth/src/index.ts"],
+      "@codeware/app-cms/ui/auth/*": ["./libs/app-cms/ui/auth/src/lib/*"],
       "@codeware/app-cms/ui/blocks": ["./libs/app-cms/ui/blocks/src/index.ts"],
       "@codeware/app-cms/ui/blocks/*": ["./libs/app-cms/ui/blocks/src/lib/*"],
       "@codeware/app-cms/ui/components": [
@@ -104,6 +109,21 @@
       "@codeware/app-cms/util/tour-signups": [
         "./libs/app-cms/util/tour-signups/src/index.ts"
       ],
+      "@codeware/app-headless/data-access": [
+        "./libs/app-headless/data-access/src/index.ts"
+      ],
+      "@codeware/app-headless/feature/security": [
+        "./libs/app-headless/feature/security/src/index.ts"
+      ],
+      "@codeware/app-headless/util/env-schema": [
+        "./libs/app-headless/util/env-schema/src/index.ts"
+      ],
+      "@codeware/app-headless/util/routing": [
+        "./libs/app-headless/util/routing/src/index.ts"
+      ],
+      "@codeware/app-headless/util/seo": [
+        "./libs/app-headless/util/seo/src/index.ts"
+      ],
       "@codeware/apps/cms/components/*": ["./apps/cms/src/components/*"],
       "@codeware/e2e/utils": ["./e2e/utils/index.ts"],
       "@codeware/shared/feature/infisical": [
@@ -149,6 +169,9 @@
       "@codeware/shared/ui/shadcn/*": ["./libs/shared/ui/shadcn/src/lib/*"],
       "@codeware/shared/ui/theme-studio": [
         "./libs/shared/ui/theme-studio/src/index.ts"
+      ],
+      "@codeware/shared/util/agent-review": [
+        "./libs/shared/util/agent-review/src/index.ts"
       ],
       "@codeware/shared/util/github": [
         "./libs/shared/util/github/src/index.ts"
@@ -196,6 +219,9 @@
       "@codeware/shared/util/signature": [
         "./libs/shared/util/signature/src/index.ts"
       ],
+      "@codeware/shared/util/invite-code": [
+        "./libs/shared/util/invite-code/src/index.ts"
+      ],
       "@codeware/shared/util/site-gate": [
         "./libs/shared/util/site-gate/src/index.ts"
       ],
@@ -206,6 +232,7 @@
         "./libs/shared/util/typesafe/src/index.ts"
       ],
       "@codeware/shared/util/ui": ["./libs/shared/util/ui/src/index.ts"],
+      "@codeware/shared/util/umami": ["./libs/shared/util/umami/src/index.ts"],
       "@codeware/shared/util/zod": ["./libs/shared/util/zod/src/index.ts"],
       "@payload-config": ["./apps/cms/src/payload.config.ts"],
       "dev-plugin": ["./tools/dev-plugin/src/index.ts"]

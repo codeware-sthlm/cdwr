@@ -355,6 +355,191 @@ describe('preDeploy', () => {
     });
   });
 
+  describe('preview companions', () => {
+    const withPreview = (name: string, previewWith: Array<string>) => ({
+      ...deployable(name),
+      githubConfig: { previewWith }
+    });
+    const skipped = (name: string, reason: string) => ({
+      projectName: name,
+      status: 'skip' as const,
+      reason
+    });
+
+    /** First call analyzes the apps, the second the companions */
+    const mockAnalyze = (
+      first: Array<ReturnType<typeof deployable | typeof skipped>>,
+      second: Array<ReturnType<typeof deployable | typeof skipped>> = []
+    ) =>
+      mockAnalyzeAppsToDeploy
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second);
+
+    it('should add the host app in preview when the app deploys', async () => {
+      mockAnalyze([withPreview('headless', ['cms'])], [deployable('cms')]);
+      mockFetchDeployments
+        .mockResolvedValueOnce({
+          deployments: { headless: [{ tenant: 'acme' }] },
+          skipped: []
+        })
+        .mockResolvedValueOnce({
+          deployments: { cms: [{}] },
+          skipped: []
+        });
+
+      setContext('pull-request');
+      const result = await preDeploy(
+        setupTest({ ...infisicalInputs, prNumber: '12' }),
+        true
+      );
+
+      expect(result.apps.map((a) => a.name)).toEqual(['headless', 'cms']);
+      expect(result.appTenants).toEqual({
+        headless: [{ tenant: 'acme' }],
+        cms: [{}]
+      });
+      expect(mockAnalyzeAppsToDeploy).toHaveBeenLastCalledWith(
+        'preview',
+        'preview.12',
+        ['cms'],
+        12,
+        'main'
+      );
+      expect(mockFetchDeployments).toHaveBeenLastCalledWith(expect.anything(), [
+        'cms'
+      ]);
+      expect(mockCoreInfo).toHaveBeenCalledWith(
+        'Deploy: cms @ 1.0.0 (preview beside headless)'
+      );
+      expect(mockFetchAppSentry).toHaveBeenCalledWith(expect.anything(), [
+        'headless',
+        'cms'
+      ]);
+    });
+
+    it('should not add the host app in production', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        withPreview('headless', ['cms'])
+      ]);
+      mockDeployments({ headless: [{ tenant: 'acme' }] });
+
+      setContext('push-main-branch');
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['headless']);
+      expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledTimes(1);
+      expect(mockFetchDeployments).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not add the host app when it is already deploying', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        withPreview('headless', ['cms']),
+        deployable('cms')
+      ]);
+      mockDeployments({ headless: [{ tenant: 'acme' }], cms: [{}] });
+
+      setContext('pull-request');
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['headless', 'cms']);
+      expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledTimes(1);
+      expect(mockFetchDeployments).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not add the host app when the app has no deployment', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        withPreview('headless', ['cms'])
+      ]);
+      mockDeployments({ headless: [] });
+
+      setContext('pull-request');
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps).toEqual([]);
+      expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not add the host app on a manual app run', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([
+        withPreview('headless', ['cms'])
+      ]);
+      mockDeployments({ headless: [{ tenant: 'acme' }] });
+
+      setContext('pull-request');
+      const result = await preDeploy(
+        setupTest({ ...infisicalInputs, manualApp: 'headless' }),
+        true
+      );
+
+      expect(result.apps.map((a) => a.name)).toEqual(['headless']);
+      expect(mockAnalyzeAppsToDeploy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should keep only the host entry with a manual tenant', async () => {
+      mockAnalyze([withPreview('headless', ['cms'])], [deployable('cms')]);
+      mockFetchDeployments
+        .mockResolvedValueOnce({
+          deployments: {
+            headless: [{ tenant: 'acme' }, { tenant: 'other' }]
+          },
+          skipped: []
+        })
+        .mockResolvedValueOnce({
+          deployments: { cms: [{}, { tenant: 'acme' }] },
+          skipped: []
+        });
+
+      setContext('pull-request');
+      const result = await preDeploy(
+        setupTest({ ...infisicalInputs, manualTenant: 'acme' }),
+        true
+      );
+
+      expect(result.appTenants).toEqual({
+        headless: [{ tenant: 'acme' }],
+        cms: [{}]
+      });
+    });
+
+    it('should drop a companion without a host entry with a warning', async () => {
+      mockAnalyze([withPreview('headless', ['cms'])], [deployable('cms')]);
+      mockFetchDeployments
+        .mockResolvedValueOnce({
+          deployments: { headless: [{ tenant: 'acme' }] },
+          skipped: []
+        })
+        .mockResolvedValueOnce({
+          deployments: { cms: [{ tenant: 'acme' }] },
+          skipped: []
+        });
+
+      setContext('pull-request');
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['headless']);
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        expect.stringContaining('Skip: cms - no host deployment enabled')
+      );
+    });
+
+    it('should warn, not fail, when a companion is skipped', async () => {
+      mockAnalyze(
+        [withPreview('headless', ['cms'])],
+        [skipped('cms', 'Deployment is disabled')]
+      );
+      mockDeployments({ headless: [{ tenant: 'acme' }] });
+
+      setContext('pull-request');
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.apps.map((a) => a.name)).toEqual(['headless']);
+      expect(mockCoreWarning).toHaveBeenCalledWith(
+        'Skip: cms - Deployment is disabled'
+      );
+      expect(core.setFailed).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deployment discovery', () => {
     it('should fail when credentials are missing and there is something to deploy', async () => {
       mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
@@ -514,7 +699,7 @@ describe('preDeploy', () => {
         web: [
           {},
           { tenant: 'acme', env: { PUBLIC_URL: 'https://acme.com' } },
-          { tenant: 'demo', secrets: { API_KEY: 'secret' } }
+          { tenant: 'demo', secretNames: ['API_KEY'] }
         ],
         cms: [{ tenant: 'demo' }]
       });
@@ -522,6 +707,22 @@ describe('preDeploy', () => {
       expect(mockCoreInfo).toHaveBeenCalledWith(
         'Deploy web to: <host>, acme, demo'
       );
+    });
+
+    it('should output secret names sorted and never a secret value', async () => {
+      mockAnalyzeAppsToDeploy.mockResolvedValue([deployable('web')]);
+      mockDeployments({
+        web: [
+          { tenant: 'demo', secrets: { ZED: 'value-z', API_KEY: 'value-a' } }
+        ]
+      });
+
+      const result = await preDeploy(setupTest(infisicalInputs), true);
+
+      expect(result.appTenants).toEqual({
+        web: [{ tenant: 'demo', secretNames: ['API_KEY', 'ZED'] }]
+      });
+      expect(JSON.stringify(result)).not.toContain('value-');
     });
 
     it('should deploy a host-only app with a single host entry', async () => {

@@ -18,10 +18,11 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
   body,
   image,
   illustration,
+  showLink,
   link
 }) => {
   const { navigate, iconConfig } = usePayload();
-  const resolved = resolveLinkGroup(link);
+  const resolved = link ? resolveLinkGroup(link) : null;
   // An id alone is an unpopulated relation, which ImageBlock renders as nothing
   const shownImage = image && typeof image === 'object' ? image : null;
   // Whitespace left in a cleared field is not a drawing
@@ -59,7 +60,8 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
             {body}
           </p>
         )}
-        {resolved && (
+        {/* A row from before `showLink` existed has no value and keeps its button */}
+        {showLink !== false && resolved && (
           <div className="mt-8">
             <Button onClick={() => navigate(resolved.path, resolved.newTab)}>
               {resolved.label}

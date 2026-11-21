@@ -1,0 +1,75 @@
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  type DocumentSeo
+} from '@codeware/shared/util/payload-utils';
+
+type MetaTag =
+  | { title: string }
+  | { name: string; content: string }
+  | { property: string; content: string };
+
+type LinkTag = { rel: string; href: string };
+
+/** An address a crawler can fetch: relative ones are taken from the given base */
+const absolute = (url: string, base: string | undefined): string => {
+  if (!base) {
+    return url;
+  }
+  try {
+    return new URL(url, base).toString();
+  } catch {
+    return url;
+  }
+};
+
+/**
+ * A document's head as router tags: the title in the site's own form, the
+ * description, the canonical link and the shared-link card.
+ *
+ * The rules are `documentSeo`'s, the ones the cms site renders through Next
+ * metadata, so a page reads the same on both clients. The title follows the
+ * cms's template, `<page> · <site>`; an absolute title stands alone.
+ *
+ * @param seo - What `documentSeo` made of the document
+ * @param siteName - The tenant's app name, the title template's second half
+ * @param origin - The site's own origin, the base of a relative image when no media host is given
+ * @param mediaUrl - The cms url, which serves uploads: a relative image is taken from it
+ */
+export function seoHead(
+  seo: DocumentSeo,
+  siteName: string,
+  origin?: string,
+  mediaUrl?: string
+): { meta: Array<MetaTag>; links: Array<LinkTag> } {
+  const { title, description, canonical, openGraph, twitterCard } = seo;
+  const fullTitle = !title
+    ? siteName
+    : title.absolute
+      ? title.text
+      : `${title.text} · ${siteName}`;
+
+  const property = (name: string, content: string | undefined) =>
+    content ? [{ property: `og:${name}`, content }] : [];
+  // Headless draws no default card, so a page without an image of its own
+  // gets none rather than a link that 404s
+  const image =
+    openGraph.image === DEFAULT_OG_IMAGE_PATH
+      ? undefined
+      : absolute(openGraph.image, mediaUrl ?? origin);
+
+  return {
+    meta: [
+      { title: fullTitle },
+      ...(description ? [{ name: 'description', content: description }] : []),
+      ...property('type', openGraph.type),
+      ...property('site_name', openGraph.siteName),
+      ...property('locale', openGraph.locale),
+      ...property('title', openGraph.title ?? fullTitle),
+      ...property('description', openGraph.description),
+      ...property('image', image),
+      ...(canonical ? property('url', canonical) : []),
+      { name: 'twitter:card', content: image ? twitterCard : 'summary' }
+    ],
+    links: canonical ? [{ rel: 'canonical', href: canonical }] : []
+  };
+}

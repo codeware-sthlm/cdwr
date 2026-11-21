@@ -35,10 +35,12 @@ export type CertificateState = {
    */
   issuedCertificates: Array<{ type: string; expiresAt: string }>;
   /**
-   * The addresses an apex domain's A and AAAA records should point at.
+   * The app's addresses, which an A or AAAA record for the domain points at.
    *
-   * Empty for anything but an apex, which uses a CNAME instead. Always an
-   * array, never null, for the reason given on `issuedCertificates`.
+   * An apex has to use them. A subdomain normally uses a CNAME instead, but
+   * may point A and AAAA here too, which Fly accepts. Empty for a row stored
+   * before subdomains kept them. Always an array, never null, for the reason
+   * given on `issuedCertificates`.
    */
   addresses: Array<{ type: 'A' | 'AAAA'; address: string }>;
 };
@@ -75,7 +77,7 @@ const toAddressRecords = (
  *
  * @param certificate - What Fly returned, or `null` when none exists yet
  * @param now - Injectable clock, so a test can assert the stamp
- * @param addresses - The app's addresses, kept only for an apex certificate
+ * @param addresses - The app's addresses
  */
 export const toCertificateState = (
   certificate: Certificate | null,
@@ -127,7 +129,7 @@ export const toCertificateState = (
     // Both halves have to be there to be worth a row: a type with no expiry
     // says nothing the status line does not already say
     issuedCertificates: issued,
-    addresses: certificate.isApex ? toAddressRecords(addresses) : []
+    addresses: toAddressRecords(addresses)
   };
 };
 

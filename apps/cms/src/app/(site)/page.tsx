@@ -1,4 +1,5 @@
 import { getPage, getPageData } from '@codeware/app-cms/data-access';
+import { docMeta } from '@codeware/shared/util/payload-utils';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -22,9 +23,12 @@ export async function generateMetadata(): Promise<Metadata> {
   );
 
   return page
-    ? documentMetadata(page, {
+    ? documentMetadata(docMeta({ collection: 'pages', doc: page }), {
         landing: true,
-        siteName: runtime.tenantConfig?.appName
+        siteName: runtime.tenantConfig?.appName,
+        origin: runtime.payload.config.serverURL,
+        path: '/',
+        locale: runtime.tenantConfig?.locale
       })
     : {};
 }
@@ -46,6 +50,10 @@ export default async function SiteIndexPage() {
   }
 
   return (
-    <LandingPagePreview landingPage={data.page} blocksData={data.blocksData} />
+    <LandingPagePreview
+      landingPage={data.page}
+      blocksData={data.blocksData}
+      live={draft}
+    />
   );
 }

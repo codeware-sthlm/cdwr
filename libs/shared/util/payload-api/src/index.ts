@@ -22,6 +22,7 @@ export { findById } from './lib/find-by-id';
 export { findBySlug } from './lib/find-by-slug';
 export { findDoc } from './lib/find-doc';
 export { findLandingDoc } from './lib/find-landing-doc';
+export { findPages } from './lib/find-pages';
 export { findPosts } from './lib/find-posts';
 export { findTours } from './lib/find-tours';
 export { getBlocksData } from './lib/get-blocks-data';

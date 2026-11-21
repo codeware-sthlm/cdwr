@@ -63,6 +63,24 @@ describe('resolveBlockReferences', () => {
     expect(unresolved).toEqual([]);
   });
 
+  it('resolves each gallery photo and keeps its size and caption', () => {
+    const { resolved, unresolved } = resolve({
+      blockType: 'gallery',
+      items: [
+        { image: { lookupFilename: 'hero.jpg' }, size: 'wide', caption: 'A' },
+        { image: { lookupFilename: 'absent.jpg' }, size: 'tall' }
+      ]
+    });
+
+    expect(resolved['items']).toEqual([
+      { image: 11, size: 'wide', caption: 'A' },
+      { image: { lookupFilename: 'absent.jpg' }, size: 'tall' }
+    ]);
+    expect(unresolved).toEqual([
+      { blockType: 'gallery', field: 'items[1].image', lookup: 'absent.jpg' }
+    ]);
+  });
+
   it('resolves the callout image, which is not called media', () => {
     const { resolved } = resolve({
       blockType: 'callout',

@@ -12,6 +12,7 @@ const settings = (
   overrides: Partial<Parameters<typeof buildTenantConfig>[0]['settings']> = {}
 ) => ({
   appName: 'Acme',
+  brandLabel: null,
   colorScheme: 'system' as const,
   chrome: 'outlined' as const,
   customThemeIds: [],

@@ -12,9 +12,10 @@ import { DomainMismatchNoticeClient } from './DomainMismatchNotice.client';
  * their `admin.hidden` role check, an editor's role in the sidebar, and a logout
  * that cannot complete. Nothing in the UI says why, so this does.
  *
- * Server-side on purpose: adoption assigns `serverURL` in `onInit`, after the
- * client config has been derived, so the value the browser receives is the
- * boot-time one and cannot be compared against the address bar.
+ * Server-side on purpose: it compares against `csrf`, which never reaches the
+ * browser, and against the live `serverURL` that adoption assigns in `onInit`.
+ * Payload caches the browser's copy per language, so that copy can be one
+ * built before adoption (`dropStaleClientConfigs` drops such entries).
  */
 const DomainMismatchNotice: React.FC<ServerProps> = async ({ payload }) => {
   if (!payload) {

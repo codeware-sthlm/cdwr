@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/packages/fly-node-integration',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
   test: {
     name: 'packages-fly-node-integration',
     maxWorkers: 1,

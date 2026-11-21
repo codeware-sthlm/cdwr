@@ -40,6 +40,7 @@ describe('main', () => {
       if (name === 'environment') return 'production';
       if (name === 'images') return '';
       if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'eu';
       return name;
     });
     getMultilineInputMock.mockImplementation(() => []);
@@ -75,16 +76,17 @@ describe('main', () => {
     getInputMock.mockImplementation((name: string) => {
       if (name === 'apps') return JSON.stringify(apps);
       if (name === 'app-details')
-        return '{"web":[{"tenant":"t1","secrets":{"KEY":"val"}}]}';
+        return '{"web":[{"tenant":"t1","secretNames":["KEY"]}]}';
       if (name === 'environment') return 'production';
       if (name === 'images') return '';
       if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'us';
       return name;
     });
     await main.run();
 
     expect(flyDeploymentMock).toHaveBeenCalledWith({
-      appDetails: { web: [{ tenant: 't1', secrets: { KEY: 'val' } }] },
+      appDetails: { web: [{ tenant: 't1', secretNames: ['KEY'] }] },
       apps,
       env: [],
       environment: 'production',
@@ -94,6 +96,10 @@ describe('main', () => {
       flyTraceCli: true,
       flyConsoleLogs: true,
       images: undefined,
+      infisicalClientId: 'infisical-client-id',
+      infisicalClientSecret: 'infisical-client-secret',
+      infisicalProjectId: 'infisical-project-id',
+      infisicalSite: 'us',
       optOutDepotBuilder: true,
       secrets: [],
       token: 'token'
@@ -125,11 +131,35 @@ describe('main', () => {
       flyTraceCli: true,
       flyConsoleLogs: true,
       images: undefined,
+      infisicalClientId: undefined,
+      infisicalClientSecret: undefined,
+      infisicalProjectId: undefined,
+      infisicalSite: undefined,
       optOutDepotBuilder: true,
       secrets: [],
       token: 'token'
     } satisfies ActionInputs);
     expect(runMock).toHaveReturned();
+  });
+
+  it('fails when images arrive without apps', async () => {
+    getInputMock.mockImplementation((name: string) => {
+      if (name === 'apps') return '[]';
+      if (name === 'app-details') return '{}';
+      if (name === 'environment') return 'preview';
+      if (name === 'images')
+        return '{"cdwr-headless-pr-1-moon":"registry.fly.io/x:1"}';
+      if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'eu';
+      return name;
+    });
+
+    await main.run();
+
+    expect(flyDeploymentMock).not.toHaveBeenCalled();
+    expect(setFailedMock).toHaveBeenCalledWith(
+      expect.stringContaining('no apps arrived')
+    );
   });
 
   it('should have invalid inputs with missing required inputs', async () => {
@@ -179,6 +209,26 @@ describe('main', () => {
     );
   });
 
+  it('should list skipped projects in the summary without failing', async () => {
+    flyDeploymentMock.mockResolvedValue({
+      environment: 'production',
+      projects: [
+        {
+          action: 'skipped',
+          appOrProject: 'cms',
+          reason: 'abcdef1 is older than cms-1.2.3'
+        }
+      ]
+    } satisfies ActionOutputs);
+
+    await main.run();
+
+    expect(core.summary.addList).toHaveBeenCalledWith([
+      'cms: abcdef1 is older than cms-1.2.3'
+    ]);
+    expect(setFailedMock).not.toHaveBeenCalled();
+  });
+
   it('should handle errors', async () => {
     getInputMock.mockImplementation((name: string) => {
       if (name === 'apps') return '[]';
@@ -186,6 +236,7 @@ describe('main', () => {
       if (name === 'environment') return 'production';
       if (name === 'images') return '';
       if (name === 'images-path') return '';
+      if (name === 'infisical-site') return 'eu';
       return name;
     });
     const error = new Error('error message');

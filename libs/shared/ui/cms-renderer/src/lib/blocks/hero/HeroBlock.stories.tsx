@@ -21,6 +21,17 @@ export const WithoutVisual: Story = {
   args: { ...args, media: undefined }
 };
 
+/** Centred text filling the screen under the header, with the lines along the bottom. */
+export const Fill: Story = {
+  args: {
+    ...args,
+    media: undefined,
+    layout: 'fill',
+    decoration: 'horizon-lines'
+  },
+  parameters: { layout: 'fullscreen' }
+};
+
 export const Default: Story = {
   args
 };
@@ -33,3 +44,20 @@ export const SpotlightLight = a11yStory({ args }, 'spotlight', 'light');
 export const SpotlightDark = a11yStory({ args }, 'spotlight', 'dark');
 export const CodewareLight = a11yStory({ args }, 'codeware', 'light');
 export const CodewareDark = a11yStory({ args }, 'codeware', 'dark');
+
+const fillArgs: Story['args'] = {
+  ...args,
+  media: undefined,
+  layout: 'fill',
+  decoration: 'horizon-lines'
+};
+export const CodewareLightFill = a11yStory(
+  { args: fillArgs },
+  'codeware',
+  'light'
+);
+export const CodewareDarkFill = a11yStory(
+  { args: fillArgs },
+  'codeware',
+  'dark'
+);

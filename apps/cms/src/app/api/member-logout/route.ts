@@ -29,12 +29,21 @@ export async function POST(request: NextRequest) {
     headers: { location: '/' }
   });
 
+  const expiredSession = generateExpiredPayloadCookie({
+    collectionAuthConfig: usersAuthConfig(config),
+    cookiePrefix: config.cookiePrefix
+  });
+
+  response.headers.append('Set-Cookie', expiredSession);
+  // `payload-totp` marks the second factor done in a cookie of its own, set
+  // with the same flags. Left behind, it would let the next password-only
+  // sign-in in this browser skip the code
   response.headers.append(
     'Set-Cookie',
-    generateExpiredPayloadCookie({
-      collectionAuthConfig: usersAuthConfig(config),
-      cookiePrefix: config.cookiePrefix
-    })
+    expiredSession.replace(
+      `${config.cookiePrefix}-token=`,
+      `${config.cookiePrefix}-totp=`
+    )
   );
 
   return response;

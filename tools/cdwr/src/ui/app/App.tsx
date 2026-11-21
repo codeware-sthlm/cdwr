@@ -12,14 +12,20 @@ import { type Entry, type Group, nameOf } from '../../cli/registry';
 import { CLOUD } from '../logo';
 
 import { colors, dangerColor, dangerLabel } from './palette';
-import type { LogEntry, RunState, RunStore } from './store';
+import {
+  type Row as LogRowData,
+  type Viewport,
+  flattenLog,
+  viewport,
+  wrapLines
+} from './rows';
+import type { Prompt, RunState, RunStore } from './store';
 import {
   Card,
   Confirm,
   MultiSelect,
   Select,
   Spinner,
-  Table,
   TextInput,
   isEnter
 } from './widgets';
@@ -31,8 +37,6 @@ export interface AppProps {
   store: RunStore;
   /** Runs a command through the runtime with the app UI; resolves to its exit code */
   run: (entry: Entry, argv: string[]) => Promise<number>;
-  /** Open straight on a command, as `cdwr db backup` does */
-  initial?: { entry: Entry; argv: string[] };
   /** Stop a running command and whatever it spawned */
   abort?: () => void;
   onExit: (code: number) => void;
@@ -98,22 +102,21 @@ export function App({
   entries,
   store,
   run,
-  initial,
   abort,
   onExit
 }: AppProps) {
   const { exit } = useApp();
   const { columns, rows: height } = useSize();
   const runState = useSyncExternalStore(store.subscribe, store.snapshot);
-  const [screen, setScreen] = useState<'home' | 'run'>(
-    initial ? 'run' : 'home'
-  );
+  const [screen, setScreen] = useState<'home' | 'run'>('home');
   const [filter, setFilter] = useState('');
   const [filtering, setFiltering] = useState(false);
   const [help, setHelp] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [lastCode, setLastCode] = useState(0);
-  const [current, setCurrent] = useState<Entry | undefined>(initial?.entry);
+  const [current, setCurrent] = useState<Entry | undefined>();
+  // Run pane scroll: a row index, or null to follow the tail
+  const [scroll, setScroll] = useState<number | null>(null);
 
   const rows = useMemo(
     () => buildRows(groups, entries, filter),
@@ -143,24 +146,22 @@ export function App({
     (entry: Entry, argv: string[]) => {
       setCurrent(entry);
       setScreen('run');
+      setScroll(null);
       run(entry, argv).then(
         (code) => {
           setLastCode(code);
+          setScroll(null);
           store.end(code, '');
         },
         (error: unknown) => {
           setLastCode(1);
+          setScroll(null);
           store.end(1, error instanceof Error ? error.message : String(error));
         }
       );
     },
     [run, store]
   );
-
-  useEffect(() => {
-    if (initial) start(initial.entry, initial.argv);
-    // Only on mount: the initial command opens once
-  }, []);
 
   const move = (delta: number) => {
     if (!commandIndexes.length) return;
@@ -208,21 +209,55 @@ export function App({
     { isActive: screen === 'run' }
   );
 
-  // Run keys: only once the command has ended
+  const paneWidth = columns - SIDEBAR - 3;
+  const bodyHeight = Math.max(5, height - 4);
+  const logRows = useMemo(
+    () => flattenLog(runState?.log ?? [], paneWidth),
+    [runState?.log, paneWidth]
+  );
+  // The result's text is wrapped inside the card, so its rows are known
+  const resultLines = useMemo(
+    () =>
+      runState?.result?.text
+        ? wrapLines(runState.result.text, paneWidth - CARD_INSET)
+        : [],
+    [runState?.result?.text, paneWidth]
+  );
+  const fixed =
+    1 +
+    (runState?.answered.length ?? 0) +
+    (runState?.prompt ? promptRows(runState.prompt, paneWidth) : 0) +
+    (runState?.result ? RESULT_FRAME + resultLines.length : 0);
+  const budget = Math.max(3, bodyHeight - fixed);
+  // Scrolled to the bottom is the same as following
+  const view = viewport(logRows, budget, scroll);
+  const pinned = scroll !== null && view.start < view.max;
+
+  // Run keys: scroll any time, leave once the command has ended
   useInput(
     (input, key) => {
+      if (!key.ctrl) {
+        const to = (at: number) => setScroll(at >= view.max ? null : at);
+        if (key.upArrow || input === 'k')
+          return to(Math.max(0, view.start - 1));
+        if (key.downArrow || input === 'j') return to(view.start + 1);
+        if (key.pageUp || input === 'u')
+          return to(Math.max(0, view.start - (budget - 1)));
+        if (key.pageDown || input === 'd')
+          return to(view.start + view.rows.length);
+        if (input === 'g') return to(0);
+        if (input === 'G') return setScroll(null);
+      }
       if (!runState?.result) return;
       if (isEnter(input, key) || key.escape || input === 'h' || key.leftArrow) {
-        if (initial && current === initial.entry && !filter)
-          return leave(lastCode);
         store.clear();
+        setScroll(null);
         setScreen('home');
       } else if (input === 'q') leave(lastCode);
     },
     { isActive: screen === 'run' && !runState?.prompt }
   );
 
-  const bodyHeight = Math.max(5, height - 4);
   const breadcrumb =
     screen === 'run' && current
       ? nameOf(current)
@@ -246,15 +281,17 @@ export function App({
           {screen === 'run' && runState ? (
             <RunPane
               state={runState}
-              height={bodyHeight}
-              width={columns - SIDEBAR - 3}
+              view={view}
+              pinned={pinned}
+              resultLines={resultLines}
+              width={paneWidth}
             />
           ) : help ? (
             <KeyHelp />
           ) : selected ? (
             <CommandCard
               entry={selected}
-              width={columns - SIDEBAR - 3}
+              width={paneWidth}
               showCloud={bodyHeight >= 24}
             />
           ) : (
@@ -456,25 +493,50 @@ function CommandCard({
   );
 }
 
-function KeyHelp() {
-  const keys: Array<[string, string]> = [
-    ['↑ ↓  j k', 'move'],
-    ['⏎', 'run the command'],
-    ['d', 'dry run: show the plan, apply nothing'],
-    ['/', 'filter commands; esc clears'],
-    ['esc  h  ←', 'back to the menu after a command'],
-    ['q', 'quit'],
-    ['?', 'this help']
-  ];
+const MENU_KEYS: Array<[string, string]> = [
+  ['↑ ↓  j k', 'move'],
+  ['⏎', 'run the command'],
+  ['d', 'dry run: show the plan, apply nothing'],
+  ['/', 'filter commands; esc clears'],
+  ['q', 'quit'],
+  ['?', 'this help']
+];
+
+const RUN_KEYS: Array<[string, string]> = [
+  ['↑ ↓  j k', 'scroll the output one row'],
+  ['u d  PgUp PgDn', 'scroll a page'],
+  ['g  G', 'top · follow the end'],
+  ['esc  h  ←  ⏎', 'back to the menu once the command has ended'],
+  ['q', 'quit once the command has ended']
+];
+
+function KeyList({
+  title,
+  keys
+}: {
+  title: string;
+  keys: Array<[string, string]>;
+}) {
   return (
     <Box flexDirection="column">
-      <Text bold>Keys</Text>
+      <Text bold>{title}</Text>
       {keys.map(([k, what]) => (
         <Text key={k}>
-          <Text color={colors.brand}>{k.padEnd(12)}</Text>
+          <Text color={colors.brand}>{k.padEnd(16)}</Text>
           {what}
         </Text>
       ))}
+    </Box>
+  );
+}
+
+function KeyHelp() {
+  return (
+    <Box flexDirection="column">
+      <KeyList title="Menu" keys={MENU_KEYS} />
+      <Box marginTop={1}>
+        <KeyList title="During a run" keys={RUN_KEYS} />
+      </Box>
       <Box marginTop={1}>
         <Text dimColor>
           Badges: ~ changes things ! destructive $ spends money
@@ -483,19 +545,6 @@ function KeyHelp() {
     </Box>
   );
 }
-
-const linesOf = (entry: LogEntry): number => {
-  switch (entry.kind) {
-    case 'note':
-      return entry.lines.length + 2;
-    case 'table':
-      return entry.rows.length + 1;
-    case 'raw':
-      return entry.text.split('\n').length;
-    default:
-      return 1;
-  }
-};
 
 /** Re-render every second while a command runs, so the clock and spinner move */
 const useTicking = (running: boolean) => {
@@ -507,31 +556,57 @@ const useTicking = (running: boolean) => {
   }, [running]);
 };
 
+/** Border and horizontal padding of the result card */
+const CARD_INSET = 4;
+
+/** Margin, border, title and the closing line of the result card */
+const RESULT_FRAME = 5;
+
+/**
+ * Terminal rows an open prompt takes: its margin, the message wrapped at the
+ * pane width, and the widget's own lines, one per choice.
+ */
+const promptRows = (prompt: Prompt, width: number): number => {
+  const head = 1 + wrapLines(prompt.message, width).length;
+  switch (prompt.kind) {
+    case 'select':
+      return head + prompt.choices.length;
+    case 'multiselect':
+      return head + prompt.choices.length + 1;
+    case 'text':
+    case 'password':
+      return head + 1 + (prompt.error ? 1 : 0);
+    case 'confirm':
+      return head + 1;
+  }
+};
+
 function RunPane({
   state,
-  height,
+  view,
+  pinned,
+  resultLines,
   width
 }: {
   state: RunState;
-  height: number;
+  view: Viewport;
+  pinned: boolean;
+  resultLines: string[];
   width: number;
 }) {
-  const fixed =
-    2 + state.answered.length + (state.prompt ? 8 : 0) + (state.result ? 4 : 0);
-  let budget = Math.max(3, height - fixed);
-  const shown: LogEntry[] = [];
-  for (let i = state.log.length - 1; i >= 0 && budget > 0; i--) {
-    const entry = state.log[i];
-    if (!entry) continue;
-    budget -= linesOf(entry);
-    shown.unshift(entry);
-  }
+  // While scrolled, a row after the visible ones says what is hidden
+  const shown: LogRowData[] = pinned
+    ? [
+        ...view.rows,
+        { kind: 'text', text: `… ${view.below} more below · G end`, dim: true }
+      ]
+    : view.rows;
   const running = !state.result && !state.prompt;
   useTicking(running);
   const took = ((Date.now() - state.startedAt) / 1000).toFixed(running ? 0 : 1);
   return (
     <Box flexDirection="column" width={width}>
-      <Text bold>
+      <Text bold wrap="truncate-end">
         {state.title}
         {running ? (
           <Text color={colors.brand}>
@@ -541,12 +616,12 @@ function RunPane({
         ) : null}
       </Text>
       {state.answered.map((a, i) => (
-        <Text key={i} dimColor>
+        <Text key={i} dimColor wrap="truncate-end">
           {a.message} <Text color={colors.accent}>{a.shown}</Text>
         </Text>
       ))}
-      {shown.map((entry, i) => (
-        <LogLine key={i} entry={entry} />
+      {shown.map((row, i) => (
+        <LogRow key={i} row={row} />
       ))}
       {state.prompt ? (
         <Box marginTop={1}>
@@ -571,8 +646,14 @@ function RunPane({
                   : colors.danger
             }
           >
-            {state.result.text ? <Text>{state.result.text}</Text> : null}
-            <Text dimColor>{took}s ⏎ menu · q quit</Text>
+            {resultLines.map((line, i) => (
+              <Text key={i} wrap="truncate-end">
+                {line}
+              </Text>
+            ))}
+            <Text dimColor wrap="truncate-end">
+              {took}s ⏎ menu · q quit
+            </Text>
           </Card>
         </Box>
       ) : null}
@@ -580,46 +661,25 @@ function RunPane({
   );
 }
 
-function LogLine({ entry }: { entry: LogEntry }) {
-  switch (entry.kind) {
-    case 'task':
+function LogRow({ row }: { row: LogRowData }) {
+  switch (row.kind) {
+    case 'text':
       return (
-        <Text>
-          {entry.state === 'running' ? (
-            <Spinner />
-          ) : entry.state === 'done' ? (
-            <Text color={colors.ok}>✔</Text>
-          ) : (
-            <Text color={colors.danger}>✖</Text>
-          )}{' '}
-          {entry.state === 'running'
-            ? entry.label
-            : (entry.text ?? entry.label)}
+        <Text
+          wrap="truncate-end"
+          color={row.color}
+          dimColor={row.dim}
+          bold={row.bold}
+        >
+          {row.text}
         </Text>
       );
-    case 'line': {
-      const color =
-        entry.level === 'success'
-          ? colors.ok
-          : entry.level === 'warn'
-            ? colors.warn
-            : entry.level === 'error'
-              ? colors.danger
-              : undefined;
-      return <Text color={color}>{entry.text}</Text>;
-    }
-    case 'note':
+    case 'spinner':
       return (
-        <Card title={entry.title}>
-          {entry.lines.map((line, i) => (
-            <Text key={i}>{line}</Text>
-          ))}
-        </Card>
+        <Text wrap="truncate-end">
+          <Spinner /> {row.text}
+        </Text>
       );
-    case 'table':
-      return <Table head={entry.head} rows={entry.rows} />;
-    case 'raw':
-      return <Text>{entry.text}</Text>;
   }
 }
 
@@ -697,10 +757,10 @@ function Footer({
         ? 'type to filter · ⏎ keep · esc clear'
         : '↑↓ move · ⏎ run · d dry run · / filter · ? keys · q quit'
       : ended
-        ? '⏎ menu · q quit'
+        ? '↑↓ scroll · G end · ⏎ menu · q quit'
         : prompting
           ? '↑↓ move · ⏎ answer · esc cancel'
-          : 'working… · ctrl-c aborts';
+          : '↑↓ scroll · working… · ctrl-c aborts';
   return (
     <Box
       paddingX={1}

@@ -40,6 +40,11 @@ outputs:
       Path to a JSON file holding the same mapping. Preferred over `changelogs`
       for passing between jobs.
 
+  failed-releases:
+    description: >
+      JSON array of release tags whose GitHub release could not be created.
+      A failure does not fail the step.
+
 runs:
   using: "node24"
   main: "../../dist/packages/nx-changelog-action/action.js"

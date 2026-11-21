@@ -1,8 +1,11 @@
 export { editorUserAccess } from './lib/editor-user.access';
 export { authenticatedAccess } from './lib/authenticated.access';
+export { type TotpResetTarget, canResetTotp } from './lib/can-reset-totp';
+export { contentVisibilityWhere } from './lib/content-visibility';
 export {
-  contentVisibilityWhere,
-  publicVisibilityWhere
-} from './lib/content-visibility';
+  isSecondFactorPending,
+  isTotpSetupPending,
+  mustEnrolTotp
+} from './lib/second-factor';
 export { systemUserAccess } from './lib/system-user.access';
 export { systemUserOrTenantAdminAccess } from './lib/system-user-or-tenant-admin.access';

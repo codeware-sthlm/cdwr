@@ -1,14 +1,16 @@
 import { createPlainUi } from '../ui/plain';
 import { createSilentUi } from '../ui/silent';
+import { createTerminalUi } from '../ui/terminal';
 import { symbols, theme } from '../ui/theme';
 import type { Ui } from '../ui/ui';
 
-import { parseCommandArgs } from './args';
+import { parseCommandArgs, splitRest } from './args';
 import { type AnyCommand, type Plan, confirmFor, planDanger } from './command';
 import type { Context, Flags } from './context';
 import { Cancelled, CliError, EXIT, UsageError, messageOf } from './errors';
 import { renderCommandHelp } from './help';
 import { type HistoryEntry, recordHistory } from './history';
+import { wantsPrompts } from './mode';
 import { preflight } from './preflight';
 import type { Prefs } from './prefs';
 import { publicInputs, resolveInputs } from './resolve';
@@ -52,7 +54,7 @@ async function confirmPlan(
   if (!ctx.ui.interactive || ctx.flags.nonInteractive) {
     throw new UsageError(
       'This command needs a confirmation',
-      'Pass --yes to confirm it up front'
+      'Add -i to be asked here, or pass --yes to confirm it up front'
     );
   }
 
@@ -81,9 +83,13 @@ export async function runCommand(options: RunOptions): Promise<number> {
   const stdout =
     options.stdout ?? ((text: string) => process.stdout.write(`${text}\n`));
 
+  // Without `rest`, a `--` stays in argv and its arguments are refused as before
+  const { own, rest } = command.rest
+    ? splitRest(argv)
+    : { own: argv, rest: [] };
   let parsed;
   try {
-    parsed = parseCommandArgs(argv, command.inputs);
+    parsed = parseCommandArgs(own, command.inputs);
   } catch (error) {
     return fail(error, false, stdout, false, options.ui);
   }
@@ -96,18 +102,24 @@ export async function runCommand(options: RunOptions): Promise<number> {
     yes: parsed.globals.yes,
     dryRun: parsed.globals['dry-run'],
     json: parsed.globals.json,
-    nonInteractive:
-      parsed.globals['non-interactive'] ||
-      parsed.globals.json ||
-      !options.interactive,
+    nonInteractive: !wantsPrompts({
+      tty: options.interactive,
+      hasArgs: Object.keys(parsed.values).length > 0,
+      interactive: parsed.globals.interactive,
+      json: parsed.globals.json
+    }),
     verbose: parsed.globals.verbose
   };
+  const stderr = (line: string) => process.stderr.write(`${line}\n`);
+  // A rest command hands stdout to the command it runs, so `-- … --json` stays parseable
   const ui =
     options.ui ??
     (flags.json
-      ? createSilentUi((line) => process.stderr.write(`${line}\n`))
-      : createPlainUi(stdout));
-  const ctx: Context = { root, env, prefs, ui, flags, command: name };
+      ? createSilentUi(stderr)
+      : flags.nonInteractive
+        ? createPlainUi(command.rest ? stderr : stdout)
+        : createTerminalUi());
+  const ctx: Context = { root, env, prefs, ui, flags, command: name, rest };
   const record = options.history ?? recordHistory;
   const started = Date.now();
   let inputs: Record<string, unknown> = {};
@@ -148,7 +160,10 @@ export async function runCommand(options: RunOptions): Promise<number> {
     const result = await command.apply(ctx, plan.data, inputs);
     prefs.save();
 
-    if (command.danger !== 'read') {
+    if (
+      command.history !== false &&
+      planDanger(command.danger, plan.danger) !== 'read'
+    ) {
       record({
         at: new Date(started).toISOString(),
         command: name,
@@ -189,7 +204,12 @@ export async function runCommand(options: RunOptions): Promise<number> {
     }
     return result.partial ? EXIT.failed : EXIT.ok;
   } catch (error) {
-    if (plan && command.danger !== 'read' && !(error instanceof Cancelled)) {
+    if (
+      plan &&
+      command.history !== false &&
+      planDanger(command.danger, plan.danger) !== 'read' &&
+      !(error instanceof Cancelled)
+    ) {
       record({
         at: new Date(started).toISOString(),
         command: name,
@@ -208,7 +228,8 @@ export async function runCommand(options: RunOptions): Promise<number> {
 const planJson = (plan: Plan) => ({
   steps: plan.steps.map((s) => (typeof s === 'string' ? { label: s } : s)),
   notes: plan.notes,
-  target: plan.target
+  target: plan.target,
+  ...(plan.json === undefined ? {} : { json: plan.json })
 });
 
 /** Print an error the way the mode wants and return its exit code */

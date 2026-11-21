@@ -38,13 +38,34 @@ async function list() {
 
   const apiKeys = await readTenantApiKeys(payload);
 
-  const tenants = docs.map(({ id, name, slug, deployment }) => ({
-    id,
-    name,
-    slug,
-    deployment: deployment ?? null,
-    apiKey: apiKeys.get(id) ?? null
-  }));
+  const tenants = docs.map(
+    ({
+      id,
+      name,
+      slug,
+      status,
+      deployment,
+      statsWebsiteId,
+      statsShareId,
+      statsTeamId,
+      domains
+    }) => ({
+      id,
+      name,
+      slug,
+      status,
+      deployment: deployment ?? null,
+      apiKey: apiKeys.get(id) ?? null,
+      statsWebsiteId: statsWebsiteId || null,
+      statsShareId: statsShareId || null,
+      statsTeamId: statsTeamId || null,
+      domains: (domains ?? []).map(({ hostname, app, isPrimary }) => ({
+        hostname,
+        app,
+        isPrimary: Boolean(isPrimary)
+      }))
+    })
+  );
 
   report('TENANT_DEPLOYMENTS', JSON.stringify(tenants));
   process.exit(0);

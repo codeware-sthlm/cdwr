@@ -173,11 +173,11 @@ jobs:
 
 ## Outputs
 
-| Output        | Description                                                                                                                                                                    | Example                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `apps`        | List of applications to deploy, only those with a deployment switched on                                                                                                       | `api,cms,web`                                                                                                              |
-| `environment` | Deployment environment that match the GitHub event, if any.                                                                                                                    | `preview`, `production` or empty string                                                                                    |
-| `app-tenants` | JSON object mapping each app to its deployments. A host deployment is an empty object `{}` and comes first, a tenant deployment has `tenant` and optional `env` and `secrets`. | See example below where `api` is host only, `cms` has one tenant without secrets and `web` host plus a tenant with secrets |
+| Output        | Description                                                                                                                                                                                                         | Example                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `apps`        | List of applications to deploy, only those with a deployment switched on                                                                                                                                            | `api,cms,web`                                                                                                              |
+| `environment` | Deployment environment that match the GitHub event, if any.                                                                                                                                                         | `preview`, `production` or empty string                                                                                    |
+| `app-tenants` | JSON object mapping each app to its deployments. A host deployment is an empty object `{}` and comes first, a tenant deployment has `tenant` and optional `env` and `secretNames`. Secret names only, never values. | See example below where `api` is host only, `cms` has one tenant without secrets and `web` host plus a tenant with secrets |
 
 ```json
 // apps:
@@ -192,7 +192,7 @@ jobs:
     {
       "tenant": "acme",
       "env": { "PUBLIC_URL": "..." },
-      "secrets": { "API_KEY": "..." }
+      "secretNames": ["API_KEY"]
     }
   ]
 }

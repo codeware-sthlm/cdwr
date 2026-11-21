@@ -11,7 +11,7 @@ export const visibilityPublic = 'public' as const;
 export const visibilityMembers = 'members' as const;
 
 /**
- * Adds a visibility field to the sidebar.
+ * Adds a visibility field.
  *
  * `public` is readable by anyone, `members` only by a signed-in user who
  * belongs to the same workspace. The default is deliberately `public`, so
@@ -37,7 +37,6 @@ export const visibilityField = (): Field => ({
     description: {
       en: 'Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.',
       sv: 'Styr vem som kan öppna innehållet på webbplatsen. Välj Publik för att låta alla läsa innehållet. Välj Endast medlemmar för att dölja innehållet från den publika webbplatsen — besökaren måste då logga in på webbplatsen, och bara medlemmar i den här arbetsytan kan läsa det. Alla andra, inklusive sökmotorer, ser det aldrig.'
-    },
-    position: 'sidebar'
+    }
   }
 });

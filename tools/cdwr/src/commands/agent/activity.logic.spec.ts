@@ -1,13 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import {
+  AGENT_CUTOVER,
+  AGENT_USER_ID,
   type HistoryNode,
   type IssueNode,
   type RunRow,
+  activityRows,
   actorOf,
   collectEvents,
   commentEvents,
   historyEvents,
   plural,
-  renderActivityDocument,
   runEvents
 } from './activity.logic';
 import { localMinute } from './usage.logic';
@@ -72,6 +77,7 @@ describe('historyEvents', () => {
       history([{ toState: { name: 'Done' }, actor: { name: 'Håkan' } }])
     );
     expect(event).toEqual({
+      id: 'history:COD-1:2026-10-10T10:00:00.000Z',
       at: new Date('2026-10-10T10:00:00.000Z'),
       ticket: 'COD-1',
       actor: 'Håkan',
@@ -111,32 +117,77 @@ describe('commentEvents', () => {
 });
 
 describe('actorOf', () => {
+  const before = '2026-11-10T21:59:59Z';
+  const after = '2026-11-10T22:00:01Z';
+  const app = { id: AGENT_USER_ID, name: 'CDWR Agent', app: true };
+
+  it('keeps the cutover and app user id in step with watch.jq', () => {
+    const jq = readFileSync(
+      fileURLToPath(new URL('../../../agent-queue/watch.jq', import.meta.url)),
+      'utf8'
+    );
+    expect(jq).toContain(`def agent_user_id: "${AGENT_USER_ID}";`);
+    expect(jq).toContain(`def agent_cutover: "${AGENT_CUTOVER}";`);
+  });
+
   it.each([
     [
-      'Agent marker',
-      { body: '  **Agent plan**', user: { name: 'Håkan' } },
+      'Agent marker before the cutover',
+      { createdAt: before, body: '  **Agent plan**', user: { name: 'Håkan' } },
       'agent'
     ],
     [
+      'Agent marker by a person after the cutover',
+      { createdAt: after, body: '**Agent plan**', user: { name: 'Håkan' } },
+      'Håkan'
+    ],
+    [
       'Agent marker beats a bot',
-      { body: '**Agent', botActor: { name: 'Bot' } },
+      { createdAt: before, body: '**Agent', botActor: { name: 'Bot' } },
       'agent'
     ],
     [
       'bot name',
-      { botActor: { name: 'Bot', type: 'api' }, user: { name: 'H' } },
+      {
+        createdAt: after,
+        botActor: { name: 'Bot', type: 'api' },
+        user: { name: 'H' }
+      },
       'Bot'
     ],
     [
       'bot type only',
-      { botActor: { type: 'api' }, user: { name: 'H' } },
+      { createdAt: after, botActor: { type: 'api' }, user: { name: 'H' } },
       'api'
     ],
-    ['empty bot falls through', { botActor: {}, user: { name: 'H' } }, 'H'],
-    ['user', { user: { name: 'Håkan' } }, 'Håkan'],
-    ['actor', { actor: { name: 'Håkan' } }, 'Håkan'],
-    ['unknown', { user: null, botActor: null }, 'unknown'],
-    ['not the marker', { body: 'Agent said', user: { name: 'H' } }, 'H']
+    [
+      'empty bot falls through',
+      { createdAt: after, botActor: {}, user: { name: 'H' } },
+      'H'
+    ],
+    ['user', { createdAt: after, user: { name: 'Håkan' } }, 'Håkan'],
+    ['actor', { createdAt: after, actor: { name: 'Håkan' } }, 'Håkan'],
+    ['unknown', { createdAt: after, user: null, botActor: null }, 'unknown'],
+    [
+      'not the marker',
+      { createdAt: before, body: 'Agent said', user: { name: 'H' } },
+      'H'
+    ],
+    ['app user', { createdAt: after, user: app }, 'agent'],
+    ['app actor', { createdAt: after, actor: app }, 'agent'],
+    [
+      'another app user',
+      {
+        createdAt: after,
+        user: { id: 'other', name: 'Some integration', app: true }
+      },
+      'Some integration'
+    ],
+    [
+      'a person who is not an app',
+      { createdAt: after, user: { id: 'p', name: 'Håkan', app: false } },
+      'Håkan'
+    ]
   ])('%s', (_name, args, expected) => {
     expect(actorOf(args)).toBe(expected);
   });
@@ -152,7 +203,7 @@ describe('runEvents', () => {
   });
 
   it('reads when as local time', () => {
-    const [event] = runEvents([row()]);
+    const [event] = runEvents([row()], 'mac');
     expect(localMinute(event.at)).toBe('2026-10-10 08:05');
     expect(event.at).toEqual(new Date(2026, 9, 10, 8, 5));
   });
@@ -162,13 +213,22 @@ describe('runEvents', () => {
     [row({ detail: 'two steps' }), 'COD-2', 'run: planned — two steps'],
     [row({ ticket: '' }), '—', 'run: planned']
   ])('%j', (r, ticket, change) => {
-    expect(runEvents([r])).toMatchObject([
+    expect(runEvents([r], 'mac')).toMatchObject([
       { actor: 'scheduler', ticket, change }
     ]);
   });
 
+  it('keeps the same run on two hosts apart', () => {
+    const [a] = runEvents([row()], 'mac');
+    const [b] = runEvents([row()], 'linux');
+    expect(a?.id).not.toBe(b?.id);
+    expect(b?.host).toBe('linux');
+  });
+
   it('skips rows with an invalid date', () => {
-    expect(runEvents([row({ when: 'soon' }), row({ when: '' })])).toEqual([]);
+    expect(
+      runEvents([row({ when: 'soon' }), row({ when: '' })], 'mac')
+    ).toEqual([]);
   });
 });
 
@@ -201,7 +261,8 @@ describe('collectEvents', () => {
     const { events, dropped } = collectEvents(response, rows, {
       now,
       windowDays: 7,
-      limit: 10
+      limit: 10,
+      host: 'mac'
     });
     expect(events.map((e) => e.change)).toEqual([
       'comment: hi',
@@ -221,7 +282,8 @@ describe('collectEvents', () => {
     const { events } = collectEvents({}, [edge], {
       now,
       windowDays: 7,
-      limit: 10
+      limit: 10,
+      host: 'mac'
     });
     expect(events).toHaveLength(1);
   });
@@ -230,14 +292,15 @@ describe('collectEvents', () => {
     const { events, dropped } = collectEvents(response, rows, {
       now,
       windowDays: 7,
-      limit: 2
+      limit: 2,
+      host: 'mac'
     });
     expect(events.map((e) => e.change)).toEqual(['comment: hi', 'status → A']);
     expect(dropped).toBe(1);
   });
 
   it('copes with an empty or null response', () => {
-    const opts = { now, windowDays: 7, limit: 5 };
+    const opts = { now, windowDays: 7, limit: 5, host: 'mac' };
     expect(collectEvents({}, [], opts)).toEqual({ events: [], dropped: 0 });
     expect(collectEvents({ data: { issues: null } }, [], opts).events).toEqual(
       []
@@ -245,49 +308,7 @@ describe('collectEvents', () => {
   });
 });
 
-describe('renderActivityDocument', () => {
-  const event = (
-    over: Partial<Parameters<typeof renderActivityDocument>[0][0]> = {}
-  ) => ({
-    at: new Date(2026, 9, 10, 20, 1),
-    ticket: 'COD-540',
-    actor: 'Håkan Ströberg',
-    change: 'status Todo → In Progress',
-    ...over
-  });
-  const opts = { updated: '2026-10-10 20:30', windowDays: 7, dropped: 0 };
-
-  it('renders the contract', () => {
-    expect(renderActivityDocument([event()], opts)).toBe(
-      [
-        'Updated: 2026-10-10 20:30 · last 7 days · 1 event',
-        '',
-        'Written by the agent queue scheduler from Linear\'s issue history and its own runs. Times are local. Actor "agent" is a comment marked `**Agent`; the agent and Håkan otherwise write through the same Linear account.',
-        '',
-        '| When | Ticket | Actor | Change |',
-        '| -- | -- | -- | -- |',
-        '| 2026-10-10 20:01 | COD-540 | Håkan Ströberg | status Todo → In Progress |'
-      ].join('\n')
-    );
-  });
-
-  it('escapes pipes and flattens newlines', () => {
-    const doc = renderActivityDocument([event({ change: 'a | b\nc' })], opts);
-    expect(doc).toContain('| a \\| b c |');
-  });
-
-  it('escapes backslashes before pipes', () => {
-    const doc = renderActivityDocument([event({ change: 'path\\' })], opts);
-    expect(doc).toContain('| path\\\\ |');
-  });
-
-  it('mentions what the cap left out only when something was', () => {
-    const line = 'Older events beyond the newest 1 are left out (4).';
-    const cut = renderActivityDocument([event()], { ...opts, dropped: 4 });
-    expect(cut).toContain(`the same Linear account.\n\n${line}\n\n| When`);
-    expect(renderActivityDocument([event()], opts)).not.toContain('Older');
-  });
-
+describe('plural', () => {
   it.each([
     [0, 'event', '0 events'],
     [1, 'event', '1 event'],
@@ -296,14 +317,131 @@ describe('renderActivityDocument', () => {
   ])('plural(%i, %s) is %s', (n, noun, expected) => {
     expect(plural(n, noun)).toBe(expected);
   });
+});
 
-  it('prints the header alone without events', () => {
-    const doc = renderActivityDocument([], opts);
+describe('activityRows', () => {
+  const at = new Date('2026-10-10T10:00:00.000Z');
+  const ev = (id: string, over = {}) => ({
+    id,
+    at,
+    ticket: 'COD-1',
+    actor: 'agent',
+    change: 'a',
+    ...over
+  });
+
+  it('maps actors to the three kinds and the scheduler dash to no ticket', () => {
     expect(
-      doc.startsWith('Updated: 2026-10-10 20:30 · last 7 days · 0 events')
-    ).toBe(true);
-    expect(
-      doc.endsWith('| When | Ticket | Actor | Change |\n| -- | -- | -- | -- |')
-    ).toBe(true);
+      activityRows([
+        ev('1'),
+        ev('2', {
+          ticket: '—',
+          actor: 'scheduler',
+          change: 'b',
+          host: 'mac'
+        }),
+        ev('3', { ticket: 'COD-2', actor: 'Håkan', change: 'c' }),
+        ev('4', { ticket: 'COD-3', actor: 'Linear', change: 'd' })
+      ])
+    ).toEqual([
+      {
+        event_id: '1',
+        at: at.toISOString(),
+        ticket: 'COD-1',
+        actor: 'agent',
+        change: 'a',
+        host: null
+      },
+      {
+        event_id: '2',
+        at: at.toISOString(),
+        ticket: null,
+        actor: 'scheduler',
+        change: 'b',
+        host: 'mac'
+      },
+      {
+        event_id: '3',
+        at: at.toISOString(),
+        ticket: 'COD-2',
+        actor: 'human',
+        change: 'c',
+        host: null
+      },
+      {
+        event_id: '4',
+        at: at.toISOString(),
+        ticket: 'COD-3',
+        actor: 'human',
+        change: 'd',
+        host: null
+      }
+    ]);
+  });
+
+  it('keeps one row per id, the last seen', () => {
+    const rows = activityRows([ev('1'), ev('1', { change: 'b' })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.change).toBe('b');
+  });
+});
+
+describe('event ids', () => {
+  it('keys history and comments on Linear ids, which an edit keeps', () => {
+    const node = { createdAt: '2026-10-10T10:00:00.000Z' };
+    const withBody = (id: string, body: string): IssueNode =>
+      issue({
+        history: { nodes: [{ ...node, id: 'h1', updatedDescription: true }] },
+        comments: { nodes: [{ ...node, id, body }] }
+      });
+    const before = collectEvents(
+      { data: { issues: { nodes: [withBody('c1', 'old')] } } },
+      [],
+      {
+        now: new Date('2026-10-11T00:00:00Z'),
+        windowDays: 7,
+        limit: 50,
+        host: 'mac'
+      }
+    );
+    const after = collectEvents(
+      { data: { issues: { nodes: [withBody('c1', 'new')] } } },
+      [],
+      {
+        now: new Date('2026-10-11T00:00:00Z'),
+        windowDays: 7,
+        limit: 50,
+        host: 'mac'
+      }
+    );
+    const ids = (r: typeof before) => r.events.map((e) => e.id).sort();
+    expect(ids(before)).toEqual(['comment:c1', 'history:h1']);
+    expect(ids(after)).toEqual(ids(before));
+    expect(before.events.map((e) => e.change)).not.toEqual(
+      after.events.map((e) => e.change)
+    );
+  });
+
+  it('derives a deterministic id without one, and for scheduler runs', () => {
+    const [h] = historyEvents(history([{ updatedDescription: true }]));
+    expect(h?.id).toBe('history:COD-1:2026-10-10T10:00:00.000Z');
+    const [c] = commentEvents(
+      issue({
+        comments: {
+          nodes: [{ createdAt: '2026-10-10T10:00:00.000Z', body: 'x' }]
+        }
+      })
+    );
+    expect(c?.id).toBe('comment:COD-1:2026-10-10T10:00:00.000Z');
+    const row: RunRow = {
+      when: '2026-10-10 10:00',
+      outcome: 'planned',
+      ticket: 'COD-1',
+      detail: 'd'
+    };
+    expect(runEvents([row], 'mac')[0]?.id).toBe(runEvents([row], 'mac')[0]?.id);
+    expect(runEvents([row], 'mac')[0]?.id).toMatch(
+      /^run:mac:.*:COD-1:run: planned — d$/
+    );
   });
 });

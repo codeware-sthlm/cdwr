@@ -100,6 +100,8 @@ export default defineCommand({
   inputs: {
     patch: input.select<string>({
       prompt: 'Which patch?',
+      description: 'Config patch to apply',
+      short: 'P',
       choices: () => [
         ...discoverPatches(PATCHES_DIR).map((p) => ({
           value: p.name,
@@ -116,6 +118,8 @@ export default defineCommand({
     patchFile: input.optional(
       input.string({
         prompt: 'Path to the patch TOML file?',
+        description: 'Path to a custom patch TOML file',
+        short: 'f',
         schema: patchFileSchema
       }),
       (r) => r['patch'] === 'custom',
@@ -123,11 +127,15 @@ export default defineCommand({
     ),
     prefix: input.string({
       prompt: 'Filter apps by prefix?',
+      description: 'Only apps whose name starts with this',
+      short: 'p',
       flagOnly: true,
       default: ''
     }),
     apps: input.multiselect<string>({
       prompt: 'Which apps to patch?',
+      description: 'Fly apps to patch',
+      short: 'a',
       min: 1,
       choices: async (_ctx, resolved) => {
         const prefix =

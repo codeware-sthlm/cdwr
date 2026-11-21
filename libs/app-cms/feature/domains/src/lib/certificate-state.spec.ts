@@ -53,8 +53,12 @@ describe('toCertificateState', () => {
       ]);
     });
 
-    it('keeps none for a subdomain, which uses a CNAME', () => {
-      expect(toCertificateState(certificate(), now, ips).addresses).toEqual([]);
+    it('keeps them for a subdomain too, which may point A and AAAA there', () => {
+      expect(toCertificateState(certificate(), now, ips).addresses).toEqual([
+        { type: 'A', address: '66.241.124.1' },
+        { type: 'A', address: '137.66.0.1' },
+        { type: 'AAAA', address: '2a09:8280:1::1' }
+      ]);
     });
 
     it('keeps none when there is no certificate', () => {

@@ -67,8 +67,7 @@ export const FONT_FAMILIES: ReadonlyArray<FontFamily> = [
     id: 'inter',
     label: 'Inter',
     // `Inter Variable` is what `@fontsource-variable/inter` declares; plain
-    // `Inter` covers a reader who has it installed, and apps/web, which still
-    // loads it from Google
+    // `Inter` covers a reader who has it installed
     stack: 'Inter Variable, Inter, sans-serif',
     slots: ['body', 'heading'],
     bundled: ['@fontsource-variable/inter/wght.css']

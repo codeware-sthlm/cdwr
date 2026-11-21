@@ -1,0 +1,5 @@
+# .env is committed public configuration; .env.local overrides it, e.g. for another tenant
+.env.local
+
+# Nitro build output
+.output

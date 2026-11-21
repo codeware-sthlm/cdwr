@@ -1,0 +1,433 @@
+// Sends desk commands to the desk-command Edge Function with the device token as the bearer
+
+export type CommandKind =
+  | 'pause'
+  | 'resume'
+  | 'run'
+  | 'limit'
+  | 'cap'
+  | 'abandon'
+  | 'snooze'
+  | 'wake'
+  | 'copilot'
+  | 'merge'
+  | 'review'
+  | 'dismiss'
+  | 'restart'
+  | 'gate';
+
+/** The kinds a PR's buttons send; they belong to a ticket's review row, like snooze and wake */
+export type PrCommandKind = 'copilot' | 'merge';
+
+/** The kinds a tenant's sheet sends; they belong to a tenant's app or site */
+export type PlatformCommandKind = 'restart' | 'gate';
+
+/** The kinds behind a control; snooze, wake, copilot, merge and dismiss belong to a ticket or finding, review to the Review panel, and restart and gate to a tenant, so they stay in no control's state */
+export type ControlKind = Exclude<
+  CommandKind,
+  | 'snooze'
+  | 'wake'
+  | 'copilot'
+  | 'merge'
+  | 'review'
+  | 'dismiss'
+  | 'restart'
+  | 'gate'
+>;
+
+export type CommandStatus = 'pending' | 'applied' | 'refused';
+
+/**
+ * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
+ * snooze, wake, copilot and merge, and `kind` (a waiting row's kind) with `eventAt` (ISO, or
+ * null) for snooze; `pr` (the number) for copilot and merge; `finding` (its id) with an
+ * optional `note` for dismiss; `tenant` (its slug) for restart and gate, with `app` (the Fly
+ * app) and `sha` (the commit its machines run, or null) for restart and `action` for gate
+ */
+export type CommandArgs = {
+  finding?: string;
+  note?: string;
+  value?: number;
+  session?: string;
+  ticket?: string;
+  kind?: string;
+  eventAt?: string | null;
+  pr?: number;
+  tenant?: string;
+  app?: string;
+  sha?: string | null;
+  action?: 'open' | 'close';
+};
+
+/** The function's answer to a stored command */
+export type CommandReply = {
+  id: number;
+  status: CommandStatus;
+  note: string | null;
+};
+
+export type CommandErrorCode =
+  'unauthorized' | 'network' | 'bad_request' | 'server';
+
+export class CommandError extends Error {
+  readonly code: CommandErrorCode;
+
+  constructor(code: CommandErrorCode, message: string) {
+    super(message);
+    this.name = 'CommandError';
+    this.code = code;
+  }
+}
+
+export type CommandTarget = {
+  supabaseUrl: string;
+  controlToken: string;
+  fetch?: typeof fetch;
+};
+
+const endpoint = (supabaseUrl: string): string =>
+  `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/desk-command`;
+
+const post = async (
+  { supabaseUrl, controlToken, fetch: send = fetch }: CommandTarget,
+  body: string
+): Promise<Response> => {
+  try {
+    return await send(endpoint(supabaseUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${controlToken}`,
+        'Content-Type': 'application/json'
+      },
+      body
+    });
+  } catch (error) {
+    throw new CommandError(
+      'network',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+};
+
+const errorText = async (res: Response): Promise<string> => {
+  try {
+    const body: unknown = await res.json();
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      typeof body.error === 'string'
+    )
+      return body.error;
+  } catch {
+    // Not JSON; the status says enough
+  }
+  return `HTTP ${res.status}`;
+};
+
+/**
+ * Checks the token without storing a command: the function reads the token before the
+ * body, so a body that is not JSON answers 400 for a good token and 401 for a bad one.
+ */
+export const checkToken = async (target: CommandTarget): Promise<void> => {
+  const res = await post(target, 'token check');
+  if (res.status === 400) return;
+  if (res.status === 401)
+    throw new CommandError(
+      'unauthorized',
+      'The desk-command function rejected this token.'
+    );
+  throw new CommandError('server', await errorText(res));
+};
+
+const isStatus = (value: unknown): value is CommandStatus =>
+  value === 'pending' || value === 'applied' || value === 'refused';
+
+/** Sends one command; the reply says whether it waits for the scheduler, was applied or refused */
+export const sendCommand = async (
+  target: CommandTarget,
+  host: string,
+  kind: CommandKind,
+  args: CommandArgs = {}
+): Promise<CommandReply> => {
+  const res = await post(target, JSON.stringify({ host, kind, args }));
+  if (res.status === 401)
+    throw new CommandError('unauthorized', 'The control token was rejected.');
+  if (res.status === 400)
+    throw new CommandError('bad_request', await errorText(res));
+  if (!res.ok) throw new CommandError('server', await errorText(res));
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    throw new CommandError('server', 'The reply was not JSON.');
+  }
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('id' in body) ||
+    typeof body.id !== 'number' ||
+    !('status' in body) ||
+    !isStatus(body.status)
+  )
+    throw new CommandError('server', 'The reply did not name the command.');
+  const note =
+    'note' in body && typeof body.note === 'string' ? body.note : null;
+  return { id: body.id, status: body.status, note };
+};
+
+/** The controls the desk shows; pause and resume share one */
+export type Control = 'pause' | 'run' | 'limit' | 'cap' | 'abandon';
+
+const CONTROL: Record<ControlKind, Control> = {
+  pause: 'pause',
+  resume: 'pause',
+  run: 'run',
+  limit: 'limit',
+  cap: 'cap',
+  abandon: 'abandon'
+};
+
+/** The fields of a `desk_commands` row the state reads */
+export type CommandRowLike = {
+  id: number;
+  at: string;
+  args: unknown;
+  host: string;
+  kind: string;
+  status: string;
+  applied_at: string | null;
+  note: string | null;
+};
+
+export type ControlState =
+  | { state: 'idle' }
+  | { state: 'pending'; kind: ControlKind }
+  | { state: 'refused'; kind: ControlKind; note: string };
+
+/** What the host's newest `queue_state` row reports, to tell an applied command took effect */
+export type Reported = {
+  /** When the row was published, ISO; null without one */
+  at: string | null;
+  paused: boolean;
+  limit: number | null;
+  cap: number | null;
+};
+
+const valueOf = (args: unknown): number | null =>
+  typeof args === 'object' &&
+  args !== null &&
+  'value' in args &&
+  typeof args.value === 'number'
+    ? args.value
+    : null;
+
+/** Whether the host reports what an applied command asked for; a paused tick republishes an old queue view, so the time alone is not enough */
+const tookEffect = (
+  kind: ControlKind,
+  args: unknown,
+  appliedAt: string | null,
+  reported: Reported
+): boolean => {
+  if (kind === 'abandon') return true;
+  if (appliedAt === null || reported.at === null) return false;
+  if (Date.parse(reported.at) < Date.parse(appliedAt)) return false;
+  switch (kind) {
+    case 'pause':
+      return reported.paused;
+    case 'resume':
+      return !reported.paused;
+    case 'run':
+      return true;
+    case 'limit':
+      return reported.limit === valueOf(args);
+    case 'cap':
+      return reported.cap === valueOf(args);
+  }
+};
+
+/** A pending row older than this is one the scheduler expires (its DESK_STALE_SECS) */
+export const PENDING_MAX_MS = 2 * 60 * 60 * 1000;
+
+/** How long a refusal note stays beside its control */
+export const REFUSED_SHOW_MS = 15 * 60 * 1000;
+
+const isKind = (value: string): value is ControlKind =>
+  Object.hasOwn(CONTROL, value);
+
+/**
+ * Each control's state on one host from its newest command row. An applied row stays
+ * pending until the host reports its effect (`tookEffect`); abandon is applied in place, so
+ * it is done once applied. A refusal shows for REFUSED_SHOW_MS, a pending row for
+ * PENDING_MAX_MS.
+ */
+export const controlStates = (
+  rows: readonly CommandRowLike[],
+  host: string,
+  reported: Reported,
+  now: number
+): Record<Control, ControlState> => {
+  const states: Record<Control, ControlState> = {
+    pause: { state: 'idle' },
+    run: { state: 'idle' },
+    limit: { state: 'idle' },
+    cap: { state: 'idle' },
+    abandon: { state: 'idle' }
+  };
+  const newest = new Map<Control, { row: CommandRowLike; kind: ControlKind }>();
+  for (const row of rows) {
+    if (row.host !== host || !isKind(row.kind)) continue;
+    const control = CONTROL[row.kind];
+    const seen = newest.get(control);
+    if (!seen || row.id > seen.row.id)
+      newest.set(control, { row, kind: row.kind });
+  }
+  for (const [control, { row, kind }] of newest) {
+    const age = now - Date.parse(row.applied_at ?? row.at);
+    if (row.status === 'pending') {
+      if (age <= PENDING_MAX_MS) states[control] = { state: 'pending', kind };
+    } else if (row.status === 'refused') {
+      if (age <= REFUSED_SHOW_MS)
+        states[control] = {
+          state: 'refused',
+          kind,
+          note: row.note ?? 'refused'
+        };
+    } else if (
+      row.status === 'applied' &&
+      !tookEffect(kind, row.args, row.applied_at, reported) &&
+      age <= PENDING_MAX_MS
+    )
+      states[control] = { state: 'pending', kind };
+  }
+  return states;
+};
+
+/** Where a ticket's Copilot or Merge command stands; `at` is when the scheduler applied it, ISO */
+export type PrCommandState =
+  | { state: 'pending' }
+  | { state: 'refused'; note: string }
+  | { state: 'applied'; at: string | null };
+
+const isPrKind = (value: string): value is PrCommandKind =>
+  value === 'copilot' || value === 'merge';
+
+const ticketOf = (args: unknown): string | null =>
+  typeof args === 'object' &&
+  args !== null &&
+  'ticket' in args &&
+  typeof args.ticket === 'string'
+    ? args.ticket
+    : null;
+
+const prOf = (args: unknown): number | null => {
+  if (typeof args !== 'object' || args === null || !('pr' in args)) return null;
+  const pr = Number(args.pr);
+  return Number.isInteger(pr) ? pr : null;
+};
+
+/** The key a ticket's command for a PR is kept under in `prCommandStates` */
+export const prCommandKey = (
+  ticket: string,
+  pr: number | string,
+  kind: PrCommandKind
+): string => `${ticket} ${Number(pr)} ${kind}`;
+
+/**
+ * Each ticket PR's Copilot and Merge command from its newest row, keyed by `prCommandKey`. A pending
+ * row shows for PENDING_MAX_MS, a refusal or an applied row for REFUSED_SHOW_MS; older ones are
+ * absent, and the watch says what became of the PR.
+ */
+export const prCommandStates = (
+  rows: readonly CommandRowLike[],
+  now: number
+): Map<string, PrCommandState> => {
+  const newest = new Map<string, CommandRowLike>();
+  for (const row of rows) {
+    const ticket = ticketOf(row.args);
+    const pr = prOf(row.args);
+    if (ticket === null || pr === null || !isPrKind(row.kind)) continue;
+    const key = prCommandKey(ticket, pr, row.kind);
+    const seen = newest.get(key);
+    if (!seen || row.id > seen.id) newest.set(key, row);
+  }
+  const states = new Map<string, PrCommandState>();
+  for (const [key, row] of newest) {
+    const age = now - Date.parse(row.applied_at ?? row.at);
+    if (row.status === 'pending') {
+      if (age <= PENDING_MAX_MS) states.set(key, { state: 'pending' });
+    } else if (row.status === 'refused') {
+      if (age <= REFUSED_SHOW_MS)
+        states.set(key, { state: 'refused', note: row.note ?? 'refused' });
+    } else if (row.status === 'applied' && age <= REFUSED_SHOW_MS)
+      states.set(key, { state: 'applied', at: row.applied_at });
+  }
+  return states;
+};
+
+/** Where a tenant's restart or gate command stands; a gate carries the `action` of its newest row */
+export type PlatformCommandState = PrCommandState & {
+  action?: 'open' | 'close';
+};
+
+const isPlatformKind = (value: string): value is PlatformCommandKind =>
+  value === 'restart' || value === 'gate';
+
+const stringArg = (args: unknown, name: string): string | null => {
+  if (typeof args !== 'object' || args === null || !(name in args)) return null;
+  const value = (args as Record<string, unknown>)[name];
+  return typeof value === 'string' && value !== '' ? value : null;
+};
+
+/** The key a tenant's command is kept under in `platformCommandStates`: `restart <app>`, `gate <tenant>` */
+export const platformCommandKey = (
+  kind: PlatformCommandKind,
+  target: string
+): string => `${kind} ${target}`;
+
+/**
+ * Each app's restart and each tenant's gate command from its newest row, keyed by
+ * `platformCommandKey`; the windows are `prCommandStates`'s. A gate state carries the `action` of
+ * its row.
+ */
+export const platformCommandStates = (
+  rows: readonly CommandRowLike[],
+  now: number
+): Map<string, PlatformCommandState> => {
+  const newest = new Map<string, CommandRowLike>();
+  for (const row of rows) {
+    if (!isPlatformKind(row.kind)) continue;
+    const target = stringArg(
+      row.args,
+      row.kind === 'restart' ? 'app' : 'tenant'
+    );
+    if (target === null) continue;
+    const key = platformCommandKey(row.kind, target);
+    const seen = newest.get(key);
+    if (!seen || row.id > seen.id) newest.set(key, row);
+  }
+  const states = new Map<string, PlatformCommandState>();
+  for (const [key, row] of newest) {
+    const age = now - Date.parse(row.applied_at ?? row.at);
+    const action = stringArg(row.args, 'action');
+    const extra: { action?: 'open' | 'close' } =
+      row.kind === 'gate' && action === 'open'
+        ? { action: 'open' }
+        : row.kind === 'gate' && action === 'close'
+          ? { action: 'close' }
+          : {};
+    if (row.status === 'pending') {
+      if (age <= PENDING_MAX_MS)
+        states.set(key, { state: 'pending', ...extra });
+    } else if (row.status === 'refused') {
+      if (age <= REFUSED_SHOW_MS)
+        states.set(key, {
+          state: 'refused',
+          note: row.note ?? 'refused',
+          ...extra
+        });
+    } else if (row.status === 'applied' && age <= REFUSED_SHOW_MS)
+      states.set(key, { state: 'applied', at: row.applied_at, ...extra });
+  }
+  return states;
+};

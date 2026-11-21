@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { flyConditions } from './fly-conditions';
 import {
@@ -13,7 +14,8 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { skip } = await flyConditions(inputs);
 

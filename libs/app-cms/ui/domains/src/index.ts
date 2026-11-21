@@ -1,5 +1,6 @@
 export * from './lib/dns-record';
 export * from './lib/domain-card';
+export * from './lib/domain-details';
 export * from './lib/domain-status-badge';
 export * from './lib/domain-status-row';
 export * from './lib/expiry';

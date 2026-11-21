@@ -1,8 +1,11 @@
 export { buildTenantConfig } from './lib/build-tenant-config';
-export type { AuthenticatedPayloadOptions } from './lib/get-authenticated-payload';
+export {
+  type AuthenticatedPayloadOptions,
+  getAuthenticatedPayload
+} from './lib/get-authenticated-payload';
 export { getPayloadRuntime } from './lib/get-payload-runtime';
 export { hasMembersContent } from './lib/collections/has-members-content';
-export { loginMember } from './lib/login-member';
+export { type SecondFactor, loginMember } from './lib/login-member';
 export { getTenantContext } from './lib/get-tenant-context';
 export { mapToRuntime } from './lib/map-to-runtime';
 export type {
@@ -16,6 +19,12 @@ export type {
 } from './lib/collections/types';
 
 export { countDocs } from './lib/collections/count-docs';
+export {
+  type InviteCodeVerdict,
+  InviteCodeRefused,
+  checkInviteCode,
+  consumeInviteCode
+} from './lib/collections/invite-codes';
 export { countUnreadSubmissions } from './lib/collections/count-unread-submissions';
 export { getCollectionCounts } from './lib/collections/get-collection-counts';
 export { getCountableSlugs } from './lib/collections/get-countable-slugs';
@@ -71,3 +80,4 @@ export {
 export { getTourSignups } from './lib/collections/get-tour-signups';
 
 export { getUser } from './lib/collections/get-user';
+export { resetTotp } from './lib/collections/reset-totp';

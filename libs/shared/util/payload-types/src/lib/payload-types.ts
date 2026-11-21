@@ -156,6 +156,7 @@ export type SupportedTimezones =
 
 export interface Config {
   auth: {
+    agents: AgentAuthOperations;
     tenants: TenantAuthOperations;
     users: UserAuthOperations;
   };
@@ -165,12 +166,14 @@ export interface Config {
     callout: CalloutBlock;
     card: CardBlock;
     code: CodeBlock;
+    'coming-soon': ComingSoonBlock;
     content: ContentBlock;
     'custom-component': CustomComponentBlock;
     'feature-cards': FeatureCardsBlock;
     'feature-section': FeatureSectionBlock;
     'file-area': FileAreaBlock;
     form: FormBlock;
+    gallery: GalleryBlock;
     hero: HeroBlock;
     image: ImageBlock;
     'pill-list': PillListBlock;
@@ -184,10 +187,12 @@ export interface Config {
     tours: ToursBlock;
   };
   collections: {
+    agents: Agent;
     categories: Category;
     'custom-components': CustomComponent;
     'custom-themes': CustomTheme;
     faq: Faq;
+    'invite-codes': InviteCode;
     media: Media;
     navigation: Navigation;
     pages: Page;
@@ -205,33 +210,22 @@ export interface Config {
     users: User;
     forms: Form;
     'form-submissions': FormSubmission;
+    'totp-attempts': TotpAttempt;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
-  collectionsJoins: {
-    categories: {
-      'relations.relatedPosts': 'posts';
-    };
-    tags: {
-      'relations.relatedMedia': 'media';
-    };
-    tenants: {
-      'relations.relatedUsers': 'users';
-      'relations.relatedPages': 'pages';
-      'relations.relatedPosts': 'posts';
-      'relations.relatedCategories': 'categories';
-      'relations.relatedMedia': 'media';
-    };
-  };
+  collectionsJoins: {};
   collectionsSelect: {
+    agents: AgentsSelect<false> | AgentsSelect<true>;
     categories: CategoriesSelect<false> | CategoriesSelect<true>;
     'custom-components':
       CustomComponentsSelect<false> | CustomComponentsSelect<true>;
     'custom-themes': CustomThemesSelect<false> | CustomThemesSelect<true>;
     faq: FaqSelect<false> | FaqSelect<true>;
+    'invite-codes': InviteCodesSelect<false> | InviteCodesSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     navigation: NavigationSelect<false> | NavigationSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
@@ -252,6 +246,7 @@ export interface Config {
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions':
       FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
+    'totp-attempts': TotpAttemptsSelect<false> | TotpAttemptsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents':
@@ -281,11 +276,12 @@ export interface Config {
   widgets: {
     collections: CollectionsWidget;
   };
-  user: Tenant | User;
+  user: Agent | Tenant | User;
   jobs: {
     tasks: {
       'anonymize-tour-signups': TaskAnonymizeTourSignups;
       'build-custom-component': TaskBuildCustomComponent;
+      'clean-up-idle-workspaces': TaskCleanUpIdleWorkspaces;
       'delete-expired-form-submissions': TaskDeleteExpiredFormSubmissions;
       inline: {
         input: unknown;
@@ -293,6 +289,24 @@ export interface Config {
       };
     };
     workflows: unknown;
+  };
+}
+export interface AgentAuthOperations {
+  forgotPassword: {
+    email: string;
+    password: string;
+  };
+  login: {
+    email: string;
+    password: string;
+  };
+  registerFirstUser: {
+    email: string;
+    password: string;
+  };
+  unlock: {
+    email: string;
+    password: string;
   };
 }
 export interface TenantAuthOperations {
@@ -386,7 +400,11 @@ export interface CalloutBlock {
    * SVG code, drawn in the page itself. Colours can use the theme, such as var(--brand-500) or var(--foreground), so it follows a change of theme. Shown instead of the visual when both are set.
    */
   illustration?: string | null;
-  link: CalloutLink;
+  /**
+   * Uncheck for a band that says something without asking for a click.
+   */
+  showLink?: boolean | null;
+  link?: CalloutLink;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
@@ -513,6 +531,22 @@ export interface Tenant {
    */
   supportedLocales: ('en' | 'sv')[];
   /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  /**
+   * Pending workspaces come from self-serve signup and are not deployed until activated.
+   */
+  status: 'pending' | 'active';
+  /**
+   * When the workspace's admins were warned that it will be deleted for never having a page. Set by the nightly cleanup.
+   */
+  idleWarnedAt?: string | null;
+  /**
+   * When the platform was told this idle workspace has provisioning traces and needs deprovisioning by hand. Set by the nightly cleanup.
+   */
+  idleReportedAt?: string | null;
+  /**
    * The name this workspace is deployed under: its folder in Infisical and the end of its Fly app names, so "demo" deploys as "cdwr-cms-demo". Lowercase letters, digits and hyphens. It cannot be changed once saved, because a new name would leave the old apps and settings behind.
    */
   deployment?: string | null;
@@ -562,37 +596,18 @@ export interface Tenant {
         id?: string | null;
       }[]
     | null;
-  relations?: {
-    relatedUsers?: {
-      docs?: (number | User)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedPages?: {
-      docs?: (number | Page)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedPosts?: {
-      docs?: (number | Post)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedCategories?: {
-      docs?: (number | Category)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    relatedMedia?: {
-      docs?: (number | Media)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
   /**
-   * Used for url paths. Will be automatically generated from name if left empty.
+   * The site's id in Umami. Set by provisioning; leave empty to collect no statistics.
    */
-  slug?: string | null;
+  statsWebsiteId?: string | null;
+  /**
+   * The share slug of the site's Umami dashboard. Set by provisioning; empty means no link in the admin.
+   */
+  statsShareId?: string | null;
+  /**
+   * The id of the workspace's team in Umami. Set by provisioning; leave empty when there is no team.
+   */
+  statsTeamId?: string | null;
   updatedAt: string;
   createdAt: string;
   enableAPIKey?: boolean | null;
@@ -602,42 +617,51 @@ export interface Tenant {
   collection: 'tenants';
 }
 /**
- * Manage users and their access to workspaces.
+ * Labels are used to organize photos and files so they are easy to find and select.
  *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "users".
+ * via the `definition` "tags".
  */
-export interface User {
+export interface Tag {
   id: number;
+  tenant?: (number | null) | Tenant;
+  managedBy?: string | null;
   name: string;
   /**
-   * System users have access to manage the whole system and do not need to be members of a workspace. For normal users, it is a requirement to be members of a workspace.
+   * Used for url paths. Will be automatically generated from name if left empty.
    */
-  role: 'user' | 'system-user';
-  tenants?: TenantsArrayField;
+  slug?: string | null;
   /**
-   * Short description of the user.
+   * Select an icon and color that represent the tag.
    */
-  description?: string | null;
+  brand?: {
+    icon?: string | null;
+    color?: string | null;
+  };
   updatedAt: string;
   createdAt: string;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  resetPasswordRequestedAt?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  sessions?:
-    | {
-        id: string;
-        createdAt?: string | null;
-        expiresAt: string;
-      }[]
-    | null;
-  password?: string | null;
-  collection: 'users';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "CalloutLink".
+ */
+export interface CalloutLink {
+  type?: ('reference' | 'custom') | null;
+  newTab?: boolean | null;
+  reference?:
+    | ({
+        relationTo: 'pages';
+        value: number | Page;
+      } | null)
+    | ({
+        relationTo: 'posts';
+        value: number | Post;
+      } | null);
+  /**
+   * Add protocol (http:// or https://) if the link is external
+   */
+  url?: string | null;
+  label: string;
 }
 /**
  * Pages are the foundation of the system and are used to build your website. Work with drafts and publish when ready.
@@ -654,6 +678,14 @@ export interface Page {
    */
   name: string;
   /**
+   * Used for url paths. Will be automatically generated from name if left empty.
+   */
+  slug?: string | null;
+  /**
+   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
+   */
+  visibility: 'public' | 'members';
+  /**
    * A pre-designed header on top of the page. Provide for a consistent look and feel or customize everything in layout builder.
    */
   header?: string | null;
@@ -666,12 +698,14 @@ export interface Page {
     | CalloutBlock
     | CardBlock
     | CodeBlock
+    | ComingSoonBlock
     | CustomComponentBlock
     | ContentBlock
     | FeatureCardsBlock
     | FeatureSectionBlock
     | FileAreaBlock
     | FormBlock
+    | GalleryBlock
     | HeroBlock
     | ImageBlock
     | PillListBlock
@@ -692,14 +726,6 @@ export interface Page {
     image?: (number | null) | Media;
     description?: string | null;
   };
-  /**
-   * Used for url paths. Will be automatically generated from name if left empty.
-   */
-  slug?: string | null;
-  /**
-   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
-   */
-  visibility: 'public' | 'members';
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
@@ -777,6 +803,14 @@ export interface Post {
    * The title of the post and name used in navigation.
    */
   title: string;
+  /**
+   * Used for url paths. Will be automatically generated from title if left empty.
+   */
+  slug?: string | null;
+  /**
+   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
+   */
+  visibility: 'public' | 'members';
   heroImage?: (number | null) | Media;
   content: {
     root: {
@@ -793,8 +827,16 @@ export interface Post {
     };
     [k: string]: unknown;
   };
+  /**
+   * The authors of the post.
+   */
+  authors?: (number | User)[] | null;
   relatedPosts?: (number | Post)[] | null;
   categories?: (number | Category)[] | null;
+  /**
+   * The agent that drafted the post.
+   */
+  draftedBy?: (number | null) | Agent;
   meta?: {
     title?: string | null;
     /**
@@ -803,21 +845,57 @@ export interface Post {
     image?: (number | null) | Media;
     description?: string | null;
   };
-  /**
-   * The authors of the post.
-   */
-  authors?: (number | User)[] | null;
-  /**
-   * Used for url paths. Will be automatically generated from title if left empty.
-   */
-  slug?: string | null;
-  /**
-   * Controls who can open this on the website. Choose Public to let anyone read it. Choose Members only to hide it from the public site — a visitor then has to sign in on the website, and only members of this workspace can read it. Everyone else, search engines included, never sees it.
-   */
-  visibility: 'public' | 'members';
   updatedAt: string;
   createdAt: string;
+  deletedAt?: string | null;
   _status?: ('draft' | 'published') | null;
+}
+/**
+ * Manage users and their access to workspaces.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "users".
+ */
+export interface User {
+  id: number;
+  name: string;
+  /**
+   * System users have access to manage the whole system and do not need to be members of a workspace. For normal users, it is a requirement to be members of a workspace.
+   */
+  role: 'user' | 'system-user';
+  /**
+   * Short description of the user.
+   */
+  description?: string | null;
+  tenants?: TenantsArrayField;
+  statsAccount?: {
+    umamiUserId?: string | null;
+    createdAt?: string | null;
+  };
+  totpRequired?: boolean | null;
+  totpSecret?: string | null;
+  hasTotp?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
+  _verified?: boolean | null;
+  _verificationToken?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'users';
 }
 /**
  * Categories makes it possible to group blog posts by topic for better overview.
@@ -833,13 +911,6 @@ export interface Category {
    * The name of the category.
    */
   name: string;
-  relations?: {
-    relatedPosts?: {
-      docs?: (number | Post)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
   /**
    * Used for url paths. Will be automatically generated from name if left empty.
    */
@@ -848,11 +919,32 @@ export interface Category {
   createdAt: string;
 }
 /**
+ * Agents draft content through an API key. They can never publish.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agents".
+ */
+export interface Agent {
+  id: number;
+  name: string;
+  /**
+   * The only workspace the agent can draft in.
+   */
+  tenant: number | Tenant;
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'agents';
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "CodeBlock".
  */
 export interface CodeBlock {
-  language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx';
+  language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx' | 'shell';
   code: string;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
@@ -861,6 +953,40 @@ export interface CodeBlock {
   id?: string | null;
   blockName?: string | null;
   blockType: 'code';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ComingSoonBlock".
+ */
+export interface ComingSoonBlock {
+  /**
+   * A short line above the heading, such as "Opening soon".
+   */
+  badge?: string | null;
+  heading: string;
+  message?: string | null;
+  /**
+   * Optional. Shown as "Opening <date>" in the site’s language.
+   */
+  openingDate?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  /**
+   * The label of a button that opens a form, such as "Notify me". Empty means no button.
+   */
+  notifyLabel?: string | null;
+  /**
+   * The anchor of a Form block on this page set to Overlay. The button opens that form.
+   */
+  notifyAnchor?: string | null;
+  showIllustration?: boolean | null;
+  /**
+   * SVG code drawn in place of the built-in drawing of the site’s pages coming home. Empty keeps the built-in one. Colours can use the theme, such as var(--brand-500).
+   */
+  illustration?: string | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'coming-soon';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1016,6 +1142,18 @@ export interface FormBlock {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * On the page draws the form where the block sits. Overlay keeps it hidden until a link to #anchor opens it beside the page, as a panel on a wide screen and a sheet from the bottom on a phone.
+   */
+  display?: ('inline' | 'overlay') | null;
+  /**
+   * What a link reaches the form by, as #anchor. Lowercase letters, digits and dashes.
+   */
+  anchor?: string | null;
+  /**
+   * The heading of the panel. Empty means the form’s own title.
+   */
+  overlayTitle?: string | null;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
@@ -1314,6 +1452,7 @@ export interface ReusableContent {
     | ContentBlock
     | FileAreaBlock
     | FormBlock
+    | GalleryBlock
     | ImageBlock
     | SocialMediaBlock
     | SpacingBlock
@@ -1345,36 +1484,41 @@ export interface FileAreaBlock {
   blockType: 'file-area';
 }
 /**
- * Labels are used to organize photos and files so they are easy to find and select.
- *
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "tags".
+ * via the `definition` "GalleryBlock".
  */
-export interface Tag {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  managedBy?: string | null;
-  name: string;
+export interface GalleryBlock {
   /**
-   * Select an icon and color that represent the tag.
+   * Small uppercase label shown above the heading
    */
-  brand?: {
-    icon?: string | null;
-    color?: string | null;
-  };
-  relations?: {
-    relatedMedia?: {
-      docs?: (number | Media)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-  };
+  eyebrow?: string | null;
+  heading?: string | null;
   /**
-   * Used for url paths. Will be automatically generated from name if left empty.
+   * Short paragraph below the heading
    */
-  slug?: string | null;
-  updatedAt: string;
-  createdAt: string;
+  intro?: string | null;
+  /**
+   * Collage lays the photos out like a scrapbook, each a little askew, sized by the item. Row lines them up evenly, with a caption under each.
+   */
+  layout?: ('collage' | 'row') | null;
+  items?:
+    | {
+        image: number | Media;
+        /**
+         * Wide takes two columns, tall two rows.
+         */
+        size?: ('normal' | 'wide' | 'tall') | null;
+        caption?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
+   */
+  band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;
+  id?: string | null;
+  blockName?: string | null;
+  blockType: 'gallery';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1603,6 +1747,14 @@ export interface HeroBlock {
    * The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).
    */
   lede: string;
+  /**
+   * Standard sets the text to the left with a visual beneath. Fill centres the text and makes the block fill the screen under the header, with no visual.
+   */
+  layout?: ('standard' | 'fill') | null;
+  /**
+   * A static drawing in the theme’s own colour along the bottom of the block, fading upward.
+   */
+  decoration?: ('none' | 'horizon-lines') | null;
   /**
    * Shown below the actions. What makes the claim above checkable rather than asserted.
    */
@@ -1940,28 +2092,6 @@ export interface ToursBlock {
   blockType: 'tours';
 }
 /**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "CalloutLink".
- */
-export interface CalloutLink {
-  type?: ('reference' | 'custom') | null;
-  newTab?: boolean | null;
-  reference?:
-    | ({
-        relationTo: 'pages';
-        value: number | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: number | Post;
-      } | null);
-  /**
-   * Add protocol (http:// or https://) if the link is external
-   */
-  url?: string | null;
-  label: string;
-}
-/**
  * Your own themes. Select them in Site Settings to make them available on the site.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2028,7 +2158,7 @@ export interface CustomTheme {
   createdAt: string;
 }
 /**
- * Questions and answers shown to all users in the admin help drawer.
+ * Questions and answers shown to all users in the admin help drawer, grouped by topic. The platform entries are restored from the code at every start, so change them there; an edit here is overwritten.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "faq".
@@ -2036,11 +2166,54 @@ export interface CustomTheme {
 export interface Faq {
   id: number;
   _order?: string | null;
+  topic:
+    | 'pages'
+    | 'drafts'
+    | 'navigation'
+    | 'site-settings'
+    | 'search-help'
+    | 'account'
+    | 'statistics'
+    | 'media'
+    | 'forms';
   question: string;
   /**
    * Plain text; line breaks are preserved.
    */
   answer: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Codes that let someone sign up when self-serve signup is open. A code is shown once, when it is created.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invite-codes".
+ */
+export interface InviteCode {
+  id: number;
+  /**
+   * Generate a code or type your own, in the form XXXX-XXXX-XXXX-XXXX.
+   */
+  code?: string | null;
+  /**
+   * The first half of the code, which is not secret. Identifies the code in this list.
+   */
+  lookup?: string | null;
+  codeHash: string;
+  /**
+   * How many times the code can be used.
+   */
+  maxUses: number;
+  uses?: number | null;
+  /**
+   * Leave empty for a code that does not expire.
+   */
+  expiresAt?: string | null;
+  /**
+   * Who the code is for.
+   */
+  note: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -2122,6 +2295,18 @@ export interface PlatformLabel {
 export interface PlatformSetting {
   id: number;
   /**
+   * Self-serve signup accepts invite codes.
+   */
+  signupOpen?: boolean | null;
+  /**
+   * Gets a short notice for each self-serve signup; empty means the signup is only logged.
+   */
+  signupNotifyEmail?: string | null;
+  /**
+   * Self-serve workspaces that still have no page this many days after signup are deleted, after a warning to their admins a week before. Leave empty to turn the cleanup off.
+   */
+  idleWorkspaceDays?: number | null;
+  /**
    * Domains the host application is reachable on, in addition to its .fly.dev address — which keeps working and stays useful for support. Add the domain here first, then create the DNS records shown after saving. Takes effect after a restart.
    */
   domains?:
@@ -2193,6 +2378,10 @@ export interface SiteSetting {
  */
 export interface SiteSettingsGeneral {
   appName: string;
+  /**
+   * Shown next to the icon in the header. Leave empty to show the icon only.
+   */
+  brandLabel?: string | null;
   /**
    * The page that will be used as the landing page for the application.
    */
@@ -2532,6 +2721,10 @@ export interface Tour {
    */
   title: string;
   /**
+   * Used for url paths. Will be automatically generated from title if left empty.
+   */
+  slug: string;
+  /**
    * Pick a shared image to set the mood, or upload your own photo of the actual places for an accurate one.
    */
   heroImage:
@@ -2629,10 +2822,6 @@ export interface Tour {
     image?: (number | null) | Media;
     description?: string | null;
   };
-  /**
-   * Used for url paths. Will be automatically generated from title if left empty.
-   */
-  slug: string;
   seatsTaken?: number | null;
   seatsWaiting?: number | null;
   seatsLeft?: number | null;
@@ -2664,6 +2853,15 @@ export interface FormSubmission {
     ('not-configured' | 'no-recipient' | 'sent' | 'failed') | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "totp-attempts".
+ */
+export interface TotpAttempt {
+  id: string;
+  attempts: number;
+  lockUntil?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2738,6 +2936,7 @@ export interface PayloadJob {
           | 'inline'
           | 'anonymize-tour-signups'
           | 'build-custom-component'
+          | 'clean-up-idle-workspaces'
           | 'delete-expired-form-submissions';
         taskID: string;
         input?:
@@ -2776,6 +2975,7 @@ export interface PayloadJob {
         | 'inline'
         | 'anonymize-tour-signups'
         | 'build-custom-component'
+        | 'clean-up-idle-workspaces'
         | 'delete-expired-form-submissions'
       )
     | null;
@@ -2802,6 +3002,10 @@ export interface PayloadLockedDocument {
   id: number;
   document?:
     | ({
+        relationTo: 'agents';
+        value: number | Agent;
+      } | null)
+    | ({
         relationTo: 'categories';
         value: number | Category;
       } | null)
@@ -2816,6 +3020,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'faq';
         value: number | Faq;
+      } | null)
+    | ({
+        relationTo: 'invite-codes';
+        value: number | InviteCode;
       } | null)
     | ({
         relationTo: 'media';
@@ -2888,6 +3096,10 @@ export interface PayloadLockedDocument {
   globalSlug?: string | null;
   user:
     | {
+        relationTo: 'agents';
+        value: number | Agent;
+      }
+    | {
         relationTo: 'tenants';
         value: number | Tenant;
       }
@@ -2905,6 +3117,10 @@ export interface PayloadLockedDocument {
 export interface PayloadPreference {
   id: number;
   user:
+    | {
+        relationTo: 'agents';
+        value: number | Agent;
+      }
     | {
         relationTo: 'tenants';
         value: number | Tenant;
@@ -2939,17 +3155,26 @@ export interface PayloadMigration {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agents_select".
+ */
+export interface AgentsSelect<T extends boolean = true> {
+  name?: T;
+  tenant?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  enableAPIKey?: T;
+  apiKey?: T;
+  apiKeyIndex?: T;
+  hasAPIKey?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "categories_select".
  */
 export interface CategoriesSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   name?: T;
-  relations?:
-    | T
-    | {
-        relatedPosts?: T;
-      };
   slug?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -3008,8 +3233,24 @@ export interface CustomThemesSelect<T extends boolean = true> {
  */
 export interface FaqSelect<T extends boolean = true> {
   _order?: T;
+  topic?: T;
   question?: T;
   answer?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invite-codes_select".
+ */
+export interface InviteCodesSelect<T extends boolean = true> {
+  code?: T;
+  lookup?: T;
+  codeHash?: T;
+  maxUses?: T;
+  uses?: T;
+  expiresAt?: T;
+  note?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -3135,6 +3376,8 @@ export interface PagesSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   name?: T;
+  slug?: T;
+  visibility?: T;
   header?: T;
   layout?: T | {};
   meta?:
@@ -3144,8 +3387,6 @@ export interface PagesSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
-  slug?: T;
-  visibility?: T;
   updatedAt?: T;
   createdAt?: T;
   _status?: T;
@@ -3181,6 +3422,9 @@ export interface PlatformLabelsSelect<T extends boolean = true> {
  * via the `definition` "platform-settings_select".
  */
 export interface PlatformSettingsSelect<T extends boolean = true> {
+  signupOpen?: T;
+  signupNotifyEmail?: T;
+  idleWorkspaceDays?: T;
   domains?:
     | T
     | {
@@ -3228,10 +3472,14 @@ export interface PostsSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   title?: T;
+  slug?: T;
+  visibility?: T;
   heroImage?: T;
   content?: T;
+  authors?: T;
   relatedPosts?: T;
   categories?: T;
+  draftedBy?: T;
   meta?:
     | T
     | {
@@ -3239,11 +3487,9 @@ export interface PostsSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
-  authors?: T;
-  slug?: T;
-  visibility?: T;
   updatedAt?: T;
   createdAt?: T;
+  deletedAt?: T;
   _status?: T;
 }
 /**
@@ -3278,6 +3524,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
  */
 export interface SiteSettingsGeneralSelect<T extends boolean = true> {
   appName?: T;
+  brandLabel?: T;
   landingPage?: T;
   icon?:
     | T
@@ -3450,18 +3697,13 @@ export interface TagsSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   name?: T;
+  slug?: T;
   brand?:
     | T
     | {
         icon?: T;
         color?: T;
       };
-  relations?:
-    | T
-    | {
-        relatedMedia?: T;
-      };
-  slug?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -3474,6 +3716,10 @@ export interface TenantsSelect<T extends boolean = true> {
   name?: T;
   description?: T;
   supportedLocales?: T;
+  slug?: T;
+  status?: T;
+  idleWarnedAt?: T;
+  idleReportedAt?: T;
   deployment?: T;
   domains?:
     | T
@@ -3511,16 +3757,9 @@ export interface TenantsSelect<T extends boolean = true> {
             };
         id?: T;
       };
-  relations?:
-    | T
-    | {
-        relatedUsers?: T;
-        relatedPages?: T;
-        relatedPosts?: T;
-        relatedCategories?: T;
-        relatedMedia?: T;
-      };
-  slug?: T;
+  statsWebsiteId?: T;
+  statsShareId?: T;
+  statsTeamId?: T;
   updatedAt?: T;
   createdAt?: T;
   enableAPIKey?: T;
@@ -3556,6 +3795,7 @@ export interface ToursSelect<T extends boolean = true> {
   tenant?: T;
   managedBy?: T;
   title?: T;
+  slug?: T;
   heroImage?: T;
   summary?: T;
   destination?: T;
@@ -3589,7 +3829,6 @@ export interface ToursSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
-  slug?: T;
   seatsTaken?: T;
   seatsWaiting?: T;
   seatsLeft?: T;
@@ -3616,8 +3855,17 @@ export interface TourItinerarySelect<T extends boolean = true> {
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
-  tenants?: T | TenantsArrayFieldSelect<T>;
   description?: T;
+  tenants?: T | TenantsArrayFieldSelect<T>;
+  statsAccount?:
+    | T
+    | {
+        umamiUserId?: T;
+        createdAt?: T;
+      };
+  totpRequired?: T;
+  totpSecret?: T;
+  hasTotp?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
@@ -3626,6 +3874,8 @@ export interface UsersSelect<T extends boolean = true> {
   salt?: T;
   hash?: T;
   resetPasswordRequestedAt?: T;
+  _verified?: T;
+  _verificationToken?: T;
   loginAttempts?: T;
   lockUntil?: T;
   sessions?:
@@ -3831,6 +4081,15 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "totp-attempts_select".
+ */
+export interface TotpAttemptsSelect<T extends boolean = true> {
+  id?: T;
+  attempts?: T;
+  lockUntil?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -3955,6 +4214,14 @@ export interface TaskBuildCustomComponent {
   input: {
     id: number;
   };
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskClean-up-idle-workspaces".
+ */
+export interface TaskCleanUpIdleWorkspaces {
+  input?: unknown;
   output?: unknown;
 }
 /**

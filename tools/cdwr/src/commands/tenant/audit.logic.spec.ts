@@ -1,0 +1,324 @@
+import {
+  type AuditReport,
+  type FailedRequest,
+  addFailedRequest,
+  auditFindings,
+  auditMarkdown,
+  axeTargets,
+  isBroken,
+  notFoundPath,
+  ogCheck,
+  sameOriginLinks
+} from './audit.logic';
+
+const okReport = (): AuditReport => ({
+  url: 'https://cdwr.io',
+  at: '2026-11-12T10:00:00.000Z',
+  gateCookie: true,
+  pages: [
+    {
+      route: '/',
+      status: 200,
+      consoleErrors: [],
+      failedRequests: [],
+      axe: [],
+      brokenLinks: []
+    }
+  ],
+  og: {
+    title: 'Home',
+    description: 'A site',
+    image: 'https://cdwr.io/og.png',
+    imageStatus: 200,
+    missing: []
+  },
+  notFound: [{ locale: 'sv', path: '/missing', status: 404, lang: 'sv' }]
+});
+
+describe('sameOriginLinks', () => {
+  const base = 'https://cdwr.io/studio';
+
+  it('keeps same-origin links, resolved, without hash, once, in order', () => {
+    expect(
+      sameOriginLinks(
+        ['/a#top', 'b', '/a', 'https://cdwr.io/c', '#section'],
+        base
+      )
+    ).toEqual([
+      'https://cdwr.io/a',
+      'https://cdwr.io/b',
+      'https://cdwr.io/c',
+      'https://cdwr.io/studio'
+    ]);
+  });
+
+  it.each([
+    ['mailto:a@b.se'],
+    ['tel:+4612345'],
+    ['javascript:void(0)'],
+    ['https://other.com/a'],
+    ['http://cdwr.io/a'],
+    ['http://[bad']
+  ])('leaves out %s', (href) => {
+    expect(sameOriginLinks([href], base)).toEqual([]);
+  });
+});
+
+describe('isBroken', () => {
+  it.each([
+    [null, true],
+    [404, true],
+    [500, true],
+    [399, false],
+    [200, false]
+  ])('reads %s as %s', (status, expected) => {
+    expect(isBroken(status)).toBe(expected);
+  });
+});
+
+describe('addFailedRequest', () => {
+  const unauthorized: FailedRequest = {
+    method: 'GET',
+    url: 'https://cdwr.io/_next/image?url=%2Fa.png&w=640&q=75',
+    status: 401,
+    resourceType: 'image'
+  };
+
+  it('adds a request that answers 400 or worse, query string kept', () => {
+    const failed: Array<FailedRequest> = [];
+
+    expect(addFailedRequest(failed, unauthorized)).toBe(true);
+    expect(failed).toEqual([unauthorized]);
+  });
+
+  it.each([[200], [304], [399]])(
+    'leaves out a request answering %s',
+    (status) => {
+      const failed: Array<FailedRequest> = [];
+
+      expect(addFailedRequest(failed, { ...unauthorized, status })).toBe(false);
+      expect(failed).toEqual([]);
+    }
+  );
+
+  it('adds the same method, URL and status once', () => {
+    const failed: Array<FailedRequest> = [];
+    addFailedRequest(failed, unauthorized);
+
+    expect(
+      addFailedRequest(failed, { ...unauthorized, resourceType: 'fetch' })
+    ).toBe(false);
+    expect(failed).toEqual([unauthorized]);
+  });
+
+  it.each([
+    ['method', { method: 'POST' }],
+    ['URL', { url: 'https://cdwr.io/api/a' }],
+    ['status', { status: 403 }]
+  ])('adds a request with another %s', (_, change) => {
+    const failed: Array<FailedRequest> = [];
+    addFailedRequest(failed, unauthorized);
+
+    expect(addFailedRequest(failed, { ...unauthorized, ...change })).toBe(true);
+    expect(failed).toHaveLength(2);
+  });
+});
+
+describe('ogCheck', () => {
+  const tags = {
+    'og:title': 'Home',
+    'og:description': 'A site',
+    'og:image': 'https://cdwr.io/og.png'
+  };
+
+  it('has nothing missing when all is set and the image answers', () => {
+    expect(ogCheck(tags, 200).missing).toEqual([]);
+  });
+
+  it.each([
+    ['og:title', ['og:title']],
+    ['og:description', ['og:description']]
+  ])('lists %s when absent', (tag, missing) => {
+    expect(ogCheck({ ...tags, [tag]: null }, 200).missing).toEqual(missing);
+  });
+
+  it('lists an absent image once, without a status', () => {
+    expect(ogCheck({ ...tags, 'og:image': null }, null).missing).toEqual([
+      'og:image'
+    ]);
+  });
+
+  it.each([
+    [404, 'og:image (answers 404)'],
+    [null, 'og:image (answers nothing)']
+  ])('lists an image answering %s', (status, line) => {
+    expect(ogCheck(tags, status).missing).toEqual([line]);
+  });
+});
+
+describe('notFoundPath', () => {
+  it('is a path under the stamp', () => {
+    expect(notFoundPath('2026-11-12')).toBe('/cdwr-audit-missing-2026-11-12');
+  });
+});
+
+describe('axeTargets', () => {
+  it('keeps the first five selectors', () => {
+    const nodes = ['.a', '.b', '.c', '.d', '.e', '.f'].map((selector) => ({
+      target: [selector]
+    }));
+
+    expect(axeTargets(nodes)).toEqual(['.a', '.b', '.c', '.d', '.e']);
+  });
+
+  it('joins a path through a frame or a shadow root', () => {
+    expect(
+      axeTargets([
+        { target: ['iframe', '#inner'] },
+        { target: [['my-el', 'button']] }
+      ])
+    ).toEqual(['iframe >>> #inner', 'my-el >>> button']);
+  });
+});
+
+describe('auditFindings', () => {
+  it('is empty when all is well', () => {
+    expect(auditFindings(okReport())).toEqual([]);
+  });
+
+  it('says one line per problem', () => {
+    const report = okReport();
+    report.pages = [
+      {
+        route: '/a',
+        status: 500,
+        consoleErrors: ['x', 'y'],
+        failedRequests: [
+          {
+            method: 'GET',
+            url: 'https://cdwr.io/api/a',
+            status: 401,
+            resourceType: 'fetch'
+          },
+          {
+            method: 'POST',
+            url: 'https://cdwr.io/api/b',
+            status: 403,
+            resourceType: 'xhr'
+          }
+        ],
+        axe: [
+          {
+            id: 'color-contrast',
+            impact: 'serious',
+            help: '',
+            nodes: 3,
+            targets: ['.a', '.b', '.c']
+          },
+          { id: 'label', impact: null, help: '', nodes: 1, targets: ['#x'] }
+        ],
+        brokenLinks: [{ href: 'https://cdwr.io/gone', status: 404 }]
+      },
+      {
+        route: '/b',
+        status: null,
+        consoleErrors: [],
+        failedRequests: [],
+        axe: [],
+        brokenLinks: []
+      }
+    ];
+    report.og.missing = ['og:image'];
+    report.notFound = [{ locale: 'en', path: '/m', status: 200, lang: 'en' }];
+
+    expect(auditFindings(report)).toEqual([
+      '/a: answers 500',
+      '/a: 2 console error(s)',
+      '/a: 2 failed request(s) (401 GET https://cdwr.io/api/a, 403 POST https://cdwr.io/api/b)',
+      '/a: 2 axe violation(s) (color-contrast, label)',
+      '/a: 1 broken link(s) (https://cdwr.io/gone)',
+      '/b: answers nothing',
+      'OG: missing og:image',
+      '404 (en): /m answers 200'
+    ]);
+  });
+});
+
+describe('auditMarkdown', () => {
+  it('has a heading, a table, OG, 404 and no findings', () => {
+    const markdown = auditMarkdown(okReport());
+
+    expect(markdown).toContain(
+      '### Audit of https://cdwr.io at 2026-11-12T10:00:00.000Z'
+    );
+    expect(markdown).toContain(
+      '| Route | Status | Console errors | Failed requests | Axe | Broken links |'
+    );
+    expect(markdown).toContain('| / | 200 | 0 | 0 | 0 | 0 |');
+    expect(markdown).toContain('OG: title, description and image (200)');
+    expect(markdown).toContain('404 in sv: 404, lang sv');
+    expect(markdown).toContain('Gate cookie: sent');
+    expect(markdown).toContain('No findings');
+  });
+
+  it('says when no gate cookie was sent', () => {
+    const report = okReport();
+    report.gateCookie = false;
+
+    expect(auditMarkdown(report)).toContain('Gate cookie: not sent');
+  });
+
+  it('counts failed requests in the table and lists them as a finding', () => {
+    const report = okReport();
+    report.pages[0].failedRequests = [
+      {
+        method: 'GET',
+        url: 'https://cdwr.io/api/a',
+        status: 401,
+        resourceType: 'fetch'
+      }
+    ];
+
+    const markdown = auditMarkdown(report);
+
+    expect(markdown).toContain('| / | 200 | 0 | 1 | 0 | 0 |');
+    expect(markdown).toContain(
+      '- /: 1 failed request(s) (401 GET https://cdwr.io/api/a)'
+    );
+  });
+
+  it('lists the elements of each axe violation', () => {
+    const report = okReport();
+    report.pages[0].axe = [
+      {
+        id: 'color-contrast',
+        impact: 'serious',
+        help: '',
+        nodes: 7,
+        targets: ['.caption', 'pre > span:nth-child(2)']
+      },
+      { id: 'region', impact: 'moderate', help: '', nodes: 1, targets: [] }
+    ];
+
+    const markdown = auditMarkdown(report);
+
+    expect(markdown).toContain(
+      '#### Axe elements\n\n- / color-contrast (7): `.caption`, `pre > span:nth-child(2)`\n- / region (1): no selector'
+    );
+  });
+
+  it('has no axe elements section without violations', () => {
+    expect(auditMarkdown(okReport())).not.toContain('Axe elements');
+  });
+
+  it('lists the findings when there are some', () => {
+    const report = okReport();
+    report.og.missing = ['og:title'];
+
+    const markdown = auditMarkdown(report);
+
+    expect(markdown).toContain('OG: missing og:title');
+    expect(markdown).toContain('- OG: missing og:title');
+    expect(markdown).not.toContain('No findings');
+  });
+});

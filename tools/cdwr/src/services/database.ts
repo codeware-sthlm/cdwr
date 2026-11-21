@@ -6,7 +6,7 @@ import type {
   CmsReportKey,
   RetryableCmsReportKey
 } from '@codeware/shared/util/pure';
-import { toPoolerUrl } from '@codeware/shared/util/pure';
+import { isGuardedNoOpOutput, toPoolerUrl } from '@codeware/shared/util/pure';
 
 import { sshExec } from './fly';
 import { type Environment, readSecret } from './infisical';
@@ -44,13 +44,19 @@ export async function previewDatabaseUrl(app: string): Promise<string> {
 }
 
 /** Production from Infisical, preview from the named cms app */
-export const resolveDatabaseUrl = (
+export const resolveDatabaseUrl = async (
   environment: Environment,
   previewApp?: string
-): Promise<string> =>
-  environment === 'preview' && previewApp
-    ? previewDatabaseUrl(previewApp)
-    : cmsDatabaseUrl(environment);
+): Promise<string> => {
+  if (environment !== 'preview') return cmsDatabaseUrl(environment);
+  // Each pull request has its own preview database, so Infisical holds none
+  if (!previewApp) {
+    throw new Error(
+      'Preview has no shared database: pass --preview-app (-p), such as cdwr-cms-pr-123'
+    );
+  }
+  return previewDatabaseUrl(previewApp);
+};
 
 const PROXY_PORT = 15432;
 const TUNNEL_ATTEMPTS = 5;
@@ -185,15 +191,6 @@ export async function withDatabase<T>(
 }
 
 /**
- * Run a script under `apps/cms/src/utils` as an environment. The environment
- * decides which `PAYLOAD_SECRET_KEY` is loaded, and that key encrypts API
- * keys: inheriting the local one would read or write values the deployment
- * cannot decrypt.
- */
-/** What the cms exit guard writes when a script's event loop drained on its own */
-const GUARD_MESSAGE = 'ended without completing';
-
-/**
  * Whether a failed run is the cms exit guard reporting a no-op.
  *
  * The guard fires only when the script's module graph stopped evaluating
@@ -202,7 +199,7 @@ const GUARD_MESSAGE = 'ended without completing';
  * script with the same inputs simply gets another go at winning the race.
  */
 export const isGuardedNoOp = (error: unknown): boolean =>
-  (error instanceof CommandError && error.stderr.includes(GUARD_MESSAGE)) ||
+  (error instanceof CommandError && isGuardedNoOpOutput(error.stderr)) ||
   error instanceof SilentNoOpError;
 
 /**
@@ -251,6 +248,12 @@ export async function retryGuardedNoOp<T>(
   );
 }
 
+/**
+ * Run a script under `apps/cms/src/utils` as an environment. The environment
+ * decides which `PAYLOAD_SECRET_KEY` is loaded, and that key encrypts API
+ * keys: inheriting the local one would read or write values the deployment
+ * cannot decrypt.
+ */
 export function runCmsScript(
   root: string,
   script: string,

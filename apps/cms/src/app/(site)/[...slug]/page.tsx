@@ -1,4 +1,5 @@
 import { getPage, getPageData } from '@codeware/app-cms/data-access';
+import { docMeta, sitePath } from '@codeware/shared/util/payload-utils';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -21,7 +22,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const page = await getPage(runtime, slug.join('/'), { draft, depth: 1 });
 
   return page
-    ? documentMetadata(page, { siteName: runtime.tenantConfig?.appName })
+    ? documentMetadata(docMeta({ collection: 'pages', doc: page }), {
+        siteName: runtime.tenantConfig?.appName,
+        origin: runtime.payload.config.serverURL,
+        path: sitePath('pages', page, runtime.tenantConfig?.landingPage.id),
+        locale: runtime.tenantConfig?.locale
+      })
     : {};
 }
 
@@ -37,5 +43,7 @@ export default async function Page({ params }: Props) {
     notFound();
   }
 
-  return <PagePreview page={data.page} blocksData={data.blocksData} />;
+  return (
+    <PagePreview page={data.page} blocksData={data.blocksData} live={draft} />
+  );
 }

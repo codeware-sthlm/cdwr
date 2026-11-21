@@ -11,6 +11,8 @@ export const FORCE_LOGOUT_PATH = '/admin/force-logout';
 /** Cookies that together make up an admin session. */
 export const SESSION_COOKIES = [
   'payload-token',
+  // `payload-totp`'s verified second factor, which outlives the session cookie
+  'payload-totp',
   // Multi-tenant plugin's selected workspace
   'payload-tenant',
   // Next.js draft mode, enabled through `/api/preview` for live preview

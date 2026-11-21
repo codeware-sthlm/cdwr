@@ -9,10 +9,11 @@ import { input } from '../../cli/inputs';
 import {
   type LinearActivityResponse,
   type RunRow,
+  activityRows,
   collectEvents,
-  plural,
-  renderActivityDocument
+  plural
 } from './activity.logic';
+import { hostId } from './host-id';
 import { localMinute } from './usage.logic';
 
 const SHOWN = 20;
@@ -22,7 +23,7 @@ const runSchema = z.object({
   outcome: z.string().catch(''),
   ticket: z.string().catch(''),
   detail: z.string().catch('')
-}) satisfies z.ZodType<RunRow, z.ZodTypeDef, unknown>;
+}) satisfies z.ZodType<RunRow, unknown>;
 
 /** A runs.jsonl row, or undefined for a line that is not one */
 const parseRun = (line: string): RunRow | undefined => {
@@ -42,14 +43,15 @@ const readStdin = async (): Promise<string> => {
 
 export default defineCommand({
   summary:
-    "The activity document from Linear's issue history and the runs file",
+    "Who did what to which ticket, from Linear's history and the runs file",
   description:
-    "Reads a Linear GraphQL response (issues with their history and comments) on stdin, as the queue script pipes it in, and the scheduler's runs.jsonl, and renders one Markdown table of who did what to which ticket. It never talks to Linear itself.",
+    "Reads a Linear GraphQL response (issues with their history and comments) on stdin, as the queue script pipes it in, and the scheduler's runs.jsonl, and prints a table of who did what to which ticket; --json adds the rows for the telemetry table. It never talks to Linear itself.",
   danger: 'read',
   inputs: {
     runs: input.optional(
       input.string({
         prompt: 'Path to runs.jsonl?',
+        short: 'r',
         description:
           "The scheduler's runs file; left out, only Linear's events",
         flagOnly: true
@@ -58,12 +60,14 @@ export default defineCommand({
     ),
     days: input.number({
       prompt: 'How many days?',
+      short: 'D',
       description: 'Days back from now to include',
       default: 7,
       schema: z.number().int().positive()
     }),
     limit: input.number({
       prompt: 'How many events?',
+      short: 'l',
       description: 'Newest events to keep, at most 200',
       default: 200,
       schema: z.number().int().min(1).max(200)
@@ -103,7 +107,8 @@ export default defineCommand({
     const { events, dropped } = collectEvents(response, rows, {
       now,
       windowDays: days,
-      limit
+      limit,
+      host: hostId()
     });
 
     if (events.length > 0) {
@@ -123,12 +128,8 @@ export default defineCommand({
         events: events.map((e) => ({ ...e, at: e.at.toISOString() })),
         dropped,
         skippedLines,
-        // Ready for the Linear document the scheduler publishes
-        document: renderActivityDocument(events, {
-          updated: localMinute(now),
-          windowDays: days,
-          dropped
-        })
+        // For the telemetry table, built from the same events
+        rows: activityRows(events)
       }
     };
   }

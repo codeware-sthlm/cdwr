@@ -22,6 +22,7 @@ const blocks: Record<BlockSlug, boolean> = {
   content: true,
   'file-area': true,
   form: true,
+  gallery: true,
   image: true,
   'social-media': true,
   spacing: true,
@@ -29,6 +30,7 @@ const blocks: Record<BlockSlug, boolean> = {
   'theme-studio': false,
   // Unsupported blocks
   callout: false,
+  'coming-soon': false,
   'feature-cards': false,
   'feature-section': false,
   hero: false,

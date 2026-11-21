@@ -1,6 +1,7 @@
 import {
   type CspOptions,
   type CspSurface,
+  SHOWCASE_STORAGE_ORIGIN,
   TURNSTILE_ORIGIN,
   createCspNonce,
   cspBaseline,
@@ -72,6 +73,20 @@ describe('cspHeaders', () => {
 
   it.each<[CspSurface, boolean]>([
     ['site', true],
+    ['admin', false]
+  ])('surface %s shows showcase images: %s', (surface, expected) => {
+    const csp = cspHeaders(base({ surface, enforce: true }))[CSP];
+
+    expect(directive(csp, 'img-src')?.includes(SHOWCASE_STORAGE_ORIGIN)).toBe(
+      expected
+    );
+    expect(csp.split(SHOWCASE_STORAGE_ORIGIN).length - 1).toBe(
+      expected ? 1 : 0
+    );
+  });
+
+  it.each<[CspSurface, boolean]>([
+    ['site', true],
     ['admin', true],
     ['site', false],
     ['admin', false]
@@ -128,7 +143,7 @@ describe('cspHeaders', () => {
       "'self' 'unsafe-inline' https://fonts.googleapis.com"
     );
     expect(directive(csp, 'img-src')).toBe(
-      "'self' data: blob: https://img.example.com"
+      `'self' data: blob: https://img.example.com ${SHOWCASE_STORAGE_ORIGIN}`
     );
     expect(directive(csp, 'font-src')).toBe(
       "'self' data: https://fonts.gstatic.com"

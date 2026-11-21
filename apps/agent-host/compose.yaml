@@ -1,0 +1,49 @@
+# Run from this directory: docker compose up -d
+services:
+  agent:
+    image: ghcr.io/codeware-sthlm/cdwr-agent:${AGENT_IMAGE_TAG:-main}
+    container_name: cdwr-agent
+    # The queue's host_id; without it every deploy gets a new container id
+    hostname: agent-host
+    init: true
+    # Lets a run finish its exit trap before the kill
+    stop_grace_period: 2m
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - agent-home:/home/agent/.cdwr/agent-queue
+      - worktrees:/work
+      - pnpm-store:/pnpm-store
+      - claude-home:/home/agent/.claude
+      # The implement sessions' own claude home and pnpm store (uid session), never shared
+      - session-claude-home:/home/session/.claude
+      - session-pnpm-store:/session-pnpm-store
+    tmpfs:
+      - /run/agent:mode=0700,uid=1000,gid=1000
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  # The CDWR Desk as a static site, for the phone: bound to the host's loopback only, and
+  # published to the tailnet with `tailscale serve` (tools/cdwr/README.md, the NUC section)
+  desk:
+    image: ghcr.io/codeware-sthlm/cdwr-desk:${DESK_IMAGE_TAG:-main}
+    container_name: cdwr-desk
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:80"
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  agent-home:
+  worktrees:
+  pnpm-store:
+  claude-home:
+  session-claude-home:
+  session-pnpm-store:

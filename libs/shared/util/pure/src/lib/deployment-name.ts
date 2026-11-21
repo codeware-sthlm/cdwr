@@ -52,3 +52,47 @@ export function deploymentNameIssue(name: string): DeploymentNameIssue | null {
 
   return null;
 }
+
+/** Characters NFKD leaves whole, folded by hand */
+const FOLDED: Record<string, string> = {
+  æ: 'ae',
+  ø: 'o',
+  ß: 'ss',
+  œ: 'oe',
+  đ: 'd',
+  ð: 'd',
+  þ: 'th',
+  ł: 'l'
+};
+
+/**
+ * A deployment name made from a site's display name.
+ *
+ * Folds accents away (`Håkans Båtturer` becomes `hakans-batturer`), turns
+ * every run of anything else into one hyphen and cuts to the length limit.
+ * A name that would collide with a preview's own (`pr-12`) gets a `site-`
+ * prefix. Returns `''` when nothing usable is left, such as for an emoji.
+ */
+export function toDeploymentName(siteName: string): string {
+  const folded = siteName
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[æøßœđðþł]/g, (char) => FOLDED[char] ?? char);
+
+  const slug = folded
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_DEPLOYMENT_NAME_LENGTH)
+    .replace(/-+$/, '');
+
+  if (slug === '') {
+    return '';
+  }
+
+  // `-site` after the name would still match the reserved pattern, so the
+  // prefix is what clears it
+  return deploymentNameIssue(slug) === 'reserved'
+    ? `site-${slug}`.slice(0, MAX_DEPLOYMENT_NAME_LENGTH).replace(/-+$/, '')
+    : slug;
+}

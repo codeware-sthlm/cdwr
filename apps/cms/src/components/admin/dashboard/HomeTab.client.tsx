@@ -19,6 +19,8 @@ import {
   Card,
   CardAction,
   CardContent,
+  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle
 } from '@codeware/shared/ui/shadcn/components/card';
@@ -36,6 +38,8 @@ import { useCollectionLabel } from '../utils/use-collection-label';
 
 import { hasCreatePermission } from './has-create-permission';
 import { PANEL_LIMIT_OPTIONS } from './panel-limits';
+import { PendingSiteNotice } from './PendingSiteNotice.client';
+import { SiteStatsWidget } from './SiteStatsWidget.client';
 import { TASKS } from './tasks';
 import { useGettingStarted } from './use-getting-started';
 import { usePanelLimits } from './use-panel-limits';
@@ -67,10 +71,18 @@ export function HomeTab({
   counts,
   taskCounts,
   recentDocs,
-  drafts
+  drafts,
+  showBuildSite,
+  pendingSite
 }: Pick<
   DashboardData,
-  'userName' | 'counts' | 'taskCounts' | 'recentDocs' | 'drafts'
+  | 'userName'
+  | 'counts'
+  | 'taskCounts'
+  | 'recentDocs'
+  | 'drafts'
+  | 'showBuildSite'
+  | 'pendingSite'
 >) {
   const { permissions } = useAuth<User>();
   const collectionLabel = useCollectionLabel();
@@ -95,14 +107,34 @@ export function HomeTab({
 
   return (
     <div className="flex flex-col gap-8">
+      {pendingSite && <PendingSiteNotice />}
       <div>
         <h1 className="text-foreground text-2xl leading-tight font-semibold tracking-tight">
           {t('dashboard:heading')}
         </h1>
-        <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
-          {t('dashboard:lead', { name: userName })}
-        </p>
+        {!showBuildSite && (
+          <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
+            {t('dashboard:lead', { name: userName })}
+          </p>
+        )}
       </div>
+
+      {/* An empty site has nothing to greet the editor with yet */}
+      {showBuildSite && (
+        <Card variant="bordered">
+          <CardHeader>
+            <CardTitle>{t('dashboard:buildSiteTitle')}</CardTitle>
+            <CardDescription>{t('dashboard:buildSiteBody')}</CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button asChild>
+              <Link href="/admin/first-site">
+                {t('dashboard:buildSiteCta')}
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
 
       {/* First-time editor checklist */}
       {showChecklist && (
@@ -115,6 +147,8 @@ export function HomeTab({
           linkComponent={Link}
         />
       )}
+
+      <SiteStatsWidget />
 
       {/* Task grid — create tasks are hidden without create permission */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

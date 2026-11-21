@@ -2,6 +2,9 @@ import { CopyButton } from '@codeware/shared/ui/copy-button';
 import { Highlight, themes } from 'prism-react-renderer';
 import React from 'react';
 
+import { vsDarkAA, vsLightAA } from './accessible-themes';
+import './shell-grammar';
+
 export type Props = {
   code: string;
   language?: string;
@@ -9,10 +12,18 @@ export type Props = {
   theme?: keyof typeof themes;
 };
 
+const resolveTheme = (theme: keyof typeof themes) => {
+  if (theme === 'vsLight') return vsLightAA;
+  if (theme === 'vsDark') return vsDarkAA;
+  return themes[theme];
+};
+
 /**
  * React code component for highlighting code blocks.
  *
- * Theme defaults to `vsLight`.
+ * Theme defaults to `vsLight`. `vsLight` and `vsDark` use contrast-safe copies
+ * (see `accessible-themes`) so every token reaches WCAG AA; other themes are
+ * used as shipped.
  *
  * @param props - The component props.
  * @returns A React component that renders a code block with syntax highlighting.
@@ -27,12 +38,12 @@ export const Code: React.FC<Props> = ({
 
   return (
     <div className={`relative ${className}`}>
-      <Highlight code={code} language={language} theme={themes[theme]}>
+      <Highlight code={code} language={language} theme={resolveTheme(theme)}>
         {({ className, getLineProps, getTokenProps, style, tokens }) => (
           // The code scrolls inside the gutter kept for the copy button, so a
           // long line never runs underneath it
           <pre
-            className={`${className} rounded-lg border border-slate-100 py-4 pr-12 pl-4 text-xs dark:border-slate-800`}
+            className={`${className} border-border rounded-lg border py-4 pr-12 pl-4 text-xs`}
             style={style}
           >
             <div className="overflow-x-auto">
@@ -41,7 +52,7 @@ export const Code: React.FC<Props> = ({
                   key={i}
                   {...getLineProps({ className: 'table-row', line })}
                 >
-                  <span className="table-cell text-right text-slate-500 select-none">
+                  <span className="text-muted-foreground table-cell text-right select-none">
                     {i + 1}
                   </span>
                   <span className="table-cell pl-4">

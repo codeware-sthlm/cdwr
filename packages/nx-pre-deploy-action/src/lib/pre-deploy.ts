@@ -174,9 +174,87 @@ export async function preDeploy(
       return false;
     });
 
-    const appTenants: DeploymentsMap = Object.fromEntries(
-      deployable.map((app) => [app.name, deployments[app.name]])
+    const appTenants: ActionOutputs['appTenants'] = Object.fromEntries(
+      deployable.map((app) => [
+        app.name,
+        toTenantEntries(deployments[app.name])
+      ])
     );
+
+    // A host app deploys beside the app that previews against it, even when
+    // nothing bumped the host. A manual app run deploys only what it names.
+    if (environment === 'preview' && !inputs.manualApp) {
+      const deploying = new Set(deployable.map((app) => app.name));
+      // Companion name -> the deploying apps asking for it
+      const requested = new Map<string, Array<string>>();
+      for (const app of analyzed) {
+        if (app.status !== 'deploy' || !deploying.has(app.projectName)) {
+          continue;
+        }
+        for (const name of app.githubConfig.previewWith ?? []) {
+          if (!deploying.has(name)) {
+            requested.set(name, [
+              ...(requested.get(name) ?? []),
+              app.projectName
+            ]);
+          }
+        }
+      }
+      const companions = [...requested.keys()];
+
+      if (companions.length > 0) {
+        const analyzedCompanions = await analyzeAppsToDeploy(
+          environment,
+          preid,
+          companions,
+          Number(inputs.prNumber) || undefined,
+          config.mainBranch
+        );
+
+        const companionApps: DeployableApp[] = analyzedCompanions.flatMap(
+          (app) => {
+            if (app.status === 'deploy') {
+              core.info(
+                `Deploy: ${app.projectName} @ ${app.version} (preview beside ${requested.get(app.projectName)?.join(', ')})`
+              );
+              return [
+                {
+                  name: app.projectName,
+                  flyConfigFile: app.flyConfigFile,
+                  githubConfig: app.githubConfig,
+                  version: app.version,
+                  previousVersion: app.previousVersion
+                }
+              ];
+            }
+            core.warning(`Skip: ${app.projectName} - ${app.reason}`);
+            return [];
+          }
+        );
+
+        if (companionApps.length > 0) {
+          const found = await fetchDeployments(
+            infisicalConfig,
+            companionApps.map((app) => app.name)
+          );
+
+          for (const app of companionApps) {
+            // Only the host entry: a tenant filter never narrows a companion
+            const host = (found.deployments[app.name] ?? []).filter(
+              (entry) => entry.tenant === undefined
+            );
+            if (host.length === 0) {
+              core.warning(
+                `Skip: ${app.name} - no host deployment enabled in '${environment}'${describeSkipped(app.name, found.skipped)}`
+              );
+              continue;
+            }
+            deployable.push(app);
+            appTenants[app.name] = toTenantEntries(host);
+          }
+        }
+      }
+    }
 
     for (const [app, entries] of Object.entries(appTenants)) {
       core.info(
@@ -236,3 +314,12 @@ const describeSkipped = (
   );
   return ` (${parts.join(', ')})`;
 };
+
+/** Only the secret names leave this step; the values stay in Infisical */
+const toTenantEntries = (
+  entries: DeploymentsMap[string]
+): ActionOutputs['appTenants'][string] =>
+  entries.map(({ secrets, ...entry }) => {
+    const secretNames = Object.keys(secrets ?? {}).sort();
+    return secretNames.length > 0 ? { ...entry, secretNames } : entry;
+  });

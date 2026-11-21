@@ -4,10 +4,56 @@ export {
   type TourSignupMailInput,
   sendTourSignupEmails
 } from './lib/send-tour-signup-emails';
-export { renderEmailLayout } from './lib/templates/layout';
+export {
+  type EmailBrand,
+  NEUTRAL_ACCENT,
+  escape,
+  renderEmailLayout
+} from './lib/templates/layout';
 export {
   type CustomerMailKind,
   renderCustomerMail
 } from './lib/templates/tour-signup/customer';
+export {
+  type ForgotPasswordMailInput,
+  renderForgotPasswordMail
+} from './lib/templates/forgot-password/forgot-password';
+export {
+  type StatsAccountMailInput,
+  renderStatsAccountMail
+} from './lib/templates/stats-account/stats-account';
+export {
+  type AccountExistsMailInput,
+  renderAccountExistsMail
+} from './lib/templates/account-exists/account-exists';
+export {
+  type PlatformMail,
+  type SignupEmailsInput,
+  sendPlatformMail,
+  sendSignupEmails
+} from './lib/send-signup-emails';
+export {
+  type IdleWorkspaceSummaryMailInput,
+  renderIdleWorkspaceSummaryMail
+} from './lib/templates/idle-workspace-summary/idle-workspace-summary';
+export {
+  type IdleWorkspaceWarningMailInput,
+  renderIdleWorkspaceWarningMail
+} from './lib/templates/idle-workspace-warning/idle-workspace-warning';
+export {
+  type SignupNoticeMailInput,
+  renderSignupNoticeMail
+} from './lib/templates/signup-notice/signup-notice';
+export {
+  type VerifyEmailMailInput,
+  renderVerifyEmailMail
+} from './lib/templates/verify-email/verify-email';
 export { renderNotificationMail } from './lib/templates/tour-signup/notification';
 export { renderSeatsFreedMail } from './lib/templates/tour-signup/seats-freed';
+export {
+  type BuiltInThemes,
+  PLATFORM_EMAIL_BRAND,
+  emailBrandFromSettings,
+  siteIconUrl
+} from './lib/email-brand';
+export { withTextPart } from './lib/with-text-part';

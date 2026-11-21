@@ -7,7 +7,11 @@ import { CliError } from '../cli/errors';
 import { cdwrHome } from '../cli/prefs';
 import { ENV_FILE } from '../cli/workspace';
 import {
+  type CapSource,
+  HOST_ENV,
   type JobState,
+  KEYCHAIN_CLIENT_ID_SERVICE,
+  KEYCHAIN_CLIENT_SECRET_SERVICE,
   KEYCHAIN_SERVICE,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
@@ -16,22 +20,43 @@ import {
   WORKTREE_PREF,
   byFile,
   filesDrift,
-  implementCap,
+  hostKind,
+  implementBudget,
+  implementCapSource,
+  installedEnv,
   lastImplementRun,
+  limitedUntil,
+  linearAuthSource,
+  linearCredentialFiles,
   nodeMajor,
   parseLaunchctlPrint,
   plistPath,
   queuePaths,
+  schedulerHere,
   serviceTarget,
   spendForDay
 } from '../commands/agent/agent.logic';
+import { mirrorHost } from '../commands/agent/mirror.logic';
 
 import { CommandError, run } from './shell';
 
-export function requireMac(): void {
-  if (process.platform !== 'darwin') {
-    throw new CliError('The agent queue runs on macOS only');
+/** The host this command runs on; throws unless it is one of `allowed` */
+export function requireHost(
+  allowed: ReadonlyArray<'launchd' | 'container'>,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): 'launchd' | 'container' {
+  const host = hostKind(platform, env);
+  if (host === null || !allowed.includes(host)) {
+    throw new CliError(
+      `The agent queue runs on macOS (launchd) or in the agent container (${HOST_ENV}=container)`,
+      undefined,
+      allowed.length === 1 && allowed[0] === 'launchd'
+        ? 'This command needs macOS; the container is installed as an image'
+        : undefined
+    );
   }
+  return host;
 }
 
 export const paths = (env: NodeJS.ProcessEnv): QueuePaths =>
@@ -59,50 +84,130 @@ export async function jobState(
   }
 }
 
-/** Whether the Linear key is in the Keychain; the secret itself is never read */
-export async function keyPresent(): Promise<boolean> {
-  try {
-    await run('security', ['find-generic-password', '-s', KEYCHAIN_SERVICE]);
-    return true;
-  } catch {
-    return false;
+/**
+ * Which Linear credentials the job would use: the queue's app, the personal key (fallback) or none,
+ * and where they come from. In the container the env or the credential files decide (only their
+ * existence is checked), on a Mac the Keychain; the secret values are never read
+ */
+export async function linearAuthSourceOf(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<{
+  auth: 'app' | 'key' | 'none';
+  source: ReturnType<typeof linearAuthSource>;
+}> {
+  const host = hostKind(platform, env);
+  const paths = linearCredentialFiles(env);
+  const source = linearAuthSource(
+    host,
+    env,
+    host === 'container'
+      ? { app: existsSync(paths.app), key: existsSync(paths.key) }
+      : undefined
+  );
+  if (source === 'app-env' || source === 'app-file') {
+    return { auth: 'app', source };
   }
+  if (source === 'key-env' || source === 'key-file') {
+    return { auth: 'key', source };
+  }
+  if (source === 'none') return { auth: 'none', source };
+  const has = (service: string) =>
+    run('security', ['find-generic-password', '-s', service]).then(
+      () => true,
+      () => false
+    );
+  const [id, secret] = await Promise.all([
+    has(KEYCHAIN_CLIENT_ID_SERVICE),
+    has(KEYCHAIN_CLIENT_SECRET_SERVICE)
+  ]);
+  if (id && secret) return { auth: 'app', source };
+  return { auth: (await has(KEYCHAIN_SERVICE)) ? 'key' : 'none', source };
+}
+
+/** Which Linear credentials the job would use: the queue's app, the personal key (fallback) or none */
+export async function linearAuth(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<'app' | 'key' | 'none'> {
+  return (await linearAuthSourceOf(env, platform)).auth;
 }
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict and `queue-view:` lines when it printed them. Undefined when it is not installed
+ * `attended:` verdict, `linear:` line, `queue-view:`, `suggest:`, `devlog:`, `review:`, `watch-source:` and `watch-state:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
   repo: string,
   env: NodeJS.ProcessEnv
 ): Promise<
-  { decision: string; attended?: string; queueView?: string } | undefined
+  | {
+      decision: string;
+      attended?: string;
+      linear?: string;
+      queueView?: string;
+      suggest?: string;
+      devlog?: string;
+      review?: string;
+      watchSource?: string;
+      watchState?: string;
+    }
+  | undefined
 > {
   if (!existsSync(queue.script)) return undefined;
   const { stdout } = await run('/bin/zsh', [queue.script, '--check'], {
     env: {
       ...env,
+      // The installed settings win over the shell's, as they do for the job
+      ...installedEnv(readText(queue.plist) ?? ''),
       AGENT_QUEUE_HOME: queue.home,
       AGENT_QUEUE_REPO: repo
     },
-    // Two Linear reads of up to 20 s each (attended, then the plan query)
-    timeout: 60_000
+    // Three Linear reads of up to 20 s each (attended, the plan query, the suggest gate)
+    timeout: 90_000
   });
   const lines = stdout.trim().split('\n');
   const attended = lines.filter((line) => line.startsWith('attended: ')).at(-1);
+  const linear = lines.filter((line) => line.startsWith('linear: ')).at(-1);
   const queueView = lines
     .filter((line) => line.startsWith('queue-view: '))
     .at(-1);
+  const suggest = lines.filter((line) => line.startsWith('suggest: ')).at(-1);
+  const devlog = lines.filter((line) => line.startsWith('devlog: ')).at(-1);
+  const review = lines.filter((line) => line.startsWith('review: ')).at(-1);
+  const watchSource = lines
+    .filter((line) => line.startsWith('watch-source: '))
+    .at(-1);
+  const watchState = lines
+    .filter((line) => line.startsWith('watch-state: '))
+    .at(-1);
   return {
     decision: lines.at(-1) ?? '',
+    ...(suggest === undefined
+      ? {}
+      : { suggest: suggest.slice('suggest: '.length) }),
+    ...(devlog === undefined
+      ? {}
+      : { devlog: devlog.slice('devlog: '.length) }),
+    ...(review === undefined
+      ? {}
+      : { review: review.slice('review: '.length) }),
     ...(attended === undefined
       ? {}
       : { attended: attended.slice('attended: '.length) }),
+    ...(linear === undefined
+      ? {}
+      : { linear: linear.slice('linear: '.length) }),
     ...(queueView === undefined
       ? {}
-      : { queueView: queueView.slice('queue-view: '.length) })
+      : { queueView: queueView.slice('queue-view: '.length) }),
+    ...(watchSource === undefined
+      ? {}
+      : { watchSource: watchSource.slice('watch-source: '.length) }),
+    ...(watchState === undefined
+      ? {}
+      : { watchState: watchState.slice('watch-state: '.length) })
   };
 }
 
@@ -118,6 +223,15 @@ export function lockAge(lock: string): number | undefined {
 export function readText(file: string): string | undefined {
   try {
     return readFileSync(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+/** The user's Claude config, parsed; a missing or unparsable file reads as absent */
+export function readClaudeConfig(): unknown {
+  try {
+    return JSON.parse(readFileSync(join(homedir(), '.claude.json'), 'utf8'));
   } catch {
     return undefined;
   }
@@ -160,14 +274,27 @@ export function implementReport(
 ): {
   spent: number | undefined;
   cap: number;
+  capSource: CapSource;
+  budget: number;
   last: ReturnType<typeof lastImplementRun>;
+  limitedUntil: number | undefined;
 } {
   // The day implement.sh stamps: local date
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const { cap, source } = implementCapSource(
+    env['AGENT_QUEUE_IMPLEMENT_CAP_USD'],
+    readText(queue.implementCap)
+  );
   return {
     spent: spendForDay(readText(queue.implementSpend), day),
-    cap: implementCap(env['AGENT_QUEUE_IMPLEMENT_CAP_USD']),
-    last: lastImplementRun(readText(queue.runs))
+    cap,
+    capSource: source,
+    budget: implementBudget(env['AGENT_QUEUE_IMPLEMENT_BUDGET_USD']),
+    last: lastImplementRun(readText(queue.runs)),
+    limitedUntil: limitedUntil(
+      readText(queue.limitedUntil),
+      now.getTime() / 1000
+    )
   };
 }
 
@@ -256,4 +383,32 @@ export async function githubAppCheck(
       ?.replace(/^github app: /, '');
     return { ok: false, reason: reason || 'the token check failed' };
   }
+}
+
+/** The mirror target the session hook copies to, when one is set */
+export const mirrorTargetOf = (queue: QueuePaths): string | null =>
+  readText(queue.mirror)?.split('\n')[0]?.trim() || null;
+
+/**
+ * The host for a command that needs the scheduler on this machine; a Mac without the launchd
+ * job is attended-only, the scheduler runs in the agent container. The hint names `command`
+ * with `--host`, which acts there.
+ */
+export async function requireScheduler(
+  env: NodeJS.ProcessEnv,
+  command: 'pause' | 'resume' | 'run'
+): Promise<'launchd' | 'container'> {
+  const host = requireHost(['launchd', 'container'], env);
+  if (host === 'container') return host;
+  const queue = paths(env);
+  const job = await jobState();
+  if (!schedulerHere(host, job, existsSync(queue.plist))) {
+    const where = mirrorHost(mirrorTargetOf(queue));
+    throw new CliError(
+      `No scheduler on this machine; it runs ${where ? `on ${where}` : 'elsewhere'}`,
+      undefined,
+      `cdwr agent ${command} --host ${where ?? '<host>'}`
+    );
+  }
+  return host;
 }

@@ -14,17 +14,17 @@ import {
 import { defineCommand } from '../../cli/command';
 
 import { type ResolvedKey, resolveKeys } from './resolve.logic';
-import { vaultPathInput } from './vault-path';
+import { appInput, vaultPathInput } from './vault-path';
 
 export default defineCommand({
   summary: 'Where each vault key comes from in this shell',
   description:
     "For every key under --path: inherited (set on purpose in a local .env file or this shell), vault, or vault over the committed .env, as `nx dev` would decide it. A target's own `env` is not included. Prints keys and sources, never values.",
   danger: 'read',
-  inputs: { path: vaultPathInput() },
+  inputs: { path: vaultPathInput(), app: appInput() },
 
-  async plan(ctx, { path }) {
-    const cacheFile = offlineCacheFile(ctx.root, path);
+  async plan(ctx, { path, app }) {
+    const cacheFile = offlineCacheFile(ctx.root, path, app);
     const files = taskEnvFiles({
       workspaceRoot: ctx.root,
       projectRoot: dirname(relative(ctx.root, cacheFile)),

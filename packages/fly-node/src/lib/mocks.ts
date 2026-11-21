@@ -98,7 +98,7 @@ export const mockListCertForAppResponse: ListCertForAppResponse = [
     hostname: `${mockDefs.testApp}.fly.dev`
   },
   {
-    clientStatus: 'Pending', // TODO: Check if this is correct
+    clientStatus: 'Awaiting configuration',
     createdAt: '2024-02-01T00:00:00Z',
     hostname: '*.custom.io'
   }
@@ -266,6 +266,35 @@ export const mockStatusResponse = (
   status: app === mockDefs.testApp ? 'deployed' : 'pending',
   version: app === mockDefs.testApp ? 1 : 0
 });
+
+/**
+ * Mock `fly status --json` response where one of two machines is reported
+ * mid-update, without `image_ref`, `config` and `events`.
+ *
+ * @param app - The app name to use in the response (defaults to `mockDefs.testApp`)
+ */
+export const mockPartialStatusResponse = (app: string = mockDefs.testApp) => {
+  const full = mockStatusResponse(mockDefs.testApp);
+  const [machine] = full.machines;
+  return {
+    ...full,
+    hostname: `${app}.fly.dev`,
+    id: app,
+    name: app,
+    machines: [
+      machine,
+      {
+        id: 'machine-id-updating',
+        name: 'machine-name-updating',
+        state: 'replacing',
+        region: 'iam',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-02-01T00:00:00Z',
+        hostStatus: 'ok'
+      }
+    ]
+  };
+};
 
 /**
  * Mock `fly version` response for testing.

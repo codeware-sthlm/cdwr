@@ -1,0 +1,140 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { memoryPrefs } from '../cli/prefs';
+import { runCommand } from '../cli/run';
+import { fakeUi } from '../testing/fake-ui';
+
+import { type QueuePaths, attendedLinearServer } from './agent/agent.logic';
+
+vi.mock('../cli/preflight', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../cli/preflight')>();
+  return {
+    ...actual,
+    check: (need: string) => ({ need, ok: true, detail: '' })
+  };
+});
+vi.mock('./completion', () => ({ shellOf: () => null }));
+vi.mock('./agent/agent.logic', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./agent/agent.logic')>()),
+  hostKind: () => 'launchd'
+}));
+
+let loaded = false;
+let queue: QueuePaths;
+let drift: 'missing' | 'current' | 'stale' = 'missing';
+let claudeConfig: unknown;
+const jobPathChecks = vi.fn();
+const githubAppCheck = vi.fn();
+
+vi.mock('../services/agent-queue', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/agent-queue')>()),
+  jobState: async () => ({ loaded }),
+  linearAuthSourceOf: async () => ({
+    auth: 'app' as const,
+    source: 'app-env' as const
+  }),
+  paths: () => queue,
+  queueDrift: () => drift,
+  readClaudeConfig: () => claudeConfig,
+  worktreeOf: () => '/nowhere',
+  envCopyDrift: () => 'current',
+  implementReport: () => ({ spent: undefined, cap: 40, last: undefined }),
+  jobPathChecks: (...args: unknown[]) => jobPathChecks(...args),
+  githubAppCheck: (...args: unknown[]) => githubAppCheck(...args)
+}));
+
+describe('doctor on a machine without the scheduler', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    jobPathChecks.mockReset();
+    githubAppCheck.mockReset();
+    loaded = false;
+    drift = 'missing';
+    claudeConfig = undefined;
+    dir = mkdtempSync(join(tmpdir(), 'cdwr-doctor-'));
+    queue = {
+      home: join(dir, 'agent-queue'),
+      mirror: join(dir, 'agent-queue', 'mirror'),
+      plist: join(dir, 'queue.plist'),
+      files: { 'lib.sh': join(dir, 'agent-queue', 'lib.sh') }
+    } as QueuePaths;
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  async function doctor() {
+    const ui = fakeUi([]);
+    const command = (await import('./doctor')).default;
+    await runCommand({
+      name: 'doctor',
+      command,
+      argv: [],
+      root: dir,
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui,
+      history: () => undefined,
+      stdout: () => undefined
+    });
+    return ui.printed.write.join('\n');
+  }
+
+  it('names the mirror host and skips the job checks', async () => {
+    mkdirSync(queue.home, { recursive: true });
+    writeFileSync(queue.mirror, 'nuc:docker:cdwr-agent:/d\n');
+    const text = await doctor();
+    expect(text).toContain('agent queue');
+    expect(text).toContain('runs on nuc');
+    expect(text).not.toContain('cdwr agent install');
+    expect(jobPathChecks).not.toHaveBeenCalled();
+    expect(githubAppCheck).not.toHaveBeenCalled();
+  });
+
+  it('warns without a mirror, still not asking for an install', async () => {
+    const text = await doctor();
+    expect(text).toContain('not on this machine');
+    expect(text).not.toContain('cdwr agent install');
+  });
+
+  it('stays quiet about an attended side that is current', async () => {
+    drift = 'current';
+    claudeConfig = {
+      mcpServers: { agent_linear: attendedLinearServer(queue.files['lib.sh']) }
+    };
+    const text = await doctor();
+    expect(text).not.toContain('attended');
+  });
+
+  it('warns about stale copies and a stale agent_linear', async () => {
+    drift = 'stale';
+    claudeConfig = {
+      mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') }
+    };
+    const text = await doctor();
+    expect(text).toContain(
+      'installed scripts out of date, agent_linear out of date; `cdwr agent install`'
+    );
+    expect(jobPathChecks).not.toHaveBeenCalled();
+  });
+
+  it('warns about a stale agent_linear on a Mac with the job', async () => {
+    loaded = true;
+    drift = 'current';
+    claudeConfig = {
+      mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') }
+    };
+    const text = await doctor();
+    expect(text).toContain('agent_linear out of date');
+  });
+
+  it('stays quiet about agent_linear never added on a Mac with the job', async () => {
+    loaded = true;
+    drift = 'current';
+    const text = await doctor();
+    expect(text).not.toContain('agent_linear');
+  });
+});

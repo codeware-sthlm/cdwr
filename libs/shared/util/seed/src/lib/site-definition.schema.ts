@@ -57,6 +57,18 @@ export type AssertEveryKeyKnown<
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const Slug = z.string().regex(slugPattern, 'Expected a lowercase-dashed slug');
 
+/** Strict: a misspelled `descripton` would otherwise be stored and never used */
+const MetaSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    image: z
+      .object({ lookupFilename: z.string().min(1) })
+      .strict()
+      .optional()
+  })
+  .strict();
+
 const SlugRefSchema = z.object({ lookupSlug: Slug });
 
 /** A block, judged only on being a block. Payload judges the rest. */
@@ -104,7 +116,80 @@ export const SiteDefinitionSchema = z
       )
       .optional(),
     forms: z
-      .array(z.object({ title: z.string().min(1) }).passthrough())
+      .array(
+        z
+          .object({
+            title: z.string().min(1),
+            emailLabel: z.string().optional(),
+            emailPlaceholder: z.string().optional(),
+            fields: z
+              .array(
+                z
+                  .object({
+                    blockType: z.enum(['text', 'textarea', 'email', 'number']),
+                    name: z.string().min(1),
+                    label: z.string().min(1),
+                    // The renderer's grid is six columns
+                    width: z.number().int().min(1).max(6).optional()
+                  })
+                  .passthrough()
+              )
+              .optional()
+          })
+          .passthrough()
+          .superRefine(({ fields, emailLabel, emailPlaceholder }, ctx) => {
+            const single =
+              emailLabel !== undefined || emailPlaceholder !== undefined;
+
+            if (fields && single) {
+              ctx.addIssue({
+                code: 'custom',
+                message:
+                  "A form states either 'fields' or 'emailLabel' and 'emailPlaceholder', not both",
+                path: ['fields']
+              });
+            } else if (
+              !fields &&
+              (emailLabel === undefined || emailPlaceholder === undefined)
+            ) {
+              ctx.addIssue({
+                code: 'custom',
+                message:
+                  "A form needs either 'fields' or both 'emailLabel' and 'emailPlaceholder'",
+                path: ['fields']
+              });
+            }
+
+            if (!fields) {
+              return;
+            }
+
+            const emails = fields.filter(
+              ({ blockType }) => blockType === 'email'
+            );
+
+            if (emails.length !== 1 || emails[0].name !== 'email') {
+              ctx.addIssue({
+                code: 'custom',
+                message:
+                  "A form with its own fields needs exactly one email field named 'email'",
+                path: ['fields']
+              });
+            }
+
+            // The form binds each input by its name, so two fields with one
+            // name would share a single answer
+            const names = fields.map(({ name }) => name);
+
+            if (new Set(names).size !== names.length) {
+              ctx.addIssue({
+                code: 'custom',
+                message: 'Each field of a form needs a name of its own',
+                path: ['fields']
+              });
+            }
+          })
+      )
       .optional(),
     customThemes: z
       .array(
@@ -176,6 +261,8 @@ export const SiteDefinitionSchema = z
         .object({
           name: z.string().min(1),
           slug: Slug,
+          draft: z.boolean().optional(),
+          meta: MetaSchema.optional(),
           layout: z.array(BlockSchema)
         })
         .passthrough()
@@ -186,6 +273,8 @@ export const SiteDefinitionSchema = z
           .object({
             title: z.string().min(1),
             slug: Slug,
+            draft: z.boolean().optional(),
+            meta: MetaSchema.optional(),
             content: z.string()
           })
           .passthrough()
@@ -208,7 +297,7 @@ export const SiteDefinitionSchema = z
         ])
       )
       .optional(),
-    siteSettings: z.record(z.unknown()).optional()
+    siteSettings: z.record(z.string(), z.unknown()).optional()
   })
   // Unknown keys are kept rather than stripped, so the identity guard below can
   // see them. Stripping first would let a top-level `apiKey` pass by vanishing

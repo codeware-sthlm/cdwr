@@ -6,6 +6,12 @@ export const MEMBER_LOGIN_PATH = '/login';
 /** Where its form posts */
 export const MEMBER_LOGIN_SUBMIT_PATH = '/api/member-login';
 
+/** The step that asks an enrolled member for their authenticator code */
+export const MEMBER_LOGIN_CODE_STEP = 'code';
+
+/** `payload-totp`'s endpoint, which sets the cookie that verifies the session */
+export const TOTP_VERIFY_PATH = '/api/verify-totp';
+
 /** Where signing out posts */
 export const MEMBER_LOGOUT_SUBMIT_PATH = '/api/member-logout';
 
@@ -14,9 +20,10 @@ export const MEMBER_LOGOUT_SUBMIT_PATH = '/api/member-logout';
  *
  * Deliberately coarse: a wrong password, an unknown address and a locked
  * account are all `failed`, so the form cannot be used to discover which
- * addresses belong to this workspace.
+ * addresses belong to this workspace. `setup` is told only after a correct
+ * password, so it reveals nothing to a guesser.
  */
-export type MemberLoginError = 'failed' | 'throttled';
+export type MemberLoginError = 'failed' | 'throttled' | 'setup';
 
 /**
  * Auth config of the `users` collection, which both session cookies are built

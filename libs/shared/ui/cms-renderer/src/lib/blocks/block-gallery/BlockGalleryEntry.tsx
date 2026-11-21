@@ -346,8 +346,9 @@ export function BlockGalleryEntry({
   onStep: (delta: number) => void;
   position: { index: number; total: number };
   /**
-   * Whether the block is shown full screen. Held by the gallery, not here: an
-   * entry is remounted per block, and stepping from full screen must stay there
+   * Whether the block is shown full screen. Held by the gallery, which closes
+   * it on the way back to the list. The entry, and so the dialog, stays
+   * mounted across steps: a remount closed and reopened it on every step
    */
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -361,9 +362,13 @@ export function BlockGalleryEntry({
   const exampleDoc = doc && hasExample(doc) ? doc : null;
   const example = exampleDoc?.example ?? null;
   const banded = example !== null && isBanded(example, meta);
-  const [band, setBand] = useState<SectionBand>(
-    (example && isBanded(example, meta) && example.band) || 'none'
-  );
+  // The visitor's pick outlives a step, as the colour scheme does: the entry
+  // stays mounted from block to block. Until one is picked, each example
+  // shows the band it was written with
+  const [chosenBand, setBand] = useState<SectionBand | null>(null);
+  const band: SectionBand =
+    chosenBand ??
+    ((example && isBanded(example, meta) && example.band) || 'none');
 
   // Drawn once and shown twice: framed on the page, and again at full size
   const preview =
@@ -582,7 +587,12 @@ export function BlockGalleryEntry({
               </DialogClose>
             </span>
           </DialogHeader>
-          <div className="bg-core-background-content flex-1 overflow-auto px-6 py-10 sm:px-10 sm:py-12">
+          {/* Keyed by block, so a step opens the next one at its top rather
+              than as far down as the last one was scrolled */}
+          <div
+            key={meta.slug}
+            className="bg-core-background-content flex-1 overflow-auto px-6 py-10 sm:px-10 sm:py-12"
+          >
             {preview}
           </div>
         </DialogContent>

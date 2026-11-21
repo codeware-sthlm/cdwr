@@ -3,6 +3,7 @@ import { dirname, join } from 'path';
 import { cwd } from 'process';
 
 import {
+  SpawnError,
   SpawnOptions,
   SpawnPtyOptions,
   spawn,
@@ -24,7 +25,11 @@ import { PostgresUsersListTransformedResponseSchema } from './schemas/postgres-u
 import { SecretsListWithAppTransformedResponseSchema } from './schemas/secrets-list-with-app.schema';
 import { SecretsListTransformedResponseSchema } from './schemas/secrets-list.schema';
 import { StatusExtendedTransformedResponseSchema } from './schemas/status-extended.schema';
-import { StatusTransformedResponseSchema } from './schemas/status.schema';
+import {
+  type StatusLookup,
+  StatusTransformedResponseSchema,
+  statusLookupSchema
+} from './schemas/status.schema';
 import { VersionTransformedResponseSchema } from './schemas/version.schema';
 import type {
   AllocateIpOptions,
@@ -64,7 +69,34 @@ export type ExecFlyOptions = SpawnOptions &
      *   may appear in either stream (e.g. `fly deploy --build-only`)
      */
     streamStrategy?: 'stdout' | 'stderr' | 'combined';
+    /**
+     * Run the command again when it fails on a transient Fly error
+     * (see `TRANSIENT_FLY_ERRORS`). Only for commands that are safe to repeat:
+     * a command that may have taken effect before it failed must not set this.
+     */
+    retry?: boolean;
   };
+
+/**
+ * Fly errors that say nothing about the command, only about Fly at that
+ * moment: a region out of capacity, a builder that never answered, an API
+ * that was briefly unavailable. Seen in the deploy logs, not guessed.
+ */
+const TRANSIENT_FLY_ERRORS: ReadonlyArray<{ cause: string; pattern: RegExp }> =
+  [
+    { cause: 'no capacity available', pattern: /no capacity available/i },
+    { cause: 'builder deadline exceeded', pattern: /deadline_exceeded/i },
+    {
+      cause: 'timed out connecting to machine',
+      pattern: /timed out connecting to machine/i
+    },
+    // The status text, not a bare 503: an app whose health check answers
+    // 503 is broken, not unlucky, and must not be deployed three times
+    { cause: 'Fly API 503', pattern: /503 Service Unavailable/i }
+  ];
+
+/** Waits before each retry of a transient failure, so 3 attempts in all */
+const TRANSIENT_RETRY_DELAYS_MS: ReadonlyArray<number> = [10_000, 30_000];
 
 /** How often to poll a machine's state while waiting on it */
 const MACHINE_STATE_INTERVAL_MS = 2_000;
@@ -162,7 +194,9 @@ export class Fly {
       try {
         return await this.version();
       } catch (error) {
-        throw new Error(`[version] something broke\n${error}`);
+        throw new Error(`[version] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -190,7 +224,8 @@ export class Fly {
         return response;
       } catch (error) {
         throw new Error(
-          `[create app] something broke, check your apps\n${error}`
+          `[create app] something broke, check your apps\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -217,7 +252,8 @@ export class Fly {
         this.logger.info(`Application '${app}' was destroyed`);
       } catch (error) {
         throw new Error(
-          `[destroy app] something broke, check your apps\n${error}`
+          `[destroy app] something broke, check your apps\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -231,7 +267,7 @@ export class Fly {
       try {
         return await this.fetchAllApps('throwOnError');
       } catch (error) {
-        throw new Error(`[list] something broke\n${error}`);
+        throw new Error(`[list] something broke\n${error}`, { cause: error });
       }
     }
   };
@@ -255,7 +291,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[add certificate] something broke, check your app certificates\n${error}`
+          `[add certificate] something broke, check your app certificates\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -286,7 +323,9 @@ export class Fly {
           ? ListCertForAllResponse
           : ListCertForAppResponse;
       } catch (error) {
-        throw new Error(`[list certificates] something broke\n${error}`);
+        throw new Error(`[list certificates] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -305,7 +344,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[remove certificate] something broke, check your app certificates\n${error}`
+          `[remove certificate] something broke, check your app certificates\n${error}`,
+          { cause: error }
         );
       }
     }
@@ -331,7 +371,9 @@ export class Fly {
           `Configuration for '${options.app}' was saved to '${options.config}'`
         );
       } catch (error) {
-        throw new Error(`[save config] something broke\n${error}`);
+        throw new Error(`[save config] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -346,7 +388,9 @@ export class Fly {
         await this.ensureInitialized();
         return await this.showConfig('throwOnError', options);
       } catch (error) {
-        throw new Error(`[show config] something broke\n${error}`);
+        throw new Error(`[show config] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -404,7 +448,7 @@ export class Fly {
       const { appName } = await this.deployApp(options);
       this.logger.info(`Application '${appName}' was deployed`);
 
-      const status = await this.fetchAppStatus('throwOnError', {
+      const status = await this.fetchAppLookup('throwOnError', {
         app: appName
       });
 
@@ -415,7 +459,8 @@ export class Fly {
       }) as T extends { buildOnly: true } ? BuildResponse : DeployResponse;
     } catch (error) {
       throw new Error(
-        `[deploy] something broke, check your ${isBuildOnly ? 'builds' : 'deployments'}\n${error}`
+        `[deploy] something broke, check your ${isBuildOnly ? 'builds' : 'deployments'}\n${error}`,
+        { cause: error }
       );
     }
   };
@@ -436,7 +481,9 @@ export class Fly {
         await this.ensureInitialized();
         return await this.fetchAppIps('throwOnError', options);
       } catch (error) {
-        throw new Error(`[list ips] something broke\n${error}`);
+        throw new Error(`[list ips] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -446,7 +493,8 @@ export class Fly {
      * safe on every deploy rather than only on create. That matters because
      * `flyctl` allocates addresses only for an app it creates itself — an app
      * that arrives any other way, such as a registry push auto-creating it,
-     * deploys green and answers nothing.
+     * deploys green and answers nothing. `deploy` runs it before every
+     * deploy that is not build-only.
      *
      * @param options - The application, and which addresses to ensure
      * @returns The addresses the application holds afterwards
@@ -461,19 +509,25 @@ export class Fly {
         const has = (...types: Array<string>) =>
           existing.some((ip) => types.includes(ip.type));
 
+        let allocated = false;
         if (sharedV4 && !has('v4', 'shared_v4')) {
           await this.allocateIp('allocate-v4', options);
           this.logger.info('Allocated a shared IPv4 address');
+          allocated = true;
         }
         if (v6 && !has('v6')) {
           await this.allocateIp('allocate-v6', options);
           this.logger.info('Allocated a dedicated IPv6 address');
+          allocated = true;
         }
 
-        return await this.fetchAppIps('throwOnError', options);
+        return allocated
+          ? await this.fetchAppIps('throwOnError', options)
+          : existing;
       } catch (error) {
         throw new Error(
-          `[ensure ips] something broke, check your app addresses\n${error}`
+          `[ensure ips] something broke, check your app addresses\n${error}`,
+          { cause: error }
         );
       }
     }
@@ -496,7 +550,9 @@ export class Fly {
         await this.startMachine(app, machineId);
         this.logger.info(`Machine '${machineId}' in app '${app}' was started`);
       } catch (error) {
-        throw new Error(`[start machine] something broke\n${error}`);
+        throw new Error(`[start machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -512,7 +568,9 @@ export class Fly {
         await this.stopMachine(app, machineId);
         this.logger.info(`Machine '${machineId}' in app '${app}' was stopped`);
       } catch (error) {
-        throw new Error(`[stop machine] something broke\n${error}`);
+        throw new Error(`[stop machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -534,7 +592,9 @@ export class Fly {
           `Machine '${machineId}' in app '${app}' was restarted`
         );
       } catch (error) {
-        throw new Error(`[restart machine] something broke\n${error}`);
+        throw new Error(`[restart machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -558,7 +618,9 @@ export class Fly {
         await this.updateMachine(app, machineId, options);
         this.logger.info(`Machine '${machineId}' in app '${app}' was updated`);
       } catch (error) {
-        throw new Error(`[update machine] something broke\n${error}`);
+        throw new Error(`[update machine] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -591,7 +653,9 @@ export class Fly {
         await this.ensureInitialized();
         return await this.sshExec(app, command);
       } catch (error) {
-        throw new Error(`[ssh exec] something broke\n${error}`);
+        throw new Error(`[ssh exec] something broke\n${error}`, {
+          cause: error
+        });
       }
     }
   };
@@ -619,7 +683,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[set secrets] something broke, check your app secrets\n${error}`
+          `[set secrets] something broke, check your app secrets\n${error}`,
+          { cause: error }
         );
       }
     },
@@ -641,7 +706,9 @@ export class Fly {
         await this.deployStagedSecrets(app);
         this.logger.info(`Staged secrets were deployed for '${app}'`);
       } catch (error) {
-        throw new Error(`[deploy secrets] something broke\n${error}`);
+        throw new Error(`[deploy secrets] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -668,7 +735,9 @@ export class Fly {
           ? ListSecretForAllResponse
           : ListSecretForAppResponse;
       } catch (error) {
-        throw new Error(`[list secrets] something broke\n${error}`);
+        throw new Error(`[list secrets] something broke\n${error}`, {
+          cause: error
+        });
       }
     },
     /**
@@ -693,7 +762,8 @@ export class Fly {
         );
       } catch (error) {
         throw new Error(
-          `[unset secrets] something broke, check your app secrets\n${error}`
+          `[unset secrets] something broke, check your app secrets\n${error}`,
+          { cause: error }
         );
       }
     }
@@ -788,7 +858,7 @@ export class Fly {
     args.push('--org', options?.org || this._config.org || 'personal');
     args.push('--json');
 
-    return AppsCreateTransformedResponseSchema.parseAsync(
+    return await AppsCreateTransformedResponseSchema.parseAsync(
       await this.execFly(args)
     );
   }
@@ -837,7 +907,7 @@ export class Fly {
 
     // Lookup an existing app by name (appName indicates existence)
     if (lookupApp) {
-      const status = await this.fetchAppStatus('nullOnError', {
+      const status = await this.fetchAppLookup('nullOnError', {
         app: lookupApp
       });
       if (status) {
@@ -978,6 +1048,17 @@ export class Fly {
       }
     }
 
+    // Give the app its addresses before the deploy, not after. A deploy that
+    // fails would otherwise leave a new app unreachable, and flyctl's own
+    // first-deploy allocation, which it runs only for an app without any, is
+    // the one that has been broken. Skipped for build-only, and for an app
+    // whose config serves nothing, which is private on purpose.
+    const servesTraffic =
+      !!appConfig.httpService || (appConfig.services?.length ?? 0) > 0;
+    if (!options?.buildOnly && servesTraffic) {
+      await this.ips.ensure({ app: appName });
+    }
+
     // Deploy command
     const args = ['deploy', '--app', appName, '--config', deployConfig];
 
@@ -1012,10 +1093,10 @@ export class Fly {
 
     // flyctl writes progress output (including the image ref) to stderr for
     // --build-only, so use 'combined' strategy to search both streams.
-    const output = await this.execFly<string>(
-      args,
-      options?.buildOnly ? { streamStrategy: 'combined' } : undefined
-    );
+    const output = await this.execFly<string>(args, {
+      streamStrategy: options?.buildOnly ? 'combined' : 'stdout',
+      retry: true
+    });
 
     const imageRef = options?.buildOnly
       ? output?.match(/registry\.fly\.io\/\S+/)?.[0]
@@ -1082,7 +1163,7 @@ export class Fly {
     secrets: Record<string, string>,
     options?: SetAppSecretsOptions
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['secrets', 'set'];
 
@@ -1094,7 +1175,9 @@ export class Fly {
       args.push(`${key}=${this.safeArg(value)}`);
     }
 
-    await this.execFly(args);
+    // Staging only records values, so repeating it is harmless; setting
+    // without it restarts the machines and is left to fail once
+    await this.execFly(args, { retry: options?.stage === true });
 
     return NameSchema.parse(status.name);
   }
@@ -1108,7 +1191,7 @@ export class Fly {
     keys: Array<string>,
     options?: UnsetAppSecretsOptions
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['secrets', 'unset'];
 
@@ -1132,7 +1215,7 @@ export class Fly {
     hostname: string,
     options?: AppOrConfig
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['certs', 'add', hostname];
 
@@ -1172,6 +1255,7 @@ export class Fly {
       args.push('--yes');
     }
 
+    // Not retried: an allocation that failed in transit may have taken effect
     await this.execFly(args);
   }
 
@@ -1199,7 +1283,7 @@ export class Fly {
 
     try {
       return await IpsListTransformedResponseSchema.parseAsync(
-        await this.execFly(args)
+        await this.execFly(args, { retry: true })
       );
     } catch (error) {
       if (onError === 'throwOnError') {
@@ -1218,7 +1302,7 @@ export class Fly {
     hostname: string,
     options?: AppOrConfig
   ): Promise<string> {
-    const status = await this.fetchAppStatus('throwOnError', options);
+    const status = await this.fetchAppLookup('throwOnError', options);
 
     const args = ['certs', 'remove', hostname];
 
@@ -1308,7 +1392,7 @@ export class Fly {
     const deadline = Date.now() + MACHINE_STATE_TIMEOUT_MS;
     while (Date.now() < deadline) {
       // A failed poll is retried until the deadline, not fatal
-      const status = await this.fetchAppStatus('nullOnError', { app });
+      const status = await this.fetchAppLookup('nullOnError', { app });
       const machine = status?.machines.find(({ id }) => id === machineId);
       if (machine && states.includes(machine.state)) {
         return;
@@ -1357,7 +1441,7 @@ export class Fly {
     const args = ['apps', 'list', '--json'];
 
     try {
-      return AppsListTransformedResponseSchema.parseAsync(
+      return await AppsListTransformedResponseSchema.parseAsync(
         await this.execFly(args)
       );
     } catch (error) {
@@ -1516,6 +1600,50 @@ ${JSON.stringify(response, null, 2)}`);
 
   /**
    * @private
+   * Like `fetchAppStatus`, but only requires what a lookup needs (name,
+   * hostname and each machine's id and state), so a machine Fly reports
+   * mid-update does not fail it.
+   *
+   * @returns The app lookup or `null` if the app cannot be found and `nullOnError` is used
+   * @throws An error if the app cannot be found and `throwOnError` is used
+   */
+  private async fetchAppLookup(
+    onError: 'throwOnError',
+    options?: AppOrConfig
+  ): Promise<StatusLookup>;
+  private async fetchAppLookup(
+    onError: 'nullOnError',
+    options?: AppOrConfig
+  ): Promise<StatusLookup | null>;
+  private async fetchAppLookup(
+    onError: 'throwOnError' | 'nullOnError',
+    options?: AppOrConfig
+  ): Promise<StatusLookup | null> {
+    const args = ['status'];
+
+    args.push(...this.getAppOrConfigArgs(options));
+    args.push('--json');
+
+    let response: unknown = null;
+    try {
+      response = await this.execFly<unknown>(args);
+      return statusLookupSchema.parse(response);
+    } catch (error) {
+      if (onError === 'throwOnError') {
+        throw error;
+      }
+      if (error instanceof ZodError) {
+        this.logger.info(`Failed to parse response:
+${error.message}`);
+        this.logger.info(`Raw response:
+${JSON.stringify(response, null, 2)}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * @private
    * @returns The certificates for an app or `null` if the certificates cannot be retrieved and `nullOnError` is used
    * @throws An error if the certificates cannot be retrieved and `throwOnError` is used
    */
@@ -1537,7 +1665,7 @@ ${JSON.stringify(response, null, 2)}`);
     args.push('--json');
 
     try {
-      return CertsListTransformedResponseSchema.parseAsync(
+      return await CertsListTransformedResponseSchema.parseAsync(
         await this.execFly(args)
       );
     } catch (error) {
@@ -1571,7 +1699,7 @@ ${JSON.stringify(response, null, 2)}`);
     args.push('--json');
 
     try {
-      return SecretsListTransformedResponseSchema.parseAsync(
+      return await SecretsListTransformedResponseSchema.parseAsync(
         await this.execFly(args)
       );
     } catch (error) {
@@ -1766,39 +1894,34 @@ ${JSON.stringify(response, null, 2)}`);
 
     const flyCmd = 'flyctl';
     const toLogCmd = `${flyCmd} ${args.join(' ')}`;
+    const { retry = false, ...execOpts } = options ?? {};
     let output = '';
 
-    try {
-      this.traceCLI('CALL', toLogCmd);
-      // If the command requires interactive input, use spawnPty
-      if (options?.prompt) {
-        output = await spawnPty(flyCmd, args, { prompt: options.prompt });
-        this.traceCLI('RESULT', output);
-      } else {
-        // Otherwise use spawn
-        const { streamStrategy = 'stdout', ...spawnOpts } = options ?? {};
-        const result = await spawn(flyCmd, args, {
-          ...spawnOpts,
-          streamToConsole: this.logger.streamToConsole
-        });
-        const stdout = result.stdout.trim();
-        const stderr = result.stderr.trim();
-        this.traceCLI('RESULT', `${stdout}${stderr ? `\n${stderr}` : ''}`);
-        output =
-          streamStrategy === 'combined'
-            ? `${stdout}\n${stderr}`
-            : streamStrategy === 'stderr'
-              ? stderr
-              : stdout;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        output = await this.spawnFly(flyCmd, args, toLogCmd, execOpts);
+        break;
+      } catch (error) {
+        const errorMsg = (error as Error).message;
+        this.traceCLI('RESULT', errorMsg);
+
+        const cause = retry ? this.transientCause(error) : null;
+        const delay = TRANSIENT_RETRY_DELAYS_MS[attempt - 1];
+        if (cause && delay !== undefined) {
+          this.logger.info(
+            `Transient Fly error (${cause}), retrying in ${delay / 1000}s (attempt ${attempt + 1} of ${TRANSIENT_RETRY_DELAYS_MS.length + 1}): ${toLogCmd}`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (onError === 'throwOnError') {
+          throw new Error(`Command failed: ${toLogCmd}\n${errorMsg}`, {
+            cause: error
+          });
+        }
+        return null as T;
       }
-    } catch (error) {
-      const errorMsg = (error as Error).message;
-      this.traceCLI('RESULT', errorMsg);
-      if (onError === 'throwOnError') {
-        throw new Error(`Command failed: ${toLogCmd}
-${errorMsg}`);
-      }
-      return null as T;
     }
 
     try {
@@ -1812,6 +1935,69 @@ ${errorMsg}`);
       }
     }
     return undefined as T;
+  }
+
+  /**
+   * @private
+   * Run one fly command and assemble its output
+   *
+   * @returns The output selected by `streamStrategy`
+   * @throws An error if the command fails
+   */
+  private async spawnFly(
+    flyCmd: string,
+    args: Array<string>,
+    toLogCmd: string,
+    options: Omit<ExecFlyOptions, 'retry'>
+  ): Promise<string> {
+    this.traceCLI('CALL', toLogCmd);
+    // If the command requires interactive input, use spawnPty
+    if (options.prompt) {
+      const output = await spawnPty(flyCmd, args, { prompt: options.prompt });
+      this.traceCLI('RESULT', output);
+      return output;
+    }
+    // Otherwise use spawn
+    const { streamStrategy = 'stdout', ...spawnOpts } = options;
+    const result = await spawn(flyCmd, args, {
+      ...spawnOpts,
+      streamToConsole: this.logger.streamToConsole
+    });
+    const stdout = result.stdout.trim();
+    const stderr = result.stderr.trim();
+    this.traceCLI('RESULT', `${stdout}${stderr ? `\n${stderr}` : ''}`);
+    return streamStrategy === 'combined'
+      ? `${stdout}\n${stderr}`
+      : streamStrategy === 'stderr'
+        ? stderr
+        : stdout;
+  }
+
+  /**
+   * @private
+   * Name the transient Fly error behind a failed command, if it was one.
+   *
+   * Only the error flyctl ended with counts: from its last `Error` line to
+   * the end of stderr, or the last few lines when there is none. A deploy
+   * streams the app's own output and errors flyctl recovered from, and
+   * matching those would repeat a deploy that failed for a real reason.
+   *
+   * @returns The cause, or `null` when the failure is not a known transient one
+   */
+  private transientCause(error: unknown): string | null {
+    let text: string;
+    if (error instanceof SpawnError) {
+      const lines = error.stderr.split(/\r?\n/).filter((line) => line.trim());
+      const errorLines = lines.map((line) => /^\s*Error\b/.test(line));
+      const last = errorLines.lastIndexOf(true);
+      text = lines.slice(last >= 0 ? last : -3).join('\n');
+    } else {
+      text = String((error as Error)?.message ?? error);
+    }
+    return (
+      TRANSIENT_FLY_ERRORS.find(({ pattern }) => pattern.test(text))?.cause ??
+      null
+    );
   }
 
   /**

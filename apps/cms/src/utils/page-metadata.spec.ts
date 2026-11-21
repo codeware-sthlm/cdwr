@@ -1,4 +1,6 @@
-import { documentMetadata, siteOrigin } from './page-metadata';
+import { DEFAULT_OG_IMAGE_PATH } from '@codeware/shared/util/payload-utils';
+
+import { documentMetadata } from './page-metadata';
 
 describe('documentMetadata', () => {
   it('titles a page by its name, for the layout to follow with the site', () => {
@@ -43,9 +45,42 @@ describe('documentMetadata', () => {
     expect(withImage.openGraph).toMatchObject({
       images: [{ url: '/media/a.png' }]
     });
+    // An id is not an address, so the generated card stands in
     expect(
       documentMetadata({ name: 'A', meta: { image: 12 } }).openGraph
-    ).not.toHaveProperty('images');
+    ).toMatchObject({ images: [{ url: DEFAULT_OG_IMAGE_PATH }] });
+  });
+
+  it('falls back to the generated card when a page has no image', () => {
+    expect(documentMetadata({ name: 'A' }).openGraph).toMatchObject({
+      images: [{ url: '/og-image.png' }]
+    });
+  });
+
+  it('names one host in the canonical link, whichever one served the page', () => {
+    const page = documentMetadata(
+      { name: 'Om' },
+      { path: '/om', origin: 'https://codeware.se' }
+    );
+    expect(page.alternates).toEqual({ canonical: 'https://codeware.se/om' });
+  });
+
+  it('sets the canonical path, card type and Open Graph type and locale', () => {
+    const page = documentMetadata(
+      { name: 'Om' },
+      { path: '/om', locale: 'sv' }
+    );
+    expect(page.alternates).toEqual({ canonical: '/om' });
+    expect(page.twitter).toMatchObject({ card: 'summary_large_image' });
+    expect(page.openGraph).toMatchObject({
+      type: 'website',
+      locale: 'sv_SE'
+    });
+    expect(
+      documentMetadata({ name: 'P' }, { kind: 'article', locale: 'en' })
+        .openGraph
+    ).toMatchObject({ type: 'article', locale: 'en_US' });
+    expect(documentMetadata({ name: 'A' }).alternates).toBeUndefined();
   });
 
   it('names the site in a shared link', () => {
@@ -53,25 +88,5 @@ describe('documentMetadata', () => {
       documentMetadata({ name: 'Om' }, { siteName: 'Codeware Sthlm AB' })
         .openGraph
     ).toMatchObject({ siteName: 'Codeware Sthlm AB' });
-  });
-});
-
-describe('siteOrigin', () => {
-  it('takes the scheme the proxy forwarded', () => {
-    expect(siteOrigin('codeware.se', 'https')?.origin).toBe(
-      'https://codeware.se'
-    );
-  });
-
-  it('assumes HTTPS for a public host, HTTP for a local one', () => {
-    expect(siteOrigin('cdwr.io', null)?.origin).toBe('https://cdwr.io');
-    expect(siteOrigin('localhost:3000', null)?.origin).toBe(
-      'http://localhost:3000'
-    );
-  });
-
-  it('gives nothing for a missing or malformed host', () => {
-    expect(siteOrigin(null, null)).toBeUndefined();
-    expect(siteOrigin('bad host', null)).toBeUndefined();
   });
 });

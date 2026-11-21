@@ -12,7 +12,7 @@ import { blockImages } from '../block-images';
  *
  * An optional brand mark, a heading, a short body, a single action button and
  * an optional image, which turns the band from centred into two columns.
- * The button label comes from the link group's label field.
+ * The button is optional; its label comes from the link group's label field.
  */
 export const calloutBlock: Block = {
   slug: 'callout',
@@ -61,9 +61,28 @@ export const calloutBlock: Block = {
       }
     },
     illustrationField(),
+    {
+      name: 'showLink',
+      type: 'checkbox',
+      defaultValue: true,
+      label: { en: 'Show a button', sv: 'Visa en knapp' },
+      admin: {
+        description: {
+          en: 'Uncheck for a band that says something without asking for a click.',
+          sv: 'Avmarkera för ett band som säger något utan att be om ett klick.'
+        }
+      }
+    },
     linkGroupField({
       localizedLabel: true,
-      overrides: { interfaceName: 'CalloutLink', label: false }
+      overrides: {
+        interfaceName: 'CalloutLink',
+        label: false,
+        // A row from before the field has no value and keeps its button
+        admin: {
+          condition: (_, siblingData) => siblingData?.showLink !== false
+        }
+      }
     }),
     sectionBandField()
   ]

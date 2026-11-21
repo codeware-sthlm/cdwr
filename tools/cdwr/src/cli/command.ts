@@ -35,6 +35,8 @@ export interface Plan<D = unknown> {
   nothing?: string;
   /** Raises the command's danger for this plan, e.g. a fresh apply outside development; never lowers it */
   danger?: Danger;
+  /** Machine-readable plan for `--dry-run --json`; public data only, never a secret */
+  json?: unknown;
   data: D;
 }
 
@@ -51,10 +53,14 @@ export interface Result {
 
 export interface CommandDef<I extends Inputs, D> {
   summary: string;
-  description?: string;
+  description: string;
   danger: Danger;
   confirm?: Confirm;
+  /** `false` keeps the command out of `cdwr history`, for one a script runs on a schedule */
+  history?: false;
   needs?: Need[];
+  /** Takes the arguments after `--` as they are, in `ctx.rest`; other commands refuse them */
+  rest?: true;
   inputs: I;
   /** Reads what it needs and describes the work; must not write anything */
   plan: (ctx: Context, inputs: Resolved<I>) => Promise<Plan<D>>;

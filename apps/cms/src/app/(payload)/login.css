@@ -1,0 +1,57 @@
+/*
+ * Payload's login view, drawn as the `AuthCard` of the platform's auth pages
+ * (`libs/app-cms/ui/auth`): the mark above, the form in a card, a muted line
+ * under it. Payload keeps its own form, fields and button; only the frame and
+ * spacing change.
+ *
+ * The view renders flat inside `.template-minimal__wrap`: `.login__brand`,
+ * the `beforeLogin` notice, `.login__form`, then `afterLogin`. Everything is
+ * scoped to the `.login__*` classes, so the other minimal-template views
+ * (forgot, reset, first user) keep Payload's look. Colours are the shadcn
+ * tokens, which already follow `[data-theme='dark']`.
+ */
+
+/* Same width as the auth pages' `max-w-md` */
+.template-minimal--width-normal:has(.login__brand) .template-minimal__wrap {
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.login__brand {
+  margin-bottom: 0;
+}
+
+/* The card: shadcn Card's surface, ring and radius */
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: calc(var(--radius) + 4px);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+.login__form__inputWrap {
+  margin-bottom: 0;
+}
+
+.login__form > a {
+  align-self: flex-start;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  text-underline-offset: 4px;
+}
+
+.login__form > a:hover {
+  color: var(--foreground);
+}
+
+.login__form .form-submit,
+.login__form .form-submit .btn {
+  width: 100%;
+  margin: 0;
+}

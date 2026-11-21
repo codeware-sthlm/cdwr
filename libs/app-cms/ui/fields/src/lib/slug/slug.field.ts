@@ -16,7 +16,7 @@ type Slug = (args: {
 export const slugName = 'slug' as const;
 
 /**
- * Adds an indexed slug field to the sidebar.
+ * Adds an indexed slug field in the main column.
  *
  * Makes a slug text from the provided source field when a slug value is not provided.
  *
@@ -26,21 +26,22 @@ export const slugField: Slug = ({
   sourceField,
   required = false,
   maxLength
-}) => ({
-  name: slugName,
-  type: 'text',
-  index: true,
-  required,
-  maxLength,
-  label: { en: 'Slug', sv: 'Kortnamn' },
-  admin: {
-    description: {
-      en: `Used for url paths. Will be automatically generated from ${sourceField} if left empty.`,
-      sv: `Används för url-sökvägar. Genereras automatiskt från ${sourceField} om den lämnas tomt.`
+}) => {
+  return {
+    name: slugName,
+    type: 'text',
+    index: true,
+    required,
+    maxLength,
+    label: { en: 'Slug', sv: 'Kortnamn' },
+    admin: {
+      description: {
+        en: `Used for url paths. Will be automatically generated from ${sourceField} if left empty.`,
+        sv: `Används för url-sökvägar. Genereras automatiskt från ${sourceField} om den lämnas tomt.`
+      }
     },
-    position: 'sidebar'
-  },
-  hooks: {
-    beforeValidate: [formatSlug(sourceField), ensureUniqueSlug]
-  }
-});
+    hooks: {
+      beforeValidate: [formatSlug(sourceField), ensureUniqueSlug]
+    }
+  };
+};

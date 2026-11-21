@@ -24,7 +24,6 @@ const workspaceRoot = resolve(__dirname, '../../../../../../..');
 /** Everything that ships code to a browser and can see `payloadUrl` */
 const clientRoots = [
   join(workspaceRoot, 'libs/shared/ui/cms-renderer/src'),
-  join(workspaceRoot, 'apps/web/app'),
   join(workspaceRoot, 'apps/cms/src/app/(site)')
 ];
 

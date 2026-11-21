@@ -7,8 +7,10 @@ import { NextResponse } from 'next/server';
 
 import { NONCE_HEADER, cspForRequest } from './utils/csp';
 import { FORCE_LOGOUT_PATH, SESSION_COOKIES } from './utils/force-logout';
+import { signupRewrite } from './utils/platform-signup';
 import { isWellFormedActionId } from './utils/server-action';
 import { SITE_GATE_PATH, isGatedPath } from './utils/site-gate';
+import { isUnroutableSitePath } from './utils/unroutable-path';
 
 export function proxy(request: NextRequest) {
   const csp = cspForRequest(request.nextUrl.pathname, process.env);
@@ -18,6 +20,8 @@ export function proxy(request: NextRequest) {
   requestHeaders.set('content-security-policy', csp.requestPolicy);
   // ...and the theme script the layouts render reads it from this
   requestHeaders.set(NONCE_HEADER, csp.nonce);
+  // ...and the TOTP redirects, which a server component can't read otherwise
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
 
   const response = route(request, requestHeaders);
   for (const [name, value] of Object.entries(csp.responseHeaders)) {
@@ -40,6 +44,17 @@ function route(request: NextRequest, requestHeaders: Headers) {
     !isWellFormedActionId(actionId)
   ) {
     return new NextResponse(null, { status: 404 });
+  }
+
+  // A dotted path no site route serves — a scanner's `/.env` or
+  // `/wp-config.php`. Refused here, before the site's catch-all spends a
+  // Postgres connection finding nothing, which a burst of probes turns into
+  // pool timeouts for real visitors.
+  if (isUnroutableSitePath(pathname)) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: { 'x-robots-tag': 'noindex' }
+    });
   }
 
   // Force logout — drops the session cookies and lands on the login screen.
@@ -99,6 +114,19 @@ function route(request: NextRequest, requestHeaders: Headers) {
         headers: { 'x-robots-tag': 'noindex' }
       });
     }
+  }
+
+  // The platform's signup page, on the host only; a tenant site's own
+  // `/signup` page is left to the site. After the gate, so a gated host
+  // asks for its password first
+  const signup = signupRewrite(pathname, process.env);
+  if (signup) {
+    // Keep the query: the verify page reads its result from it
+    const target = new URL(signup, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.rewrite(target, {
+      request: { headers: requestHeaders }
+    });
   }
 
   // Clear Next.js draft mode when the Payload session has expired or been cleared.

@@ -20,40 +20,72 @@ pnpm cdwr doctor          # what is missing: binaries, credentials, PATH
 
 Credentials live in `tools/cdwr/.env` (copy `.env.example`). `pnpm cdwr` works without the setup. Set up once per machine: the linked `cdwr` runs the code of the checkout you are standing in, and falls back to the one it was linked from.
 
+Completion follows the checkout it was linked from, not the one you stand in. After every run the shim compares that checkout's `tools/cdwr/src` tree (`git rev-parse HEAD:tools/cdwr/src`) with the one recorded in `~/.cdwr/completion.json`, and rewrites the script in the background when it moved, so a new command or flag completes in the next new shell. A checkout behind it never writes it. `cdwr doctor` says which checkout it follows; run `cdwr setup` there, never elsewhere, since setup moves the link to wherever it runs.
+
 ## The app
 
-On a terminal, `cdwr` opens a full-screen app: commands on the left, the selected command's card on
-the right, and the run itself in the same pane: prompts, plan, log, result. `cdwr db backup` opens
-the app straight on that command. Keys: `↑↓` move, `⏎` run, `d` dry run, `/` filter, `?` keys,
-`esc` back, `q` quit. Without a terminal, or with `--json` or `--non-interactive`, nothing is drawn
-and nothing is asked.
+A bare `cdwr` on a terminal opens a full-screen app: commands on the left, the selected command's
+card on the right, and the run itself in the same pane: prompts, plan, log, result. Keys: `↑↓` move,
+`⏎` run, `d` dry run, `/` filter, `?` keys, `esc` back, `q` quit. A long run scrolls: `↑↓` a row,
+`u`/`d` a page, `g` top, `G` follows the end again. Only a bare `cdwr` opens it.
+A command path alone, such as `cdwr db backup`, prompts in the terminal for what it needs, and so
+does one with only global flags (`-d`, `-y`, `-v`); once an input is given it never prompts unless
+`-i` is given. Without a terminal, or with `--json`, nothing is
+drawn and nothing is asked.
 
 ## Every command
 
-| Flag                | Effect                                                          |
-| ------------------- | --------------------------------------------------------------- |
-| `--dry-run`         | Print the plan and stop. Safe on any command.                   |
-| `--yes`             | Skip confirmations.                                             |
-| `--json`            | One JSON document on stdout, no prompts, no spinners.           |
-| `--non-interactive` | Never prompt; a missing input is a usage error naming the flag. |
-| `--help`            | Flags, what the command needs, and how dangerous it is.         |
+| Flag                  | Effect                                                  |
+| --------------------- | ------------------------------------------------------- |
+| `-d`, `--dry-run`     | Print the plan and stop. Safe on any command.           |
+| `-y`, `--yes`         | Skip confirmations.                                     |
+| `-j`, `--json`        | One JSON document on stdout, no prompts, no spinners.   |
+| `-i`, `--interactive` | Ask for what is missing, even with inputs given.        |
+| `-v`, `--verbose`     | Show more, such as the full error behind a failure.     |
+| `-h`, `--help`        | Flags, what the command needs, and how dangerous it is. |
+
+Every flag has a short alias, shown in `--help` next to the long form.
 
 Flags come first; anything missing is asked for. An input is required unless it is optional or
 declares a default, and an empty answer to a required prompt is refused rather than passed along. Without a terminal (CI, an agent) nothing is
-asked. Exit codes: 0 ok, 1 failed, 2 usage, 130 cancelled.
+asked, and a missing input is a usage error naming the flag. Exit codes: 0 ok, 1 failed, 2 usage, 130 cancelled.
 
 Confirmation follows the command's danger level: read-only commands never ask, everything else
 asks wherever it runs, and destructive ones also make you type the target's name on production.
 A command prints its plan before asking, so the question is about what you have just read.
-Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it.
+Commands that change something append to `~/.cdwr/history.jsonl`; `cdwr history` shows it. A command a script runs on a schedule sets `history: false` in its definition and stays out of it.
 Remembered inputs (environment, app) live in `~/.cdwr/prefs.json`.
+
+## Statistics teams
+
+`cdwr tenant stats-teams` moves every workspace that has a statistics website into its own Umami
+team: it creates the team, stores its id as `statsTeamId`, adds the cms read key as a view-only
+member and moves the website into the team. It needs an admin user's key as `PROVISION_API_KEY` in
+`/integrations/umami` and checks that before anything else, also under `--dry-run`. Run
+`--dry-run` first: it prints one line per workspace (`acme  create team · move website · add reader`
+or `acme  ok`). Applying continues past a failing workspace, ends with a done / ok / failed
+summary and exits non-zero if any failed. It is idempotent, so a rerun only does what is missing.
+
+## Statistics accounts
+
+`cdwr tenant stats-accounts` compares each statistics team's members with the admins of its workspace.
+Read-only by default: it prints one line per workspace (`acme  2 ok · stale bob@x.se · missing eve@x.se`),
+where a member is `ok` when an admin of that workspace with a stored Umami account stands behind it,
+`stale` when none does, and an admin with an account who is not in the team is `missing` (the next
+action in the stats sheet adds them). It also reports orphan teams (named `cdwr-…`, recorded by no
+workspace) and Umami users named like a workspace admin that the cms has no id for (`unlinked`);
+those are never changed. The read key's user and the provisioning user are not counted as members.
+`--prune` removes the stale members (`DELETE /api/teams/{team}/users/{user}`), and on production asks
+for the name to be typed. It needs the admin `PROVISION_API_KEY`, like `stats-teams`. The `unlinked` check
+reads Umami's user list, which refuses API keys, so it signs in with `UMAMI_ADMIN_USERNAME` and
+`UMAMI_ADMIN_PASSWORD` (a user without 2FA) from `/integrations/umami`; without them it prints a note and skips that check.
 
 ## Infisical
 
 `cdwr infisical tenants|data|analysis` read what Infisical holds for tenants and apps, with values
 masked unless `--reveal` is given. A deployment ships when its folder holds `DEPLOY_ENABLED=true`
 (`/apps/<app>` for a host, `/tenants/<t>/apps/<app>` for a tenant); `tenants` and `analysis` show
-each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. Three more work on your own CLI session (`infisical login`, no
+each folder as on, off or no flag, and `tenant provision` writes the flag for a new tenant. In production it also gives the tenant its own Umami team (`cdwr-<deployment>`, id stored as `statsTeamId`, the read key added as a view-only member), then creates (or adopts, by domain, within that team) the tenant's Umami website in it (named after the cms's primary domain, else its Fly hostname; headless's when only headless is provisioned) and stores its id as `statsWebsiteId`, and gives it a share link stored as `statsShareId`, which the admin's statistics sheet links to; moving a legacy website out of another team needs an admin `PROVISION_API_KEY`, otherwise that part is a warning; without `PROVISION_API_KEY`, `API_KEY` and `UMAMI_URL` the step is skipped. A workspace from self-serve signup (status `pending`, listed first in the choice) is activated once its cms deployment has succeeded and `/api/health` answers; a failure or timeout leaves it pending and a second run finishes the job. `--no-wait` (or `-S`) skips the wait and the activation. Three more work on your own CLI session (`infisical login`, no
 token involved) and the same core as the `dev-plugin:infisical-run` executor:
 
 ```sh
@@ -62,7 +94,8 @@ cdwr infisical resolve --path=/apps/cms    # per key: inherited, vault, or vault
 cdwr infisical cache --path=/apps/cms      # refresh apps/cms/.env.offline for OFFLINE=1; counts only, never values
 ```
 
-`--path` defaults to `/apps/cms`. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
+`--path` defaults to `/apps/cms`. `--app` names the app that runs when it reads another app's folder
+(`--path=/apps/cms --app=headless` uses `apps/headless/.env.offline` and `.env`); it defaults to the path's app. `resolve` follows `OFFLINE` and `CI` as `nx dev` does. `cache`
 writes a local file (mode 600, gitignored) so it asks first; `--dry-run` lists the folders it
 would read and fetches no value. `nx dx:secrets <app>` runs it.
 
@@ -78,6 +111,44 @@ preference. A theme the site does not offer, or a scheme it locks, is reported a
 than saved under a name that claims otherwise. With `--json`, each shot carries its path, the page's
 HTTP status and any console errors, which is what an agent reads first after changing something.
 
+A gated site shows every visitor its gate page. `--gate-password` (the site's `SITE_GATE_PASSWORD`)
+sends the cookie an invited visitor would have, minted with the same signing the site checks and
+valid for an hour, so the password itself is never sent.
+
+`cdwr tenant audit` looks at the same pages before a site opens. Per page: the HTTP status, console
+errors, every request the page made that answered 400 or worse (method, URL and status, since
+Chrome's `Failed to load resource` text names no URL), axe violations with the selectors of up to 5
+failing elements each, and every same-site link that
+answers 400 or worse. Once per site: the home
+page's `og:title`, `og:description` and `og:image` (and that the image answers), and a path no site
+has answering 404 in each of `--locales` (`sv,en` by default). It takes `--gate-password` too, and
+writes `audit.json` and `audit.md` (a table to paste into a ticket) into a new folder under
+`.site-snapshots/<host>/`.
+
+```sh
+cdwr tenant audit --url https://cdwr.io --definition cdwr-io --gate-password …
+```
+
+Lighthouse is not part of it. Run it by hand on a gated site with the cookie as a header, or after
+opening with PageSpeed Insights.
+
+## Seeing a story
+
+`cdwr storybook snapshot --story <id,…>` renders Storybook stories to PNG, so UI can be reviewed
+(by an agent, which reads the images) without opening Storybook. Each story is drawn on its own page
+in every combination of `--themes` (the toolbar's, default `payload-admin`), `--schemes` (`light`,
+`dark`) and `--viewports` (`phone`, `desktop`), at twice the pixel density, into the gitignored
+`.showcase-images/storybook/` (`--out` to change), named `<story-id>--<theme>-<scheme>-<viewport>.png`.
+
+It serves the static build in `dist/storybook`, building it first when it is missing or with
+`--build`. `--url http://localhost:6006` shoots a running Storybook instead, with no build and no
+server. A story that draws nothing within 15 seconds is reported and the rest carry on; the command
+then exits 1. Story ids are the ones in the story's URL (`?id=…`), or `dist/storybook/index.json`.
+
+```sh
+cdwr storybook snapshot --story app-cms-dashboard-sitestatssheetbody--with-data,app-cms-dashboard-sitestatssheetbody--empty
+```
+
 ## Deploying
 
 `cdwr fly deploy <app> --env preview --pr 566` dispatches the Fly Deployment workflow, so a pull
@@ -85,6 +156,19 @@ request can get an app it did not change. The apps offered are the `apps` releas
 `nx.json`. Preview runs from the pull request's branch (`--pr` defaults to the current branch's);
 production runs from `main` and asks for confirmation. `--tenant` limits it to one tenant. The run's
 URL is reported, and is in the `--json` result.
+
+## Releasing packages
+
+`cdwr release` bumps versions, writes changelogs and tags. The publish itself is left to CI by
+default: the workflow stages each package on npm (`pnpm stage publish`) instead of publishing it,
+and the release waits there until you approve it with 2FA:
+
+```sh
+pnpm stage list                           # what is waiting
+pnpm stage approve <stage-id> --otp 123456
+```
+
+The stage ids are in the workflow's run summary. Approving is also a button on npmjs.com.
 
 ## Rotating the builder token
 
@@ -95,22 +179,60 @@ restarts, so nothing is refused on the way. Progress lives in the three Infisica
 interrupted run resumes where it stopped. Preview shares one Infisical environment, so a preview
 rollover covers every pull request's apps. The token is never printed.
 
+## The devlog
+
+`cdwr devlog draft --file post.md --covers 412,415` posts a markdown file to the cms as a draft post,
+signed in as the agent user. The first `# ` line is the title and the rest the body; a code fence is
+refused, since a post takes code as a cms block that markdown can't produce. It never publishes: a
+person reviews the draft in the admin. Each draft is recorded with the pull requests it covers in
+`devlog-covered.jsonl` in the agent queue home, and `cdwr devlog covered` reads every post back and
+writes its outcome there (draft, published or deleted; `--no-check` lists without asking the cms).
+It first checks that the key may create posts, and a read the cms refuses leaves the file
+untouched, so a wrong key never marks posts deleted.
+
+It needs `CMS_URL` and `CMS_AGENT_API_KEY` in `tools/cdwr/.env`, and `CMS_SIGNATURE_SECRET` when the
+cms runs in host mode. `cdwr doctor` doesn't check them.
+
+The `/devlog-draft` skill (`.claude/skills/devlog-draft`) is what writes the drafts: it reads the
+covered file and the pull requests merged since the newest covered one, keeps what a visitor or
+tenant would notice, writes at most two drafts under `devlog-drafts/` in the queue home and posts
+each with `cdwr devlog draft`. It ends with `DRAFTED <post id> <title>` per draft or
+`nothing this week`. Run it by hand as `/devlog-draft home=<queue home>`; the scheduler's weekly
+slot is a later step.
+
 ## The agent queue
 
-A launchd job (`se.codeware.agent-queue`), every 10 minutes, runs `/work-queue` plan-only against a
-separate worktree, `codeware-agent` beside this checkout. macOS only.
+The scheduler runs in the NUC's agent container, every 10 minutes, `/work-queue` plan-only against a
+separate worktree. A Mac is attended-only: `cdwr agent install` sets up its attended side, the
+script copies in `~/.cdwr/agent-queue/`, the Linear app's Keychain items and the `agent_linear` MCP
+server, and nothing more. It can still run the same loop as a launchd job (`se.codeware.agent-queue`,
+worktree `codeware-agent` beside this checkout): `install --scheduler` adds that job, a plain
+`install` keeps one already there current, and `cdwr agent uninstall` removes it. Without it, `status` shows the attended rows and names the host, and `pause`, `resume`
+and `run` refuse and name their `--host` line. With `--host <name>`, `status`, `notify`, `pause`,
+`resume` and `run` act on the queue in the agent container over ssh: the plan is the container's own
+`--dry-run`, and applying runs it there; `--json` passes the container's result through.
 
 ```sh
-cdwr agent install        # worktree, env files, deps, script, launchd job, Keychain key
+cdwr agent install        # the attended side: scripts, Keychain items, agent_linear; keeps an existing job current
+cdwr agent install --scheduler   # plus the launchd job: worktree, env files, deps, plist, load
+cdwr agent uninstall      # unload and remove the launchd job; --worktree-remove takes the planner checkout
 cdwr agent status         # loaded, paused, key, scripts current, watched PRs, next run
-cdwr agent run            # start a planning run now
+cdwr agent run            # start a planning run now; in the container, wake its loop
 cdwr agent pause|resume   # hold or release the schedule
+cdwr agent status|notify|pause|resume|run --host <name>   # the same, in the agent container over ssh
 cdwr agent logs [--run]   # the scheduler log, or the latest run
+cdwr agent logs --host <name> [--run]   # the same, from the agent container over ssh
+cdwr agent exec --host <name> -- <cdwr args>   # any cdwr command in the agent container, with its vault secrets
 cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ticket, from local transcripts
-… | cdwr agent activity [--runs <file>]   # the activity document from a Linear history response on stdin
+cdwr agent usage-record [--days 3] [--kind both] [--hours 6]   # upsert that spend into the telemetry database: day rows (this repo) and hour rows (every Claude project); --dry-run prints the rows
+cdwr agent platform-record [--dry-run]   # upsert tenant and platform state (db, Fly, health, Infisical flags, Sentry, Umami, deploy state) into tenant_state; the scheduler runs it each tick
+cdwr agent backup   # pg_dump the cms payload schema into the queue home's backups/, keep 7; the scheduler runs it nightly with PLATFORM_BACKUP_DATABASE_URL
+… | cdwr agent activity [--runs <file>]   # activity rows and a table from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
+cdwr agent attend [COD-n] [--path <dir>] [--no-start]   # refresh codeware-queue to origin/main, then start /work-queue there
 cdwr agent worktree add COD-529 --branch <name>   # codeware-cod-529 beside this checkout
 cdwr agent worktree prune          # remove ticket worktrees whose PR is merged or closed
+cdwr agent desk install [--pr <n>] # install the CDWR Desk from the newest CI build of main, or of a PR (the phone gets it from the NUC, see The desk on the phone)
 ```
 
 `worktree add` gives each ticket its own checkout, so starting the next never disturbs an earlier
@@ -118,18 +240,224 @@ branch: the pushed branch when origin has it, else the local one, else a new one
 It copies the env files and installs dependencies, and does only what differs. `worktree prune`
 removes the `codeware-cod-<n>` checkouts whose pull request is merged or closed, deleting the
 branch too when merged. One with no pull request, an open one or uncommitted changes is kept, as
-are the agent worktree and the one you run it from. Shell completion stops at `worktree`.
+are the agent worktree and the one you run it from. It stops a worktree's Nx daemon before
+removing it, and afterwards stops any Nx daemon or plugin worker still running for a
+`codeware-cod-<n>` worktree that is gone. Shell completion stops at `worktree`.
+
+`desk install` downloads the `cdwr-desk-macos-arm64` artifact of the newest successful `desk.yml`
+run (a push to main, or with `--pr` that PR's branch) and replaces `/Applications/CDWR Desk.app`,
+quitting a running copy first and clearing the quarantine flag the unsigned build needs. It then
+quits and removes the old `/Applications/Agent Desk.app` if it is there. It does not
+open the app; the settings live outside it and survive. An expired or missing artifact fails in the
+plan with the fix: `gh workflow run desk.yml` (`--ref <branch>` for a PR) or `nx tauri-build desk`.
+macOS arm64 only.
+
+`usage` and `usage-record` read role and ticket from each transcript. A session that ran
+`session.sh register` orchestrates, wherever it runs; its subagents implement, and so does every
+subagent outside the planner checkout. The rest of `<base>-agent` (plan-only runs,
+`/suggest-improvement`) plans. A reply's ticket is the one its session last named with `session.sh
+ticket` (a subagent takes its parent's at its first reply), else its git branch. `usage-record`
+replaces this host's day rows from the window's first day, so `--days 30 --kind day` re-sends a
+month under the current reading.
 
 The script's source is `agent-queue/run.sh`. Launchd runs the copy `install` puts in
 `~/.cdwr/agent-queue/`, beside its pause flag and logs, so a merged change does nothing
-unattended until the next `install`; `status` and `doctor` say when that copy is out of date. The
+unattended until the next `install`; `status` and `doctor` say when that copy is out of date.
+Each run also writes its own verdict to `job.json` there (`differs` names the scripts that differ
+from `origin/main`), which a session reads to tell a denial that a deploy fixes. The
 script holds the guardrails (read-only tools, Linear the only writable server, no API key), so
-review a change to it as one. The Linear key lives in the Keychain under `linear-agent-queue`;
-cdwr checks that it is there and never reads it. `install` asks for it when it is missing, and
-only does what differs, so run it again after the script changes. `--worktree` picks another
+review a change to it as one. The queue signs its Linear calls as its own Linear app, the app user
+`Codeware Agent`, so what it writes is not Håkan's. The launchd job reads the app's client id and
+secret from the Keychain items `linear-agent-queue-client-id` and `linear-agent-queue-client-secret`
+(a shell-exported `AGENT_QUEUE_LINEAR_CLIENT_ID` or `_SECRET` never reaches the job; the container
+gets those variables from Infisical and files them at start). With them `lib.sh` buys a 30-day
+token, cached with mode 600 in `~/.cdwr/agent-queue/linear.token` (the container's
+`/run/agent/linear.token`) and bought again a day before it expires or when Linear refuses it. The
+personal key, the Keychain's `linear-agent-queue` or `AGENT_QUEUE_LINEAR_KEY`, stays as the fallback
+until it is revoked. cdwr checks that the credentials are there and never reads them. `install`
+asks for the client id and secret when they are missing, and only does what differs, so run it
+again after the script changes.
+
+The queue tells the agent's Linear comments from Håkan's by their author: a comment is the agent's
+when the queue's app user wrote it, matched by its id (`agent_user_id` and `is_agent` in `watch.jq`,
+which the attended query and the scheduler's watch feed with each comment's `user { id app }`);
+another Linear app is not the agent. Before the switch the agent wrote as Håkan, so a comment of his that
+starts with `**Agent` and is older than `agent_cutover` still counts as the agent's; that fallback
+can go 14 days after the cutover. The `**Agent` prefix stays as the comment's kind (`**Agent: PR
+ready**`), and a kind counts only on the agent's own comment, so pasting the marker fakes no gate.
+Only Håkan makes a ticket ready: when the newest history entry adding `agent:ready` has an app user
+(the queue's or any other) as its actor, the queue doesn't start the ticket and lists it under `refused`, which `status` shows.
+
+The claude runs reach Linear through one of two MCP servers, picked by `AGENT_QUEUE_LINEAR_MCP`
+(`lib.sh`). `key`, the default on both hosts, is Linear's own server at `https://mcp.linear.app/mcp`,
+signed with the app's token: the runs load it with `--strict-mcp-config --mcp-config ~/.cdwr/agent-queue/linear-mcp.json`,
+whose `headersHelper` runs `zsh ~/.cdwr/agent-queue/lib.sh header`. That returns the cached token,
+buys one from the credentials in `AGENT_QUEUE_LINEAR_APP_FILE` (the container's `/run/agent/linear-app.env`,
+tmpfs, mode 600) or the Keychain, or falls back to the key in `AGENT_QUEUE_LINEAR_KEY_FILE` or the
+Keychain, so no credential is ever in the config or on a command line. Claude itself runs without
+them in its environment, and implement-only runs deny reading `/run/agent` and the token cache. In the
+container `linear-mcp.json` has no `headersHelper`: its url is a local proxy, `apps/agent-host/linear-mcp-proxy.mjs`
+on `127.0.0.1:8790` (`AGENT_QUEUE_LINEAR_PROXY_PORT`, set in the Dockerfile), which the entrypoint
+starts and restarts. The proxy signs each request with what `lib.sh header` prints, buys a new token
+with `lib.sh header force` on a 401 and retries once, so claude never runs the helper and the session
+never gets the token through it. It answers a `tools/call` for any tool not in
+`agent-queue/linear-tools.txt` with a JSON-RPC error, so Linear never sees it (`tools/list` is not
+filtered), and refuses batches, bodies that are not JSON or over 1 MB, a foreign `Host` header and
+other paths. `linear-tools.txt` is the one tool list: `implement.sh` allows exactly it, and the other
+runs in `run.sh` a subset of it (a spec checks). Its
+tools are `mcp__agent_linear__*`; the allowlists take the prefix from the same place. `install` adds
+the same server as `agent_linear` to the Mac's user Claude config, so an attended session can use
+the app too. `connector`, an explicit opt-out, is the claude.ai connector of the interactive login,
+which writes as its owner. Before each claude run the scripts check that the server answers (an MCP
+`initialize` for `key`, sent unsigned to the proxy in the container, where a miss reads `the Linear proxy on 127.0.0.1:8790 answered nothing` or `answered <code>`, and `status` shows `linear: ok (key via proxy)`; `claude mcp list` for the connector); without it nothing starts, the run is recorded as `no Linear tools`, one notice
+goes out, and `status` shows a `linear tools` warning. Notices go
+through `agent-queue/notify.sh "<message>"`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
+`CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. It also reads
+`{message, cwd}` JSON on stdin, as a hook; a session under `dontAsk` passes the message as an argument,
+since any `$` in a command gets it denied. `--worktree` picks another
 checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/notify-level`
 (missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
 run) always go out.
+
+The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
+`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds`, `tenant_state` (one row per tenant plus `_shared`, from `cdwr agent platform-record`), `desk_commands` and `snoozes`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
+`AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
+optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The
+queue writes no Linear document; the CDWR Desk reads these tables. The `queue_state` row also
+carries `watch`, the host's `watch.json` (the PRs of agent-labelled tickets with their state and
+the unresolved review threads a person or Copilot spoke last in, Copilot's share as
+`copilotThreads`; a review ticket with only Copilot threads open reads `review feedback (Copilot
+review)`), written in its own patch after the row; it needs the migration
+`20261105120000_queue_state_watch.sql`. It carries `renovate`, the host's `renovate.json`, the same
+way, after `20261105210000_queue_state_renovate.sql`; until that is applied only its patch fails, and
+a Mac reads the row without it.
+
+Linear changes reach the desk through the same project. A Linear webhook (team Codeware, Issue and
+Comment events) calls the Edge Function `linear-webhook` (`agent-queue/supabase/functions`). The function
+checks the `Linear-Signature` HMAC against `LINEAR_WEBHOOK_SECRET` and refuses a `webhookTimestamp` more
+than 60 s off. It then upserts one row per issue into `issue_events`: the issue's UUID, its identifier
+when the event carries it, and the action, never the payload, since anon can read the table. The desk
+hears the row through Realtime and refetches that one issue from Linear. Without the webhook, the desk
+reloads every 5 minutes, on focus and on Refresh. Deploy the function after a change to it, with JWT
+verification off, since Linear sends no Supabase JWT:
+
+```sh
+supabase functions deploy linear-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+```
+
+GitHub changes on `codeware-sthlm/cdwr` land beside them, in `github_events`, for the NUC's scheduler to
+wake on. A repo webhook (JSON) sends `pull_request`, `pull_request_review`, `pull_request_review_comment`,
+`check_suite` and `workflow_run` events to the Edge Function `github-webhook`, which checks `X-Hub-Signature-256`
+against `GITHUB_WEBHOOK_SECRET`. GitHub sends no timestamp, so a replayed delivery is accepted; it can
+only cause an extra wake, which re-reads Linear and GitHub anyway. The function keeps one row per subject:
+`pr/<n>` when the event names a pull request, else `ref/<branch>`, with the action (`pull_request:merged`,
+`check_suite:success` or another conclusion, `pull_request_review:copilot` for Copilot's review, …) and never
+the payload; the desk reads the action as the PR's state. A `ping` is answered without a row, and every other
+event or action with `Ignored`. Commit statuses aren't subscribed: the required checks and Chromatic run
+as Actions jobs, which `check_suite` covers. Both webhooks share `functions/_shared/hmac.ts` with `desk-command` (below), so a
+change to it means deploying all three:
+
+```sh
+supabase functions deploy github-webhook --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+supabase secrets set GITHUB_WEBHOOK_SECRET=… --project-ref xwmrptothspulojaxrvf
+```
+
+A completed `workflow_run` goes to `builds` instead, and only when it is a successful `push` or
+`workflow_dispatch` run on `main` of `agent-host-image.yml` or `desk.yml`: one row per workflow with
+the commit and the time the run was created. Those workflows' path filters already say what touched the image
+or the desk, so a row there is a new version of it. Runs can finish out of order or be re-run, so a
+trigger keeps the row of the run created last, which a re-run of an old run never is; the image
+workflow also queues its runs, so the `main` tag lands in the same order. `builds` is its own table because the NUC wakes on `github_events`,
+and a desk build should not wake it. The desk compares it with the commit the NUC's image reports
+(`· image sha-…` on the Job line) and with its own (`VITE_DESK_SHA`, set by `desk.yml`) and says
+which is behind main. Until the first run lands the table is empty and the desk says nothing; a
+`workflow_dispatch` of each workflow on main fills it.
+
+The desk steers the queue through a third Edge Function, `desk-command`. Anon may only read, so the
+desk posts `{host, kind, args}` with a per-device bearer token, and the function checks the token's
+SHA-256 against `DESK_CONTROL_TOKENS`, a JSON object of `{device: hex sha256}`; the device name is
+the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `run`, `limit`
+(`{value}` 1–20), `cap` (`{value}` 0–500 dollars), `copilot` and `merge` (`{ticket, pr}`), `restart` (`{tenant, app, sha}`) and `gate` (`{tenant, action}`), which it stores `pending` in `desk_commands`
+for the scheduler on that host to apply, and `abandon`, which it applies itself through `desk_abandon`, a database function that ends the
+session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
+host reads its own session files. The function stores the command in the same transaction. A host whose `queue_state` row is missing or more than 2 hours old,
+or an `abandon` with no open session, is stored `refused` with the reason. `snooze`
+(`{ticket, kind, eventAt}`: the Waiting on you row's kind and newest gate event, as the desk saw them)
+and `wake` (`{ticket}`) belong to a ticket, not a host, so no `queue_state` check refuses them. The
+function applies them itself through `desk_snooze` and `desk_wake`, which set or remove the ticket's
+row in `snoozes` and store the command `applied` in the same transaction; a `wake` with no snooze is
+`refused` (`not snoozed`). The desk keeps a row snoozed only while its kind and gate event still match,
+so a stale `snoozes` row is ignored and needs no cleanup. An applied or refused command also
+writes an `activity` row (`desk:<id>`, actor `human`). A new device gets its own token:
+
+```sh
+openssl rand -hex 32                     # the token, entered in the desk's settings
+printf %s '<token>' | shasum -a 256      # its hash, for the secret
+supabase secrets set DESK_CONTROL_TOKENS='{"mac-studio":"<hash>"}' --project-ref xwmrptothspulojaxrvf
+supabase functions deploy desk-command --use-api --no-verify-jwt --project-ref xwmrptothspulojaxrvf --workdir tools/cdwr/agent-queue
+```
+
+`run.sh` applies a host's pending commands at the start of every tick, before it reads `paused`, so
+a `resume` lifts the pause in the same tick. In the container the listener wakes on each new row
+(an update is the scheduler's own ack, so it doesn't wake); the Mac picks them up on its next tick.
+They are applied in `id` order, so the last one wins. A command older than 2 hours is refused `expired`
+and never replayed. `pause` and `resume` set or remove `paused`, `run` is this tick (refused while
+paused or while another run holds the lock), and `limit` and `cap` write the files `limit` and `implement-cap` in the queue home. Those
+override the PR limit of 5 (`run.sh`, and `wait.sh` from its own machine's file) and
+`AGENT_QUEUE_IMPLEMENT_CAP_USD` (a cap of 0 launches nothing); `cdwr agent status` shows both and
+where they came from. Each command is acked `applied` or `refused` with a note, on
+`status=eq.pending`, before anything changes, so of two overlapping ticks only one applies it and
+writes its `activity` row. A list that can't be read applies nothing that tick, and an ack that
+fails changes nothing and leaves the row for the next. A `resume` sent while `cdwr agent deploy` holds the container paused applies too; at worst it
+delays the deploy by one run.
+
+`copilot` and `merge` (`{ticket, pr}`) are the buttons on a review row in **Waiting on you**, and
+the scheduler's only GitHub writes. It acts only on a PR that its `watch.json` already holds for
+that ticket, reads the PR again as the `codeware-agent` app (never your login), and checks it with
+`desk_verdict` in `watch.jq` before the ack: a merge needs green checks, no conflict, every review
+thread resolved and no merge-queue entry, and a Copilot request needs no Copilot review asked or
+done. The desk greys the buttons out by the same rules, read from `queue_state.watch`. A `merge`
+adds the PR to main's merge queue (`enqueuePullRequest` with the head it checked), so it ends like a
+merge on GitHub: the watch sees it merged and the hand-offs stay. A `copilot` asks for
+`copilot-pull-request-reviewer[bot]` and reads the PR back. When the app is refused, or GitHub
+takes the request without adding Copilot (the app has no Copilot seat), it tries again with
+`AGENT_COPILOT_TOKEN`, a fine-grained token of yours on `cdwr` with pull requests read and write,
+from the environment or `tools/cdwr/.env`. A GitHub call that fails after the ack turns the row
+`refused` with GitHub's reason.
+
+`restart` (`{tenant, app, sha}`) and `gate` (`{tenant, action}`, `open` or `close`) are a tenant's
+buttons, and they change production. `restart` runs `cdwr fly restart <app>`; `gate` runs
+`cdwr tenant gate open|close --env production --tenant <tenant>`. The scheduler runs the same command
+first with `--dry-run --json` and checks the live state it prints with `platform_verdict` in
+`watch.jq`, before the ack: a restart needs the app to have machines and still run the commit the
+desk showed (`sha`, when the desk showed one), and a gate needs a deployed app that is not already
+closed or open. A gate with no deployed app names the side that failed: Infisical listing no app
+for the tenant, or Fly refusing to read the app, with Fly's error. A command whose dry run fails, or whose answer doesn't match, is refused with that
+reason and never runs for real. Then the row is acked, then the real command runs, so a command
+that fails after the ack turns the row `refused` with the command's own message. A gate goes ahead
+when one of the tenant's apps is live, and an app Fly could not read is then left as it was: the
+command ends `partial`, and the row is `refused` with its `reason`, which names that app and Fly's
+error (`cdwr-cms-codeware not read on Fly: Error: …`). The readable apps were opened or closed. Only the app name
+and tenant slug that pass a strict pattern reach the command line, and only production.
+
+A `close` always generates a new password. It is stored by the command in Infisical
+(`/tenants/<tenant>/apps/<app>`, `SITE_GATE_PASSWORD`) and goes no further: `run.sh` reads only the
+command's `ok` and error message (or a partial gate's `reason`), replaces the password wherever the
+result carries it, cuts a gate's message at the key, and replaces anything shaped like a generated
+password in an error message, so it reaches no row, log or notice. Read it in Infisical when you need it. The
+write credentials are `DESK_FLY_TOKEN` (an org deploy token, with an expiry) and
+`DESK_INFISICAL_CLIENT_ID`, `_CLIENT_SECRET` and `_PROJECT_ID` (an identity with write on production
+secrets of the project), in the same places as the platform step's read-only ones, which they are kept
+apart from. `run.sh` unexports them too and names them only on the command line of the `cdwr` call
+that applies a command, the Fly token as both `FLY_API_TOKEN` and `FLY_ACCESS_TOKEN` (flyctl reads
+the second first and takes an empty one as set) and the identity as `INFISICAL_*`, with
+`INFISICAL_SERVICE_TOKEN` emptied so `tools/cdwr/.env` fills in no other credential. Without all four
+the command is refused (`no write credentials on <host>`).
+
+The daily suggest session is set by `AGENT_QUEUE_SUGGEST_BUDGET_USD` (5), `AGENT_QUEUE_SUGGEST_HOUR` (6) and `AGENT_QUEUE_SUGGEST_DAYS` (1; 0 switches it off), read by `cdwr agent install --scheduler` into the job: `AGENT_QUEUE_SUGGEST_DAYS=7 cdwr agent install --scheduler` makes it weekly, `0` turns it off; review whether it earns its keep on 2026-11-16.
+
+The weekly devlog session is set by `AGENT_QUEUE_DEVLOG_BUDGET_USD` (5) and `AGENT_QUEUE_DEVLOG_DAYS` (7; 0 switches it off), read the same way; it starts after `AGENT_QUEUE_SUGGEST_HOUR` on an idle run where the suggestion does not run. `cdwr devlog` needs `CMS_URL` and `CMS_AGENT_API_KEY` in `tools/cdwr/.env`; in the container they come from the agent-host vault through `secrets.sh`, and without them the run ends `failed:` and sends a notice.
 
 A launched implementing session acts on GitHub as the `codeware-agent` GitHub App, never as you:
 you sit in the `release` team that bypasses main's rulesets, and an app in no bypass list gets
@@ -141,18 +469,330 @@ from `tools/cdwr/.env`, the copy `install` keeps in the agent worktree: `AGENT_G
 `AGENT_GITHUB_APP_INSTALLATION_ID` and `AGENT_GITHUB_APP_KEY_PATH`, a `.pem` outside every
 checkout with mode 600. One of them missing or wrong, or a refused exchange, means no session
 and a notice saying why; it never falls back to your `gh` login. `doctor` runs the same exchange
-and shows what the token reaches. The app's permissions: Contents and Pull requests read and
-write, Metadata, Checks and Actions read; installed on `cdwr` only, in no ruleset bypass list.
+and shows what the token reaches. The app's permissions: Contents, Pull requests and Workflows
+read and write, Metadata, Checks and Actions read; installed on `cdwr` only, in no ruleset bypass
+list, so a workflow change still reaches main only through a reviewed PR.
 
-Before it plans, the scheduler watches the PRs of `agent:review` tickets (open, or done within 14
-days) without starting Claude. It sends one notice per change: a PR that left the merge queue
-or has failing checks (`action`), a merge with the hand-offs still unticked in the agent's
-`**Agent: PR ready**` comment (`action`), and a plain merge or a close (`info`, which follows
-the level). `~/.cdwr/agent-queue/watch.json` remembers what was last sent, and `status` shows
-it. `gh` runs as you here, so the script only lists and queries; a spec fails on anything
-else. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
+The agent container (`apps/agent-host`) reads its secrets from Infisical at start: `secrets.sh`, its
+entrypoint, logs in with a machine identity, exports production `/agent-queue` and then execs the run
+loop, so the loop is still the process `docker compose stop` signals. For Linear the folder holds
+`AGENT_QUEUE_LINEAR_CLIENT_ID` and `AGENT_QUEUE_LINEAR_CLIENT_SECRET`, the queue's Linear app, and
+until it is revoked the fallback `AGENT_QUEUE_LINEAR_KEY`; the entrypoint files them on `/run/agent`
+and unsets them before the loop starts. The folder lives in its own
+Infisical project, `agent-host`, which holds nothing else, and the identity is a Viewer there and a
+member of no other project: the free plan cannot limit an identity to a folder, so the project is
+the limit. The NUC holds only the identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`,
+`INFISICAL_PROJECT_ID` of that project, `INFISICAL_SITE`) in a `.env` only the deploy user can read; a key set there
+wins over the vault, and the log names which keys came from where, never their values. The identity
+is unset before the loop starts, but PID 1 keeps it in its environment, readable by the agent's own
+sessions; that is why it must stay a Viewer of that one project. Without the identity the container
+uses its environment as given. Secrets are read once per start, so a rotated one takes a
+`docker compose restart`. Claude runs on `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived token from
+`claude setup-token` on the Mac, which keeps billing on the subscription.
+
+The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so
+the claude runs reach Linear without holding the token. On a Mac nothing changes: the
+`headersHelper` stays.
+
+In the container the loop wakes on events rather than on the clock. `cdwr agent listen`, started and
+restarted by the entrypoint (back-off from 5 s to 5 min), subscribes to `issue_events` and
+`github_events` over Supabase Realtime with the publishable key `AGENT_SUPABASE_ANON_KEY` (with
+`AGENT_SUPABASE_URL`, both in `/agent-queue`) and sends the loop `SIGUSR1`: 15 s after the first
+event, at most once a minute, and once on every (re)subscribe. It only wakes the loop; `run.sh`
+still decides, so pause, the lock, the live-session check and the spend caps apply as before. A
+wake during a run starts the next run right after it, never beside it. `cdwr agent run` in the
+container (`--host` from the Mac) sends the same wake, to the pid the entrypoint keeps in `loop.pid`
+in the queue home. The loop sleeps in steps of
+`RUN_INTERVAL_SECONDS` (600): while `listener.json` in the queue home says live with a beat under 2
+minutes it keeps sleeping, up to `RUN_FALLBACK_SECONDS` (3600), and checks in with the Sentry monitor
+at each step so its 10-minute schedule holds; a step that finds the listener down runs at once, so
+without it, or without the two env vars, it polls every 10 minutes as before. A woken run reads
+Linear's history for the activity rows at most every 10 minutes; a read it skips is owed, and the
+next step runs for it. The agent's own Linear writes wake the loop too, and so does every check or
+status change on a PR (`github_events` is upserted per PR): during a CI run that is a run a minute,
+cheap since it starts no session, and it ends idle when nothing changed. The listener runs from the checkout, not the image, so a merged
+change to it takes effect when it restarts (a `cdwr agent deploy`), not at the next run. `status` and
+the desk show `live (events), fallback every 60 min` or that it is polling, and why.
+
+An attended session's `wait.sh` (the watcher the work-queue skill starts between tickets) wakes
+the same way: it starts `cdwr agent listen --notify-pid <its pid> --state-file <temp file>` from its
+own checkout, so the Mac's `tools/cdwr/.env` needs the same two variables, and re-picks on
+`SIGUSR1`. While that listener is live it re-picks every 10 minutes (`--fallback`) as well; without
+it, or once it exited, every minute (`--interval`) as before. The state file is a temp file of the
+wait's own, never the queue home's `listener.json`, which is the scheduler's. The listener is not
+restarted mid-wait; each `wait.sh` starts a fresh one and kills it on exit.
+
+Before it plans, the scheduler watches the PRs of every ticket an agent label still claims
+(`agent:working`, `agent:needs-input`, `agent:review`; open, or done within 14 days) without
+starting Claude. It sends one notice per change: a PR that left the merge queue, has failing
+checks or conflicts with main (`action`, `agent:review` only, since a working ticket has a session on it), a merge with
+hand-offs still unticked (`action`), and a plain merge or a close (`info`, which follows the
+level). The hand-offs come from the agent's `**Agent: PR ready**` comment, or from the Status
+table's `Hand-off` rows when none was posted. A hand-off you won't do is dropped, not ticked:
+strike it through and leave it unticked (`- [ ] ~~item~~`, Cmd+Shift+X in Linear), or set its
+Status row to `Dropped`. A dropped item no longer waits, in the merge notice, on the Desk or in
+"Queue waiting on you". Outside review only the PR attached in Linear
+counts. A ticket whose PR merged outside review, as when you merge from a gate, gets the watch's
+one Linear write: `agent:review` replaces its agent label and its **Next:** line says when it
+merged and what is handed off. `~/.cdwr/agent-queue/watch.json` remembers what was last sent and
+whether the relabel went through, so a failed write is tried again on the next run.
+
+On a Mac without the scheduler nothing refreshes the local `watch.json`, so `run.sh --check` (and so
+`status`) and the attended session's `wait.sh` read the freshest other host's `watch` from
+`queue_state` instead: one GET per check or pick, with the service key from `tools/cdwr/.env`, found as
+the status line finds it (`AGENT_QUEUE_ENV_FILE`, the checkout's, else the main checkout's). `status`
+shows a `watch` row with the host and the age of that row, and a warn when it is older than 2 h or when
+the remote row is unreadable and the local file is used instead.
+
+After the watch, the scheduler closes a parent whose agent split finished, its other Linear write,
+so no session has to come by for it. A parent closes when it is open in this team and repo, carries
+no agent label of its own (a split clears it), and its sub-issues (read from those closed in the
+last 14 days) are all Done or Canceled, at least one Done and at least one carrying an agent label.
+It is set to the team's Done state and gets an `**Agent: closed**` comment naming the sub-issues,
+with an `info` notice. A split whose sub-issues were all canceled stays for you. A failed close is a
+warn and is tried again on the next run; the comment follows only a close Linear took.
+`~/.cdwr/agent-queue/closed-parents` lists every parent closed this way, so one you reopen stays
+open. Linear's own
+parent auto-close stays off, since it would also close epics no agent split started.
+
+The Renovate watch comes next, and writes nothing to Linear. It reads Renovate's open PRs
+(`gh pr list --author app/renovate`) and the `renovate`-labelled tickets with their attachments, and
+`watch.jq` `renovate_step` gives each PR a state: `tended` when a ticket carries the PR as an
+attachment (it is never offered again), `failing` when a check failed, `conflicting` when it
+conflicts with main and carries a commit not by Renovate (Renovate rebases its own unmodified
+branches), `fine` otherwise. `~/.cdwr/agent-queue/renovate.json` keeps one entry per open PR, and a
+PR that turns failing or conflicting sends one `info` notice. An untended broken PR is queue work,
+`PR 754` in the queue view after merged comments and before ready tickets, held by the limit like a
+new ticket. A failing one launches an implementing session, which diagnoses it and files a
+`renovate` ticket; a conflict waits for an attended one. `status` shows a `renovate` row and the desk
+a "Renovate PRs" group. A mechanical fix goes on a `cod-<n>-…` branch cut from Renovate's, with its
+own PR, never on Renovate's branch: Renovate automerges an edited non-major PR once it is green.
+
+`gh` runs as you here, so the script only lists and queries; a spec fails on anything else, and on
+a Linear mutation beyond its three named ones (`RELABEL`, `CLOSE_PARENT`, `CLOSE_COMMENT`), each
+used in one function. The watch's decisions live in `agent-queue/watch.jq`, installed beside `run.sh`, rather
 than in a `*.logic.ts`: what runs unattended stays behind `install`, and jq is already a
 dependency of the script. Its spec runs it through `jq`.
+
+The review's daily notice of what the queue did on its own ends with the desk's address when
+`AGENT_DESK_URL` is set, the desk's `https://cdwr-nuc.<tailnet>.ts.net` url (the agent container
+reads it from `/agent-queue` in Infisical, a Mac from the environment or `tools/cdwr/.env`; unset,
+the notice says `See the desk.`).
+
+A run reports to a Sentry cron monitor, `agent-queue`, when `SENTRY_DSN` is set (the agent
+container reads it from `/agent-queue` in Infisical; unset, as on the Mac, nothing is sent).
+`agent-queue/checkin.sh`, sourced by `run.sh`, posts to Sentry's HTTP check-in endpoint with curl:
+`in_progress` once the run holds its lock, `ok` or `error` by exit status when it ends. Every
+check-in carries the monitor's config, so whichever reaches Sentry first creates the monitor and
+the rest keep it in step (upsert): every 10 minutes, a
+15-minute margin, which makes a missed check-in alert after 25 minutes, and a 60-minute max
+runtime. A paused queue still sends an `ok` on each tick, since a pause is deliberate; a tick that
+finds a run in progress, a `--check`, and a run that skips for a missing Linear key or no network
+send nothing, so a key that stays missing alerts as missed check-ins. A failed check-in is logged once to
+`scheduler.log` and never fails the run.
+
+`cdwr agent logs --host <name>` reads the log of the agent container instead of a local file: it
+runs `ssh <name> docker exec cdwr-agent` to list `/home/agent/.cdwr/agent-queue/logs`, picks the
+scheduler log or, with `--run`, the latest run, and tails it. It needs no local launchd job.
+
+## The NUC
+
+The agent container runs on a NUC. Everything below is done once; after that the self-deploy timer
+updates it, and `cdwr agent deploy` does it by hand. The machine is named after its hardware (`cdwr-nuc`); everything the queue reaches it by
+is named after its role, `agent-host`, so moving to another box changes only the machine.
+
+1. Install Ubuntu Server 24.04 LTS.
+2. Install Docker Engine from Docker's apt repository, following
+   [the official guide](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
+3. Keep the host patched: `apt install unattended-upgrades`, then in
+   `/etc/apt/apt.conf.d/50unattended-upgrades`:
+
+   ```txt
+   Unattended-Upgrade::Automatic-Reboot "true";
+   Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+   ```
+
+4. In the BIOS, set power on after AC loss.
+5. Join the tailnet with Tailscale SSH and the role's tag, and forward no router ports:
+
+   ```sh
+   sudo tailscale up --ssh --advertise-tags=tag:agent-host
+   ```
+
+   The tailnet policy needs `"tagOwners": {"tag:agent-host": ["autogroup:admin"]}` first. A tagged
+   device has key expiry off.
+
+6. Create the deploy user `cdwr`, in the `docker` group, and its directory:
+
+   ```sh
+   sudo adduser --disabled-password cdwr
+   sudo usermod -aG docker cdwr
+   sudo install -d -o cdwr -g cdwr /opt/cdwr-agent
+   ```
+
+   Tailscale SSH needs a rule letting you in as `cdwr`, aimed at the tag rather than the machine:
+
+   ```json
+   { "action": "accept", "src": ["autogroup:admin"], "dst": ["tag:agent-host"], "users": ["cdwr"] }
+   ```
+
+   On the Mac, an ssh alias names the role, so `--host agent-host` outlives the hardware:
+
+   ```txt
+   Host agent-host
+     HostName cdwr-nuc
+     User cdwr
+   ```
+
+7. Write `/opt/cdwr-agent/.env` from `apps/agent-host/.env.example`, with the Infisical identity
+   (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`, `INFISICAL_SITE=eu`).
+   It is owned by `cdwr`, not root, with mode 600, since `docker compose` reads `env_file` as
+   the user who runs it:
+
+   ```sh
+   sudo install -m 600 -o cdwr -g cdwr /dev/null /opt/cdwr-agent/.env
+   ```
+
+8. Install the nightly backup of the `agent-home` volume (03:30, the newest 14 tarballs kept in
+   `/var/backups/cdwr-agent`), from `apps/agent-host/nuc` in this repo:
+
+   ```sh
+   sudo install -m 755 backup-agent-home.sh /usr/local/sbin/
+   sudo install -m 644 cdwr-agent-backup.service cdwr-agent-backup.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now cdwr-agent-backup.timer
+   ```
+
+9. Install the self-deploy timer (every 5 minutes; the newest green image build on main is
+   deployed once the queue is quiet, and rolled back if its first run is not healthy). The host needs
+   `curl`, `jq` and `flock` (util-linux), and `cdwr agent deploy` needs `flock` there too:
+
+   ```sh
+   sudo install -m 755 apps/agent-host/nuc/self-deploy.sh /usr/local/sbin/
+   sudo install -m 644 apps/agent-host/nuc/cdwr-agent-deploy.service apps/agent-host/nuc/cdwr-agent-deploy.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now cdwr-agent-deploy.timer
+   ```
+
+   Its log is `journalctl -u cdwr-agent-deploy`. How it decides and rolls back is in
+   `tools/cdwr/agent-queue/README.md`, "Self-deploy".
+
+10. From the Mac, the first deploy. The image is public, so the NUC pulls without a login. The
+    timer does nothing until this has run once:
+
+    ```sh
+    cdwr agent deploy --host agent-host
+    ```
+
+11. Check it. `cdwr agent logs --host agent-host` lands with COD-592; until then, on the NUC:
+
+    ```sh
+    docker logs cdwr-agent
+    cd /opt/cdwr-agent && docker compose --env-file image.env run --rm agent claude -p 'say ok'
+    ```
+
+    The second answers without a login prompt.
+
+`cdwr agent deploy` ships `apps/agent-host/compose.yaml`, pauses the queue, waits up to `--wait`
+minutes (default 30) for the running job to finish, writes the tag to `image.env`, pulls,
+restarts and resumes. Without `--tag` it takes the latest image built on main; `--dry-run` prints
+the plan with the resolved tag. When the queue stays busy it resumes and changes nothing.
+
+An implementing session that only waits in `wait.sh` does not hold a deploy up: while it waits,
+`wait.sh` writes its pid to `implement.lock/waiting`, and the deploy reads the session as idle when
+that pid is alive and is a `wait.sh`. It restarts at once and names the ticket it interrupted, from
+`implement.lock/key`. It checks once more right before the restart, since the pull can take
+minutes: a session that went back to work is waited for with what is left of `--wait`, and if that
+runs out the image is pulled but the container is not restarted, so the same deploy finishes the
+job. `implement.sh` records a session cut by a deploy or a container stop as `interrupted`, sends no
+failure notice and gives the launch back once per key. `--force` skips both checks and cuts a
+working session too; it is prompted as destructive. Both queue locks hold their owner's pid, so a
+lock whose run was killed is cleared by the next run (`warn: cleared lock; its run <pid> is gone`)
+instead of blocking every run and deploy until the container restarts.
+
+### The desk on the phone
+
+The same CDWR Desk, with both views (Agent and Platform), runs as a web app, served by the NUC to the tailnet only. `.github/workflows/desk-image.yml`
+builds `ghcr.io/codeware-sthlm/cdwr-desk` on main whenever `apps/desk` changes (`apps/desk/Dockerfile`:
+the Vite build behind nginx, with the Tauri window's CSP plus Linear's API as a header), and the
+`desk` service in `apps/agent-host/compose.yaml` runs it on the host's loopback, `127.0.0.1:8787`,
+never on a routable address. `cdwr agent deploy` pulls and restarts it with the agent. The keys are
+entered on the phone and stay there (`localStorage`), as they stay on the Mac; nothing in the image
+holds one. The page is live in the foreground only, as the Mac app is; Slack carries the notices.
+
+Once, in the tailnet's admin console, enable MagicDNS and HTTPS certificates (DNS → HTTPS
+Certificates → Enable); that gives the machine its `cdwr-nuc.<tailnet>.ts.net` name and lets
+Tailscale issue the certificate. Then, on the NUC, publish the port to the tailnet over HTTPS on
+that name:
+
+```sh
+sudo tailscale serve --bg 8787
+tailscale serve status     # https://cdwr-nuc.<tailnet>.ts.net/ -> http://127.0.0.1:8787
+```
+
+Then on the iPhone:
+
+1. Install Tailscale from the App Store and sign in to the tailnet (the device needs no tag).
+2. Open `https://cdwr-nuc.<tailnet>.ts.net/` in Safari, with Tailscale connected.
+3. Share → Add to Home Screen. It opens standalone, full height, with the desk's icon.
+4. In its Settings sheet, enter the Supabase url and publishable key and the Linear key, as on the Mac.
+5. For the controls, make the phone a token of its own the way the Mac got one (the recipe
+   under the agent queue's desk-command section): the secret `DESK_CONTROL_TOKENS` takes the
+   token's SHA-256 under a new device name, and the Settings sheet on the phone takes the token
+   itself.
+
+Nothing is cached offline: without Tailscale connected the page does not load, and a reload needs it.
+
+`cdwr agent status --host agent-host` reads the queue's status from the Mac: it runs `agent status`
+in the container over ssh, through `/opt/agent-host/secrets.sh` so the report sees the vault's
+secrets, and renders the answer as a local run would.
+
+Any other `cdwr` command in the container goes through `cdwr agent exec`. The container's keys are
+not in its environment: the entrypoint's `secrets.sh` reads them from Infisical `/agent-queue` and
+hands them only to the process it starts, so a plain `ssh agent-host docker exec cdwr-agent node
+tools/cdwr/bin/cdwr.mjs …` sees none of them (`AGENT_SUPABASE_URL and AGENT_SUPABASE_SERVICE_KEY
+are not both set`). `exec` runs the command in the planner checkout through `secrets.sh`, streams
+its output and exits with its exit code. It runs `cdwr` only, never another binary. The remote has
+no terminal, so pass every input as a flag, `--yes` included. Global flags before `--` are `exec`'s
+own (`-d` prints the ssh line and stops); after it they go to the remote command. Write a hand-off
+that runs a `cdwr` command on the NUC this way, never as a raw `docker exec`:
+
+```sh
+cdwr agent exec --host agent-host -- agent usage-record --days 30 --kind day --dry-run
+```
+
+A command that declares `needs: gh` (`agent worktree prune`, `agent deploy`, `agent install`,
+`agent desk-install`, `fly deploy`, `tenant provision`) also gets `GH_TOKEN`. The `gh` in the
+container has no login, so `exec` runs it through `/opt/agent-host/with-gh-token.sh`, which mints the
+GitHub app's installation token (on cdwr only) and hands it to that one process. A failed mint is the
+error: `exec` exits 75 with `github app: no token for …`, and the command never starts.
+
+An attended `/work-queue` on the Mac stays visible to the NUC through its session file, which the
+Mac's session hook copies into the container at every change and at least once a minute. That way
+the NUC launches no implementing session while one is alive on the Mac. The hook runs from the
+checkout the session was started in (`$CLAUDE_PROJECT_DIR`), so that checkout must be on a main
+that includes the mirror support; `cdwr agent attend` moves it there. Set the target once on the
+Mac:
+
+```sh
+cdwr agent mirror set --host agent-host   # checks over ssh that the container's sessions directory is writable
+cdwr agent mirror clear                   # stop mirroring
+```
+
+The NUC treats a file from another host as alive for three hours while it waits at a prompt or
+polls, and otherwise while its heartbeat is under 15 minutes old. It deletes the file after a day.
+
+The plan's own usage reaches the desk only from an interactive session: Claude Code hands its status
+line the 5-hour and weekly `rate_limits`, and nothing else exposes them. `agent-queue/statusline.sh`
+prints a one-line status, keeps the newest figures in `~/.cdwr/agent-queue/rate-limits.json` and
+sends a `plan_usage` row when a value changes (at most once a minute) and every 10 minutes while it
+holds, detached. Set it once on the Mac; it refuses to replace a status line that isn't its own:
+
+```sh
+cdwr agent statusline install   # points ~/.claude/settings.json at the main checkout's statusline.sh
+```
+
+The figures age while only the NUC runs, and the desk shows how old they are.
 
 ## Writing a command
 
@@ -173,7 +813,8 @@ export default defineCommand({
 });
 ```
 
-The runtime parses flags, prompts for the rest, prints the plan, confirms, runs `apply`, prints
+The runtime parses flags and runs with what it was given; a command path alone (or with only global
+flags) prompts for the rest, as does `-i`. It then prints the plan, confirms, runs `apply`, prints
 the outro, writes `--json` and records history. Commands never call `process.exit`, `console`,
 `dotenv` or clack directly. `src/commands/db/backup.ts` and `src/commands/fly/restart.ts` are the
 templates; `src/services/` holds the shared I/O (Fly, Infisical, database tunnels, backups, shell,

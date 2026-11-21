@@ -1,0 +1,539 @@
+import type { Issue } from '../../linear';
+import type {
+  ActivityPayload,
+  HostMetricRow,
+  PlanUsageRow,
+  RunsPayload,
+  UsageHourRow,
+  UsagePayload
+} from '../../supabase';
+import { type DeskState, createState } from '../state';
+import type { QueueView, ReviewRecord, SessionState } from '../types';
+
+import { ACTIVITY_MAX } from './ticket';
+
+/** A review of two findings (COD-2 blocks, COD-3 is a note), an action, a stale ticket and a suggestion, run 30 minutes before NOW */
+export const reviewRecord = (
+  over: Partial<ReviewRecord> = {}
+): ReviewRecord => ({
+  id: 1,
+  host: 'nuc',
+  at: new Date(NOW.getTime() - 30 * 6e4).toISOString(),
+  brief: 'Two PRs wait on you',
+  actions: [
+    {
+      ticket: 'COD-1',
+      action: 'Merge the PR',
+      why: 'Checks passed',
+      evidence: []
+    }
+  ],
+  findings: [
+    {
+      id: 'stale-pr:COD-2:0a1b2c3d',
+      ticket: 'COD-2',
+      kind: 'stale PR',
+      severity: 'blocks',
+      evidence: ['no push in 9 days'],
+      fix: 'Rebase it'
+    },
+    {
+      id: 'thin-plan:COD-3:1b2c3d4e',
+      ticket: 'COD-3',
+      kind: 'thin plan',
+      severity: 'note',
+      evidence: [],
+      fix: 'Add steps'
+    }
+  ],
+  stale: [{ ticket: 'COD-4', why: 'Untouched for 30 days', evidence: [] }],
+  suggestions: [{ ticket: 'COD-5', why: 'A quick win' }],
+  own: {
+    since: '2026-10-28T08:00:00',
+    until: '2026-10-29T11:30:00',
+    items: [
+      {
+        at: '2026-10-28T09:00:00',
+        kind: 'merge',
+        ticket: 'COD-6',
+        pr: 61,
+        title: 'Add the thing',
+        target: null,
+        result: 'merged',
+        reason: null
+      },
+      {
+        at: '2026-10-28T10:00:00',
+        kind: 'deploy',
+        ticket: null,
+        pr: null,
+        title: null,
+        target: 'cms',
+        result: 'success',
+        reason: null
+      },
+      {
+        at: '2026-10-29T08:00:00',
+        kind: 'merge',
+        ticket: 'COD-7',
+        pr: 62,
+        title: 'Fix the other thing',
+        target: null,
+        result: 'held',
+        reason: 'a rename needs your look'
+      }
+    ]
+  },
+  cost: 0.42,
+  model: 'sonnet',
+  ...over
+});
+
+// Local-time dates, so the specs read the same in every time zone
+export const NOW = new Date('2026-10-29T12:00:00');
+
+export const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
+  id,
+  title: `Title of ${id}`,
+  priority: { value: 3 },
+  status: 'Todo',
+  statusType: 'unstarted',
+  labels: [],
+  createdAt: '2026-10-01T08:00:00',
+  updatedAt: '2026-10-01T08:00:00',
+  url: `https://linear.app/codeware/issue/${id}`,
+  completedAt: null,
+  canceledAt: null,
+  prReady: false,
+  ...over
+});
+
+export const view = (over: Partial<QueueView> = {}): QueueView => ({
+  at: '2026-10-29T11:55:00',
+  limit: { used: 2, max: 5 },
+  session: { state: 'none' },
+  next: [{ ticket: 'COD-1', reason: 'ready' }],
+  held: { tickets: ['COD-9'], free: [{ action: 'review', ticket: 'COD-3' }] },
+  parked: [{ ticket: 'COD-2', wait: 'ci', pr: 5 }],
+  blocked: [],
+  renovate: [],
+  audit: [],
+  tree: [],
+  table: {
+    before: [{ ticket: 'COD-4', kind: 'plan' }],
+    label: [{ ticket: 'COD-6', parent: 'COD-<1>', blockers: ['COD-2'] }],
+    after: [
+      { ticket: 'COD-3', kind: 'pr', pr: 7 },
+      { ticket: 'COD-5', kind: 'handoffs', items: ['check it'] }
+    ]
+  },
+  ...over
+});
+
+export const runs = (qv: QueueView | null): RunsPayload => ({
+  last: { when: '2026-10-29 11:50', outcome: 'planned COD-1' },
+  attended: null,
+  suggested: { date: '2026-10-29', kind: 'nothing', text: 'nothing today' },
+  job: {
+    line: 'every 10 min',
+    minutes: 10,
+    live: false,
+    host: 'launchd',
+    rev: null,
+    install: 'current',
+    items: '',
+    effort: null,
+    paused: false
+  },
+  qv,
+  viewInvalid: false,
+  view: null,
+  viewIssues: [],
+  at: new Date('2026-10-29T11:55:00').toISOString(),
+  host: 'nuc',
+  others: [],
+  watches: [],
+  deploys: [],
+  main: { image: null, desk: null, deskWeb: null },
+  rows: [
+    {
+      when: '2026-10-29 11:50',
+      outcome: 'failed',
+      ticket: 'COD-1',
+      detail: 'x',
+      started: new Date('2026-10-29T11:50:00').toISOString(),
+      finished: null
+    }
+  ]
+});
+
+export const usage: UsagePayload = {
+  updated: '2026-10-29 11:00',
+  windowDays: 30,
+  total: 10,
+  pricesDate: '2026-10-01',
+  unpriced: [],
+  models: [
+    {
+      model: 'opus',
+      input: 1,
+      output: 2,
+      cacheRead: 3,
+      cacheWrite: 4,
+      cost: 5
+    }
+  ],
+  days: [
+    {
+      day: '2026-10-28',
+      planning: 1,
+      orchestrating: 2,
+      implementing: 3,
+      total: 6
+    }
+  ],
+  tickets: [
+    {
+      ticket: 'COD-30',
+      planning: 1,
+      orchestrating: 2,
+      implementing: 3,
+      total: 6,
+      output: 1,
+      cacheRead: 1
+    }
+  ]
+};
+
+export const activity: ActivityPayload = {
+  updated: '2026-10-29 11:50',
+  header: 'Updated 2026-10-29 11:50',
+  dropped: '',
+  rows: [
+    {
+      when: '2026-10-29 11:50',
+      ticket: 'COD-30',
+      actor: 'agent',
+      change: 'moved <b>'
+    }
+  ]
+};
+
+export const hostSample = (
+  ago: number,
+  over: Partial<HostMetricRow> = {}
+): HostMetricRow => ({
+  id: 1,
+  host: 'nuc',
+  at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+  cores: 4,
+  load1: 1,
+  load5: 1,
+  load15: 1,
+  mem_total: 8 * 2 ** 30,
+  mem_available: 6 * 2 ** 30,
+  swap_total: 2 * 2 ** 30,
+  swap_free: 2 * 2 ** 30,
+  disk_total: 100 * 2 ** 30,
+  disk_free: 60 * 2 ** 30,
+  cgroup_mem_current: null,
+  cgroup_mem_max: null,
+  exposed: [],
+  ...over
+});
+
+// A sample `ago` minutes before NOW of a window that resets `resetsIn` hours after NOW
+export const planSample = (
+  kind: PlanUsageRow['kind'],
+  resetsIn: number,
+  used: number,
+  ago = 0
+): PlanUsageRow => ({
+  kind,
+  resets_at: new Date(NOW.getTime() + resetsIn * 36e5).toISOString(),
+  used_percentage: used,
+  sampled_at: new Date(NOW.getTime() - ago * 6e4).toISOString(),
+  host: 'mac'
+});
+
+// An hour row `ago` whole hours before the current hour
+export const hourRow = (
+  ago: number,
+  cost: number,
+  over: Partial<UsageHourRow> = {}
+): UsageHourRow => ({
+  hour: new Date(
+    Math.floor(NOW.getTime() / 36e5) * 36e5 - ago * 36e5
+  ).toISOString(),
+  host: 'mac',
+  model: 'opus',
+  role: 'planning',
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_read_tokens: 0,
+  cache_write_tokens: 0,
+  cost_usd: cost,
+  updated_at: NOW.toISOString(),
+  ...over
+});
+
+export const filled = (
+  session: SessionState = { state: 'none' }
+): DeskState => {
+  const s = createState();
+  s.data.buckets.set('unstarted', [
+    issue('COD-1', { labels: ['agent:ready'] }),
+    issue('COD-2', { labels: ['agent:review'] }),
+    issue('COD-3', { labels: ['agent:review'] }),
+    issue('COD-4', { labels: ['agent:needs-input'] })
+  ]);
+  s.data.closed = [
+    issue('COD-30', {
+      statusType: 'completed',
+      status: 'Done',
+      labels: ['agent:review'],
+      completedAt: '2026-10-28T10:00:00'
+    })
+  ];
+  s.data.ideas = [
+    issue('COD-50'),
+    issue('COD-51', {
+      statusType: 'canceled',
+      canceledAt: '2026-10-20T00:00:00'
+    })
+  ];
+  s.data.runs = runs(view({ session }));
+  s.data.usage = usage;
+  s.data.activity = activity;
+  s.data.hostMetrics = [hostSample(10), hostSample(0)];
+  s.data.planUsage = [
+    planSample('five_hour', 2, 30),
+    planSample('seven_day', 100, 18)
+  ];
+  s.data.usageHours = [hourRow(0, 1.5), hourRow(2, 3, { role: 'other' })];
+  s.ideaReasons.set('COD-51', 'not worth it');
+  return s;
+};
+
+const minute = (i: number): string =>
+  `2026-10-29 10:${String(i).padStart(2, '0')}`;
+
+/** The filled desk with COD-3 held by every part: review, tree, PR, gap, session, plan, snooze, spend and history */
+export const ticketDesk = (): DeskState => {
+  const s = filled();
+  s.data.runs = {
+    ...runs(
+      view({
+        session: {
+          state: 'alive',
+          ticket: 'COD-3',
+          id: 's1',
+          detail: 'working'
+        },
+        held: { tickets: ['COD-3'], free: [] },
+        audit: [
+          {
+            id: 'g1',
+            ticket: 'COD-3',
+            kind: 'stale',
+            what: 'PR is stale',
+            fix: 'rebase it'
+          }
+        ],
+        tree: [
+          {
+            ticket: 'COD-10',
+            title: 'The root',
+            state: 'started',
+            label: null,
+            pr: null,
+            position: 1,
+            waiting: false,
+            blockers: [],
+            gaps: [],
+            children: [
+              {
+                ticket: 'COD-3',
+                title: 'Title of COD-3',
+                state: 'started',
+                label: 'agent:review',
+                pr: 7,
+                position: 1,
+                waiting: false,
+                blockers: [],
+                gaps: [{ kind: 'stale', candidate: false }],
+                children: []
+              },
+              {
+                ticket: 'COD-11',
+                title: 'The sibling',
+                state: 'unstarted',
+                label: null,
+                pr: null,
+                position: null,
+                waiting: false,
+                blockers: [],
+                gaps: [],
+                children: []
+              }
+            ]
+          }
+        ]
+      })
+    ),
+    watches: [
+      {
+        host: 'nuc',
+        at: '2026-10-29T11:55:00Z',
+        watch: {
+          'COD-3': {
+            pr: 7,
+            state: 'open',
+            unresolved: 1,
+            threads: 1,
+            conflicting: false,
+            mergeable: 'MERGEABLE',
+            ci: 'SUCCESS',
+            copilot: 'reviewed'
+          }
+        }
+      }
+    ]
+  };
+  s.data.sessions = [
+    {
+      id: 's1',
+      host: 'nuc',
+      kind: 'implement',
+      last_seen: '2026-10-29T11:58:00Z',
+      state: 'alive',
+      detail: null
+    }
+  ];
+  s.details.set('COD-3', {
+    steps: 4,
+    done: 2,
+    next: 'Step 3',
+    idea: null,
+    blockedBy: [],
+    pr: 7,
+    prAt: null
+  });
+  s.data.snoozes = [
+    {
+      ticket: 'COD-3',
+      kind: 'review',
+      event_at: null,
+      at: '2026-10-29T11:00:00Z',
+      actor: 'desk'
+    }
+  ];
+  s.data.usage = {
+    ...usage,
+    tickets: [
+      {
+        ticket: 'COD-3',
+        planning: 1,
+        orchestrating: 2,
+        implementing: 3,
+        total: 6,
+        output: 1,
+        cacheRead: 1
+      }
+    ]
+  };
+  s.data.activity = {
+    updated: '2026-10-29 11:50',
+    header: '',
+    dropped: '',
+    rows: [
+      ...Array.from({ length: ACTIVITY_MAX + 2 }, (_, i) => ({
+        when: minute(i),
+        ticket: 'COD-3',
+        actor: 'agent',
+        change: `change ${i}`
+      })).reverse(),
+      { when: minute(30), ticket: 'COD-4', actor: 'agent', change: 'other' }
+    ]
+  };
+  s.data.githubEvents = [
+    {
+      subject: 'pr-7',
+      pr: 7,
+      action: 'check_suite:completed:success',
+      updated_at: '2026-10-29T10:05:00'
+    },
+    {
+      subject: 'pr-8',
+      pr: 8,
+      action: 'pull_request:opened',
+      updated_at: '2026-10-29T10:50:00'
+    }
+  ];
+  return s;
+};
+
+/** A connection state, live or not */
+export const connection = (live: boolean): DeskState['data']['connection'] => ({
+  live,
+  retries: 0,
+  upSince: NOW.getTime() - 6e4,
+  downSince: null,
+  status: null,
+  nextAt: null,
+  lastIssue: null
+});
+
+/** The time `ago` minutes before NOW, in ms */
+export const at = (ago: number): number => NOW.getTime() - ago * 6e4;
+
+/** A state whose channel is down; `over` adjusts the connection */
+export const down = (
+  s: DeskState,
+  over: Partial<DeskState['data']['connection']> = {}
+): DeskState => {
+  s.data.connection = {
+    ...s.data.connection,
+    live: false,
+    retries: 2,
+    downSince: at(2.7),
+    status: 'CHANNEL_ERROR',
+    nextAt: NOW.getTime() + 16000,
+    ...over
+  };
+  return s;
+};
+
+/** A state whose channel came up a minute ago */
+export const live = (s: DeskState): DeskState => {
+  s.data.connection = { ...s.data.connection, live: true, upSince: at(1) };
+  return s;
+};
+
+export const OLD = 'abc1234' + '0'.repeat(33);
+export const NEW = 'def5678' + '0'.repeat(33);
+
+/** A filled state whose runs report `main`, with the job on the container or not */
+export const behind = (
+  main: RunsPayload['main'],
+  container: boolean
+): DeskState => {
+  const state = filled();
+  const base = runs(view());
+  state.data.runs = {
+    ...base,
+    main,
+    job: base.job && {
+      ...base.job,
+      ...(container ? { host: 'container', rev: 'sha-abc1234' } : {})
+    }
+  };
+  return state;
+};
+
+/** Every utility of a shared class string, such as `CARD`, is on the element */
+export const carries = (el: Element | null, classes: string): boolean =>
+  classes
+    .trim()
+    .split(/\s+/)
+    .every((c) => el?.classList.contains(c) ?? false);

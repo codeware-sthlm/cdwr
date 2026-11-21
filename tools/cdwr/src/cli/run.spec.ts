@@ -10,12 +10,20 @@ import { runCommand } from './run';
 const command = (danger: Danger, applied: string[] = [], planDanger?: Danger) =>
   defineCommand({
     summary: 'Test command',
+    description: 'Test command',
     danger,
     inputs: {
       environment: input.enum(['preview', 'production'], {
-        prompt: 'Which environment?'
+        prompt: 'Which environment?',
+        description: 'Test input',
+        short: 'a'
       }),
-      note: input.string({ prompt: 'Note?', default: '' })
+      note: input.string({
+        prompt: 'Note?',
+        description: 'Test input',
+        short: 'b',
+        default: ''
+      })
     },
     plan: async (_ctx, inputs) => ({
       steps: ['Do the thing'],
@@ -68,34 +76,46 @@ describe('runCommand', () => {
   it('confirms a mutating command wherever it runs', async () => {
     // It prints a plan first, and a plan reads as a question — applying one
     // unasked in development surprised someone into writing a site
-    const preview = run('mutate', ['--environment', 'preview'], [true]);
+    const preview = run('mutate', ['--environment', 'preview', '-i'], [true]);
     expect(await preview.exit).toBe(EXIT.ok);
     expect(preview.ui.asked).toEqual(['Continue?']);
 
-    const production = run('mutate', ['--environment', 'production'], [true]);
+    const production = run(
+      'mutate',
+      ['--environment', 'production', '-i'],
+      [true]
+    );
     expect(await production.exit).toBe(EXIT.ok);
     expect(production.ui.asked).toEqual(['Continue on production?']);
   });
 
   it('applies nothing when a mutating command is declined', async () => {
-    const r = run('mutate', ['--environment', 'preview'], [false]);
+    const r = run('mutate', ['--environment', 'preview', '-i'], [false]);
     expect(await r.exit).toBe(EXIT.cancelled);
     expect(r.applied).toEqual([]);
   });
 
   it('asks for the typed name before a destructive production change', async () => {
-    const wrong = run('destructive', ['--environment', 'production'], ['nope']);
+    const wrong = run(
+      'destructive',
+      ['--environment', 'production', '-i'],
+      ['nope']
+    );
     expect(await wrong.exit).toBe(EXIT.cancelled);
     expect(wrong.applied).toEqual([]);
 
-    const right = run('destructive', ['--environment', 'production'], ['demo']);
+    const right = run(
+      'destructive',
+      ['--environment', 'production', '-i'],
+      ['demo']
+    );
     expect(await right.exit).toBe(EXIT.ok);
     expect(right.ui.asked[0]).toContain('Type');
     expect(right.applied).toEqual(['production']);
   });
 
   it('confirms destructive changes elsewhere with a plain question', async () => {
-    const r = run('destructive', ['--environment', 'preview'], [false]);
+    const r = run('destructive', ['--environment', 'preview', '-i'], [false]);
     expect(await r.exit).toBe(EXIT.cancelled);
     expect(r.ui.asked).toEqual(['This cannot be undone. Continue?']);
   });
@@ -103,7 +123,7 @@ describe('runCommand', () => {
   it('lets a plan raise a mutating command to destructive', async () => {
     const production = run(
       'mutate',
-      ['--environment', 'production'],
+      ['--environment', 'production', '-i'],
       ['demo'],
       true,
       'destructive'
@@ -113,7 +133,7 @@ describe('runCommand', () => {
 
     const preview = run(
       'mutate',
-      ['--environment', 'preview'],
+      ['--environment', 'preview', '-i'],
       [true],
       true,
       'destructive'
@@ -125,7 +145,7 @@ describe('runCommand', () => {
   it('never lets a plan lower the danger its command declares', async () => {
     const r = run(
       'destructive',
-      ['--environment', 'production'],
+      ['--environment', 'production', '-i'],
       ['demo'],
       true,
       'mutate'
@@ -146,10 +166,31 @@ describe('runCommand', () => {
     expect(r.applied).toEqual([]);
   });
 
-  it('never prompts for a confirmation under --non-interactive', async () => {
+  it('never prompts for a confirmation once arguments are given', async () => {
+    const r = run('destructive', ['--environment', 'preview'], [true]);
+    expect(await r.exit).toBe(EXIT.usage);
+    expect(r.ui.asked).toEqual([]);
+  });
+
+  it('still prompts for a missing input with only global flags', async () => {
+    const dry = run('read', ['--dry-run'], ['preview']);
+    expect(await dry.exit).toBe(EXIT.ok);
+    expect(dry.ui.asked).toEqual(['Which environment?']);
+    const verbose = run('read', ['--verbose'], ['preview']);
+    expect(await verbose.exit).toBe(EXIT.ok);
+    expect(verbose.ui.asked).toEqual(['Which environment?']);
+  });
+
+  it('prompts again with --interactive', async () => {
+    const r = run('destructive', ['--environment', 'preview', '-i'], [true]);
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.ui.asked).not.toEqual([]);
+  });
+
+  it('never prompts under --json, even with --interactive', async () => {
     const r = run(
       'destructive',
-      ['--environment', 'preview', '--non-interactive'],
+      ['--environment', 'preview', '-i', '-j'],
       [true]
     );
     expect(await r.exit).toBe(EXIT.usage);
@@ -167,7 +208,7 @@ describe('runCommand', () => {
   it('records history for anything that changes something', async () => {
     const r = run(
       'mutate',
-      ['--environment', 'preview', '--note', 'hi'],
+      ['--environment', 'preview', '--note', 'hi', '-i'],
       [true]
     );
     await r.exit;
@@ -178,6 +219,37 @@ describe('runCommand', () => {
       target: { environment: 'preview', name: 'demo' },
       outcome: 'done'
     });
+  });
+
+  it('keeps a command with history: false out of the history, applied or failed', async () => {
+    for (const fail of [false, true]) {
+      const history: HistoryEntry[] = [];
+      const exit = await runCommand({
+        name: 'test quiet',
+        command: defineCommand({
+          summary: 'Quiet',
+          description: 'Quiet',
+          danger: 'mutate',
+          history: false,
+          inputs: {},
+          plan: async () => ({ steps: ['x'], data: {} }),
+          apply: async () => {
+            if (fail) throw new Error('boom');
+            return { summary: 'done' };
+          }
+        }),
+        argv: ['--yes'],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        ui: fakeUi([], false),
+        history: (entry) => history.push(entry),
+        stdout: () => undefined
+      });
+      expect(exit).toBe(fail ? EXIT.failed : EXIT.ok);
+      expect(history).toEqual([]);
+    }
   });
 
   it('prints one JSON document with --json', async () => {
@@ -191,6 +263,44 @@ describe('runCommand', () => {
         target: { environment: 'preview', name: 'demo' }
       },
       result: { summary: 'Did it on preview' }
+    });
+  });
+
+  it('puts the plan json in a --dry-run --json document, and omits the key without one', async () => {
+    const dry = async (json?: unknown) => {
+      const stdout: string[] = [];
+      const exit = await runCommand({
+        name: 'test dry',
+        command: defineCommand({
+          summary: 'Dry',
+          description: 'Dry',
+          danger: 'mutate',
+          inputs: {},
+          plan: async () => ({ steps: ['x'], json, data: {} }),
+          apply: async () => ({ summary: 'done' })
+        }),
+        argv: ['--dry-run', '--json'],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        ui: fakeUi([], false),
+        history: () => undefined,
+        stdout: (text) => stdout.push(text)
+      });
+      expect(exit).toBe(EXIT.ok);
+      return JSON.parse(stdout[0] ?? '');
+    };
+
+    expect((await dry({ machines: [{ id: 'm1' }] })).plan).toEqual({
+      steps: [{ label: 'x' }],
+      json: { machines: [{ id: 'm1' }] }
+    });
+    expect(await dry()).toEqual({
+      ok: true,
+      command: 'test dry',
+      dryRun: true,
+      plan: { steps: [{ label: 'x' }] }
     });
   });
 
@@ -216,6 +326,7 @@ describe('runCommand', () => {
       name: 'noop',
       command: defineCommand({
         summary: '',
+        description: 'Test command',
         danger: 'mutate',
         inputs: {},
         plan: async () => ({ steps: [], nothing: 'Already done', data: null }),
@@ -238,5 +349,99 @@ describe('runCommand', () => {
       command: 'noop',
       nothing: 'Already done'
     });
+  });
+});
+
+describe('runCommand with rest arguments', () => {
+  const restCommand = (seen: string[][], rest?: true) =>
+    defineCommand({
+      summary: 'Test command',
+      description: 'Test command',
+      danger: 'read',
+      rest,
+      inputs: {},
+      plan: async (ctx) => ({ steps: [], data: ctx.rest ?? [] }),
+      apply: async (_ctx, data) => {
+        seen.push(data);
+        return { summary: 'Done' };
+      }
+    });
+
+  const runRest = (argv: string[], rest?: true) => {
+    const seen: string[][] = [];
+    const stdout: string[] = [];
+    const exit = runCommand({
+      name: 'test rest',
+      command: restCommand(seen, rest),
+      argv,
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (text) => stdout.push(text)
+    });
+    return { exit, seen, stdout };
+  };
+
+  it('hands everything after -- to a rest command, global flags included', async () => {
+    const r = runRest(['--', 'agent', 'status', '--dry-run', '--json'], true);
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.seen).toEqual([['agent', 'status', '--dry-run', '--json']]);
+  });
+
+  it('keeps the global flags before -- for the command itself', async () => {
+    const r = runRest(['--dry-run', '--', 'agent', 'pause'], true);
+    expect(await r.exit).toBe(EXIT.ok);
+    // A dry run stops after the plan
+    expect(r.seen).toEqual([]);
+  });
+
+  it('refuses arguments after -- for a command without rest', async () => {
+    const r = runRest(['--', 'agent', 'status']);
+    expect(await r.exit).toBe(EXIT.usage);
+    expect(r.seen).toEqual([]);
+  });
+
+  it('keeps its own plan and summary off stdout, which the rest command owns', async () => {
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    const stdout: string[] = [];
+    try {
+      const exit = await runCommand({
+        name: 'test rest',
+        command: defineCommand({
+          summary: 'Test command',
+          description: 'Test command',
+          danger: 'read',
+          rest: true,
+          inputs: {},
+          plan: async () => ({ steps: ['Run it remotely'], data: null }),
+          apply: async () => ({ summary: 'Done', details: ['A detail'] })
+        }),
+        argv: ['--', 'agent', 'status', '--json'],
+        root: '/repo',
+        env: {},
+        prefs: memoryPrefs(),
+        interactive: false,
+        history: () => undefined,
+        stdout: (text) => stdout.push(text)
+      });
+      expect(exit).toBe(EXIT.ok);
+      expect(stdout).toEqual([]);
+      const written = stderr.mock.calls.map(([text]) => String(text)).join('');
+      expect(written).toContain('Run it remotely');
+      expect(written).toContain('A detail');
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it('shows the rest in the usage line', async () => {
+    const r = runRest(['--help'], true);
+    expect(await r.exit).toBe(EXIT.ok);
+    expect(r.stdout[0]).toContain('[flags] [-- <args>]');
   });
 });

@@ -1,0 +1,8 @@
+{
+  "name": "app-headless-util-routing",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/app-headless/util/routing/src",
+  "projectType": "library",
+  "tags": ["scope:app-headless", "type:util"],
+  "targets": {}
+}

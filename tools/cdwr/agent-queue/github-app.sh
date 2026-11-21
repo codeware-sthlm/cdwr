@@ -4,11 +4,15 @@
 # the branch rules from GitHub itself. Sourced by implement.sh; every function fails closed.
 #   app_env <.env file>   reads AGENT_GITHUB_APP_ID, _INSTALLATION_ID and _KEY_PATH, nothing else
 #   app_jwt               a 9-minute RS256 JWT for the app, signed with openssl
-#   app_session           exchanges the JWT for an installation token on cdwr, then exports
-#                         GH_TOKEN, an env-only git credential helper and the bot's commit identity
+#   app_token             exchanges the JWT for an installation token on cdwr and exports GH_TOKEN
+#                         and GITHUB_TOKEN, for reads
+#   app_session           app_token, then an env-only git credential helper and the bot's commit identity
 # AGENT_QUEUE_GITHUB_API replaces https://api.github.com in specs.
 
 GITHUB_API="${AGENT_QUEUE_GITHUB_API:-https://api.github.com}"
+
+# A file's permission bits in octal, GNU stat first: BSD stat rejects -c, while GNU stat takes -f for the filesystem
+mode_of() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
 
 # The three variables, read as plain KEY=VALUE lines: the file is never sourced or evaluated
 app_env() {
@@ -25,7 +29,7 @@ app_env() {
   [[ -n "${AGENT_GITHUB_APP_KEY_PATH:-}" && -r "${AGENT_GITHUB_APP_KEY_PATH/#\~/$HOME}" ]] ||
     { print -ru2 -- "github app: AGENT_GITHUB_APP_KEY_PATH missing or not readable"; return 1; }
   AGENT_GITHUB_APP_KEY_PATH="${AGENT_GITHUB_APP_KEY_PATH/#\~/$HOME}"
-  [[ "$(stat -f '%Lp' "$AGENT_GITHUB_APP_KEY_PATH" 2>/dev/null)" == 600 ]] ||
+  [[ "$(mode_of "$AGENT_GITHUB_APP_KEY_PATH" 2>/dev/null)" == 600 ]] ||
     { print -ru2 -- "github app: $AGENT_GITHUB_APP_KEY_PATH must have mode 600"; return 1; }
 }
 
@@ -44,10 +48,10 @@ app_jwt() {
   print -r -- "$signing.$sig"
 }
 
-# Exports the session's GitHub identity; returns non-zero, with the reason on stderr, otherwise
-app_session() {
+# Exports GH_TOKEN and GITHUB_TOKEN alone; returns non-zero, with the reason on stderr, otherwise
+app_token() {
   setopt localoptions extendedglob
-  local jwt resp token slug bot
+  local jwt resp token
   jwt="$(app_jwt)" || { print -ru2 -- "github app: could not sign the JWT"; return 1; }
   # The token reaches only cdwr, whatever else the app is installed on
   resp="$(curl -sS -m 20 -X POST \
@@ -59,6 +63,17 @@ app_session() {
   token="$(jq -r '.token // empty' <<<"$resp" 2>/dev/null)"
   [[ "$token" == ghs_[A-Za-z0-9_.-]## ]] ||
     { print -ru2 -- "github app: no installation token: $(jq -r '.message // "unexpected response"' <<<"$resp" 2>/dev/null)"; return 1; }
+  # gh reads GH_TOKEN before its own keychain login
+  export GH_TOKEN="$token" GITHUB_TOKEN="$token"
+}
+
+# Exports the session's GitHub identity; returns non-zero, with the reason on stderr, otherwise
+app_session() {
+  setopt localoptions extendedglob
+  local jwt slug bot token
+  app_token || return 1
+  token="$GH_TOKEN"
+  jwt="$(app_jwt)" || { print -ru2 -- "github app: could not sign the JWT"; return 1; }
   slug="$(curl -sS -m 20 -H "Authorization: Bearer $jwt" -H 'Accept: application/vnd.github+json' \
     "$GITHUB_API/app" | jq -r '.slug // empty' 2>/dev/null)"
   [[ "$slug" == [a-z0-9-]## ]] || { print -ru2 -- "github app: could not read the app's slug"; return 1; }
@@ -66,8 +81,6 @@ app_session() {
     "$GITHUB_API/users/$slug%5Bbot%5D" | jq -r '.id // empty' 2>/dev/null)"
   [[ "$bot" == <-> ]] || { print -ru2 -- "github app: could not read the bot user of $slug"; return 1; }
 
-  # gh reads GH_TOKEN before its own keychain login
-  export GH_TOKEN="$token" GITHUB_TOKEN="$token"
   # git: drop every configured helper, then answer from the env token only. GitHub over SSH
   # becomes HTTPS so Håkan's SSH key is never offered, and SSH itself is made to fail.
   export GIT_CONFIG_COUNT=4

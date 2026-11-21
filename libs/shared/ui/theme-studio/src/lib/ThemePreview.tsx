@@ -61,13 +61,13 @@ export function ThemePreview({ id, dark, className }: ThemePreviewProps) {
     >
       <div className="border-core-navbar-border bg-core-navbar flex items-center justify-between border-b px-4 py-2.5">
         <span className="text-core-header text-sm font-semibold">Acme</span>
-        <nav className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-4 text-sm">
           <span className="text-core-nav-link-active font-medium">Home</span>
           <span className="text-core-nav-link">Articles</span>
           <span className="border-core-action-btn-border bg-core-action-btn-background text-core-action-btn-foreground rounded-full border px-2 py-1 text-xs">
             Aa
           </span>
-        </nav>
+        </div>
       </div>
 
       {/* The content column sits inside the body surface, as RenderLayout does,
@@ -168,7 +168,7 @@ export function ThemePreview({ id, dark, className }: ThemePreviewProps) {
           </div>
         </div>
 
-        <pre className="bg-secondary text-foreground overflow-x-auto rounded-lg border p-3 font-mono text-xs">
+        <pre className="bg-secondary text-foreground rounded-lg border p-3 font-mono text-xs break-words whitespace-pre-wrap">
           {'const theme = buildThemeTokens(recipe);'}
         </pre>
       </div>

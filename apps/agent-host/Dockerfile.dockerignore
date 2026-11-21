@@ -1,0 +1,25 @@
+# Only what the image copies gets into the build context
+*
+!/tools/cdwr/agent-queue
+/tools/cdwr/agent-queue/*
+!/tools/cdwr/agent-queue/run.sh
+!/tools/cdwr/agent-queue/lib.sh
+!/tools/cdwr/agent-queue/waits.sh
+!/tools/cdwr/agent-queue/implement.sh
+!/tools/cdwr/agent-queue/github-app.sh
+!/tools/cdwr/agent-queue/notify.sh
+!/tools/cdwr/agent-queue/checkin.sh
+!/tools/cdwr/agent-queue/telemetry.sh
+!/tools/cdwr/agent-queue/deploy-gate.sh
+!/tools/cdwr/agent-queue/watch.jq
+!/tools/cdwr/agent-queue/linear-tools.txt
+!/tools/cdwr/agent-queue/hold-paths.txt
+!/apps/agent-host/secrets.sh
+!/apps/agent-host/entrypoint.sh
+!/apps/agent-host/git-credential-app.sh
+!/apps/agent-host/with-gh-token.sh
+!/apps/agent-host/linear-mcp-proxy.mjs
+!/apps/agent-host/session-launch.sh
+!/apps/agent-host/session-stop.sh
+!/apps/agent-host/devlog-cms.sh
+!/apps/agent-host/sudoers

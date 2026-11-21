@@ -1,7 +1,13 @@
 # Semi-automated Nx releases where pre-created tags gets published to NPM.
 # The tags has been created locally using `nx release-cli`.
 #
-# This workflow will publish to NPM:
+# `nx release-cli` creates the GitHub release together with its tag through the
+# API, which fires only `release: published`, not a tag push. The release event
+# is therefore the real trigger; the tag push covers tags pushed by hand.
+# Both resolve to the same tag, so the concurrency group keeps them from
+# publishing twice.
+#
+# This workflow will stage on NPM, awaiting approval:
 #  - a single package identified by a pushed tag
 #  - a single package identified by a tag given when manually triggered
 #  - all pending packages when manually triggered without a tag
@@ -19,8 +25,10 @@ on:
       - "!builder-*"
       - "!cms-*"
       - "!web-*"
+      - "!umami-*"
+      - "!headless-*"
 
-  # Fall back if tag push doesn't fire, since tags and releases are created together by `nx release-cli`
+  # The trigger for `nx release-cli`, which creates tag and release together
   release:
     types: [published]
 
@@ -32,7 +40,7 @@ on:
         required: false
         type: string
       dry-run:
-        description: Do not publish anything, just see what would be published.
+        description: Do not stage anything, just see what would be staged.
         required: false
         default: false
         type: boolean
@@ -45,14 +53,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # Apps are versioned by the deployment workflow and never published, but their
+    # releases fire this event too; keep in step with the `apps` release group in nx.json
+    if: >-
+      github.event_name != 'release' ||
+      !(startsWith(github.event.release.tag_name, 'builder-') ||
+      startsWith(github.event.release.tag_name, 'cms-') ||
+      startsWith(github.event.release.tag_name, 'web-') ||
+      startsWith(github.event.release.tag_name, 'umami-') ||
+      startsWith(github.event.release.tag_name, 'headless-'))
+
     permissions:
       contents: read
       id-token: write # npm provenance
 
-    # Avoid duplicate runs if both push and release fire
+    # Avoid duplicate runs if both push and release fire for the same tag
     concurrency:
-      group: publish-${{ github.event.release.tag_name || github.ref || github.run_id }}
-      cancel-in-progress: true
+      group: publish-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name || github.run_id }}
+      # Queue, never cancel: a publish cut off midway is worse than a duplicate run, which nx skips
+      cancel-in-progress: false
 
     steps:
       - name: Resolve context (tag or pending)
@@ -141,27 +160,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Verify a package by tag is actually configured for publishing
+      # Verify a package by tag is actually configured for publishing;
+      # the steps that follow only run when it is
       - name: Verify publishable package by tag
-        if: steps.ctx.outputs.mode == 'tag'
+        id: verify
         run: |
-          if [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
+          if [ "${{ steps.ctx.outputs.mode }}" != "tag" ]; then
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
             echo "'${{ steps.ctx.outputs.package }}' belongs to fixed release group '${{ steps.group.outputs.group }}' - will publish: ${{ steps.group.outputs.projects }}"
+            echo "publishable=true" >> "$GITHUB_OUTPUT"
           else
             PROJECTS=$(pnpm nx show projects --with-target nx-release-publish)
             if echo "$PROJECTS" | grep -qx "^${{ steps.ctx.outputs.package }}$"; then
               echo "Package '${{ steps.ctx.outputs.package }}' is valid for publishing"
+              echo "publishable=true" >> "$GITHUB_OUTPUT"
             else
               echo "'${{ steps.ctx.outputs.package }}' is not a project configured for publishing"
               echo "Publishable projects:"
               echo "$PROJECTS"
               echo "Skipping publish"
-              exit 0
+              echo "publishable=false" >> "$GITHUB_OUTPUT"
             fi
           fi
 
       # Build package (or all group members) by tag, or all publishable packages
       - name: Build
+        if: steps.verify.outputs.publishable == 'true'
         run: |
           if [ "${{ steps.ctx.outputs.mode }}" = "tag" ]; then
             pnpm nx run-many -t build -p "${{ steps.group.outputs.projects }}"
@@ -169,23 +194,54 @@ jobs:
             pnpm nx show projects --with-target nx-release-publish | xargs -t pnpm nx run-many -t build -p
           fi
 
-      # Publish package (or fixed group) by tag, or pending packages if any
+      # Trusted publishers only allow staging: the package waits on npm until a
+      # human approves it with 2FA (`pnpm stage approve <id>`, or on npmjs.com).
       # Auth is via npm Trusted Publishing (OIDC) - no NODE_AUTH_TOKEN needed,
       # relies on the id-token: write permission above.
-      - name: Publish
+      - name: Stage
+        if: steps.verify.outputs.publishable == 'true'
         run: |
+          set -euo pipefail
+
           if [ "${{ steps.ctx.outputs.mode }}" = "tag" ]; then
-            if [ "${{ steps.group.outputs.is_group }}" = "true" ]; then
-              pnpm nx release publish --groups "${{ steps.group.outputs.group }}" ${{ steps.ctx.outputs.dry_flag }}
-            else
-              pnpm nx release publish -p "${{ steps.ctx.outputs.package }}" ${{ steps.ctx.outputs.dry_flag }}
-            fi
+            PROJECTS=$(echo "${{ steps.group.outputs.projects }}" | tr ',' ' ')
           else
-            # Filter to publishable projects - an unfiltered `nx release publish`
-            # also matches the "apps" release group (cms, web), which is versioned
-            # for the deployment workflow but has no nx-release-publish target.
-            pnpm nx show projects --with-target nx-release-publish | xargs -t pnpm nx release publish ${{ steps.ctx.outputs.dry_flag }} -p
+            # Only projects with an nx-release-publish target - the "apps" release
+            # group (cms, headless) is versioned for deployment and never published.
+            PROJECTS=$(pnpm nx show projects --with-target nx-release-publish)
           fi
+
+          for PROJECT in $PROJECTS; do
+            DIR=$(pnpm nx show project "$PROJECT" --json | jq -r '.targets["nx-release-publish"].options.packageRoot')
+            NAME=$(jq -r .name "$DIR/package.json")
+            VERSION=$(jq -r .version "$DIR/package.json")
+            # Skip a version npm already has, published or staged awaiting approval
+            if [ -n "$(npm view "$NAME@$VERSION" version 2>/dev/null || true)" ]; then
+              echo "$NAME@$VERSION is already on npm, skipping"
+              continue
+            fi
+            if pnpm stage list "$NAME" --json 2>/dev/null | grep -q "\"$VERSION\""; then
+              echo "$NAME@$VERSION is already staged, skipping"
+              continue
+            fi
+            # Prereleases never take the latest tag
+            DIST_TAG=latest
+            case "$VERSION" in *-*) DIST_TAG=next ;; esac
+            echo "Staging $PROJECT ($NAME@$VERSION) from $DIR"
+            pnpm stage publish "$DIR" --access public --tag "$DIST_TAG" --no-git-checks ${{ steps.ctx.outputs.dry_flag }} --json | tee "$RUNNER_TEMP/stage-$PROJECT.json"
+            {
+              if [ -n "${{ steps.ctx.outputs.dry_flag }}" ]; then
+                echo "### Dry run: would stage $PROJECT ($NAME@$VERSION, tag $DIST_TAG)"
+              else
+                echo "### Staged $PROJECT ($NAME@$VERSION, tag $DIST_TAG)"
+              fi
+              echo '```json'
+              cat "$RUNNER_TEMP/stage-$PROJECT.json"
+              echo '```'
+              if [ -z "${{ steps.ctx.outputs.dry_flag }}" ]; then
+                echo "Approve with \`pnpm stage approve <stage-id> --otp <code>\` or on npmjs.com; in a group, approve dependencies first (nx-payload before create-nx-payload)."
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
         env:
-          GH_TOKEN: ${{ github.token }}
           NPM_CONFIG_PROVENANCE: true

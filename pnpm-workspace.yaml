@@ -7,11 +7,6 @@ overrides:
   react-dom: "catalog:"
   tar: ">=7.5.11"
   fast-xml-parser: ">=5.7.0"
-  "@remix-run/server-runtime": ">=2.17.5 <3"
-  # Remix v2 pins these exactly; only an override collapses the old copies
-  react-router: ">=6.30.6 <7"
-  react-router-dom: ">=6.30.6 <7"
-  "@remix-run/router": ">=1.23.4 <2"
 
   # Transitive-only floors: nothing declares these directly, so a lockfile
   # refresh alone never reaches the stale copies.
@@ -25,7 +20,7 @@ overrides:
   # Scoped to one line each: these packages have newer majors in the tree that
   # an unscoped floor would drag backwards.
   yaml@1: ">=1.10.3 <2"
-  minimatch@7: ">=7.4.8 <8"
+  minimatch@7: ">=7.4.8 <12"
   js-yaml@3: ">=3.15.2 <4"
   js-yaml@4: ">=4.3.2 <5"
   undici@7: ">=7.29.0 <8"
@@ -42,6 +37,11 @@ overrides:
   "verdaccio>compression": ">=1.8.2 <2"
   # GHSA-8r5x-fm3f-whwj, GHSA-xw65-4hp5-5hc7
   "@verdaccio/hooks>handlebars": ">=4.7.10 <5"
+
+# The authenticator entry's icon (COD-739), until payload-totp takes an image
+# option of its own. Pinned to the version: an upgrade has to drop or redo it.
+patchedDependencies:
+  payload-totp@3.0.7: patches/payload-totp@3.0.7.patch
 
 allowBuilds:
   "@evilmartians/lefthook": true

@@ -1,4 +1,6 @@
+import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { within } from 'storybook/test';
 
 import { ThemeStudioBlock } from './ThemeStudioBlock';
 import { themeStudioGallery } from './ThemeStudioBlock.gallery';
@@ -38,3 +40,36 @@ export const Bare: Story = {
     note: ''
   }
 };
+
+/** Below `lg` the studio is not loaded; the block says what it needs. */
+export const Phone: Story = {
+  args,
+  globals: { viewport: { value: 'mobile1', isRotated: false } }
+};
+
+/** The studio loads lazily; axe must not run before it has arrived. */
+const studioLoaded: Story['play'] = async ({ canvasElement }) => {
+  await within(canvasElement).findByRole(
+    'group',
+    { name: 'Theme options' },
+    { timeout: 10000 }
+  );
+};
+
+/** A page has its own `main`, so the block has to add none of its own. */
+const onAPage: NonNullable<Story['decorators']> = [
+  (Story) => (
+    <main>
+      <Story />
+    </main>
+  )
+];
+
+const a11yBase = {
+  args,
+  decorators: onAPage,
+  play: studioLoaded
+};
+
+export const CodewareLight = a11yStory(a11yBase, 'codeware', 'light');
+export const CodewareDark = a11yStory(a11yBase, 'codeware', 'dark');

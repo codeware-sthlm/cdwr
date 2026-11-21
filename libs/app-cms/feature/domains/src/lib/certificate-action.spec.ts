@@ -60,7 +60,7 @@ describe('runCertificateAction', () => {
     expect(result.check).toBe(check);
   });
 
-  it('never asks for addresses on a subdomain', async () => {
+  it('stores the addresses for a subdomain too', async () => {
     const { fly, list } = stubFly({ cert: certificate(false) });
 
     const result = await runCertificateAction(
@@ -71,8 +71,8 @@ describe('runCertificateAction', () => {
       now
     );
 
-    expect(list).not.toHaveBeenCalled();
-    expect(result.certificate?.addresses).toEqual([]);
+    expect(list).toHaveBeenCalledWith('cdwr-cms');
+    expect(result.certificate?.addresses).toHaveLength(2);
   });
 
   it('checks an apex certificate and stores its addresses', async () => {

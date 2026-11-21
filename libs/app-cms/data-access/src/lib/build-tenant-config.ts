@@ -43,6 +43,7 @@ export function buildTenantConfig({
 
   return {
     appName: settings.appName,
+    brandLabel: settings.brandLabel,
     icon: settings.icon,
     locale: settings.defaultLocale,
     fallbackLocale: null,

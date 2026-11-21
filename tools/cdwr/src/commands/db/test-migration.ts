@@ -189,11 +189,15 @@ export default defineCommand({
   inputs: {
     fresh: input.boolean({
       prompt: 'Create a fresh production backup first?',
+      description:
+        'Take a new production backup instead of using an existing one',
+      short: 'f',
       initial: false
     }),
     backup: input.optional(
       input.select<string>({
         prompt: 'Which backup to test against?',
+        short: 'b',
         description: 'Backup folder under backups/',
         choices: (ctx) =>
           listBackups(ctx.root).map((b) => ({
@@ -206,6 +210,8 @@ export default defineCommand({
     ),
     keep: input.boolean({
       prompt: 'Keep the container running afterwards?',
+      description: 'Leave the test container running afterwards',
+      short: 'k',
       initial: false
     })
   },

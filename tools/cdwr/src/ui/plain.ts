@@ -1,8 +1,8 @@
-import Table from 'cli-table3';
-
 import { messageOf } from '../cli/errors';
 
 import { createSilentUi } from './silent';
+import { createTable } from './table';
+import { outputWidth, tableLayout } from './table-layout';
 import { symbols, theme } from './theme';
 import type { Ui } from './ui';
 
@@ -14,7 +14,8 @@ import type { Ui } from './ui';
  */
 export function createPlainUi(
   stdout: (line: string) => void = (line) => process.stdout.write(`${line}\n`),
-  stderr: (line: string) => void = (line) => process.stderr.write(`${line}\n`)
+  stderr: (line: string) => void = (line) => process.stderr.write(`${line}\n`),
+  width: () => number = () => outputWidth(100)
 ): Ui {
   const silent = createSilentUi(stderr);
   return {
@@ -33,12 +34,10 @@ export function createPlainUi(
     },
     write: (text) => stdout(text),
     table: (head, rows) => {
-      const table = new Table({
-        head: head.map((h) => theme.title(h)),
-        style: { head: [], border: [] },
-        chars: { mid: '', 'left-mid': '', 'mid-mid': '', 'right-mid': '' }
+      const table = createTable(head, rows, {
+        colWidths: tableLayout(head, rows, width()),
+        wordWrap: true
       });
-      for (const row of rows) table.push(row);
       stdout(table.toString());
     },
     async task(label, work, done) {

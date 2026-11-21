@@ -199,6 +199,16 @@ export function oklchToRgb(color: Oklch): Rgba {
   };
 }
 
+/** Rgba (channels 0–255) as lowercase `#rrggbb`; alpha is dropped. */
+export function toHex({ r, g, b }: Rgba): string {
+  const part = (value: number) =>
+    Math.min(255, Math.max(0, Math.round(value)))
+      .toString(16)
+      .padStart(2, '0');
+
+  return `#${part(r)}${part(g)}${part(b)}`;
+}
+
 /** sRGB → Oklch, the inverse of {@link oklchToRgb}. */
 export function rgbToOklch({ r, g, b, a }: Rgba): Oklch {
   return {

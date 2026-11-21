@@ -2,6 +2,10 @@
 
 import { isValidTokenValue } from '@codeware/shared/theme';
 import { ColorField } from '@codeware/shared/ui/color-picker';
+import {
+  Alert,
+  AlertDescription
+} from '@codeware/shared/ui/shadcn/components/alert';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import { Input } from '@codeware/shared/ui/shadcn/components/input';
 import {
@@ -13,6 +17,8 @@ import { type ThemeTokens, resolveToken } from '@codeware/shared/util/color';
 import { cn } from '@codeware/shared/util/ui';
 import { RotateCcwIcon, TriangleAlertIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
+
+import { type DroppedOverrides, droppedNames } from './derived-overrides';
 
 export type ThemeOverrides = { light: ThemeTokens; dark: ThemeTokens };
 
@@ -61,15 +67,22 @@ type OverridePanelProps = {
   issues?: TokenIssues;
   /** Where the colour popovers portal to, when the studio is itself portalled */
   container?: HTMLElement | null;
+  /** Edits a recipe change took away, offered back until cleared */
+  dropped?: DroppedOverrides | null;
+  onRestore?: () => void;
+  onDismiss?: () => void;
   onChange: (overrides: ThemeOverrides) => void;
 };
+
+/** How many dropped names the notice spells out before "and N more". */
+const LISTED_DROPPED = 4;
 
 /**
  * Edit single tokens the recipe cannot express.
  *
  * The escape hatch, not the main road: four decisions cover a whole theme, and
- * anything set here stops following the recipe, so a later change of brand or
- * base leaves it behind. Overridden rows say so.
+ * anything set here stops following the recipe until a later change derives it
+ * again, which drops the edit. Overridden rows say so.
  *
  * Only the light scheme lists every token — dark carries just what it changes,
  * and adding a token there that light already covers would be a no-op the
@@ -80,6 +93,9 @@ export function OverridePanel({
   overrides,
   issues,
   container,
+  dropped,
+  onRestore,
+  onDismiss,
   onChange
 }: OverridePanelProps) {
   const [scheme, setScheme] = useState<'light' | 'dark'>('light');
@@ -113,8 +129,32 @@ export function OverridePanel({
 
   const overriddenCount = Object.keys(overrides[scheme]).length;
 
+  const dropNames = dropped ? droppedNames(dropped.tokens) : [];
+  const droppedCount = dropNames.length;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {dropped && droppedCount > 0 && (
+        <Alert>
+          <AlertDescription>
+            {dropped.cause} dropped {droppedCount} fine-tuned{' '}
+            {droppedCount === 1 ? 'token' : 'tokens'}:{' '}
+            {dropNames.slice(0, LISTED_DROPPED).join(', ')}
+            {dropNames.length > LISTED_DROPPED &&
+              ` and ${dropNames.length - LISTED_DROPPED} more`}
+            .
+          </AlertDescription>
+          <div className="mt-1.5 flex gap-2">
+            <Button size="sm" variant="outline" onClick={onRestore}>
+              Restore
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          </div>
+        </Alert>
+      )}
+
       <Tabs
         value={scheme}
         onValueChange={(value) => setScheme(value as 'light' | 'dark')}

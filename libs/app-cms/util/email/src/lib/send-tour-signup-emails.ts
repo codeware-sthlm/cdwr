@@ -1,6 +1,7 @@
 import type { SupportedLocale } from '@codeware/shared/util/i18n';
 import type { Payload } from 'payload';
 
+import type { EmailBrand } from './templates/layout';
 import {
   type CustomerMailKind,
   renderCustomerMail
@@ -27,6 +28,8 @@ export type TourSignupMailInput = {
   notificationRecipients?: Array<string>;
   privacyUrl?: string | null;
   termsUrl?: string | null;
+  /** Sender identity for both mails */
+  brand?: EmailBrand;
 };
 
 /**
@@ -41,6 +44,7 @@ export type TourSignupMailInput = {
  * guide themselves triggered, so telling them about it is noise.
  */
 export async function sendTourSignupEmails({
+  brand,
   customer,
   from,
   kind,
@@ -76,7 +80,8 @@ export async function sendTourSignupEmails({
       people,
       privacyUrl,
       termsUrl,
-      from
+      from,
+      brand
     })
   );
 
@@ -91,7 +96,8 @@ export async function sendTourSignupEmails({
         tourTitle: tour.title,
         people,
         queued: kind === 'waiting',
-        from
+        from,
+        brand
       })
     );
   }

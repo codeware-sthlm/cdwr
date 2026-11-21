@@ -6,13 +6,6 @@ on:
       - opened
       - reopened
       - synchronize
-    paths-ignore:
-      - "**/*.md"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/PULL_REQUEST_TEMPLATE/**"
-      - ".github/CODEOWNERS"
-      - "LICENSE"
-      - "libs/shared/util/seed/src/lib/bundled/media/**"
   merge_group:
   push:
     branches:
@@ -25,16 +18,15 @@ permissions:
   contents: read
 
 # Environment details:
-# - Nx Cloud (cache + distributed agents) is used for human-driven runs:
-#   PRs, pushes to main, merge_group, and manual workflow_dispatch.
+# - Every task runs on this GitHub runner; there are no distributed agents.
+# - The Nx Cloud remote cache is used for human-driven runs: PRs, pushes to
+#   main, merge_group, and manual workflow_dispatch.
 # - Disabled only for machine-driven runs — renovate branches (matched on
 #   push and PR via head_ref/ref_name) — or via the NX_NO_CLOUD repo variable,
 #   to keep costs down on high-frequency bot traffic.
 env:
   CDWR_DEBUG_LOGGING: true
   NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
-  # Keep agents fed with tasks as soon as they come online.
-  NX_CLOUD_CONTINUOUS_ASSIGNMENT: true
   NX_NO_CLOUD: ${{ startsWith(github.head_ref || github.ref_name, 'renovate') ||
     vars.NX_NO_CLOUD == 'true' }}
   NX_PARALLEL: ${{ vars.NX_PARALLEL }}
@@ -66,29 +58,6 @@ jobs:
       - name: Analyze affected projects
         uses: nrwl/nx-set-shas@v5
 
-      # Distribute lint/test/build across Nx Agents, only when Nx Cloud is
-      # active. Follows the NX_NO_CLOUD rule above (off for renovate branches
-      # or the kill-switch variable), the same guard the record/format steps
-      # below use.
-      # - require-explicit-completion: keep the run open across the format
-      #   check, the main task command, and `nx fix-ci` self-healing; the run
-      #   is closed by the guarded "Stop Nx Cloud CI run" step.
-      # - stop-agents-on-failure=false: a failing task must not tear the run
-      #   down before `nx fix-ci` can analyze it.
-      - name: Start Nx Cloud CI run (distributed agents)
-        if: env.NX_NO_CLOUD != 'true'
-        # Distribution is an optimization: if starting the run fails (Nx Cloud
-        # outage, agent misconfig) don't block the job — `nx affected` below
-        # degrades to local execution. The failed step stays visible as an
-        # annotation so setup problems are still noticed.
-        continue-on-error: true
-        run: |
-          pnpm nx-cloud start-ci-run \
-            --distribute-on=".nx/workflows/distribution-config.yaml" \
-            --with-env-vars="CDWR_DEBUG_LOGGING" \
-            --require-explicit-completion \
-            --stop-agents-on-failure=false
-
       - name: Cache Next.js build
         uses: actions/cache@v5
         with:
@@ -98,36 +67,17 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
             ${{ runner.os }}-nextjs-
 
-      - name: Format check (Nx Cloud)
-        if: env.NX_NO_CLOUD != 'true'
-        run: pnpm nx-cloud record -- nx format:check
-
       - name: Format check
-        if: env.NX_NO_CLOUD == 'true'
         run: pnpm nx format:check
 
       - name: Install Playwright Chromium (for Storybook tests)
         run: pnpm exec playwright install chromium --with-deps
 
-      - run: pnpm nx affected -t lint,typecheck,test,build -c ci
+      - name: Install zsh (for the agent-queue shell specs)
+        run: sudo apt-get update && sudo apt-get install -y zsh
 
-      # Runs even when the affected command fails — that's the case self-healing
-      # exists to analyze, and it pairs with --stop-agents-on-failure=false so
-      # agents are still available for it.
-      - name: Nx Self-healing CI
-        if: always()
-        run: pnpm nx fix-ci
+      - run: pnpm nx affected -t lint,typecheck,test,build -c ci
 
       - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      # Close the run started above and release any still-running agents.
-      # Paired with --require-explicit-completion; always runs so agents are
-      # never orphaned, guarded to the same condition as start-ci-run.
-      - name: Stop Nx Cloud CI run
-        if: always() && env.NX_NO_CLOUD != 'true'
-        # Best-effort teardown: if the run was never started (start step above
-        # failed) or completion errors, don't fail the job over it.
-        continue-on-error: true
-        run: pnpm nx-cloud complete-ci-run

@@ -49,6 +49,15 @@ SchemaRegistry.register('fly/certs-list', CertsListTransformedResponseSchema, {
   name: 'CertsListTransformedResponseSchema',
   tags: ['fly']
 });
+// flyctl 0.5 prints snake_case keys and `status` instead of `ClientStatus`
+SchemaRegistry.register(
+  'fly/certs-list-v0.5',
+  CertsListTransformedResponseSchema,
+  {
+    name: 'CertsListTransformedResponseSchema (flyctl 0.5)',
+    tags: ['fly']
+  }
+);
 // Captured from the GraphQL api against a real issued certificate, with the
 // identifying values replaced — the shape is what the schema is proven against
 SchemaRegistry.register('fly-api/certificate', CertificateApiResponseSchema, {

@@ -19,6 +19,17 @@ export const DeploymentConfigSchema = z.object({
   secrets: z.record(z.string(), z.string()).optional(),
   apps: z.array(DeployableAppSchema),
   appDetails: AppDetailsSchema,
+  // Present only when id, secret and project id are all given
+  infisical: z
+    .object({
+      clientId: z.string().nonempty('Infisical client ID is required'),
+      clientSecret: z.string().nonempty('Infisical client secret is required'),
+      projectId: z.string().nonempty('Infisical project ID is required'),
+      site: z.enum(['eu', 'us'], {
+        message: 'Infisical site must be either "eu" or "us"'
+      })
+    })
+    .optional(),
   token: ActionInputsSchema.shape.token
 });
 

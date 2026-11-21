@@ -1,0 +1,434 @@
+import { describe, expect, it } from 'vitest';
+
+import { STALE_WATCH_MS } from './agent.logic';
+import {
+  attendedSummary,
+  checkRepoOf,
+  formatContainerJob,
+  formatLimit,
+  parseListener,
+  parseRemoteStatus,
+  remoteStatus,
+  rmLockCommand,
+  schedulerRow,
+  showsRow,
+  skewedStatus,
+  staleScriptsHint,
+  statusSummary,
+  unreadableStatus,
+  watchRow
+} from './status.logic';
+
+const report = {
+  job: { loaded: false },
+  paused: false,
+  notifyLevel: 'action',
+  host: 'container',
+  linearAuth: 'app',
+  linearAuthSource: 'app-env',
+  mirror: null,
+  script: 'current',
+  installedAny: true,
+  watching: [{ ticket: 'COD-1', pr: 2, state: 'open' }],
+  worktree: { path: '/w', exists: true },
+  lastScheduled: null,
+  lockState: 'free',
+  lock: '/l',
+  implement: { cap: 40, budget: 15 },
+  next: null,
+  attended: null,
+  suggest: null,
+  devlog: null,
+  review: null,
+  queueView: null
+};
+const envelope = JSON.stringify({
+  ok: true,
+  command: 'agent status',
+  plan: {},
+  result: report
+});
+
+describe('remoteStatus', () => {
+  it('runs status through secrets.sh in the container, one argv entry each', () => {
+    expect(remoteStatus('agent-host')).toEqual([
+      'agent-host',
+      'docker',
+      'exec',
+      '-w',
+      '/work/codeware-agent',
+      'cdwr-agent',
+      '/opt/agent-host/secrets.sh',
+      'node',
+      'tools/cdwr/bin/cdwr.mjs',
+      'agent',
+      'status',
+      '--json'
+    ]);
+  });
+});
+
+describe('parseRemoteStatus', () => {
+  it.each([
+    ['bare envelope', envelope],
+    [
+      'secrets line before it',
+      `secrets: production /agent-queue: 5 from the vault (A, B)\n${envelope}\n`
+    ],
+    ['two secrets lines', `secrets: a\nsecrets: kept: X\n${envelope}`]
+  ])('reads %s', (_name, stdout) => {
+    expect(parseRemoteStatus(stdout)).toMatchObject({
+      kind: 'report',
+      report: { host: 'container', linearAuth: 'app' }
+    });
+  });
+
+  it('reads the remote failure and its hint', () => {
+    const line = JSON.stringify({
+      ok: false,
+      error: { message: 'No Linear key', hint: 'Set it', exitCode: 1 }
+    });
+    expect(parseRemoteStatus(`secrets: x\n${line}`)).toEqual({
+      kind: 'failed',
+      message: 'No Linear key',
+      hint: 'Set it'
+    });
+  });
+
+  it('reads a report from an older image without the implement budget', () => {
+    const old = JSON.stringify({
+      ok: true,
+      result: { ...report, implement: { cap: 40 } }
+    });
+    expect(parseRemoteStatus(old)).toMatchObject({ kind: 'report' });
+  });
+
+  it('reads a limited outcome and the hold, which an older image omits', () => {
+    const implement = {
+      cap: 40,
+      limitedUntil: 1_800_000_000,
+      last: { when: 'a', outcome: 'limited', ticket: 'COD-9' }
+    };
+    expect(
+      parseRemoteStatus(
+        JSON.stringify({ ok: true, result: { ...report, implement } })
+      )
+    ).toMatchObject({ kind: 'report', report: { implement } });
+  });
+
+  it('reads the limit and the cap source, which an older image omits', () => {
+    const answer = JSON.stringify({
+      ok: true,
+      result: {
+        ...report,
+        implement: { cap: 25, capSource: 'file' },
+        limit: { value: 3, source: 'file' }
+      }
+    });
+    expect(parseRemoteStatus(answer)).toMatchObject({
+      kind: 'report',
+      report: {
+        implement: { cap: 25, capSource: 'file' },
+        limit: { value: 3, source: 'file' }
+      }
+    });
+  });
+
+  it.each([
+    [{ value: 3, source: 'file' as const }, '3, set from the desk'],
+    [{ value: 5, source: 'default' as const }, '5, default']
+  ])('formats the limit row %j', (limit, text) => {
+    expect(formatLimit(limit)).toBe(text);
+  });
+
+  it('names the paths of a report that differs and keeps its line', () => {
+    const line = JSON.stringify({
+      result: { ...report, lockState: undefined }
+    });
+    expect(parseRemoteStatus(`secrets: x\n${line}`)).toEqual({
+      kind: 'skew',
+      paths: ['result.lockState'],
+      line
+    });
+  });
+
+  it.each([
+    ['an empty answer', ''],
+    ['garbage', 'bash: docker: command not found'],
+    ['broken JSON', '{"ok":true,']
+  ])('finds nothing in %s', (_name, stdout) => {
+    expect(parseRemoteStatus(stdout)).toEqual({ kind: 'none' });
+  });
+
+  it.each([
+    ['JSON without a report', '{"ok":true,"result":{"summary":"x"}}'],
+    ['JSON of another shape', '[1,2]']
+  ])('%s', (_name, stdout) => {
+    expect(parseRemoteStatus(stdout).kind).toBe(
+      stdout.startsWith('{') ? 'skew' : 'none'
+    );
+  });
+});
+
+describe('skewedStatus', () => {
+  it('names the host, the first paths, the likely cause and the line, not the secrets line', () => {
+    const text = skewedStatus('nuc', ['a', 'b', 'c', 'd'], '{"x":1}');
+    expect(text).toContain('nuc');
+    expect(text).toContain('a, b, c, ...');
+    expect(text).toContain('different versions');
+    expect(text).toContain('cdwr agent attend');
+    expect(text).toContain('cdwr agent deploy --host nuc');
+    expect(text.endsWith('Answer starts: {"x":1}')).toBe(true);
+  });
+});
+
+describe('rmLockCommand', () => {
+  it.each([
+    [undefined, 'rm -rf /l'],
+    ['nuc', 'ssh nuc docker exec cdwr-agent rm -rf /l']
+  ])('with host %s', (host, text) => {
+    expect(rmLockCommand('/l', host)).toBe(text);
+  });
+});
+
+describe('unreadableStatus', () => {
+  it('names the host and quotes the start of the answer', () => {
+    expect(unreadableStatus('nuc', 'x'.repeat(300))).toBe(
+      `The status answer from nuc could not be read: ${'x'.repeat(200)}...`
+    );
+  });
+
+  it('says so when the answer is empty', () => {
+    expect(unreadableStatus('nuc', '  ')).toContain('(empty)');
+  });
+});
+
+describe('staleScriptsHint', () => {
+  it.each([
+    ['launchd', 're-run `cdwr agent install`'],
+    [
+      'container',
+      're-deploy with `cdwr agent deploy --host <nuc>` from the Mac'
+    ]
+  ] as const)('on %s', (host, text) => {
+    expect(staleScriptsHint(host)).toBe(text);
+  });
+});
+
+describe('formatContainerJob', () => {
+  const now = new Date('2026-10-29T12:00:00Z');
+  const listener = (state: 'live' | 'down', lastBeat: string) => ({
+    state,
+    since: '2026-10-29T11:00:00Z',
+    lastBeat,
+    lastEvent: null,
+    pid: 1
+  });
+
+  it('is live while the beat is fresh', () => {
+    expect(
+      formatContainerJob(listener('live', '2026-10-29T11:59:30Z'), now, 10, 60)
+    ).toEqual({ ok: true, detail: 'live (events), fallback every 60 min' });
+  });
+
+  it('warns on a stale beat', () => {
+    const job = formatContainerJob(
+      listener('live', '2026-10-29T11:50:00Z'),
+      now,
+      10,
+      60
+    );
+    expect(job.ok).toBe('warn');
+    expect(job.detail).toMatch(/^polling every 10 min \(listener down since /);
+  });
+
+  it('warns on a down listener', () => {
+    const job = formatContainerJob(
+      listener('down', '2026-10-29T11:59:50Z'),
+      now,
+      10,
+      60
+    );
+    expect(job.ok).toBe('warn');
+    expect(job.detail).toContain('listener down since');
+  });
+
+  it('is fine without a listener file', () => {
+    expect(formatContainerJob(null, now, 10, 60)).toEqual({
+      ok: true,
+      detail: 'polling every 10 min (no listener)'
+    });
+  });
+});
+
+describe('parseListener', () => {
+  it('reads a listener file', () => {
+    const text = JSON.stringify({
+      state: 'live',
+      since: 'a',
+      lastBeat: 'b',
+      lastEvent: null,
+      pid: 3
+    });
+    expect(parseListener(text)?.pid).toBe(3);
+  });
+
+  it.each([[undefined], ['not json'], ['{}']])('gives null for %s', (text) => {
+    expect(parseListener(text)).toBeNull();
+  });
+});
+
+describe('watchRow', () => {
+  it('is ok for a fresh remote row', () => {
+    expect(
+      watchRow({ kind: 'remote', host: 'nuc', at: 'x', ageMs: 12 * 60_000 })
+    ).toEqual({ ok: true, detail: 'nuc, 12 min ago' });
+  });
+
+  it('warns on a stale remote row', () => {
+    expect(
+      watchRow({
+        kind: 'remote',
+        host: 'nuc',
+        at: 'x',
+        ageMs: STALE_WATCH_MS + 3_600_000
+      })
+    ).toEqual({ ok: 'warn', detail: 'nuc, 3 h ago, stale' });
+  });
+
+  it('warns on the fallback, a local source and no report', () => {
+    expect(watchRow({ kind: 'fallback' })).toEqual({
+      ok: 'warn',
+      detail:
+        "local (the NUC's row is unreadable); the local file is never refreshed here"
+    });
+    expect(watchRow({ kind: 'local' })).toEqual({
+      ok: 'warn',
+      detail: 'local; nothing refreshes it here'
+    });
+    expect(watchRow({ kind: 'unknown' }).detail).toBe(
+      'reported in a form status does not read'
+    );
+    expect(watchRow(null)).toEqual({
+      ok: 'warn',
+      detail: 'not reported by the check'
+    });
+  });
+
+  it('shows on an attended-only machine', () => {
+    expect(showsRow('elsewhere', 'watch')).toBe(true);
+  });
+});
+
+describe('showsRow', () => {
+  it.each([
+    'job',
+    'paused',
+    'scripts',
+    'worktree',
+    'last run',
+    'lock',
+    'implement',
+    'next run',
+    'suggest'
+  ])('drops %s when the scheduler is elsewhere', (check) => {
+    expect(showsRow('elsewhere', check)).toBe(false);
+    expect(showsRow('here', check)).toBe(true);
+    expect(showsRow(undefined, check)).toBe(true);
+  });
+
+  it.each([
+    'scheduler',
+    'notify',
+    'Linear auth',
+    'Heartbeat mirror',
+    'attended',
+    'linear tools',
+    'watching',
+    'watch',
+    'next',
+    'held',
+    'blocked',
+    'refused',
+    'deploy hold',
+    'parked',
+    'renovate',
+    'on your table'
+  ])('keeps %s when the scheduler is elsewhere', (check) => {
+    expect(showsRow('elsewhere', check)).toBe(true);
+  });
+
+  it('keeps scripts on an attended-only machine with installed copies', () => {
+    expect(showsRow('elsewhere', 'scripts', true)).toBe(true);
+    expect(showsRow('elsewhere', 'scripts', false)).toBe(false);
+    expect(showsRow('elsewhere', 'worktree', true)).toBe(false);
+  });
+});
+
+describe('schedulerRow and attendedSummary', () => {
+  it('names the mirror host', () => {
+    expect(schedulerRow('nuc:docker:cdwr-agent:/d')).toEqual({
+      ok: true,
+      detail: 'runs on nuc; cdwr agent status --host nuc'
+    });
+    expect(attendedSummary('nuc:docker:cdwr-agent:/d')).toBe(
+      'Attended only; the scheduler runs on nuc'
+    );
+  });
+
+  it('warns without a mirror', () => {
+    expect(schedulerRow(null)).toEqual({
+      ok: 'warn',
+      detail: 'not on this machine; cdwr agent status --host <host>'
+    });
+    expect(attendedSummary(null)).toBe(
+      'Attended only; the scheduler runs elsewhere'
+    );
+  });
+});
+
+describe('parseRemoteStatus scheduler', () => {
+  it('accepts a report with and without scheduler', () => {
+    for (const extra of [{}, { scheduler: 'elsewhere' }]) {
+      const text = JSON.stringify({
+        ok: true,
+        result: { ...report, ...extra }
+      });
+      expect(parseRemoteStatus(text).kind).toBe('report');
+    }
+  });
+});
+
+describe('statusSummary', () => {
+  const mirror = 'nuc:docker:cdwr-agent:/d';
+
+  it('says attended only when nothing is wrong', () => {
+    expect(statusSummary('elsewhere', mirror, 0, 0)).toBe(
+      'Attended only; the scheduler runs on nuc'
+    );
+  });
+
+  it('shows the warnings of an attended-only machine', () => {
+    expect(statusSummary('elsewhere', mirror, 0, 2)).toBe(
+      'Loaded, with 2 thing(s) worth a look'
+    );
+  });
+
+  it('counts failures first, and a healthy local queue', () => {
+    expect(statusSummary('elsewhere', mirror, 1, 2)).toBe(
+      '1 thing(s) need attention'
+    );
+    expect(statusSummary('here', mirror, 0, 0)).toBe('The queue is healthy');
+  });
+});
+
+describe('checkRepoOf', () => {
+  it('falls back to this checkout when the planner checkout is gone', () => {
+    const gone = { path: '/p/planner', exists: false };
+    expect(checkRepoOf('elsewhere', gone, '/p/root')).toBe('/p/root');
+    expect(checkRepoOf('here', gone, '/p/root')).toBe('/p/planner');
+    expect(
+      checkRepoOf('elsewhere', { path: '/p/planner', exists: true }, '/p/root')
+    ).toBe('/p/planner');
+  });
+});

@@ -9,18 +9,19 @@ import {
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { isUser } from '@codeware/app-cms/util/misc';
 import {
-  BUILT_IN_TOKENS,
   THEME_COOKIE,
   customThemeCss,
   resolveTheme,
+  siteFontFaceCss,
   themeLabel
 } from '@codeware/shared/theme';
 import { RenderLayout } from '@codeware/shared/ui/cms-renderer';
 import {
-  entitledFonts,
-  fontFaceCss,
-  selfServedFontsIn
-} from '@codeware/shared/util/color';
+  DEFAULT_OG_IMAGE_PATH,
+  ogLocale,
+  siteOrigin
+} from '@codeware/shared/util/payload-utils';
+import { statsScript } from '@codeware/shared/util/umami';
 import { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -33,7 +34,6 @@ import {
   MEMBER_LOGIN_PATH,
   MEMBER_LOGOUT_SUBMIT_PATH
 } from '../../utils/member-login';
-import { siteOrigin } from '../../utils/page-metadata';
 
 import { Providers } from './providers';
 
@@ -79,6 +79,13 @@ export default async function RootLayout({
   // Set by the proxy for the inline theme script
   const nonce = (await headers()).get(NONCE_HEADER) ?? undefined;
 
+  // Cookieless statistics, first-party through /stats; off without both settings
+  const stats = statsScript({
+    umamiUrl: env.UMAMI_URL,
+    websiteId: runtime.tenantConfig?.tenant.statsWebsiteId,
+    nonce
+  });
+
   // Theme is resolved server-side so the first paint is already correct.
   // A tenant without theme settings falls back to what sites rendered before
   // the setting existed (getGeneralSiteSettings normalises that).
@@ -97,25 +104,12 @@ export default async function RootLayout({
   // A licensed face may only be embedded on a site Codeware owns or controls,
   // so the entitlement belongs to the deployment rather than to whoever chose
   // the font — and which deployment is settled by where the secret lives.
-  // Driven off the tokens because those are what renders, and only for a
-  // family the platform serves itself: Inter comes from the bundle.
-  const fontFaces = entitledFonts(
-    selfServedFontsIn([
-      ...customThemes.flatMap(({ tokensLight, tokensDark }) => [
-        tokensLight,
-        tokensDark
-      ]),
-      // A built-in may name a licensed face too, which only an entitled
-      // deployment embeds; elsewhere its stack falls back to Inter
-      ...themes.flatMap((name) => {
-        const builtIn = BUILT_IN_TOKENS[name];
-        return builtIn ? [builtIn.light, builtIn.dark] : [];
-      })
-    ]),
-    env.RESTRICTED_FONTS
-  )
-    .map((font) => fontFaceCss(font, env.FONT_ASSETS_BASE_URL))
-    .join('');
+  const fontFaces = siteFontFaceCss(
+    themes,
+    customThemes,
+    env.RESTRICTED_FONTS,
+    env.FONT_ASSETS_BASE_URL
+  );
   const customLabels = new Map(
     customThemes.map(({ slug, name }) => [slug, name])
   );
@@ -143,10 +137,13 @@ export default async function RootLayout({
         */}
         {fontFaces && <style>{fontFaces}</style>}
         {customCss && <style>{customCss}</style>}
+        {stats && <script defer {...stats.tracker} />}
+        {stats && <script defer {...stats.recorder} />}
       </head>
       <body>
         <Providers
           appInfo={getAppInfo(env)}
+          brandLabel={runtime.tenantConfig?.brandLabel ?? null}
           iconConfig={runtime.tenantConfig?.icon ?? null}
           humanCheckSiteKey={env.HUMAN_CHECK?.siteKey ?? null}
           locale={runtime.tenantConfig?.locale ?? 'en'}
@@ -196,7 +193,13 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s · ${config?.appName ?? 'Codeware CMS'}`
     },
     // For a page stating no Open Graph of its own
-    openGraph: { siteName: config?.appName ?? 'Codeware CMS' },
+    openGraph: {
+      type: 'website',
+      siteName: config?.appName ?? 'Codeware CMS',
+      ...(ogLocale(config?.locale) && { locale: ogLocale(config?.locale) }),
+      images: [{ url: DEFAULT_OG_IMAGE_PATH }]
+    },
+    twitter: { card: 'summary_large_image' },
     ...(icon?.source === 'svg' && {
       icons: {
         icon: [

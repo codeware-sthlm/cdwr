@@ -4,6 +4,7 @@ import { getTenantFromCookie } from '@payloadcms/plugin-multi-tenant/utilities';
 import type { CollectionAfterLoginHook } from 'payload';
 
 import { resolveScopedTenant } from '../../../security/resolve-scoped-tenant';
+import { errorKind } from '../../../utils/error-kind';
 
 /**
  * Selects the tenant's default locale in the admin UI on every login.
@@ -119,9 +120,7 @@ export const applyTenantLocaleHook: CollectionAfterLoginHook<User> = async ({
     }
   } catch (error) {
     payload.logger.warn(
-      `[applyTenantLocale] Could not apply tenant locale for '${user.email}': ${
-        error instanceof Error ? error.message : error
-      }`
+      `[applyTenantLocale] Could not apply tenant locale for user ${user.id} (${errorKind(error)})`
     );
   }
 

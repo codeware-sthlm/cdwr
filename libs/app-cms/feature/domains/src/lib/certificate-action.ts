@@ -16,8 +16,9 @@ export type CertificateResult = {
 /**
  * Run one certificate action against Fly and fold the answer into row state.
  *
- * The app's addresses are only fetched for an apex certificate, the one case
- * that needs them. Errors propagate, including a failed address lookup: the
+ * The app's addresses are fetched for every certificate: an apex needs them
+ * for its A and AAAA records, and a subdomain served by address rather than by
+ * CNAME is judged against them. Errors propagate, including a failed address lookup: the
  * caller reports them, and a row stored without its addresses would read as if
  * there were none to configure.
  */
@@ -43,7 +44,7 @@ export const runCertificateAction = async (
           fly.certs.check(app, hostname)
         ]);
 
-  const addresses = certificate?.isApex ? await fly.ips.list(app) : [];
+  const addresses = certificate ? await fly.ips.list(app) : [];
 
   return {
     certificate: toCertificateState(certificate, now, addresses),

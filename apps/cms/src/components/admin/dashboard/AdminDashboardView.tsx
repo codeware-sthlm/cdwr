@@ -10,6 +10,7 @@ import {
 } from '@codeware/app-cms/data-access';
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import type { RecentDoc } from '@codeware/app-cms/ui/dashboard';
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import type { SupportedLocale } from '@codeware/shared/util/i18n';
 import type {
@@ -20,6 +21,7 @@ import type {
 import type { ServerProps, Where } from 'payload';
 import React from 'react';
 
+import { getFirstSiteState } from '../first-site/first-site-access';
 import { formatRelativeTime } from '../utils/relative-time';
 import { getTenantWhere } from '../utils/tenant-where';
 
@@ -31,6 +33,7 @@ import {
   isDashboardTab
 } from './dashboard-preferences';
 import { getPlatformData } from './get-platform-data';
+import { isSitePending } from './is-site-pending';
 import { PANEL_MAX_LIMIT } from './panel-limits';
 
 const SKIPPED_COUNT_SLUGS: Set<CollectionSlug> = new Set([
@@ -70,6 +73,12 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
   user,
   locale
 }) => {
+  // A session that owes its second factor is refused every read below, and
+  // the providers are already sending it on to verify or setup
+  if (isSecondFactorPending(user)) {
+    return null;
+  }
+
   const runtime = mapToRuntime(payload, user);
   const tenantWhere = await getTenantWhere(user);
 
@@ -178,6 +187,9 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
     .slice(0, PANEL_MAX_LIMIT);
 
   const userName = user?.name ?? '';
+  const showBuildSite =
+    (await getFirstSiteState(payload, user)).kind === 'available';
+  const pendingSite = await isSitePending(payload, user);
 
   return (
     <AdminDashboard
@@ -188,6 +200,8 @@ const AdminDashboardView: React.FC<ServerProps> = async ({
       drafts={drafts}
       initialActiveTab={activeTab}
       platform={platform}
+      showBuildSite={showBuildSite}
+      pendingSite={pendingSite}
     />
   );
 };

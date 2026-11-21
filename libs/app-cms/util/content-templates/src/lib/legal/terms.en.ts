@@ -6,7 +6,9 @@
  * commercial terms (payment, cancellation windows) as prompts the editor must
  * fill in, since only they know them.
  */
-export const termsEn = `> **Draft — review before publishing.** This text covers how signing up works on this website. The commercial parts are marked and must be filled in with your own terms. It is a starting point, not legal advice.
+export const termsEn = `{{^published}}
+> **Draft — review before publishing.** This text covers how signing up works on this website. The commercial parts are marked and must be filled in with your own terms. It is a starting point, not legal advice.
+{{/published}}
 
 # Terms for signing up
 

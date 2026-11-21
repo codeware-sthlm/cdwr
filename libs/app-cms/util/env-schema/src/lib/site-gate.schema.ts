@@ -23,9 +23,10 @@ export const SiteGateSchema = z.object({
   SITE_GATE_PASSWORD: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z
-      .string({ description: 'Shared password the site asks visitors for' })
-      .min(12, { message: 'SITE_GATE_PASSWORD must be at least 12 characters' })
+      .string()
+      .min(8, { message: 'SITE_GATE_PASSWORD must be at least 8 characters' })
       .optional()
+      .describe('Shared password the site asks visitors for')
   )
 });
 

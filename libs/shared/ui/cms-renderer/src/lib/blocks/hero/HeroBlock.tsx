@@ -1,6 +1,7 @@
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import type { HeroBlock as HeroBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
+import { useId } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { Illustration } from '../../utils/Illustration';
@@ -17,14 +18,126 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
   lede,
   actions,
   media,
-  illustration
+  illustration,
+  layout,
+  decoration
 }) => {
+  const fadeId = useId();
   const { navigate, iconConfig } = usePayload();
   // Whitespace left in a cleared field is not a drawing
-  const drawing = illustration?.trim() ? illustration : null;
+  const fill = layout === 'fill';
+  const drawing = !fill && illustration?.trim() ? illustration : null;
+  const decorated = decoration === 'horizon-lines';
+
+  // Lines converge on a point above the block and fan out past both edges of
+  // the drawing, so a crop on a narrow screen never shows an empty side
+  const lines = Array.from({ length: 27 }, (_, i) => 1200 - 1560 + i * 120);
+
+  const buttons = !!actions?.length && (
+    <div
+      className={cn(
+        'flex flex-wrap gap-3',
+        fill ? 'mt-9 justify-center' : 'mt-8'
+      )}
+    >
+      {actions.map((action, i) => {
+        const resolved = resolveLinkGroup(action.link);
+        if (!resolved) return null;
+        return (
+          <Button
+            key={i}
+            variant={action.emphasis === 'secondary' ? 'outline' : 'default'}
+            onClick={() => navigate(resolved.path, resolved.newTab)}
+          >
+            {resolved.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+
+  // Spans the band reach so it crosses the sheet like a band does, and fades
+  // into the content background token so it meets the page at any theme.
+  // Sliced from the centre rather than stretched: the lines keep their angle,
+  // the sides are cropped on a narrow screen and the meeting point stays put
+  //
+  // The box is a div, not the svg itself: an absolutely positioned svg is a
+  // replaced element, so it takes its width from the viewBox's aspect ratio
+  // and ignores `right`, which pushed the meeting point off to the side
+  const linesDrawing = decorated && (
+    <div
+      aria-hidden="true"
+      // Behind the text: the fade is painted in the page colour, and over the
+      // button it would wash it out
+      className="inset-x-band-reach pointer-events-none absolute bottom-0 -z-10 h-36 md:h-56"
+    >
+      <svg
+        viewBox="0 0 2400 260"
+        preserveAspectRatio="xMidYMax slice"
+        className="block size-full"
+      >
+        <defs>
+          <linearGradient id={fadeId} x1="0" y1="0" x2="0" y2="1">
+            <stop
+              offset="0"
+              stopColor="var(--core-background-content)"
+              stopOpacity="1"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--core-background-content)"
+              stopOpacity="0"
+            />
+          </linearGradient>
+        </defs>
+        <g
+          fill="none"
+          stroke="var(--primary)"
+          strokeOpacity="0.18"
+          strokeWidth="1.5"
+        >
+          {lines.map((x2) => (
+            <path
+              key={x2}
+              d={`M1200 0 L${x2} 260`}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+        <rect width="2400" height="120" fill={`url(#${fadeId})`} />
+      </svg>
+    </div>
+  );
+
+  if (fill) {
+    return (
+      <section
+        className={cn(
+          // The header is 4rem; the rest of the first screen is the hero's
+          'relative isolate flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center text-center',
+          // Room for the lines, so the centred text stays clear of them
+          decorated && 'pb-36 md:pb-56'
+        )}
+      >
+        {badge && (
+          <p className="text-core-link text-sm font-semibold tracking-[0.14em] uppercase">
+            {badge}
+          </p>
+        )}
+        <h1 className="text-core-headline mt-5 max-w-4xl text-5xl font-semibold tracking-tight text-balance md:text-7xl lg:text-8xl">
+          {heading}
+        </h1>
+        <p className="text-muted-foreground mt-6 max-w-xl text-lg leading-relaxed md:text-xl">
+          {lede}
+        </p>
+        {buttons}
+        {linesDrawing}
+      </section>
+    );
+  }
 
   return (
-    <section>
+    <section className={cn(decorated && 'relative isolate')}>
       {/* A drawing sits beside the text on a wide screen, where the text alone
           leaves half the row empty; an image keeps a row of its own */}
       <div
@@ -46,25 +159,7 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
           <p className="text-muted-foreground mt-6 max-w-xl text-lg leading-relaxed">
             {lede}
           </p>
-          {!!actions?.length && (
-            <div className="mt-8 flex flex-wrap gap-3">
-              {actions.map((action, i) => {
-                const resolved = resolveLinkGroup(action.link);
-                if (!resolved) return null;
-                return (
-                  <Button
-                    key={i}
-                    variant={
-                      action.emphasis === 'secondary' ? 'outline' : 'default'
-                    }
-                    onClick={() => navigate(resolved.path, resolved.newTab)}
-                  >
-                    {resolved.label}
-                  </Button>
-                );
-              })}
-            </div>
-          )}
+          {buttons}
         </div>
         {drawing && <Illustration svg={drawing} />}
       </div>
@@ -74,6 +169,7 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
           <ImageBlock media={media} hideCaption />
         </div>
       )}
+      {linesDrawing}
     </section>
   );
 };

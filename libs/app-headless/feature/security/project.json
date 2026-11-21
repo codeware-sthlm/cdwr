@@ -1,0 +1,8 @@
+{
+  "name": "app-headless-feature-security",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/app-headless/feature/security/src",
+  "projectType": "library",
+  "tags": ["scope:app-headless", "type:feature"],
+  "targets": {}
+}

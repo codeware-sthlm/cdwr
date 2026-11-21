@@ -43,6 +43,7 @@ export function RestartCard({
           >
             <span className="font-medium">{app}</span>
             <Button
+              type="button"
               variant="outline"
               size="sm"
               disabled={disabled}

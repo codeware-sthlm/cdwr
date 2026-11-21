@@ -1,3 +1,51 @@
+## 0.3.5 (2026-11-15)
+
+### 🐞 Bug Fixes
+
+- **fly-node:** await parse so nullOnError catches schema errors ([23f2ffb3](https://github.com/codeware-sthlm/cdwr/commit/23f2ffb3))
+- **fly-node:** read certificate status from flyctl 0.5 certs list ([8ea5053f](https://github.com/codeware-sthlm/cdwr/commit/8ea5053f))
+
+### ✅ Tests
+
+- **fly-node:** list a real certificate in the cli integration test ([522353c6](https://github.com/codeware-sthlm/cdwr/commit/522353c6))
+
+## 0.3.4 (2026-11-15)
+
+### 🐞 Bug Fixes
+
+- **fly-node:** give the status schema records a key schema for zod 4 ([6cbff255](https://github.com/codeware-sthlm/cdwr/commit/6cbff255))
+- **deps:** require zod 4.6.7 or later for the array length advisory ([f5d15049](https://github.com/codeware-sthlm/cdwr/commit/f5d15049))
+
+### ⚙️ Miscellaneous Chores
+
+- **deps:** update dependency zod to v4 [security] ([1d5324c4](https://github.com/codeware-sthlm/cdwr/commit/1d5324c4))
+
+## 0.3.3 (2026-11-04)
+
+### ✨ Features
+
+- **fly-node:** retry transient errors, allocate ips before deploy ([e0b1040b](https://github.com/codeware-sthlm/cdwr/commit/e0b1040b))
+- **fly-node:** list an app's ip addresses over the api ([bd722141](https://github.com/codeware-sthlm/cdwr/commit/bd722141))
+
+### 🐞 Bug Fixes
+
+- **fly-node:** verify against flyctl 0.5.4 ([81b6afd8](https://github.com/codeware-sthlm/cdwr/commit/81b6afd8))
+- **fly-node:** verify against flyctl 0.5.12 ([f526ae95](https://github.com/codeware-sthlm/cdwr/commit/f526ae95))
+- **fly-node:** match only the final error, ensure ips for serving apps ([3ad07c66](https://github.com/codeware-sthlm/cdwr/commit/3ad07c66))
+- **fly-node:** a machine reported mid-update no longer fails a deploy ([e0240e98](https://github.com/codeware-sthlm/cdwr/commit/e0240e98))
+- **repo:** vite configs read path aliases from the base tsconfig only ([41056c7d](https://github.com/codeware-sthlm/cdwr/commit/41056c7d))
+- **fly-node:** a streamed failure's error keeps only a stderr tail ([a9a3b20e](https://github.com/codeware-sthlm/cdwr/commit/a9a3b20e))
+- **fly-node:** ips.list rejects an unknown app, names what it lists ([38eee7e9](https://github.com/codeware-sthlm/cdwr/commit/38eee7e9))
+
+### ⚙️ Miscellaneous Chores
+
+- **repo:** replace deprecated nx vite plugins with vite-tsconfig-paths ([a9d2bf38](https://github.com/codeware-sthlm/cdwr/commit/a9d2bf38))
+
+### ✅ Tests
+
+- **fly-node:** the full stderr survives both wrappers ([1517d8dd](https://github.com/codeware-sthlm/cdwr/commit/1517d8dd))
+- **fly-node:** ips.list and its fields against the real Fly api ([9133c793](https://github.com/codeware-sthlm/cdwr/commit/9133c793))
+
 ## 0.3.2 (2026-10-10)
 
 ### ✨ Features

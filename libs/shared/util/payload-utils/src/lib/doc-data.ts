@@ -15,12 +15,14 @@ import type { BlocksData } from './blocks-data';
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- read as a type below
 const renderable = {
+  agents: false,
   categories: false,
   faq: false,
   'custom-components': false,
   'custom-themes': false,
   'form-submissions': false,
   forms: false,
+  'invite-codes': false,
   media: false,
   navigation: false,
   pages: true,

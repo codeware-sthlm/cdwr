@@ -21,6 +21,7 @@ FROM base
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 
 # A build compiles with typescript, esbuild and the tailwind engine, which
 # the workspace keeps as devDependencies, so the full install stays. tsx runs

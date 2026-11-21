@@ -1,10 +1,8 @@
 import type { UserAny } from '@codeware/shared/util/payload-types';
+import { publicVisibilityWhere } from '@codeware/shared/util/payload-utils';
 import { describe, expect, it } from 'vitest';
 
-import {
-  contentVisibilityWhere,
-  publicVisibilityWhere
-} from './content-visibility';
+import { contentVisibilityWhere } from './content-visibility';
 
 const user = (
   role: 'user' | 'system-user',
@@ -61,15 +59,5 @@ describe('contentVisibilityWhere', () => {
 
   it('accepts a populated tenant as well as an id', () => {
     expect(contentVisibilityWhere(reader, { id: 7 } as never)).toBeNull();
-  });
-
-  it('treats a missing visibility value as public', () => {
-    // Documents predating the field; nothing was restricted before it existed
-    expect(publicVisibilityWhere).toEqual({
-      or: [
-        { visibility: { equals: 'public' } },
-        { visibility: { exists: false } }
-      ]
-    });
   });
 });

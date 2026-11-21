@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { flyDeployment } from './fly-deployment';
 import {
@@ -22,7 +23,14 @@ const parsePrNumber = (value: string): number | undefined => {
 export async function run(): Promise<void> {
   try {
     const appDetailsInput = core.getInput('app-details');
-    const appDetails = appDetailsInput ? JSON.parse(appDetailsInput) : {};
+    let appDetails = {};
+    try {
+      appDetails = appDetailsInput ? JSON.parse(appDetailsInput) : {};
+    } catch {
+      // The parser's message quotes the input, which a stale caller may have
+      // filled with tenant secret values
+      throw new Error('app-details is not valid JSON');
+    }
 
     // Prefer images-path over images to avoid GitHub Actions secret scanning
     // suppressing the images job output when it matches a registered secret pattern.
@@ -45,6 +53,12 @@ export async function run(): Promise<void> {
       flyTraceCli: core.getBooleanInput('fly-trace-cli'),
       flyConsoleLogs: core.getBooleanInput('fly-console-logs'),
       images,
+      infisicalClientId: core.getInput('infisical-client-id') || undefined,
+      infisicalClientSecret:
+        core.getInput('infisical-client-secret') || undefined,
+      infisicalProjectId: core.getInput('infisical-project-id') || undefined,
+      infisicalSite: (core.getInput('infisical-site') ||
+        undefined) as ActionInputs['infisicalSite'],
       optOutDepotBuilder: core.getBooleanInput('opt-out-depot-builder'),
       prNumber: parsePrNumber(core.getInput('pr-number')),
       secrets: core.getMultilineInput('secrets'),
@@ -52,7 +66,16 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     } satisfies ActionInputs);
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    // GitHub drops a job output that holds a masked value, so the build's
+    // `apps` can vanish while its images arrive; deploying nothing is no success
+    if (inputs.apps.length === 0 && Object.keys(images ?? {}).length > 0) {
+      throw new Error(
+        `The build produced images for ${Object.keys(images ?? {}).join(', ')} but no apps arrived; check the build job for "Skip output 'apps' since it may contain secret"`
+      );
+    }
+
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     const { environment, projects } = await flyDeployment(inputs);
 
@@ -94,6 +117,16 @@ export async function run(): Promise<void> {
     );
     writeFileSync(projectsPath, JSON.stringify(projects));
     core.setOutput('projects-path', projectsPath);
+
+    // A skip is no failure, but the run summary says what was left out and why
+    const skippedProjects = projects.filter((p) => p.action === 'skipped');
+    if (skippedProjects.length > 0) {
+      core.summary.addHeading('Skipped deployments', 3);
+      core.summary.addList(
+        skippedProjects.map((p) => `${p.appOrProject}: ${p.reason}`)
+      );
+      await core.summary.write();
+    }
 
     const failedProjects = projects.filter((p) => p.action === 'failed');
     if (failedProjects.length > 0) {

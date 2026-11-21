@@ -5,7 +5,7 @@ import { Fly } from '@cdwr/fly-node';
 import { getAppName } from '@codeware/shared/util/pure';
 import * as TOML from 'smol-toml';
 
-import { sleep } from './shell';
+import { run, sleep } from './shell';
 
 let client: Fly | undefined;
 
@@ -113,6 +113,16 @@ export async function restartMachines(
     await fly().machines.restart(app, machine.id);
   }
   return machines.length;
+}
+
+/**
+ * Set the number of machines of an app. fly-node has no scale call, so this
+ * runs `flyctl scale count`, which creates or destroys machines as needed.
+ */
+export async function scaleMachines(app: string, count: number): Promise<void> {
+  await run('flyctl', ['scale', 'count', String(count), '-a', app, '--yes'], {
+    timeout: 10 * 60_000
+  });
 }
 
 /** Run a command inside a machine and return what it printed */

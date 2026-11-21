@@ -3,15 +3,17 @@
 import { t } from '@codeware/shared/util/i18n';
 import { useEffect, useRef, useState } from 'react';
 
-import { usePayload } from '../providers/PayloadProvider';
+import type { PayloadValue } from '../providers/PayloadProvider';
 
 import { loadTurnstile } from './turnstile';
 
-type Props = {
+export type HumanCheckProps = {
   /** Where the honeypot's value is read from at submit time */
   honeypotRef: React.RefObject<HTMLInputElement | null>;
   /** Absent when the site has no key configured, so no widget is drawn */
   siteKey: string | null;
+  /** Language of the message shown when the widget cannot load */
+  locale: PayloadValue['locale'];
   theme: 'light' | 'dark' | 'auto';
   onToken: (token: string) => void;
   /**
@@ -34,13 +36,13 @@ type Props = {
  */
 export function HumanCheck({
   honeypotRef,
+  locale,
   onToken,
   registerReset,
   siteKey,
   theme
-}: Props) {
+}: HumanCheckProps) {
   const container = useRef<HTMLDivElement>(null);
-  const { locale } = usePayload();
 
   // Set when the widget will not arrive: the script was blocked or unreachable,
   // it could not draw, or it keeps erroring. Without saying so, the form looks

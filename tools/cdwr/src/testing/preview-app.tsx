@@ -31,9 +31,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main(args: string[]) {
   const workspace = loadWorkspace();
-  const initialName = args[0] === '--initial' ? args[1] : undefined;
-  const keys = initialName ? args.slice(2) : args;
-  const initialEntry = ENTRIES.find((e) => e.path.join(' ') === initialName);
+  const keys = args;
   const store = new RunStore();
   const ui = createAppUi(store);
   let exitCode: number | undefined;
@@ -43,7 +41,6 @@ async function main(args: string[]) {
       groups={GROUPS}
       entries={ENTRIES}
       store={store}
-      initial={initialEntry ? { entry: initialEntry, argv: [] } : undefined}
       run={async (entry, argv) =>
         runCommand({
           name: entry.path.join(' '),

@@ -2,7 +2,6 @@ import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
 import type { Choice } from '../../cli/inputs';
-import { plain } from '../theme';
 
 import { colors } from './palette';
 
@@ -47,24 +46,6 @@ export function Card({
         </Text>
       ) : null}
       {children}
-    </Box>
-  );
-}
-
-const width = (cells: string[]) =>
-  Math.max(...cells.map((c) => plain(c).length), 0);
-
-/** Columns padded to their widest cell; ANSI in cells is kept */
-export function Table({ head, rows }: { head: string[]; rows: string[][] }) {
-  const widths = head.map((h, i) => width([h, ...rows.map((r) => r[i] ?? '')]));
-  const pad = (cell: string, i: number) =>
-    cell + ' '.repeat(Math.max(0, (widths[i] ?? 0) - plain(cell).length));
-  return (
-    <Box flexDirection="column">
-      <Text bold>{head.map(pad).join('  ')}</Text>
-      {rows.map((row, r) => (
-        <Text key={r}>{row.map(pad).join('  ')}</Text>
-      ))}
     </Box>
   );
 }

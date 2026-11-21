@@ -4,7 +4,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../../../node_modules/.vite/libs/shared/feature/infisical',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })],
   test: {
     name: 'shared-feature-infisical-integration',
     maxWorkers: 1,

@@ -5,7 +5,7 @@ import type { RequestOptions } from './types';
 /**
  * Get the depth for a GET request.
  *
- * Depth defaults to 2.
+ * Depth defaults to 2, unless the request asks for its own.
  *
  * @param target - The collection or endpoint to get the depth for.
  * @param options - The options to get the depth for.
@@ -14,6 +14,10 @@ import type { RequestOptions } from './types';
 export const getDepth = (target: RestApiTarget, options: RequestOptions) => {
   if (options.method !== 'GET') {
     return null;
+  }
+
+  if (options.depth !== undefined) {
+    return options.depth;
   }
 
   // Custom depth for collections

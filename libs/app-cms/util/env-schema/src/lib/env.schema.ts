@@ -1,3 +1,4 @@
+import { PASSWORD_MIN_LENGTH } from '@codeware/app-cms/util/definitions';
 import { coerceBoolean, withEnvVars } from '@codeware/shared/util/zod';
 import { z } from 'zod';
 
@@ -32,38 +33,40 @@ export const EnvSchema = withEnvVars(
   z
     .object({
       // Environment (injected by deployment action)
-      APP_NAME: z.string({ description: 'Name of the application' }),
+      APP_NAME: z.string().describe('Name of the application'),
       DEPLOY_ENV: z.enum(['development', 'preview', 'production']),
-      FLY_URL: z.string({ description: 'Auto-generated Fly.io app URL' }),
-      PR_NUMBER: z.string({ description: 'Number of the pull request' }),
+      FLY_URL: z.string().describe('Auto-generated Fly.io app URL'),
+      PR_NUMBER: z.string().describe('Number of the pull request'),
 
       // Licensed typefaces. Both absent is the safe state: no base means no
       // face is written, and no allowlist means no site is entitled to one.
       FONT_ASSETS_BASE_URL: z
-        .string({
-          description: 'Where the platform serves its own font files from'
-        })
-        .optional(),
+        .string()
+        .optional()
+        .describe('Where the platform serves its own font files from'),
       RESTRICTED_FONTS: z
-        .string({
-          description:
-            'Comma-separated ids of the licensed typefaces this deployment may embed'
-        })
-        .optional(),
+        .string()
+        .optional()
+        .describe(
+          'Comma-separated ids of the licensed typefaces this deployment may embed'
+        ),
 
       // Build metadata (injected as Docker build args on deploy; absent in dev)
-      APP_SHA: z.string({ description: 'Commit sha of the build' }).optional(),
+      APP_SHA: z.string().optional().describe('Commit sha of the build'),
       APP_BUILD_TIME: z
-        .string({ description: 'ISO timestamp when the image was built' })
-        .optional(),
+        .string()
+        .optional()
+        .describe('ISO timestamp when the image was built'),
 
       // Tenant deployment (optional - only present when deployed for a specific tenant)
       TENANT_ID: z
-        .string({ description: 'Tenant identifier for site deployments' })
-        .optional(),
+        .string()
+        .optional()
+        .describe('Tenant identifier for site deployments'),
       PAYLOAD_API_KEY: z
-        .string({ description: 'Tenant API key for site deployments' })
-        .optional(),
+        .string()
+        .optional()
+        .describe('Tenant API key for site deployments'),
 
       // Applied by Next.js
       NODE_ENV: z
@@ -75,100 +78,154 @@ export const EnvSchema = withEnvVars(
       // behind a few addresses, and a tour going on sale is a rush of honest
       // signups. Raised further for e2e, where every request shares one address
       HUMAN_CHECK_RATE_LIMIT: z.coerce
-        .number({
-          description: 'Submissions allowed per address, per endpoint'
-        })
+        .number()
         .int()
         .positive()
-        .default(60),
+        .default(60)
+        .describe('Submissions allowed per address, per endpoint'),
+      // Set by the env loader alone, never as a secret: the folder the
+      // Turnstile pair came from, for the half-pair warning at boot
+      HUMAN_CHECK_SOURCE: z
+        .string()
+        .optional()
+        .describe('Where the loader took the Turnstile pair from'),
 
       // Payload configuration
       CORS_URLS: z
-        .string({ description: 'List of allowed URLs for CORS' })
+        .string()
         .or(z.literal('*'))
-        .default('*'),
+        .default('*')
+        .describe('List of allowed URLs for CORS'),
       CSRF_URLS: z
-        .string({
-          description:
-            'List of allowed URLs to accept cookie-based authentication from'
-        })
-        .default(''),
+        .string()
+        .default('')
+        .describe(
+          'List of allowed URLs to accept cookie-based authentication from'
+        ),
       DATABASE_URL: z
-        .string({
-          description: 'Database connection string including database name'
-        })
-        .min(1, { message: 'DATABASE_URL is required' }),
+        .string()
+        .min(1, { message: 'DATABASE_URL is required' })
+        .describe('Database connection string including database name'),
       DATABASE_SCHEMA: z
-        .string({ description: 'Database schema name for Payload tables' })
-        .min(1),
+        .string()
+        .min(1)
+        .describe('Database schema name for Payload tables'),
+      // Small on purpose: every machine has its own pool against one
+      // database, and a burst wakes every machine. The adapter keeps one
+      // client for its reconnect listener, so the rest serve queries and a
+      // pool of 1 would serve none. Blank means not set
+      DATABASE_POOL_MAX: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z.coerce
+          .number()
+          .int()
+          .min(2)
+          .default(4)
+          .describe('Postgres connections per process')
+      ),
+      // Migrations need a session, so they take this when the runtime
+      // connects through a transaction pooler. Blank or unset, they use
+      // DATABASE_URL
+      DIRECT_DATABASE_URL: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Direct database connection string, for migrations')
+      ),
       LOG_LEVEL: z
         .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
         .default('info'),
       PAYLOAD_SECRET_KEY: z
-        .string({ description: 'Payload secret key' })
-        .min(1, { message: 'PAYLOAD_SECRET_KEY is required' }),
+        .string()
+        .min(1, { message: 'PAYLOAD_SECRET_KEY is required' })
+        .describe('Payload secret key'),
       PAYLOAD_URL: z
-        .string({
-          description: 'Fallback URL to the Payload CMS instance'
-        })
+        .string()
         .optional()
-        .default('http://localhost:3000'),
+        .default('http://localhost:3000')
+        .describe('Fallback URL to the Payload CMS instance'),
 
       // Local media storage, unused when S3 is configured. Relative to
       // apps/cms; e2e sets its own so its uploads never meet development's
       MEDIA_DIR: z
-        .string({
-          description: 'Directory media and stock media are written to'
-        })
+        .string()
         .min(1)
         .optional()
-        .default('public'),
+        .default('public')
+        .describe('Directory media and stock media are written to'),
 
       // Api key request verification
       SIGNATURE_SECRET: z
-        .string({ description: 'Secret key for API request signatures' })
-        .optional(),
+        .string()
+        .optional()
+        .describe('Secret key for API request signatures'),
       SIGNATURE_SECRET_PREVIOUS: z
-        .string({
-          description:
-            'Previous signature secret, kept valid while clients roll over to a new one'
-        })
-        .optional(),
+        .string()
+        .optional()
+        .describe(
+          'Previous signature secret, kept valid while clients roll over to a new one'
+        ),
 
       // Seed configuration
       SEED_DATA_URL: z
-        .string({ description: 'URL to public seed data files' })
-        .optional(),
+        .string()
+        .optional()
+        .describe('URL to public seed data files'),
       SEED_SOURCE: SeedSourceSchema.default('local'),
       SEED_STRATEGY: SeedStrategySchema.default('delta'),
+      // The seeded users' password in preview, a secret since preview urls
+      // are public; development always seeds `dev`. Blank means not set
+      SEED_PASSWORD: z.preprocess(
+        (value) => (value === '' ? undefined : value),
+        z
+          .string()
+          .min(PASSWORD_MIN_LENGTH)
+          .optional()
+          .describe('Password the seeded users get in preview')
+      ),
 
       // Where the component build toolchain lives; found by walking up from
       // the working directory when absent
       COMPONENT_TOOLCHAIN_ROOT: z
-        .string({
-          description:
-            'Workspace root holding node_modules, tsconfig.base.json and the component kit'
-        })
+        .string()
         .min(1)
-        .optional(),
+        .optional()
+        .describe(
+          'Workspace root holding node_modules, tsconfig.base.json and the component kit'
+        ),
+
+      // Site statistics are collected only when set
+      UMAMI_URL: z
+        .string()
+        .url()
+        .optional()
+        .describe('Base URL of the Umami instance site statistics go to'),
 
       // A separate build service takes over component builds when set; the
       // local toolchain is used when absent
       BUILDER_URL: z
-        .string({ description: 'Base URL of the component build service' })
+        .string()
         .url()
-        .optional(),
+        .optional()
+        .describe('Base URL of the component build service'),
       BUILDER_TOKEN: z
-        .string({
-          description: 'Bearer token the component build service expects'
-        })
+        .string()
         .min(1)
-        .optional(),
+        .optional()
+        .describe('Bearer token the component build service expects'),
 
       // Content Security Policy. Off sends the full policy report-only, with
       // only framing, plugins, base uri and form targets enforced
       CSP_ENFORCE: coerceBoolean(false).describe(
         'Enforce the full Content Security Policy instead of reporting it'
+      ),
+
+      // Lets the seeded `@local.dev` users skip TOTP enrolment, so `nx dev cms`,
+      // the e2e suite and a preview start signed in. Never production
+      TOTP_EXEMPT_SEEDED_USERS: coerceBoolean(false).describe(
+        'Exempt the seeded @local.dev users from TOTP enrolment (development, or preview with SEED_PASSWORD)'
       ),
 
       // Internal
@@ -182,26 +239,21 @@ export const EnvSchema = withEnvVars(
         'Set by a script that boots Payload against a database, so the config leaves what only a serving process should do: running and recovering queued jobs'
       ),
       NX_TASK_TARGET_TARGET: z
-        .enum(
-          [
-            'build',
-            'dev',
-            'gen',
-            'lint',
-            'payload',
-            'reset-db',
-            'seed',
-            'serve',
-            'test',
-            'verify'
-          ],
-          {
-            description:
-              'NX environment variable set to the project target that run'
-          }
-        )
+        .enum([
+          'build',
+          'dev',
+          'gen',
+          'lint',
+          'payload',
+          'reset-db',
+          'seed',
+          'serve',
+          'test',
+          'verify'
+        ])
         .or(z.literal(''))
         .default('')
+        .describe('NX environment variable set to the project target that run')
     })
     // S3 storage is optional
     .merge(S3StorageSchema.partial())
@@ -226,6 +278,24 @@ export const EnvSchema = withEnvVars(
         message:
           'SIGNATURE_SECRET is required for CMS host (TENANT_ID is not specified)',
         path: ['SIGNATURE_SECRET']
+      }
+    )
+    // The development password is public, so the exemption reaches preview
+    // only where the seeded password is a secret, and never production. The
+    // seed must run on every boot there too, since it is what writes that
+    // secret over an older database's public password
+    .refine(
+      (data) =>
+        !data.TOTP_EXEMPT_SEEDED_USERS ||
+        data.DEPLOY_ENV === 'development' ||
+        (data.DEPLOY_ENV === 'preview' &&
+          Boolean(data.SEED_PASSWORD) &&
+          data.SEED_SOURCE !== 'off' &&
+          data.SEED_STRATEGY === 'delta'),
+      {
+        message:
+          'TOTP_EXEMPT_SEEDED_USERS is only allowed in development, or in preview with SEED_PASSWORD set and the seed running (SEED_SOURCE not off, SEED_STRATEGY delta)',
+        path: ['TOTP_EXEMPT_SEEDED_USERS']
       }
     )
     // The build service refuses every request without its token

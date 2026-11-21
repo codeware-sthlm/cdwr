@@ -7,7 +7,7 @@ import type { TenantApp } from '../../services/infisical';
 export const GATE_KEY = 'SITE_GATE_PASSWORD';
 
 /** Matches the cms env schema, which refuses to start the site below this */
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 8;
 
 export type OnFly = 'missing' | 'set' | 'unreachable';
 
@@ -19,6 +19,33 @@ export interface AppState {
   flyApp: string;
   /** Whether the running app carries it, which is what closes the site */
   onFly: OnFly;
+  /** Why Fly could not be read, so a refusal can say which side failed */
+  flyError?: string;
+}
+
+/** How long a Fly error may be once it reaches a desk row */
+export const FLY_ERROR_MAX = 160;
+
+/** Anything shaped like a Fly token: a macaroon (`FlyV1 …`) or `fm1_`/`fm2_` */
+const FLY_TOKEN = /FlyV1\s+\S+|fm[12]_[\w-]+/g;
+
+/**
+ * The last line of a Fly error, where the CLI prints its own `Error: …`,
+ * with a repeated `Error: ` prefix read once, any token-shaped text replaced
+ * and cut to fit a desk row.
+ */
+export function flyErrorOf(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const last = (lines.at(-1) ?? '')
+    .replace(/^(?:Error:\s*){2,}/, 'Error: ')
+    .replace(FLY_TOKEN, '…');
+  return last.length > FLY_ERROR_MAX
+    ? `${last.slice(0, FLY_ERROR_MAX - 1)}…`
+    : last;
 }
 
 /** A password nobody has to invent, in the alphabet a url can carry */
@@ -34,6 +61,49 @@ export const anyClosed = (states: AppState[]): boolean =>
 
 export const anyStored = (states: AppState[]): boolean =>
   states.some(({ inInfisical }) => inInfisical);
+
+/**
+ * Apps whose Fly read failed, so open or close could not act on them. A
+ * preview gate without a pull request names no app and has no error, and
+ * writing Infisical only is all it means to do.
+ */
+export const unreadApps = (states: AppState[]): AppState[] =>
+  states.filter(
+    ({ onFly, flyApp, flyError }) =>
+      onFly === 'unreachable' && !!flyApp && !!flyError
+  );
+
+export interface FlyFailure {
+  flyApp: string;
+  flyError?: string;
+}
+
+/** The first app of a kind of failure and Fly's error, counting the rest */
+function describeFailures(failures: FlyFailure[], what: string): string {
+  const [first] = failures;
+  if (!first) return '';
+  const more = failures.length > 1 ? ` (+${failures.length - 1} more)` : '';
+  return `${first.flyApp} ${what}: ${first.flyError}${more}`;
+}
+
+/**
+ * One desk-row line naming the first unread app and the first app Fly would
+ * not open, each with Fly's error, and no password
+ */
+export function partialReason(
+  unread: FlyFailure[],
+  stillClosed: FlyFailure[] = []
+): string {
+  const line = [
+    describeFailures(unread, 'not read on Fly'),
+    describeFailures(stillClosed, 'still closed on Fly')
+  ]
+    .filter(Boolean)
+    .join('; ');
+  return line.length > FLY_ERROR_MAX
+    ? `${line.slice(0, FLY_ERROR_MAX - 1)}…`
+    : line;
+}
 
 /**
  * Pull request numbers carried by preview cms app names, deduplicated, with

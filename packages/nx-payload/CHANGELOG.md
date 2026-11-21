@@ -1,3 +1,13 @@
+## 3.0.2 (2026-11-15)
+
+This was a version bump only for nx-payload to align it with other projects, there were no code changes.
+
+## 3.0.1 (2026-11-04)
+
+### ✅ Tests
+
+- **nx-payload:** prettier test tree and the src source root of Nx 23.3 ([dea08834](https://github.com/codeware-sthlm/cdwr/commit/dea08834))
+
 # 3.0.0 (2026-10-10)
 
 ### 🐞 Bug Fixes

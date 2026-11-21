@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { nxChangelog } from './nx-changelog';
 import { ActionInputsSchema } from './schemas/action-inputs.schema';
@@ -37,12 +38,10 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     });
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
-    // nx reads the token from the environment when creating remote releases
-    process.env['GITHUB_TOKEN'] = inputs.token;
-
-    const changelogs = await nxChangelog(inputs);
+    const { changelogs, failedReleases } = await nxChangelog(inputs);
 
     const changelogsPath = join(
       process.env['RUNNER_TEMP'] || tmpdir(),
@@ -52,6 +51,14 @@ export async function run(): Promise<void> {
 
     core.setOutput('changelogs', JSON.stringify(changelogs));
     core.setOutput('changelogs-path', changelogsPath);
+    core.setOutput('failed-releases', JSON.stringify(failedReleases));
+
+    if (failedReleases.length > 0) {
+      await core.summary
+        .addHeading('GitHub releases not created', 3)
+        .addList(failedReleases)
+        .write();
+    }
   } catch (error) {
     if (error instanceof Error) {
       core.setFailed(error.message);

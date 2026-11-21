@@ -17,9 +17,21 @@ export const validateTenantsArrayAccessHook: CollectionBeforeChangeHook<
   if ((operation !== 'create' && operation !== 'update') || !data) {
     return data;
   }
+  // Nothing to check when the update does not touch the workspaces, as when
+  // payload-totp saves a secret with no request; read as an empty list it
+  // would look like every workspace being removed
+  if (operation === 'update' && data.tenants === undefined) {
+    return data;
+  }
 
-  // System users and seed operations can modify anything
-  if (hasRole(user, 'system-user') || context?.seedAction) {
+  // System users, seed operations, signups and the idle cleanup can modify anything
+  if (
+    hasRole(user, 'system-user') ||
+    context?.seedAction ||
+    context?.signup ||
+    context?.statsAccountWrite ||
+    context?.idleCleanup
+  ) {
     return data;
   }
 

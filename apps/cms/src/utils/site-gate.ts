@@ -1,3 +1,5 @@
+import { SENTRY_TUNNEL_ROUTE } from './sentry-tunnel';
+
 /** Where the gate asks for the password */
 export const SITE_GATE_PATH = '/site-gate';
 
@@ -8,10 +10,19 @@ export const SITE_GATE_SUBMIT_PATH = '/api/site-gate';
  * Paths the gate never answers for.
  *
  * The admin has its own login, the api authenticates with a tenant key, and
- * the gate needs its own two routes to be reachable. Next's own matcher
- * already keeps `_next/static`, `_next/image` and the favicon out.
+ * the gate needs its own two routes to be reachable. `/stats` only forwards
+ * statistics beacons, which carry no cookie and so could never pass the gate.
+ * The Sentry tunnel only forwards error envelopes to Sentry, so a gated site
+ * would otherwise drop every browser error report. Next's own matcher already
+ * keeps `_next/static`, `_next/image` and the favicon out.
  */
-const OPEN_PATHS = ['/admin', '/api', SITE_GATE_PATH];
+const OPEN_PATHS = [
+  '/admin',
+  '/api',
+  '/stats',
+  SENTRY_TUNNEL_ROUTE,
+  SITE_GATE_PATH
+];
 
 /** A file extension marks a public asset, such as the gate page's own image */
 const ASSET = /\.[a-z0-9]+$/i;

@@ -20,4 +20,6 @@ export interface Context {
   env: NodeJS.ProcessEnv;
   /** Name of the running command, for prefs and history */
   command: string;
+  /** The arguments after `--`, for a command that takes them (`rest: true`) */
+  rest?: string[];
 }

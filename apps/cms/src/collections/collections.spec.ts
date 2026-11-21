@@ -91,6 +91,21 @@ describe('collections', () => {
     expect(slugs).toHaveLength(new Set(slugs).size);
   });
 
+  it('keeps every field out of the sidebar', () => {
+    // The edit view's sidebar takes space the form needs (COD-770); a field
+    // belongs in the main form, usually in a tab
+    const inSidebar = readdirSync(collectionsDir, { recursive: true })
+      .map(String)
+      .filter((file) => /\.tsx?$/.test(file) && !/\.spec\.tsx?$/.test(file))
+      .filter((file) =>
+        /position\s*:\s*['"`]sidebar['"`]/.test(
+          stripComments(readFileSync(join(collectionsDir, file), 'utf8'))
+        )
+      );
+
+    expect(inSidebar).toEqual([]);
+  });
+
   describe('access control', () => {
     it('scopes by tenant only where a tenant field exists', () => {
       // A tenant-scoped helper returns a `Where` naming the `tenant` field. On
@@ -141,6 +156,23 @@ describe('collections', () => {
         .filter(({ missing }) => missing.length);
 
       expect(incomplete).toEqual([]);
+    });
+
+    it('never schedules a publish where an agent may write', () => {
+      // A scheduled publish is performed by the job queue, not by the agent's
+      // request, so it would get past the draft-only hooks
+      const agentWritable = collections.filter(({ source }) =>
+        source.includes('agentOr(')
+      );
+
+      // Guard against matching nothing
+      expect(agentWritable.map(({ slug }) => slug)).toContain('posts');
+
+      const scheduling = agentWritable
+        .filter(({ source }) => source.includes('schedulePublish'))
+        .map(({ slug }) => slug);
+
+      expect(scheduling).toEqual([]);
     });
   });
 });

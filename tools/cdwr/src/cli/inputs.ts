@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 
+import type { GlobalShort } from './args';
 import type { Context } from './context';
 
 /** One option of a select or multiselect input */
@@ -26,16 +27,14 @@ export type InputKind =
   | 'select'
   | 'multiselect';
 
-export interface InputSpec<T = unknown> {
+interface InputBase<T> {
   kind: InputKind;
   /** Flag name without dashes; defaults to the kebab-cased input key */
   flag?: string;
-  /** Single-letter alias */
-  short?: string;
   /** Question asked when the value is missing */
   prompt: string;
-  /** Shown in help next to the flag */
-  description?: string;
+  /** What the input is for; shown in help and in shell completion */
+  description: string;
   /** Placeholder shown in a text prompt */
   placeholder?: string;
   /** Persist the last value as the next default */
@@ -53,8 +52,6 @@ export interface InputSpec<T = unknown> {
   /** Options for select inputs, loaded when the prompt is about to show */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   choices?: Loader<any>;
-  /** Positional argument instead of a flag */
-  positional?: boolean;
   /** Choices are worth loading only to prompt, never to validate a flag */
   trustFlag?: boolean;
   /** Minimum picks for a multiselect */
@@ -67,6 +64,50 @@ export interface InputSpec<T = unknown> {
   flagOnly?: boolean;
 }
 
+type Letter =
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'l'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'v'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z';
+
+/** A single-letter alias no global flag uses */
+export type ShortLetter = Exclude<Letter | Uppercase<Letter>, GlobalShort>;
+
+/**
+ * Where the value comes from: a positional argument, or a flag that always has
+ * a short alias. Collisions inside one command are caught by `parseCommandArgs`.
+ */
+type Placement =
+  | {
+      /** Positional argument instead of a flag */ positional: true;
+      short?: never;
+    }
+  | { positional?: false; /** Single-letter alias */ short: ShortLetter };
+
+export type InputSpec<T = unknown> = InputBase<T> & Placement;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Inputs = Record<string, InputSpec<any>>;
 
@@ -75,7 +116,7 @@ export type Resolved<I extends Inputs> = {
   [K in keyof I]: I[K] extends InputSpec<infer T> ? T : never;
 };
 
-type Opts<T> = Omit<InputSpec<T>, 'kind' | 'values' | 'choices'>;
+type Opts<T> = Omit<InputBase<T>, 'kind' | 'values' | 'choices'> & Placement;
 
 /** Descriptors for what a command needs; flags first, prompts for the rest */
 export const input = {
@@ -105,12 +146,12 @@ export const input = {
     values: V,
     opts: Opts<V[number]> & { hints?: Record<string, string> }
   ): InputSpec<V[number]> => {
-    const { hints, ...rest } = opts;
+    const { hints } = opts;
     return {
+      ...opts,
       kind: 'enum',
       values,
-      choices: () => values.map((value) => ({ value, hint: hints?.[value] })),
-      ...rest
+      choices: () => values.map((value) => ({ value, hint: hints?.[value] }))
     };
   },
 

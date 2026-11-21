@@ -13,6 +13,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/github-app.sh', import.meta.url)
 );
@@ -22,7 +24,6 @@ const code = SCRIPT.split('\n')
   .join('\n');
 
 const exec = promisify(execFile);
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 const hasOpenssl = spawnSync('openssl', ['version']).status === 0;
 
 const APP_ID = '5282871';
@@ -57,7 +58,9 @@ describe('github-app.sh', () => {
     expect(code).toContain('export GIT_SSH_COMMAND=false');
   });
 
-  describe.skipIf(!hasZsh || !hasOpenssl)('run', () => {
+  describe.skipIf(!hasOpenssl)('run', () => {
+    requireTools('zsh');
+
     let dir: string;
     let key: string;
     let pub: string;
@@ -169,6 +172,8 @@ describe('github-app.sh', () => {
     });
 
     afterAll(async () => {
+      // Unset when requireTools failed the suite first
+      if (!server) return;
       await new Promise<void>((resolve) => server.close(() => resolve()));
       rmSync(dir, { recursive: true, force: true });
     });
@@ -209,6 +214,18 @@ describe('github-app.sh', () => {
       const result = await zsh(`app_env "${file}"`);
       expect(result.status).toBe(1);
       expect(result.stderr.trim()).toBe(`github app: ${reason}`);
+    });
+
+    it.each([
+      ['600', 0o600],
+      ['644', 0o644]
+    ])('mode_of reads a file with mode %s', async (expected, mode) => {
+      const file = join(dir, `mode-${expected}`);
+      writeFileSync(file, 'x');
+      chmodSync(file, mode);
+      const result = await zsh(`mode_of "${file}"`);
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(expected);
     });
 
     it('refuses a key file anyone else can read', async () => {
@@ -317,6 +334,25 @@ describe('github-app.sh', () => {
       // The bot lookup is the first call made with the installation token
       expect(user?.url).toBe('/users/codeware-agent%5Bbot%5D');
       expect(user?.auth).toBe(`Bearer ${TOKEN}`);
+    });
+
+    it('app_token makes one request and sets no git env', async () => {
+      const result = await zsh(
+        [
+          `app_env "${good()}" && app_token || exit 1`,
+          'print -r -- "token=$GH_TOKEN github=$GITHUB_TOKEN"',
+          'print -r -- "git=${GIT_CONFIG_COUNT:-unset} ${GIT_AUTHOR_NAME:-unset} ${GIT_SSH_COMMAND:-unset}"'
+        ].join('\n')
+      );
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim().split('\n')).toEqual([
+        `token=${TOKEN} github=${TOKEN}`,
+        'git=unset unset unset'
+      ]);
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe(
+        `/app/installations/${INSTALLATION_ID}/access_tokens`
+      );
     });
 
     it('fails closed when GitHub refuses the exchange, with the reason', async () => {

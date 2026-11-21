@@ -149,16 +149,6 @@ describe('flyBuild', () => {
       );
     });
 
-    // workflow_run is the primary trigger but the event switch never handled it
-    it('should use the prNumber input for a workflow_run event', async () => {
-      setContext('workflow_run', { workflow_run: { event: 'pull_request' } });
-      await flyBuild(setupTest({ environment: 'preview', prNumber: 42 }));
-
-      expect(getMockFly().build).toHaveBeenCalledWith(
-        expect.objectContaining({ app: 'app-one-config-pr-42' })
-      );
-    });
-
     it('should use the prNumber input for a manual dispatch', async () => {
       setContext('workflow_dispatch');
       await flyBuild(setupTest({ environment: 'preview', prNumber: 42 }));
@@ -178,7 +168,7 @@ describe('flyBuild', () => {
     });
 
     it('should fail a preview build when no pull request can be resolved', async () => {
-      setContext('workflow_run', { workflow_run: { event: 'pull_request' } });
+      setContext('workflow_dispatch');
 
       await expect(
         flyBuild(setupTest({ environment: 'preview' }))

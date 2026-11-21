@@ -7,8 +7,8 @@ inputs:
   preview-label:
     description: >
       The GitHub label used to gate preview deployments on pull requests.
-      When set, the label is added automatically on PR open/reopen and checked on subsequent events.
-      Without the label, synchronize events are skipped.
+      The label is an opt-in that the action never adds. Adding it deploys the PR,
+      and later events deploy only while it is present.
     required: true
   token:
     description: >

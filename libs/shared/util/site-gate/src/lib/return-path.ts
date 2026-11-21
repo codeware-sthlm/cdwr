@@ -3,7 +3,9 @@
  *
  * Only a local path is honoured. `//elsewhere.test` is a protocol-relative
  * url and an absolute one names its own host, so either would turn the gate
- * into an open redirect; a backslash is read as a slash by some clients.
+ * into an open redirect; a backslash is read as a slash by some clients, and
+ * browsers drop tabs and newlines from a url, so `/\t/elsewhere.test` would
+ * become `//elsewhere.test` on the way out.
  *
  * Takes whatever the framework hands over: Next gives an array for a repeated
  * query key, and a gate that crashes on `?from=/a&from=/b` is a gate anyone
@@ -18,7 +20,9 @@ export function resolveReturnPath(raw: unknown): string {
     !raw ||
     !raw.startsWith('/') ||
     raw.startsWith('//') ||
-    raw.includes('\\')
+    raw.includes('\\') ||
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u001f\u007f]/.test(raw)
   ) {
     return '/';
   }

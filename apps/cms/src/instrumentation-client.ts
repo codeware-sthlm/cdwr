@@ -1,8 +1,14 @@
 import { getSentrySampleRate } from '@codeware/shared/util/pure';
 import * as Sentry from '@sentry/nextjs';
 import { isbot } from 'isbot';
+import { z } from 'zod';
 
 import { reloadOnStaleAction } from './utils/server-action';
+
+// Zod probes for eval with `Function("")` on its first object parse. The CSP
+// blocks it and the browser reports that to Sentry, even though Zod catches
+// the error. Jitless skips the probe, and with it the compiled fast path.
+z.config({ jitless: true });
 
 // Client-side env variables must use NEXT_PUBLIC_ prefix
 type ClientEnv = {

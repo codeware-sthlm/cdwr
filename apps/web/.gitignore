@@ -1,9 +1,0 @@
-.cache
-build
-public/build
-
-# .env is committed public configuration; secrets come from Infisical
-.env.local
-.env.offline
-
-server.js

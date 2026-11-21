@@ -45,10 +45,12 @@ export const IconCropField: React.FC<UploadFieldClientProps> = ({
   const sdk = useMemo(
     () =>
       new PayloadSDK<Config>({
-        baseURL: `${config.serverURL ?? ''}/api`,
+        // Same origin as the page: serverURL is the adopted domain, which is
+        // cross-site, without the session cookie, on the Fly url
+        baseURL: config.routes.api,
         baseInit: token ? { headers: { Authorization: `JWT ${token}` } } : {}
       }),
-    [config.serverURL, token]
+    [config.routes.api, token]
   );
 
   const currentId =

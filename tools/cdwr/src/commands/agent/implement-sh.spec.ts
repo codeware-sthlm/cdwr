@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/implement.sh', import.meta.url)
 );
@@ -21,7 +23,34 @@ const code = SCRIPT.split('\n')
   .filter((line) => !line.trim().startsWith('#'))
   .join('\n');
 
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+// The Bash rules of the DENY array, `Bash(...)` stripped
+const denied: string[] = (/^DENY=\(\n([\s\S]*?)^\)$/m.exec(code)?.[1] ?? '')
+  .split('\n')
+  .filter((line) => !line.trim().startsWith('#'))
+  .flatMap((line) => [...line.matchAll(/"Bash\(([^"]*)\)"/g)].map((m) => m[1]));
+
+// How Claude Code matches a Bash rule against a command: the rule is a regex with `*` as `.*`,
+// anchored at both ends and spanning newlines; a rule ending in ` *` with that one star also
+// matches without the trailing argument
+const matches = (rule: string, command: string): boolean => {
+  let source = rule
+    .trim()
+    .replace(/[.+?^${}()|[\]\\'"]/g, '\\$&')
+    .replaceAll('*', '.*');
+  if (source.endsWith(' .*') && rule.split('*').length === 2) {
+    source = `${source.slice(0, -3)}( .*)?`;
+  }
+  return new RegExp(`^${source}$`, 's').test(command);
+};
+const isDenied = (command: string): boolean =>
+  denied.some((rule) => matches(rule, command));
+
+// The Bash rules of --allowedTools, `Bash(...)` stripped
+const allowed: string[] = [
+  ...(
+    /--allowedTools \\\n([\s\S]*?)> "\$result"/.exec(code)?.[1] ?? ''
+  ).matchAll(/"Bash\(([^"]*)\)"/g)
+].map((m) => m[1] ?? '');
 
 describe('implement.sh', () => {
   it('stops on the first error', () => {
@@ -84,11 +113,19 @@ describe('implement.sh', () => {
     expect(code).toContain('>> "$HOME_DIR/implement-spend.jsonl"');
   });
 
+  // A settle after midnight must not land on the next day
+  it('stamps both ledger rows with the day captured before the reservation', () => {
+    const ledger = /^ledger\(\) \{\n([\s\S]*?)\n\}$/m.exec(code)?.[1];
+    expect(ledger).toContain('--arg day "$DAY"');
+    expect(ledger).not.toContain('date');
+    expect(code.indexOf('DAY="$(date +%F)"')).toBeLessThan(
+      code.indexOf('ledger "$BUDGET_USD" reserve')
+    );
+  });
+
   it.each([
     'Bash(git -c *)',
     'Bash(git * config *)',
-    'Bash(git * push *:main*)',
-    'Bash(git * push * --force)',
     'Bash(pnpm * nx exec*)',
     'Bash(gh pr merge*)',
     'Bash(gh api * -X *)',
@@ -101,7 +138,192 @@ describe('implement.sh', () => {
     expect(code).toContain('"${DENY[@]}"');
   });
 
-  describe.skipIf(!hasZsh)('run', () => {
+  it.each(['Bash(pnpm -C * add *)', 'Bash(pnpm -C * remove *)'])(
+    'changes dependencies in a worktree with %s',
+    (rule) => {
+      expect(code).toContain(`"${rule}"`);
+    }
+  );
+
+  it('force-pushes only through force-push.sh', () => {
+    expect(code).toContain('"Bash(tools/cdwr/agent-queue/force-push.sh *)"');
+    expect(code).not.toMatch(/"Bash\([^"]*--force-with-lease=/);
+  });
+
+  it('writes the review diff only through review-diff.sh', () => {
+    expect(code).toContain('"Bash(tools/cdwr/agent-queue/review-diff.sh *)"');
+  });
+
+  it('reads the deny rules', () => {
+    expect(denied.length).toBeGreaterThan(20);
+    expect(matches('git * push * main', 'git -C /w push origin main')).toBe(
+      true
+    );
+    expect(matches('git * push * main', 'git push origin main')).toBe(false);
+  });
+
+  it('keeps the token cache and the app credentials out of the session', () => {
+    expect(code).toContain('"Read(/$HOME_DIR/linear.token*)"');
+    expect(denied).toContain('*linear.token*');
+    expect(denied).toContain('*linear-app.env*');
+    expect(isDenied('cat /h/.cdwr/agent-queue/linear.token')).toBe(true);
+    expect(isDenied('cat /h/linear-app.env')).toBe(true);
+    expect(isDenied('cat "$AGENT_QUEUE_LINEAR_APP_FILE"')).toBe(true);
+    expect(
+      isDenied(
+        'security find-generic-password -s linear-agent-queue-client-secret -w'
+      )
+    ).toBe(true);
+  });
+
+  const wt = '/w/codeware-cod-705';
+  const branch = 'cod-705-let-attended-sessions-force-push';
+
+  // Both the `git push` and the `git -C … push` form, each option right after `push` and later;
+  // a raw push takes no option, since git also takes clusters (-uf) and abbreviations (--mi)
+  it.each([
+    'git push origin main',
+    `git -C ${wt} push origin main`,
+    `git -C ${wt} push -u origin main`,
+    `git -C ${wt} push origin HEAD:main`,
+    `git -C ${wt} push origin HEAD:refs/heads/main`,
+    'git push --force origin HEAD',
+    `git -C ${wt} push --force origin HEAD`,
+    `git -C ${wt} push origin HEAD --force`,
+    `git -C ${wt} push --force-with-lease=${branch}:0123abcd origin HEAD`,
+    `git -C ${wt} push origin HEAD --force-with-lease`,
+    `git -C ${wt} push --force-if-includes origin HEAD`,
+    'git push -f origin HEAD',
+    `git -C ${wt} push -f origin HEAD`,
+    `git -C ${wt} push -fu origin HEAD`,
+    `git -C ${wt} push origin HEAD -f`,
+    `git -C ${wt} push -uf origin HEAD`,
+    `git -C ${wt} push -ud origin ${branch}`,
+    `git -C ${wt} push --mi origin`,
+    `git -C ${wt} push origin --dele ${branch}`,
+    `git -C ${wt} push --force-w=${branch}:0123abcd origin HEAD`,
+    `git -C ${wt} push -u origin HEAD`,
+    `git -C ${wt} push --set-upstream origin HEAD`,
+    `git -C ${wt} push --no-verify origin HEAD`,
+    `git -C ${wt} push -o note=a+b origin HEAD`,
+    `git -C ${wt} push origin +HEAD:refs/heads/${branch}`,
+    `git -C ${wt} push +HEAD:refs/heads/${branch}`,
+    `git -C ${wt} push --mirror origin`,
+    `git -C ${wt} push origin --delete ${branch}`,
+    `git -C ${wt} push -d origin ${branch}`,
+    `git -C ${wt} push origin :${branch}`,
+    `git -c core.hooksPath=/x -C ${wt} push origin HEAD`,
+    `git -C ${wt} config user.name x`
+  ])('denies %s', (command) => {
+    expect(isDenied(command)).toBe(true);
+  });
+
+  it.each([
+    `git -C ${wt} push origin HEAD`,
+    `git -C ${wt} push origin ${branch}`,
+    `git -C ${wt} push origin HEAD:refs/heads/${branch}`,
+    `git -C ${wt} push`,
+    `git -C ${wt} fetch origin main`,
+    `git -C ${wt} rebase origin/main`,
+    `git -C ${wt} rev-parse origin/${branch}`,
+    `git -C ${wt} commit -m "fix: the push of a+b"`,
+    `tools/cdwr/agent-queue/force-push.sh ${wt} ${branch} 0123abcd`
+  ])('leaves %s to the allow list', (command) => {
+    expect(isDenied(command)).toBe(false);
+  });
+
+  // `cdwr agent exec` hands the vault's keys to what it runs in the container: Håkan's,
+  // never a session's. Neither it nor ssh is on the allow list, so dontAsk denies them.
+  it.each([
+    'pnpm cdwr agent exec --host agent-host -- agent status',
+    `pnpm -C ${wt} cdwr agent exec --host agent-host -- agent status`,
+    'node tools/cdwr/bin/cdwr.mjs agent exec --host agent-host -- agent status',
+    'ssh agent-host docker exec cdwr-agent /opt/agent-host/secrets.sh node tools/cdwr/bin/cdwr.mjs agent status',
+    'docker exec cdwr-agent /opt/agent-host/secrets.sh env'
+  ])('allows no rule for %s', (command) => {
+    expect(allowed.filter((rule) => matches(rule, command))).toEqual([]);
+  });
+
+  it('reads the allow rules', () => {
+    expect(allowed).toContain('pnpm cdwr agent worktree *');
+    expect(allowed).toContain('tools/cdwr/agent-queue/session.sh id');
+    expect(
+      allowed.some((rule) => matches(rule, `git -C ${wt} push origin HEAD`))
+    ).toBe(true);
+  });
+
+  // A merge check reads the queue on this host and the live site, nothing else
+  it.each([
+    'Bash(pnpm cdwr agent status)',
+    'Bash(pnpm cdwr agent status *)',
+    'Bash(pnpm cdwr agent logs)',
+    'Bash(pnpm cdwr agent logs *)'
+  ])('allows %s for a merge check', (rule) => {
+    expect(code).toContain(`"${rule}"`);
+    expect(allowed).toContain(rule.slice(5, -1));
+  });
+
+  it('denies --host on status and logs', () => {
+    expect(denied).toContain('pnpm cdwr agent status *--host*');
+    expect(denied).toContain('pnpm cdwr agent logs *--host*');
+    expect(isDenied('pnpm cdwr agent status --host agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent logs -n 5 --host agent-host')).toBe(true);
+    expect(denied).toContain('pnpm cdwr agent status *-*H*');
+    expect(denied).toContain('pnpm cdwr agent logs *-*H*');
+    expect(isDenied('pnpm cdwr agent status -H agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent logs -n 5 -H agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent status -jH agent-host')).toBe(true);
+    expect(isDenied('pnpm cdwr agent status')).toBe(false);
+  });
+
+  it('fetches only the platform domains', () => {
+    const fetches = [...code.matchAll(/"(WebFetch[^"]*)"/g)].map((m) => m[1]);
+    expect(fetches.sort()).toEqual([
+      'WebFetch(domain:*.cdwr.io)',
+      'WebFetch(domain:*.codeware.se)',
+      'WebFetch(domain:cdwr.io)',
+      'WebFetch(domain:codeware.se)'
+    ]);
+    expect(fetches.every((rule) => rule.startsWith('WebFetch(domain:'))).toBe(
+      true
+    );
+    expect(code).not.toContain('fly.dev');
+  });
+
+  it('reads a failed job log but cannot rerun it', () => {
+    expect(code).toContain('"Bash(gh run view *)"');
+    expect(code).not.toContain('"Bash(gh run *)"');
+    expect(code).not.toContain('gh run rerun');
+  });
+
+  it.each(['Read(//run/agent/**)', 'Bash(*/run/agent/*)', 'Bash(*lib.sh*)'])(
+    'denies reaching the container keys with %s',
+    (rule) => {
+      expect(code).toContain(`"${rule}"`);
+    }
+  );
+
+  it.each([
+    'Read(//proc/**)',
+    'Bash(*/proc/*)',
+    'Read(//**/tools/cdwr/.env)',
+    'Bash(*tools/cdwr/.env*)'
+  ])('denies the environs and the cdwr env with %s', (rule) => {
+    expect(code).toContain(`"${rule}"`);
+  });
+
+  it.each([
+    'cat /proc/1/environ',
+    'tr "\\0" "\\n" < /proc/self/environ',
+    `git -C ${wt} show HEAD:tools/cdwr/.env`,
+    'cat /work/codeware-agent/tools/cdwr/.env'
+  ])('denies %s', (command) => {
+    expect(isDenied(command)).toBe(true);
+  });
+
+  describe('run', () => {
+    requireTools('zsh');
+
     let dir: string;
     let bin: string;
     let queueHome: string;
@@ -127,10 +349,17 @@ describe('implement.sh', () => {
       );
     };
 
-    const start = () =>
+    const start = (extraEnv: Record<string, string> = {}) =>
       spawnSync('zsh', [join(scripts, 'implement.sh'), 'COD-1 answered'], {
         encoding: 'utf8',
         env: {
+          // Prints nothing: Linear tools are there
+          AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
+          // Implement runs only in the container
+          AGENT_QUEUE_HOST: 'container',
+          // The session's launcher is sudo into the second user; the specs have neither
+          AGENT_QUEUE_SESSION_LAUNCH: 'claude',
+          ...extraEnv,
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           // No Slack hook under this home
           HOME: join(dir, 'home'),
@@ -165,12 +394,52 @@ describe('implement.sh', () => {
         ''
       );
       copyFileSync(SCRIPT_PATH, join(scripts, 'implement.sh'));
+      copyFileSync(
+        fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url)),
+        join(scripts, 'lib.sh')
+      );
+      copyFileSync(
+        fileURLToPath(
+          new URL('../../../agent-queue/telemetry.sh', import.meta.url)
+        ),
+        join(scripts, 'telemetry.sh')
+      );
+      copyFileSync(
+        fileURLToPath(
+          new URL('../../../agent-queue/linear-tools.txt', import.meta.url)
+        ),
+        join(scripts, 'linear-tools.txt')
+      );
       fakeApp();
     });
 
     afterEach(() => {
       rmSync(dir, { recursive: true, force: true });
     });
+
+    it.each(['', 'launchd'])(
+      'refuses to start outside the container (host %j)',
+      (host) => {
+        fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');
+        const result = start({ AGENT_QUEUE_HOST: host });
+        expect(result.status).toBe(1);
+        expect(existsSync(calls)).toBe(false);
+        // Before the lock and the reservation
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+        expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(
+          false
+        );
+        expect(rows('runs.jsonl')).toEqual([
+          expect.objectContaining({
+            outcome: 'failed',
+            detail: 'COD-1 answered · implement runs only in the container'
+          })
+        ]);
+        expect(
+          readFileSync(join(queueHome, 'logs', 'scheduler.log'), 'utf8')
+        ).toContain('implement runs only in the container');
+      }
+    );
 
     it('records the spend and an implemented row, then frees the lock', () => {
       fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');
@@ -189,6 +458,263 @@ describe('implement.sh', () => {
         'implemented'
       ]);
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    });
+
+    it('writes the launch key beside the pid while the session runs', () => {
+      const seen = join(dir, 'seen');
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\ncat "${queueHome}/implement.lock/key" > "${seen}"\nprintf '%s' '{"result":"ok"}'\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      expect(start().status).toBe(0);
+      expect(readFileSync(seen, 'utf8').trim()).toBe('COD-1 answered');
+      expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    });
+
+    it('records interrupted, refunds once and stays quiet on a TERM', async () => {
+      mkdirSync(queueHome, { recursive: true });
+      writeFileSync(
+        join(queueHome, 'launch.json'),
+        JSON.stringify({ key: 'COD-1 answered', launches: 1 })
+      );
+      const ready = join(dir, 'ready');
+      const notified = join(dir, 'notified');
+      writeFileSync(
+        join(queueHome, 'notify.sh'),
+        `#!/bin/sh\ntouch "${notified}"\n`
+      );
+      chmodSync(join(queueHome, 'notify.sh'), 0o755);
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\ntouch "${ready}"\nexec sleep 30\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      const child = spawn(
+        'zsh',
+        [join(scripts, 'implement.sh'), 'COD-1 answered'],
+        {
+          env: {
+            AGENT_QUEUE_LINEAR_TOOLS_CMD: 'true',
+            // Implement runs only in the container
+            AGENT_QUEUE_HOST: 'container',
+            AGENT_QUEUE_SESSION_LAUNCH: 'claude',
+            PATH: `${bin}:${process.env['PATH'] ?? ''}`,
+            HOME: join(dir, 'home'),
+            AGENT_QUEUE_HOME: queueHome,
+            AGENT_QUEUE_REPO: join(dir, 'ws', 'codeware-agent')
+          },
+          stdio: 'ignore'
+        }
+      );
+      const exited = new Promise<number | null>((resolve) =>
+        child.on('close', (status) => resolve(status))
+      );
+      for (let i = 0; i < 100 && !existsSync(ready); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(existsSync(ready)).toBe(true);
+      child.kill('SIGTERM');
+      expect(await exited).toBe(0);
+      expect(rows('runs.jsonl').map((r) => r['outcome'])).toEqual([
+        'launched',
+        'interrupted'
+      ]);
+      expect(rows('runs.jsonl').at(-1)?.['detail']).toContain(
+        'stopped by a container stop or deploy'
+      );
+      expect(
+        JSON.parse(readFileSync(join(queueHome, 'launch.json'), 'utf8'))
+      ).toEqual({ key: 'COD-1 answered', launches: 0, refunded: true });
+      expect(existsSync(notified)).toBe(false);
+      expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    }, 20000);
+
+    describe('a session that could not take its key', () => {
+      const launchFile = (): string => join(queueHome, 'launch.json');
+      const seed = (key: string, launches: number): void => {
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(launchFile(), JSON.stringify({ key, launches }));
+      };
+      const launches = (): unknown =>
+        JSON.parse(readFileSync(launchFile(), 'utf8'));
+      const untried = JSON.stringify({
+        total_cost_usd: 0.2,
+        num_turns: 2,
+        result:
+          'looked around\n\nnot tried: COD-1 answered · held by another session\n'
+      });
+
+      it('gives the launch back and records untried', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, untried);
+        expect(start().status).toBe(0);
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 0,
+          refunded: true
+        });
+        const last = rows('runs.jsonl').at(-1);
+        expect(last).toMatchObject({ outcome: 'untried', ticket: 'COD-1' });
+        expect(last?.['detail']).toContain(
+          'COD-1 answered · held by another session'
+        );
+        expect(rows('runs.jsonl').map((r) => r['outcome'])).not.toContain(
+          'implemented'
+        );
+      });
+
+      it('refunds once per key', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, untried);
+        start();
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 0,
+          refunded: true
+        });
+        writeFileSync(
+          launchFile(),
+          JSON.stringify({ key: 'COD-1 answered', launches: 2, refunded: true })
+        );
+        start();
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 2,
+          refunded: true
+        });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('untried');
+      });
+
+      it('records no reason given when the line has none', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({ result: 'not tried: COD-1 answered', num_turns: 1 })
+        );
+        start();
+        expect(rows('runs.jsonl').at(-1)?.['detail']).toContain(
+          'COD-1 answered · no reason given'
+        );
+      });
+
+      it('takes a line naming another key for an implemented run', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({ result: 'not tried: COD-2 answered · x' })
+        );
+        start();
+        expect(launches()).toEqual({ key: 'COD-1 answered', launches: 1 });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('implemented');
+      });
+
+      it('records implemented when the result is not JSON', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, 'plain text');
+        expect(start().status).toBe(0);
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('implemented');
+      });
+
+      it('never goes below zero', () => {
+        seed('COD-1 answered', 0);
+        fakeClaude(0, untried);
+        start();
+        expect(launches()).toEqual({
+          key: 'COD-1 answered',
+          launches: 0,
+          refunded: true
+        });
+      });
+
+      it('leaves the launch of another key alone', () => {
+        seed('COD-9 answered', 2);
+        fakeClaude(0, untried);
+        start();
+        expect(launches()).toEqual({ key: 'COD-9 answered', launches: 2 });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('untried');
+      });
+
+      it('records a review that could not run as failed, keeps the launch and opens nothing', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({
+            total_cost_usd: 0.4,
+            num_turns: 9,
+            result:
+              'implemented the steps\n\nreview failed: COD-1 answered · dontAsk denied the diff read\n'
+          })
+        );
+        expect(start().status).toBe(0);
+        expect(launches()).toEqual({ key: 'COD-1 answered', launches: 1 });
+        const last = rows('runs.jsonl').at(-1);
+        expect(last).toMatchObject({ outcome: 'failed', ticket: 'COD-1' });
+        expect(last?.['detail']).toContain(
+          'COD-1 answered · review could not run: dontAsk denied the diff read'
+        );
+      });
+
+      it('records a review failure with no reason given', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(
+          0,
+          JSON.stringify({
+            result: 'review failed: COD-1 answered',
+            num_turns: 1
+          })
+        );
+        start();
+        expect(rows('runs.jsonl').at(-1)).toMatchObject({ outcome: 'failed' });
+        expect(rows('runs.jsonl').at(-1)?.['detail']).toContain(
+          'review could not run: no reason given'
+        );
+      });
+
+      it('counts a normal result as implemented and keeps the launches', () => {
+        seed('COD-1 answered', 1);
+        fakeClaude(0, '{"total_cost_usd":1,"num_turns":3,"result":"done"}');
+        start();
+        expect(launches()).toEqual({ key: 'COD-1 answered', launches: 1 });
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('implemented');
+      });
+    });
+
+    it('hands the session its key in the prompt', () => {
+      const argv = join(dir, 'argv');
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\nprintf '%s\\n' "$@" > "${argv}"\nprintf '%s' '{}'\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      expect(start().status).toBe(0);
+      expect(readFileSync(argv, 'utf8').split('\n')).toContain(
+        '/work-queue implement-only once key="COD-1 answered"'
+      );
+    });
+
+    it('settles on the reservation day when the session ends after midnight', () => {
+      // A date whose day turns over while the session runs; every other format is the real one
+      const dayFile = join(dir, 'day');
+      const realDate = spawnSync('sh', ['-c', 'command -v date'], {
+        encoding: 'utf8'
+      }).stdout.trim();
+      writeFileSync(dayFile, '2026-10-31\n');
+      writeFileSync(
+        join(bin, 'date'),
+        `#!/bin/sh\nif [ "$1" = "+%F" ]; then cat "${dayFile}"; else exec "${realDate}" "$@"; fi\n`
+      );
+      chmodSync(join(bin, 'date'), 0o755);
+      writeFileSync(
+        join(bin, 'claude'),
+        `#!/bin/sh\necho 2026-11-01 > "${dayFile}"\nprintf '%s' '{"total_cost_usd":6.5,"num_turns":3,"result":"ok"}'\n`
+      );
+      chmodSync(join(bin, 'claude'), 0o755);
+      expect(start().status).toBe(0);
+      expect(rows('implement-spend.jsonl')).toEqual([
+        { day: '2026-10-31', ticket: 'COD-1', cost: 15, kind: 'reserve' },
+        { day: '2026-10-31', ticket: 'COD-1', cost: -8.5, kind: 'settle' }
+      ]);
     });
 
     it('does not start without the app identity, and reserves nothing', () => {
@@ -220,6 +746,230 @@ describe('implement.sh', () => {
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(true);
     });
 
+    describe('telemetry', () => {
+      // A curl that records one line of arguments per call
+      const fakeCurl = (): string => {
+        const log = join(dir, 'curl.log');
+        writeFileSync(
+          join(bin, 'curl'),
+          `#!/bin/sh\ncat > /dev/null\nprintf '%s\\n' "$*" >> "${log}"\nfor a in "$@"; do last="$a"; done\nprintf '%s\\n' "$@" | grep -A1 -x -- '-d' | tail -1 >> "${log}.body"\n`
+        );
+        chmodSync(join(bin, 'curl'), 0o755);
+        return log;
+      };
+      const env = {
+        AGENT_SUPABASE_URL: 'https://x.supabase.co',
+        AGENT_SUPABASE_SERVICE_KEY: 'sb_secret_abc'
+      };
+
+      it('posts one runs row for the launch', () => {
+        const log = fakeCurl();
+        fakeClaude(0, '{"total_cost_usd":1.5,"num_turns":3,"result":"ok"}');
+        expect(start(env).status).toBe(0);
+        const calls = readFileSync(log, 'utf8').trim().split('\n');
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toContain('https://x.supabase.co/rest/v1/runs');
+        expect(calls[0]).not.toContain('sb_secret_abc');
+        const body = JSON.parse(
+          readFileSync(`${log}.body`, 'utf8').trim()
+        ) as Record<string, unknown>;
+        expect(body).toMatchObject({
+          outcome: 'implemented',
+          ticket: 'COD-1',
+          attended: false,
+          job: { kind: 'implement', interval: null, limit: null }
+        });
+        expect(typeof body['host']).toBe('string');
+        expect(body['started_at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+        expect(body['finished_at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+      });
+
+      it('launches the session as the second user through the launcher, by default', () => {
+        expect(code).toContain('"${claude_launch[@]}" -p "$prompt"');
+        expect(code).not.toContain('launch=(');
+        const lib = readFileSync(
+          fileURLToPath(
+            new URL('../../../agent-queue/lib.sh', import.meta.url)
+          ),
+          'utf8'
+        );
+        expect(lib).toContain(
+          'claude_launch=(sudo -n -u session /opt/agent-host/session-launch.sh)'
+        );
+        // The stop crosses into the session user too, and liveness is read with ps
+        expect(code).toContain(
+          '${=AGENT_QUEUE_SESSION_STOP:-sudo -n -u session /opt/agent-host/session-stop.sh} "$child"'
+        );
+        expect(code).not.toMatch(/kill -0 \$claude_pid/);
+        expect(code).not.toMatch(
+          /^\s*"\$\{claude_env\[@\]\}"[^\n]* claude -p/m
+        );
+      });
+
+      it('keeps the key and the env file out of the session', () => {
+        fakeCurl();
+        const envLog = join(dir, 'claude-env');
+        writeFileSync(
+          join(bin, 'claude'),
+          `#!/bin/sh\nenv > "${envLog}"\nprintf '%s' '{}'\n`
+        );
+        chmodSync(join(bin, 'claude'), 0o755);
+        const envFile = join(
+          dir,
+          'ws',
+          'codeware-agent',
+          'tools',
+          'cdwr',
+          '.env'
+        );
+        writeFileSync(
+          envFile,
+          'AGENT_SUPABASE_URL=https://x.supabase.co\nAGENT_SUPABASE_SERVICE_KEY=filekey\n'
+        );
+        start();
+        // Exported by the caller too: still not inherited
+        start({ AGENT_SUPABASE_SERVICE_KEY: 'envkey' });
+        const seen = readFileSync(envLog, 'utf8');
+        expect(seen).not.toContain('AGENT_SUPABASE_SERVICE_KEY');
+        expect(seen).not.toContain('filekey');
+        expect(seen).not.toContain('envkey');
+        // The session can't read that file as its own user, and the entrypoint relays its rows
+        expect(seen).not.toContain('AGENT_QUEUE_ENV_FILE');
+      });
+
+      it('sends nothing without the env vars', () => {
+        const log = fakeCurl();
+        fakeClaude(0, '{}');
+        expect(start().status).toBe(0);
+        expect(existsSync(log)).toBe(false);
+      });
+    });
+
+    describe('Linear tools', () => {
+      const argvFile = (): string => join(dir, 'argv');
+      const envFile = (): string => join(dir, 'claude-env');
+      const fakeArgvClaude = (): void => {
+        writeFileSync(
+          join(bin, 'claude'),
+          `#!/bin/sh\nprintf '%s\\n' "$@" > "${argvFile()}"\nenv > "${envFile()}"\nprintf '%s' '{}'\n`
+        );
+        chmodSync(join(bin, 'claude'), 0o755);
+      };
+
+      it('does not start without them, and reserves nothing', () => {
+        fakeClaude(0, '{}');
+        const result = start({
+          AGENT_QUEUE_LINEAR_TOOLS_CMD:
+            'print -r -- "key: Linear MCP answered 401"'
+        });
+        expect(result.status).toBe(1);
+        expect(existsSync(calls)).toBe(false);
+        expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(
+          false
+        );
+        expect(rows('runs.jsonl')).toEqual([
+          expect.objectContaining({
+            outcome: 'failed',
+            ticket: 'COD-1',
+            detail: expect.stringContaining('no Linear tools') as string
+          })
+        ]);
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+      });
+
+      it('uses the connector when asked for', () => {
+        fakeArgvClaude();
+        expect(start({ AGENT_QUEUE_LINEAR_MCP: 'connector' }).status).toBe(0);
+        const argv = readFileSync(argvFile(), 'utf8');
+        expect(argv).toContain('mcp__claude_ai_Linear__get_issue');
+        expect(argv).not.toContain('--mcp-config');
+      });
+
+      it('allows exactly the Linear tools in linear-tools.txt', () => {
+        fakeArgvClaude();
+        expect(start({ AGENT_QUEUE_LINEAR_MCP: 'connector' }).status).toBe(0);
+        const names = readFileSync(join(scripts, 'linear-tools.txt'), 'utf8')
+          .split('\n')
+          .filter((line) => line.trim() && !line.startsWith('#'));
+        expect(names.length).toBeGreaterThan(0);
+        const linear = readFileSync(argvFile(), 'utf8')
+          .split('\n')
+          .filter((arg) => arg.startsWith('mcp__claude_ai_Linear__'));
+        expect(linear).toEqual(
+          names.map((name) => `mcp__claude_ai_Linear__${name}`)
+        );
+      });
+
+      it('allows exactly those tools on the key server too', () => {
+        fakeArgvClaude();
+        const keyFile = join(dir, 'linear.key');
+        writeFileSync(keyFile, 'sekret\n');
+        expect(
+          start({
+            AGENT_QUEUE_LINEAR_MCP: 'key',
+            AGENT_QUEUE_LINEAR_KEY: 'sekret',
+            AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+          }).status
+        ).toBe(0);
+        const names = readFileSync(join(scripts, 'linear-tools.txt'), 'utf8')
+          .split('\n')
+          .filter((line) => line.trim() && !line.startsWith('#'));
+        const linear = readFileSync(argvFile(), 'utf8')
+          .split('\n')
+          .filter((arg) => arg.startsWith('mcp__agent_linear__'));
+        expect(linear).toEqual(
+          names.map((name) => `mcp__agent_linear__${name}`)
+        );
+      });
+
+      it('does not start without a Linear tool list, and reserves nothing', () => {
+        fakeClaude(0, '{}');
+        rmSync(join(scripts, 'linear-tools.txt'));
+        const result = start();
+        expect(result.status).toBe(1);
+        expect(existsSync(calls)).toBe(false);
+        expect(existsSync(join(queueHome, 'implement-spend.jsonl'))).toBe(
+          false
+        );
+        expect(rows('runs.jsonl')).toEqual([
+          expect.objectContaining({
+            outcome: 'failed',
+            ticket: 'COD-1',
+            detail: expect.stringContaining('no Linear tool list') as string
+          })
+        ]);
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+      });
+
+      it('signs its own server with the key, which stays out of argv and the config', () => {
+        fakeArgvClaude();
+        const keyFile = join(dir, 'linear.key');
+        writeFileSync(keyFile, 'sekret\n');
+        const result = start({
+          AGENT_QUEUE_LINEAR_MCP: 'key',
+          AGENT_QUEUE_LINEAR_KEY: 'sekret',
+          AGENT_QUEUE_LINEAR_KEY_FILE: keyFile
+        });
+        expect(result.status).toBe(0);
+        expect(readFileSync(envFile(), 'utf8')).not.toContain(
+          'AGENT_QUEUE_LINEAR_KEY='
+        );
+        expect(readFileSync(envFile(), 'utf8')).not.toContain('sekret');
+        const argv = readFileSync(argvFile(), 'utf8');
+        const config = join(queueHome, 'linear-mcp.json');
+        expect(argv).toContain(
+          `--strict-mcp-config\n--mcp-config\n${config}\n`
+        );
+        expect(argv).toContain('mcp__agent_linear__get_issue');
+        expect(argv).not.toContain('mcp__claude_ai_Linear');
+        expect(argv).not.toContain('sekret');
+        const json = readFileSync(config, 'utf8');
+        expect(json).toContain('headersHelper');
+        expect(json).not.toContain('${AGENT_QUEUE_LINEAR_KEY}');
+        expect(json).not.toContain('sekret');
+      });
+    });
+
     it('records a cap when the session hits its budget', () => {
       fakeClaude(1, '{"subtype":"error_max_budget_usd","total_cost_usd":15}');
       start();
@@ -229,6 +979,119 @@ describe('implement.sh', () => {
         { day: today(), ticket: 'COD-1', cost: 15, kind: 'reserve' }
       ]);
       expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+    });
+
+    describe('a session that ends on the plan session limit', () => {
+      const limitText = "You've hit your session limit · resets 7:10am (UTC)";
+      const launchFile = (): string => join(queueHome, 'launch.json');
+      const seed = (launches: number): void => {
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(
+          launchFile(),
+          JSON.stringify({ key: 'COD-1 answered', launches })
+        );
+      };
+      const launches = (): unknown =>
+        (JSON.parse(readFileSync(launchFile(), 'utf8')) as { launches: number })
+          .launches;
+      let sent: string;
+
+      // The result goes through a file: the text has an apostrophe
+      const fakeLimited = (): void => {
+        const result = join(dir, 'limit-result.json');
+        writeFileSync(
+          result,
+          JSON.stringify({
+            type: 'result',
+            subtype: 'success',
+            is_error: true,
+            api_error: 'usage_limit_reached',
+            result: limitText,
+            total_cost_usd: 0,
+            num_turns: 1
+          })
+        );
+        writeFileSync(
+          join(bin, 'claude'),
+          `#!/bin/sh\ncat "${result}"\nexit 1\n`
+        );
+        chmodSync(join(bin, 'claude'), 0o755);
+      };
+
+      beforeEach(() => {
+        sent = join(dir, 'notices');
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(
+          join(queueHome, 'notify.sh'),
+          `#!/bin/sh\ncat >> "${sent}"\necho >> "${sent}"\n`
+        );
+        chmodSync(join(queueHome, 'notify.sh'), 0o755);
+        fakeLimited();
+      });
+
+      it('records limited with the text, gives the launch back and holds the claude runs', () => {
+        seed(1);
+        expect(start().status).toBe(0);
+        const last = rows('runs.jsonl').at(-1);
+        expect(last).toMatchObject({ outcome: 'limited', ticket: 'COD-1' });
+        expect(last?.['detail']).toContain(limitText);
+        expect(rows('runs.jsonl').map((r) => r['outcome'])).not.toContain(
+          'failed'
+        );
+        expect(launches()).toBe(0);
+        const hold = JSON.parse(
+          readFileSync(join(queueHome, 'limited-until.json'), 'utf8')
+        ) as { until: number; text: string };
+        expect(hold.text).toBe(limitText);
+        expect(hold.until).toBeGreaterThan(Date.now() / 1000);
+        expect(existsSync(join(queueHome, 'implement.lock'))).toBe(false);
+      });
+
+      it('gives the launch back every time, not once per key', () => {
+        seed(2);
+        start();
+        expect(launches()).toBe(1);
+        start();
+        expect(launches()).toBe(0);
+        start();
+        expect(launches()).toBe(0);
+        expect(rows('runs.jsonl').map((r) => r['outcome'])).toEqual([
+          'launched',
+          'limited',
+          'launched',
+          'limited',
+          'launched',
+          'limited'
+        ]);
+      });
+
+      it('notifies once per hold, and never as a failure', () => {
+        seed(2);
+        start();
+        start();
+        const text = readFileSync(sent, 'utf8');
+        expect(text.match(/session limit reached/g)).toHaveLength(1);
+        expect(text).toContain('launches held until');
+        expect(text).not.toContain('failed');
+      });
+
+      it('sends no notice when notify-level is action', () => {
+        seed(1);
+        writeFileSync(join(queueHome, 'notify-level'), 'action\n');
+        start();
+        expect(existsSync(sent)).toBe(false);
+        expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('limited');
+      });
+
+      it('leaves the launch of another key alone', () => {
+        mkdirSync(queueHome, { recursive: true });
+        writeFileSync(
+          launchFile(),
+          JSON.stringify({ key: 'COD-9 answered', launches: 2 })
+        );
+        start();
+        expect(launches()).toBe(2);
+      });
     });
 
     it('records a failure on any other exit', () => {

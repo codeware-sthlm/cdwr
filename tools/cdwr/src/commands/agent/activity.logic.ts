@@ -1,15 +1,26 @@
-import { localMinute } from './usage.logic';
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Named = { name?: string | null } | null | undefined;
+
+/** A Linear user; `app` is true for an app user such as the queue's own */
+export type Person =
+  | { id?: string | null; name?: string | null; app?: boolean | null }
+  | null
+  | undefined;
+
+/** The queue's own Linear app user, `agent_user_id` in watch.jq */
+export const AGENT_USER_ID = 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841';
+
+/** Before this the agent wrote as Håkan, `agent_cutover` in watch.jq */
+export const AGENT_CUTOVER = '2026-11-10T22:00:00Z';
 
 export type BotActor =
   { name?: string | null; type?: string | null } | null | undefined;
 
 export interface HistoryNode {
+  id?: string | null;
   createdAt: string;
-  actor?: Named;
+  actor?: Person;
   botActor?: BotActor;
   fromState?: Named;
   toState?: Named;
@@ -19,9 +30,10 @@ export interface HistoryNode {
 }
 
 export interface CommentNode {
+  id?: string | null;
   createdAt: string;
   body?: string | null;
-  user?: Named;
+  user?: Person;
   botActor?: BotActor;
 }
 
@@ -45,31 +57,43 @@ export interface RunRow {
 }
 
 export interface ActivityEvent {
+  /** Stable across edits: Linear's own id where it has one, else derived from the kind, ticket and time */
+  id: string;
   at: Date;
   ticket: string;
   actor: string;
   change: string;
+  /** The machine that wrote it; Linear's events are shared by every host and carry none */
+  host?: string;
 }
 
 const COMMENT_LENGTH = 80;
 
 /**
- * Who did it. The agent and Håkan write through one Linear account, so a
- * comment marked `**Agent` is the only sign of the agent; a bot actor is named
- * by its name, else its type.
+ * Who did it. The agent writes as the queue's own Linear app user, matched by
+ * its id as `is_agent` in watch.jq does; another app is named like a person.
+ * Before the cutover it wrote as Håkan, so an older comment marked `**Agent`
+ * still reads as the agent's. A bot actor is named by its name, else its type.
  */
 export const actorOf = ({
+  createdAt,
   body,
   user,
   actor,
   botActor
 }: {
+  createdAt: string;
   body?: string | null;
-  user?: Named;
-  actor?: Named;
+  user?: Person;
+  actor?: Person;
   botActor?: BotActor;
 }): string => {
-  if (body?.trim().startsWith('**Agent')) return 'agent';
+  if (user?.id === AGENT_USER_ID || actor?.id === AGENT_USER_ID) return 'agent';
+  if (
+    body?.trim().startsWith('**Agent') &&
+    Date.parse(createdAt) < Date.parse(AGENT_CUTOVER)
+  )
+    return 'agent';
   const bot = botActor?.name ?? botActor?.type;
   if (bot) return bot;
   return user?.name ?? actor?.name ?? 'unknown';
@@ -96,6 +120,9 @@ export const historyEvents = (issue: IssueNode): ActivityEvent[] =>
     if (parts.length === 0) return [];
     return [
       {
+        id: node.id
+          ? `history:${node.id}`
+          : `history:${issue.identifier}:${node.createdAt}`,
         at: new Date(node.createdAt),
         ticket: issue.identifier,
         actor: actorOf(node),
@@ -118,6 +145,9 @@ const firstLine = (body: string | null | undefined): string => {
 /** One event per comment, as its first line */
 export const commentEvents = (issue: IssueNode): ActivityEvent[] =>
   (issue.comments?.nodes ?? []).map((node) => ({
+    id: node.id
+      ? `comment:${node.id}`
+      : `comment:${issue.identifier}:${node.createdAt}`,
     at: new Date(node.createdAt),
     ticket: issue.identifier,
     actor: actorOf(node),
@@ -125,16 +155,21 @@ export const commentEvents = (issue: IssueNode): ActivityEvent[] =>
   }));
 
 /** The scheduler's own runs; `when` is local time and rows with an unreadable one are skipped */
-export const runEvents = (rows: RunRow[]): ActivityEvent[] =>
+export const runEvents = (rows: RunRow[], host: string): ActivityEvent[] =>
   rows.flatMap((row) => {
     const at = new Date(row.when.replace(' ', 'T'));
     if (Number.isNaN(at.getTime())) return [];
+    const change = `run: ${row.outcome}${row.detail === '' ? '' : ` — ${row.detail}`}`;
+    const ticket = row.ticket === '' ? '—' : row.ticket;
     return [
       {
+        // A runs row never changes once written, so its own text is a stable key; the host keeps machines apart
+        id: `run:${host}:${at.toISOString()}:${ticket}:${change}`,
         at,
-        ticket: row.ticket === '' ? '—' : row.ticket,
+        ticket,
         actor: 'scheduler',
-        change: `run: ${row.outcome}${row.detail === '' ? '' : ` — ${row.detail}`}`
+        change,
+        host
       }
     ];
   });
@@ -143,7 +178,12 @@ export const runEvents = (rows: RunRow[]): ActivityEvent[] =>
 export const collectEvents = (
   response: LinearActivityResponse,
   rows: RunRow[],
-  { now, windowDays, limit }: { now: Date; windowDays: number; limit: number }
+  {
+    now,
+    windowDays,
+    limit,
+    host
+  }: { now: Date; windowDays: number; limit: number; host: string }
 ): { events: ActivityEvent[]; dropped: number } => {
   const since = now.getTime() - windowDays * DAY_MS;
   const issues = response.data?.issues?.nodes ?? [];
@@ -152,7 +192,7 @@ export const collectEvents = (
       ...historyEvents(issue),
       ...commentEvents(issue)
     ]),
-    ...runEvents(rows)
+    ...runEvents(rows, host)
   ]
     .filter((e) => e.at.getTime() >= since)
     .sort((a, b) => b.at.getTime() - a.at.getTime());
@@ -162,45 +202,37 @@ export const collectEvents = (
   };
 };
 
-/** Backslash first, so a cell ending in `\` can't swallow the delimiter after it */
+/** One row of the telemetry `activity` table */
+export interface ActivityRow {
+  event_id: string;
+  at: string;
+  ticket: string | null;
+  actor: 'agent' | 'scheduler' | 'human';
+  change: string;
+  host: string | null;
+}
+
+/** The table keeps three kinds of actor: the agent, the scheduler and everyone else */
+const actorKind = (actor: string): ActivityRow['actor'] =>
+  actor === 'agent' || actor === 'scheduler' ? actor : 'human';
+
+/** The events shaped for the `activity` table; the scheduler's `—` ticket is none */
+export const activityRows = (events: ActivityEvent[]): ActivityRow[] => {
+  // One row per id: a merge upsert refuses to touch the same row twice in a batch
+  const byId = new Map<string, ActivityRow>();
+  for (const e of events) {
+    byId.set(e.id, {
+      event_id: e.id,
+      at: e.at.toISOString(),
+      ticket: e.ticket === '—' ? null : e.ticket,
+      actor: actorKind(e.actor),
+      change: e.change,
+      host: e.host ?? null
+    });
+  }
+  return [...byId.values()];
+};
+
 /** `1 event`, `2 events` */
 export const plural = (n: number, noun: string): string =>
   `${n} ${noun}${n === 1 ? '' : 's'}`;
-
-const cell = (text: string): string =>
-  text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
-
-/**
- * The "Agent queue: activity" Linear document. The Agent Desk parses it, so the
- * first line, the table header and the column order are a contract: change
- * both together.
- */
-export const renderActivityDocument = (
-  events: ActivityEvent[],
-  {
-    updated,
-    windowDays,
-    dropped
-  }: { updated: string; windowDays: number; dropped: number }
-): string => {
-  const head = ['When', 'Ticket', 'Actor', 'Change'];
-  const table = [
-    `| ${head.join(' | ')} |`,
-    `| ${head.map(() => '--').join(' | ')} |`,
-    ...events.map(
-      (e) =>
-        `| ${[localMinute(e.at), e.ticket, e.actor, e.change].map(cell).join(' | ')} |`
-    )
-  ].join('\n');
-
-  return [
-    `Updated: ${updated} · last ${plural(windowDays, 'day')} · ${plural(events.length, 'event')}`,
-    'Written by the agent queue scheduler from Linear\'s issue history and its own runs. Times are local. Actor "agent" is a comment marked `**Agent`; the agent and Håkan otherwise write through the same Linear account.',
-    ...(dropped > 0
-      ? [
-          `Older events beyond the newest ${events.length} are left out (${dropped}).`
-        ]
-      : []),
-    table
-  ].join('\n\n');
-};

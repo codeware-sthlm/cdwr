@@ -10,7 +10,7 @@ export {
   type SignupStatus
 } from './lib/decide-signup-status';
 export { guardStatusChange } from './lib/guard-status-change';
-export { notifySignup } from './lib/notify-signup';
+export { createNotifySignup } from './lib/notify-signup';
 export {
   SKIP_QUEUE_RENUMBER,
   renumberQueue,

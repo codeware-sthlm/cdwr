@@ -91,7 +91,9 @@ export async function ensureSiteSetting(
     // Without this, the seeded contact form's own empty `emailTo` — deliberate,
     // to exercise the fallback chain — has nowhere to fall back to, and
     // `requireResolvableRecipient` refuses to save it
-    const hasFormsContent = !!forms?.notificationRecipients?.length;
+    const hasFormsContent =
+      !!forms?.notificationRecipients?.length &&
+      (formsFromProps?.retentionDays == null || forms.retentionDays != null);
 
     // Legal pages count too: without them a definition that adds a privacy
     // or terms page is silently ignored on an already-seeded workspace
@@ -137,7 +139,9 @@ export async function ensureSiteSetting(
           ...forms,
           notificationRecipients: forms?.notificationRecipients?.length
             ? forms.notificationRecipients
-            : formsFromProps?.notificationRecipients
+            : formsFromProps?.notificationRecipients,
+          // A period someone has set is kept, like the recipients
+          retentionDays: forms?.retentionDays ?? formsFromProps?.retentionDays
         },
         legal: {
           ...legal,

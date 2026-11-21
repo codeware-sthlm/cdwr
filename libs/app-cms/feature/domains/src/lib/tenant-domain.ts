@@ -12,7 +12,7 @@ import type { CertificateState } from './certificate-state';
 export type TenantDomain = {
   /** Domain without a scheme, e.g. `tours.example.com` */
   hostname?: string | null;
-  /** Fly app that serves it, e.g. `cdwr-web-moon` */
+  /** Fly app that serves it, e.g. `cdwr-headless-moon` */
   app?: string | null;
   /** Whether the app should present itself as this domain */
   isPrimary?: boolean | null;

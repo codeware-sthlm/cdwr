@@ -10,12 +10,14 @@
       "vitest"
     ],
     "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "jsxImportSource": "react",
+    "allowImportingTsExtensions": true
   },
   "include": [
     "vite.config.mts",
     "src/**/*.spec.ts",
     "src/**/*.spec.tsx",
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "agent-queue/supabase/functions/**/*.spec.ts"
   ]
 }

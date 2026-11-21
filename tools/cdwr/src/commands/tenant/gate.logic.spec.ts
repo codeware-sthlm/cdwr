@@ -2,17 +2,57 @@ import type { TenantApp } from '../../services/infisical';
 
 import {
   type AppState,
+  FLY_ERROR_MAX,
   GATE_KEY,
   MIN_PASSWORD_LENGTH,
   anyClosed,
   anyStored,
   describeOnFly,
+  flyErrorOf,
   generatePassword,
+  partialReason,
   prChoices,
   pullRequestChoices,
   targetFlyApp,
-  tenantHint
+  tenantHint,
+  unreadApps
 } from './gate.logic';
+
+describe('flyErrorOf', () => {
+  it("keeps the CLI's own last line", () => {
+    const error = new Error(
+      '[list secrets] something broke\nCommand failed with exit code 1: fly secrets list\n\nError: unauthorized\n'
+    );
+    expect(flyErrorOf(error)).toBe('Error: unauthorized');
+  });
+
+  it('reads a repeated Error prefix once', () => {
+    const error = new Error(
+      "Error: Error: no access token available. Please login with 'flyctl auth login'"
+    );
+    expect(flyErrorOf(error)).toBe(
+      "Error: no access token available. Please login with 'flyctl auth login'"
+    );
+  });
+
+  it('reads a non-Error value', () => {
+    expect(flyErrorOf('timed out')).toBe('timed out');
+  });
+
+  it('cuts a long line to fit a desk row', () => {
+    const out = flyErrorOf(new Error('x'.repeat(400)));
+    expect(out).toHaveLength(FLY_ERROR_MAX);
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  it('replaces anything shaped like a Fly token', () => {
+    const out = flyErrorOf(
+      new Error('Error: bad token FlyV1 fm2_abc123,fm2_def456 and fm1_xyz-9')
+    );
+    expect(out).toBe('Error: bad token … and …');
+    expect(out).not.toMatch(/fm[12]_|FlyV1/);
+  });
+});
 
 describe('generatePassword', () => {
   it('is long enough and url-safe', () => {
@@ -144,5 +184,71 @@ describe('anyClosed / anyStored', () => {
     expect(anyStored([{ ...states[0], inInfisical: false } as AppState])).toBe(
       false
     );
+  });
+});
+
+describe('unreadApps / partialReason', () => {
+  const app = (over: Partial<AppState>): AppState => ({
+    app: 'cms',
+    secretPath: '/x',
+    inInfisical: false,
+    flyApp: 'cdwr-cms-acme',
+    onFly: 'set',
+    ...over
+  });
+  const cms = app({ onFly: 'unreachable', flyError: 'Error: unauthorized' });
+  const web = app({
+    app: 'headless',
+    flyApp: 'cdwr-headless-acme',
+    onFly: 'unreachable',
+    flyError: 'Error: app not found'
+  });
+
+  it('keeps only apps whose Fly read failed', () => {
+    expect(unreadApps([app({}), cms, app({ onFly: 'missing' })])).toEqual([
+      cms
+    ]);
+  });
+
+  it('skips a preview gate that names no app', () => {
+    expect(unreadApps([app({ flyApp: '', onFly: 'unreachable' })])).toEqual([]);
+  });
+
+  it('names the first app and its error', () => {
+    expect(partialReason([cms])).toBe(
+      'cdwr-cms-acme not read on Fly: Error: unauthorized'
+    );
+  });
+
+  it('counts the rest', () => {
+    expect(partialReason([cms, web])).toBe(
+      'cdwr-cms-acme not read on Fly: Error: unauthorized (+1 more)'
+    );
+  });
+
+  it('cuts a long line to fit a desk row', () => {
+    const out = partialReason([
+      app({ onFly: 'unreachable', flyError: 'x'.repeat(FLY_ERROR_MAX) })
+    ]);
+    expect(out).toHaveLength(FLY_ERROR_MAX);
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  it('names an app Fly would not open beside an unread one', () => {
+    expect(
+      partialReason(
+        [cms],
+        [{ flyApp: 'cdwr-headless-acme', flyError: 'Error: timeout' }]
+      )
+    ).toBe(
+      'cdwr-cms-acme not read on Fly: Error: unauthorized; cdwr-headless-acme still closed on Fly: Error: timeout'
+    );
+    expect(
+      partialReason([], [{ flyApp: 'cdwr-cms-acme', flyError: 'Error: x' }])
+    ).toBe('cdwr-cms-acme still closed on Fly: Error: x');
+  });
+
+  it('is empty with nothing unread', () => {
+    expect(partialReason([])).toBe('');
   });
 });

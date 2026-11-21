@@ -5,7 +5,7 @@ export default defineConfig({
   root: import.meta.dirname,
   cacheDir:
     '../../../../node_modules/.vite/libs/app-cms/feature/component-builder',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })],
   test: {
     name: 'app-cms-feature-component-builder',
     watch: false,

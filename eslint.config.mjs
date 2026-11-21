@@ -85,8 +85,12 @@ export default [
               onlyDependOnLibsWithTags: ['type:util']
             },
             {
-              // type:theme is a dependency-free leaf — token CSS plus the
-              // generated theme registry — so it sits alongside type:util here
+              // Token CSS, the generated theme registry and the font faces
+              // they name; utils only, so ui can depend on it like a util
+              sourceTag: 'type:theme',
+              onlyDependOnLibsWithTags: ['type:util']
+            },
+            {
               sourceTag: 'type:ui',
               onlyDependOnLibsWithTags: ['type:ui', 'type:util', 'type:theme']
             },
@@ -113,6 +117,10 @@ export default [
               ]
             },
             {
+              sourceTag: 'scope:headless-e2e',
+              onlyDependOnLibsWithTags: ['scope:headless-e2e', 'scope:shared']
+            },
+            {
               sourceTag: 'scope:app-cms',
               onlyDependOnLibsWithTags: [
                 'scope:app-cms',
@@ -120,7 +128,13 @@ export default [
                 'scope:shared',
                 'type:ui',
                 'type:util'
-              ]
+              ],
+              // `type:util` would otherwise let the cms reach the headless util libs
+              notDependOnLibsWithTags: ['scope:app-headless']
+            },
+            {
+              sourceTag: 'scope:app-headless',
+              onlyDependOnLibsWithTags: ['scope:app-headless', 'scope:shared']
             },
             {
               sourceTag: 'scope:builder',
@@ -137,6 +151,19 @@ export default [
                 'scope:shared',
                 'domain:signature'
               ]
+            },
+            {
+              sourceTag: 'scope:headless',
+              onlyDependOnLibsWithTags: [
+                'scope:headless',
+                'scope:app-headless',
+                'scope:shared',
+                'domain:signature'
+              ]
+            },
+            {
+              sourceTag: 'scope:desk',
+              onlyDependOnLibsWithTags: ['scope:desk', 'scope:shared']
             },
             {
               sourceTag: 'scope:create-nx-payload',
@@ -162,6 +189,13 @@ export default [
               onlyDependOnLibsWithTags: [
                 'scope:fly-deployment-action',
                 'scope:fly-node',
+                'scope:shared'
+              ]
+            },
+            {
+              sourceTag: 'scope:fly-conditions-action',
+              onlyDependOnLibsWithTags: [
+                'scope:fly-conditions-action',
                 'scope:shared'
               ]
             },

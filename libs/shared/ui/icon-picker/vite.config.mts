@@ -4,7 +4,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/shared/ui/icon-picker',
-  plugins: [react(), tsconfigPaths()],
+  plugins: [
+    react(),
+    tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })
+  ],
   test: {
     name: 'shared-ui-icon-picker',
     watch: false,

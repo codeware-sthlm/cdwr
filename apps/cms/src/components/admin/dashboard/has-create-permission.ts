@@ -17,3 +17,17 @@ export function hasCreatePermission(
 ): boolean {
   return Boolean(permissions?.collections?.[slug]?.create);
 }
+
+/**
+ * Whether the current user can update documents in a collection.
+ *
+ * The check for single-document collections (navigation, site settings),
+ * which every user can read and nobody creates after the seed. Truthy for the
+ * same reason as {@link hasCreatePermission}.
+ */
+export function hasUpdatePermission(
+  permissions: ReturnType<typeof useAuth>['permissions'],
+  slug: CollectionSlug
+): boolean {
+  return Boolean(permissions?.collections?.[slug]?.update);
+}

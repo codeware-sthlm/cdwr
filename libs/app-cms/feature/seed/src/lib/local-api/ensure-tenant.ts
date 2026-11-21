@@ -52,6 +52,7 @@ export async function ensureTenant(
       description,
       name,
       slug,
+      status: 'active',
       supportedLocales
     },
     locale,

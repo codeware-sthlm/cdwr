@@ -7,11 +7,13 @@ export { SiteDefinitionSchema } from './lib/site-definition.schema';
 export type {
   BlockDefinition,
   FormDefinition,
+  FormFieldDefinition,
   MediaDefinition,
   MediaRef,
   NavigationGroupDefinition,
   NavigationItemDefinition,
   NavigationLinkDefinition,
+  MetaDefinition,
   PageDefinition,
   PlaceDefinition,
   PostDefinition,
@@ -27,7 +29,9 @@ export { PlatformDefinitionSchema } from './lib/platform-definition.schema';
 export type {
   FaqDefinition,
   PlatformDefinition,
+  PlatformInviteCodeDefinition,
   PlatformLabelDefinition,
+  PlatformSignupDefinition,
   PlatformTenantDefinition,
   PlatformUserDefinition,
   StockMediaDefinition
@@ -35,3 +39,4 @@ export type {
 export { findPlatformTenant } from './lib/find-platform-tenant';
 export { platform } from './lib/platform/platform';
 export type { PlatformTenantSlug } from './lib/platform/platform';
+export { codewareHeroIllustration } from './lib/site-definitions/illustrations';

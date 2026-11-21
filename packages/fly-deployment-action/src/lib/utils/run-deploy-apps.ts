@@ -6,6 +6,9 @@ import type { ActionOutputs } from '../schemas/action-outputs.schema';
 import type { DeploymentConfig } from '../schemas/deployment-config.schema';
 
 import { addOpinionatedEnv } from './add-opinionated-env';
+import { getHealthCheckPath, probeHealth } from './probe-health';
+import { checkReleaseOrder } from './release-order';
+import type { ResolvedAppDetails } from './resolve-tenant-secrets';
 
 /**
  * Deploy provided apps or apps that are affected by code changes
@@ -18,21 +21,54 @@ import { addOpinionatedEnv } from './add-opinionated-env';
  * @returns List of deploy statuses of apps
  */
 export const runDeployApps = async (options: {
+  /** Planned deployments with their tenant secrets read from Infisical */
+  appDetails: ResolvedAppDetails;
   config: DeploymentConfig;
   environment: Environment;
   fly: Fly;
+  /** The full commit sha being deployed, set as `GIT_SHA` on each app */
+  gitSha?: string | undefined;
   pullRequest: number | undefined;
   imageMap?: Record<string, string>;
 }): Promise<ActionOutputs['projects']> => {
   const projects: ActionOutputs['projects'] = [];
 
-  const { config, environment, fly, imageMap, pullRequest } = options;
+  const {
+    appDetails,
+    config,
+    environment,
+    fly,
+    gitSha,
+    imageMap,
+    pullRequest
+  } = options;
 
   // Track apps whose host deployment failed so tenant deployments can be skipped.
   // Deploying tenants against an incompatible schema would cause runtime failures.
   const failedHostApps = new Set<string>();
 
   core.info(`Found ${config.apps.length} apps to deploy`);
+
+  // A production deploy never moves an app back past its newest release:
+  // a re-run of an older deploy can start after a newer one released it.
+  // Every app is checked before any deploys, so a git error stops the run
+  // with nothing deployed rather than half of it.
+  const skipReasons = new Map<string, string>();
+  if (environment === 'production' && gitSha) {
+    for (const { name: projectName } of config.apps) {
+      try {
+        const order = await checkReleaseOrder(projectName, gitSha);
+        if (!order.deploy) {
+          skipReasons.set(projectName, order.reason);
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Release order check failed for ${projectName}, nothing deployed: ${msg}`
+        );
+      }
+    }
+  }
 
   for (const app of config.apps) {
     const { flyConfigFile, githubConfig, name: projectName, sentry } = app;
@@ -42,7 +78,7 @@ export const runDeployApps = async (options: {
     // Pre-deploy only lists apps that have somewhere to go. One without any is
     // never deployed as a bare host app: that is how a host nobody asked for
     // reaches production.
-    const appDeploymentDetails = config.appDetails[projectName] ?? [];
+    const appDeploymentDetails = appDetails[projectName] ?? [];
     if (appDeploymentDetails.length === 0) {
       core.warning(
         `Skipping ${projectName}: no host or tenant deployment is enabled for it`
@@ -51,8 +87,21 @@ export const runDeployApps = async (options: {
       continue;
     }
 
-    // Read the base app name from local config
+    const skipReason = skipReasons.get(projectName);
+    if (skipReason) {
+      core.warning(`Skipping ${projectName}: ${skipReason}`);
+      projects.push({
+        action: 'skipped',
+        appOrProject: projectName,
+        reason: skipReason
+      });
+      core.endGroup();
+      continue;
+    }
+
+    // Read the base app name and the health check path from local config
     let configAppName: string;
+    let healthCheckPath: string | undefined;
 
     core.info(`Read Fly config file: ${flyConfigFile}`);
     try {
@@ -61,6 +110,7 @@ export const runDeployApps = async (options: {
         local: true
       });
       configAppName = flyConfig.app;
+      healthCheckPath = getHealthCheckPath(flyConfig.httpService);
     } catch {
       core.endGroup();
       throw new Error(
@@ -101,6 +151,17 @@ export const runDeployApps = async (options: {
         continue;
       }
 
+      // The secrets this deployment needs could not be read
+      if (deploymentDetails.error) {
+        core.warning(`Skipping${tenantLabel}: ${deploymentDetails.error}`);
+        projects.push({
+          appOrProject: tenantId ? `${projectName} (${tenantId})` : projectName,
+          action: 'failed',
+          error: deploymentDetails.error
+        });
+        continue;
+      }
+
       core.info(`Deploying${tenantLabel}...`);
 
       const appName = getAppName({
@@ -115,9 +176,14 @@ export const runDeployApps = async (options: {
         core.info(`Using pre-built image: ${preBuiltImage}`);
       }
 
-      // Merge secrets: global -> deployment-specific (deployment wins)
+      // Merge secrets: global -> deployment-specific (deployment wins).
+      // An app that runs third-party code opts out of the global ones.
+      const withholdShared = githubConfig.sharedSecrets === false;
+      if (withholdShared) {
+        core.info('Shared secrets withheld: sharedSecrets is false');
+      }
       const mergedSecrets = {
-        ...config.secrets,
+        ...(!withholdShared && config.secrets),
         ...deploymentDetails.secrets
       };
 
@@ -135,7 +201,7 @@ export const runDeployApps = async (options: {
 
       // Add opinionated environment variables
       const envVars = addOpinionatedEnv(
-        { appName, prNumber: pullRequest, tenantId },
+        { appName, gitSha, prNumber: pullRequest, tenantId },
         mergedEnv
       );
 
@@ -165,28 +231,22 @@ export const runDeployApps = async (options: {
           secrets: mergedSecrets
         });
 
-        // A deployed app with no public address answers nothing on the URL we
-        // are about to report. `flyctl` allocates one only for an app it
-        // creates itself, and neither route here qualifies — a registry push
-        // auto-creates the app before the deploy, and `apps create` never
-        // allocates. Idempotent, so it runs on every deploy rather than only
-        // on create, which also repairs apps that were left without one.
-        try {
-          const addresses = await fly.ips.ensure({ app: result.app });
-          core.debug(
-            `Public addresses for '${result.app}': ${addresses
-              .map((ip) => `${ip.type} ${ip.address}`)
-              .join(', ')}`
-          );
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-
-          // Loud, but not fatal: the deploy itself succeeded, and failing it
-          // here would throw away a working image. The whole defect being
-          // fixed is an unreachable app that reported success, so this must
-          // never pass silently.
-          core.warning(
-            `⚠️ Deployed '${result.app}' but could not ensure a public IP address, so it may be unreachable: ${msg}`
+        // A green deploy is no proof the app answers: a retried first deploy
+        // updates a suspended machine without waiting for its health check.
+        // fly-node gives the app its addresses before deploying, so one
+        // request to the app's own check settles it.
+        if (healthCheckPath) {
+          core.info(`Probe ${result.url}${healthCheckPath}...`);
+          const failure = await probeHealth(result.url, healthCheckPath);
+          if (failure) {
+            throw new Error(
+              `Deployed, but the health probe failed: ${failure}`
+            );
+          }
+          core.info(`Health probe answered 200`);
+        } else {
+          core.info(
+            `No health probe: ${flyConfigFile} has no [[http_service.checks]]`
           );
         }
 

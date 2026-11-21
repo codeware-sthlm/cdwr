@@ -1,0 +1,59 @@
+{
+  "name": "headless",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/headless/src",
+  "projectType": "application",
+  "tags": ["scope:headless", "type:app"],
+  "targets": {
+    "build": {
+      "inputs": [
+        "production",
+        "^production",
+        { "externalDependencies": ["vite"] },
+        { "env": "DEPLOY_ENV" },
+        { "env": "SENTRY_AUTH_TOKEN" },
+        { "env": "SENTRY_DSN" },
+        { "env": "SENTRY_ORG" },
+        { "env": "SENTRY_PROJECT" },
+        { "env": "SENTRY_RELEASE" }
+      ],
+      "outputs": ["{projectRoot}/.output"]
+    },
+    "dev": {
+      "metadata": {
+        "description": "Starts the Vite dev server with tenant moon's dev vault folder, as a deploy resolves it"
+      },
+      "executor": "dev-plugin:infisical-run",
+      "continuous": true,
+      "options": {
+        "path": "/tenants/moon/apps/headless",
+        "cwd": "apps/headless",
+        "commands": ["vite"]
+      }
+    },
+    "dx:secrets": {
+      "metadata": {
+        "description": "Refresh the offline copy of tenant moon's dev vault folder, for working without a session."
+      },
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm cdwr infisical cache --path=/tenants/moon/apps/headless --app=headless --yes"
+      }
+    },
+    "start": {
+      "metadata": {
+        "description": "Runs the built Node server from .output",
+        "help": {
+          "command": "nx start headless"
+        }
+      },
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["build"],
+      "options": {
+        "command": "node .output/server/index.mjs",
+        "cwd": "apps/headless"
+      }
+    }
+  }
+}

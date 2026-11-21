@@ -1,9 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { type Need, defineCommand, readOnly } from '../cli/command';
-import { type Shell, collect, render } from '../cli/completion';
+import type { Shell } from '../cli/completion';
 import type { Context } from '../cli/context';
 import { type Check, check, onPath } from '../cli/preflight';
 import { cdwrHome } from '../cli/prefs';
@@ -14,17 +14,30 @@ import {
   implementReport,
   jobPathChecks,
   jobState,
-  keyPresent,
+  linearAuthSourceOf,
+  mirrorTargetOf,
   paths,
   queueDrift,
+  readClaudeConfig,
   worktreeOf
 } from '../services/agent-queue';
 import { symbols, theme } from '../ui/theme';
 
-import { formatImplement } from './agent/agent.logic';
+import {
+  formatImplement,
+  hostKind,
+  linearServerState,
+  schedulerHere
+} from './agent/agent.logic';
+import { schedulerRow } from './agent/status.logic';
 import { shellOf } from './completion';
-import { completionFile, completionState } from './completion.logic';
-import { ENTRIES, GROUPS } from './index';
+import { readRecord, treeOf } from './completion.install';
+import {
+  type CompletionHealth,
+  completionFile,
+  completionHealth,
+  refreshMarker
+} from './completion.logic';
 
 const NEEDS: Need[] = [
   'fly',
@@ -43,18 +56,28 @@ interface Report {
   node: string;
   /** Tool versions the workspace pins, read from its manifests */
   versions: { nx: string; pnpm: string; nodeWanted: string };
-  /** The completion script of the shell in $SHELL, against what the registry renders */
+  /** The completion script of the shell in $SHELL, against the checkout it follows */
   completion: {
     shell: Shell | null;
     file: string | null;
-    state: 'current' | 'stale' | 'missing' | 'unsupported' | 'unknown';
+    /** The checkout the script follows, once setup recorded it */
+    root: string | null;
+    state: CompletionHealth | 'unsupported';
   };
-  /** The scheduled agent queue; macOS only */
+  /** The agent queue, on a Mac or in the agent container */
   agentQueue?: {
+    host: 'launchd' | 'container';
+    /** A Mac with no job loaded and no plist is attended-only; the job checks do not apply */
+    scheduler: 'here' | 'elsewhere';
+    /** The heartbeat mirror target, when one is set */
+    mirror: string | null;
+    /** Always true in the container, which has no launchd job to load */
     loaded: boolean;
-    keyPresent: boolean;
+    linearAuth: 'app' | 'key' | 'none';
     worktree: boolean;
     script: 'missing' | 'current' | 'stale';
+    /** The `agent_linear` MCP server in the user's Claude config */
+    linearServer: ReturnType<typeof linearServerState>;
     implement: ReturnType<typeof implementReport>;
     /** The agent checkout's copy of the env file against this checkout's */
     envCopy: ReturnType<typeof envCopyDrift>;
@@ -67,24 +90,40 @@ interface Report {
 
 /** The agent queue at a glance; `cdwr agent status` has the detail */
 async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
-  if (process.platform !== 'darwin') return undefined;
+  const host = hostKind(process.platform, ctx.env);
+  if (host === null) return undefined;
   const queue = paths(ctx.env);
-  const [job, key] = await Promise.all([jobState(), keyPresent()]);
+  const [job, auth] = await Promise.all([
+    host === 'container'
+      ? Promise.resolve({ loaded: true as const })
+      : jobState(),
+    linearAuthSourceOf(ctx.env)
+  ]);
   const script = queueDrift(queue, ctx.root);
   const worktree = worktreeOf(ctx);
+  const scheduler = schedulerHere(host, job, existsSync(queue.plist))
+    ? ('here' as const)
+    : ('elsewhere' as const);
   // Both mint nothing lasting: a token lives an hour and is dropped with the check
   const [jobPath, githubApp] =
-    job.loaded || script !== 'missing'
+    scheduler === 'here' && (job.loaded || script !== 'missing')
       ? await Promise.all([
-          jobPathChecks(ctx.env, queue),
+          // The job's PATH comes from the plist, which the container has none of
+          host === 'container'
+            ? Promise.resolve(undefined)
+            : jobPathChecks(ctx.env, queue),
           githubAppCheck(ctx.root, ctx.env)
         ])
       : [undefined, undefined];
   return {
+    host,
+    scheduler,
+    mirror: mirrorTargetOf(queue),
     loaded: job.loaded,
-    keyPresent: key,
+    linearAuth: auth.auth,
     worktree: existsSync(worktree),
     script,
+    linearServer: linearServerState(readClaudeConfig(), queue.files['lib.sh']),
     implement: implementReport(queue, ctx.env),
     envCopy: envCopyDrift(ctx.root, worktree),
     ...(jobPath === undefined ? {} : { jobPath }),
@@ -92,22 +131,38 @@ async function agentQueue(ctx: Context): Promise<Report['agentQueue']> {
   };
 }
 
-async function completion(ctx: Context): Promise<Report['completion']> {
+/** The installed script against the checkout it follows, not the one doctor runs in */
+function completion(ctx: Context): Report['completion'] {
   const shell = shellOf(ctx.env['SHELL']);
-  if (!shell) return { shell: null, file: null, state: 'unsupported' };
-  const file = completionFile(shell, {
-    cdwrHome: cdwrHome(ctx.env),
-    home: homedir()
-  });
-  // Rendering loads every command; a broken one must not take the report down
-  try {
-    const installed = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
-    const rendered = render(shell, GROUPS, await collect(ENTRIES));
-    return { shell, file, state: completionState(installed, rendered) };
-  } catch {
-    return { shell, file, state: 'unknown' };
+  if (!shell) {
+    return { shell: null, file: null, root: null, state: 'unsupported' };
   }
+  const home = cdwrHome(ctx.env);
+  const record = readRecord(home);
+  // A record for another shell says nothing about this one's script
+  const tracked = record?.shell === shell ? record : undefined;
+  const file =
+    tracked?.file ?? completionFile(shell, { cdwrHome: home, home: homedir() });
+  return {
+    shell,
+    file,
+    root: tracked?.root ?? null,
+    state: completionHealth({
+      record: tracked,
+      fileExists: existsSync(file),
+      tree: tracked ? treeOf(tracked.root) : undefined,
+      markerAgeMs: ageOf(refreshMarker(home))
+    })
+  };
 }
+
+const ageOf = (file: string): number | undefined => {
+  try {
+    return Date.now() - statSync(file).mtimeMs;
+  } catch {
+    return undefined;
+  }
+};
 
 const readJson = (file: string): Record<string, unknown> => {
   try {
@@ -150,7 +205,7 @@ export default defineCommand({
           )?.node ?? ''
         )
       },
-      completion: await completion(ctx),
+      completion: completion(ctx),
       agentQueue: await agentQueue(ctx)
     };
     return readOnly(report);
@@ -200,6 +255,9 @@ export default defineCommand({
           ]
     );
     const { completion: comp } = report;
+    // Named whenever it isn't where doctor runs: setup anywhere else would move the link
+    const elsewhere =
+      comp.root !== null && comp.root !== realpathSync(ctx.root);
     const completionRows: Record<
       Report['completion']['state'],
       () => [string, string, string]
@@ -207,22 +265,50 @@ export default defineCommand({
       current: () => [
         symbols.ok,
         'completion',
-        theme.muted(`${comp.shell} is current`)
+        theme.muted(
+          `${comp.shell} is current${elsewhere ? ` with ${comp.root}` : ''}`
+        )
       ],
-      stale: () => [
+      refreshing: () => [
+        symbols.ok,
+        'completion',
+        theme.muted(
+          `refreshes from ${comp.root} after the next cdwr run; open shells need a new shell or \`source ${comp.file}\``
+        )
+      ],
+      stuck: () => [
         symbols.warn,
         'completion',
-        theme.warn('out of date; run cdwr setup')
+        theme.warn(
+          `the refresh from ${comp.root} did not finish; check that \`pnpm install\` ran there, then run cdwr setup in it`
+        )
       ],
-      missing: () => [
-        symbols.ok,
+      untracked: () => [
+        symbols.warn,
         'completion',
-        theme.muted('not installed; cdwr setup adds it')
+        theme.warn(
+          "doesn't keep itself current yet; run cdwr setup once in the checkout cdwr links to"
+        )
       ],
+      missing: () =>
+        comp.root
+          ? [
+              symbols.warn,
+              'completion',
+              theme.warn(`${comp.file} is gone; run cdwr setup in ${comp.root}`)
+            ]
+          : [
+              symbols.ok,
+              'completion',
+              theme.muted('not installed; cdwr setup adds it')
+            ],
+      // A removed checkout lands here too, and then nothing refreshes it again
       unknown: () => [
-        symbols.ok,
+        symbols.warn,
         'completion',
-        theme.muted('could not be checked')
+        theme.warn(
+          `git can't read ${comp.root}, so nothing refreshes it; run cdwr setup in the checkout cdwr links to`
+        )
       ],
       unsupported: () => [
         symbols.ok,
@@ -235,8 +321,28 @@ export default defineCommand({
     rows.push(completionRows[comp.state]());
     const queue = report.agentQueue;
     let queueProblems = 0;
-    // Optional per machine: never set up is not a problem
-    if (queue && !queue.loaded && queue.script === 'missing') {
+    if (queue?.scheduler === 'elsewhere') {
+      const where = schedulerRow(queue.mirror);
+      rows.push([
+        where.ok === true ? symbols.ok : symbols.warn,
+        'agent queue',
+        where.ok === true ? theme.muted(where.detail) : theme.warn(where.detail)
+      ]);
+      // The attended side: agent_linear signs with the installed lib.sh. Never set up is not a problem, so no row
+      const attended = [
+        queue.script === 'stale' && 'installed scripts out of date',
+        queue.linearServer === 'stale' && 'agent_linear out of date'
+      ].filter((p) => p !== false);
+      queueProblems = attended.length;
+      if (attended.length > 0) {
+        rows.push([
+          symbols.warn,
+          'attended',
+          theme.warn(`${attended.join(', ')}; \`cdwr agent install\``)
+        ]);
+      }
+      // Optional per machine: never set up is not a problem
+    } else if (queue && !queue.loaded && queue.script === 'missing') {
       rows.push([
         symbols.ok,
         'agent queue',
@@ -245,16 +351,22 @@ export default defineCommand({
     } else if (queue) {
       const problems = [
         !queue.loaded && 'job not loaded',
-        !queue.keyPresent && 'no Linear key',
+        queue.linearAuth === 'none' && 'no Linear credentials',
         !queue.worktree && 'no worktree',
         queue.script === 'missing' && 'script not installed',
         queue.script === 'stale' && 'script out of date',
         queue.envCopy === 'stale' && 'env copy out of date',
         queue.envCopy === 'missing' && 'env file not copied',
-        queue.jobPath === undefined && 'job PATH unknown (plist not installed)',
+        queue.host === 'launchd' &&
+          queue.jobPath === undefined &&
+          'job PATH unknown (plist not installed)',
         queue.jobPath?.node === false && 'node 22 not on the job PATH',
         queue.jobPath?.gh === false && 'gh not logged in',
-        queue.jobPath?.claude === false && 'claude does not run'
+        queue.jobPath?.claude === false && 'claude does not run',
+        // A Mac with the job is attended too; never added stays quiet, as without the job
+        queue.host === 'launchd' &&
+          queue.linearServer === 'stale' &&
+          'agent_linear out of date'
       ].filter((p) => p !== false);
       queueProblems = problems.length;
       rows.push(
@@ -263,9 +375,22 @@ export default defineCommand({
           : [
               symbols.warn,
               'agent queue',
-              theme.warn(`${problems.join(', ')}; \`cdwr agent install\``)
+              theme.warn(
+                queue.host === 'launchd'
+                  ? `${problems.join(', ')}; \`cdwr agent install\``
+                  : problems.join(', ')
+              )
             ]
       );
+      if (queue.linearAuth === 'key') {
+        rows.push([
+          symbols.warn,
+          'Linear',
+          theme.warn(
+            "the personal key is the fallback; store the app's client id and secret"
+          )
+        ]);
+      }
       const implement = formatImplement(
         queue.implement.spent,
         queue.implement.cap,
@@ -311,7 +436,12 @@ export default defineCommand({
     const warnings =
       (report.envFile === 'current' ? 0 : 1) +
       (report.onPath ? 0 : 1) +
-      (comp.state === 'stale' ? 1 : 0) +
+      (comp.state === 'untracked' ||
+      comp.state === 'stuck' ||
+      comp.state === 'unknown' ||
+      (comp.state === 'missing' && comp.root !== null)
+        ? 1
+        : 0) +
       (queueProblems > 0 ? 1 : 0);
     const summary =
       missing > 0

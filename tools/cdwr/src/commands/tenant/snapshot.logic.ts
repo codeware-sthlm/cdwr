@@ -1,4 +1,20 @@
 import { SITE_THEMES } from '@codeware/shared/theme';
+import {
+  SITE_GATE_COOKIE,
+  createSiteGateToken
+} from '@codeware/shared/util/site-gate';
+
+import {
+  COLOR_SCHEMES,
+  type ColorScheme,
+  VIEWPORTS,
+  VIEWPORT_NAMES,
+  type ViewportName
+} from '../../services/snapshot-matrix';
+
+// Re-exported so the command keeps importing everything from here
+export { COLOR_SCHEMES, VIEWPORTS, VIEWPORT_NAMES };
+export type { ColorScheme, ViewportName };
 
 /**
  * The part of a site definition this reads: its pages and its landing page.
@@ -35,19 +51,6 @@ export const isRoutedDefinition = (value: unknown): value is RoutedDefinition =>
  */
 export const SNAPSHOT_THEMES = ['default', ...SITE_THEMES] as const;
 export type SnapshotTheme = (typeof SNAPSHOT_THEMES)[number];
-
-/** What `prefers-color-scheme` can be told, which is what the site follows */
-export const COLOR_SCHEMES = ['light', 'dark'] as const;
-export type ColorScheme = (typeof COLOR_SCHEMES)[number];
-
-/** The screens a page is drawn on; a new name fails to compile without a size */
-export const VIEWPORT_NAMES = ['phone', 'desktop'] as const;
-export type ViewportName = (typeof VIEWPORT_NAMES)[number];
-
-export const VIEWPORTS = {
-  phone: { width: 390, height: 844 },
-  desktop: { width: 1280, height: 900 }
-} as const satisfies Record<ViewportName, { width: number; height: number }>;
 
 /** One page, drawn one way */
 export type Shot = {
@@ -194,6 +197,75 @@ export const fileName = ({
   viewport
 }: Shot): string =>
   `${routeName(route)}--${theme}-${colorScheme}-${viewport}.png`;
+
+/** How long a minted gate cookie lasts: one run, with room for a slow site */
+const GATE_COOKIE_SECONDS = 60 * 60;
+
+/**
+ * The cookie that lets a browser through a site's gate, as a visitor who typed
+ * the password would have it.
+ *
+ * Minted here with the same signing the site verifies, so no form is sent and
+ * the password never travels. Without a password there is no cookie, and a
+ * gated site shows its gate page. `HttpOnly` and `Lax` as the site sets it, so
+ * no script on an audited page can read the token.
+ *
+ * @param url - The site, so the cookie is scoped to its host
+ * @param password - The site gate password for this tenant and environment
+ */
+export const gateCookies = (
+  url: string,
+  password: string | undefined,
+  now = Date.now()
+): Array<{
+  name: string;
+  value: string;
+  url: string;
+  httpOnly: true;
+  sameSite: 'Lax';
+}> =>
+  password
+    ? [
+        {
+          name: SITE_GATE_COOKIE,
+          value: createSiteGateToken(password, {
+            maxAgeSeconds: GATE_COOKIE_SECONDS,
+            now
+          }),
+          // The root, so the cookie's path is `/`; Playwright takes a url or a
+          // path, not both
+          url: new URL('/', url).href,
+          httpOnly: true,
+          sameSite: 'Lax'
+        }
+      ]
+    : [];
+
+/** What the first page answered with, read by `assertPastGate` */
+export type GateSignals = {
+  /** The `x-robots-tag` response header, if any */
+  robotsTag: string | null;
+  /** Whether the page has the gate's password field */
+  gateField: boolean;
+};
+
+/**
+ * The reason to stop when the gate page answered instead of the site, or `null`.
+ *
+ * Both signals are required: the proxy's `noindex` header and the gate's
+ * password field. A future noindex page, or a page that mentions the gate,
+ * is not taken for it. The advice depends on whether a cookie was sent.
+ */
+export const gateProblem = (
+  signals: GateSignals,
+  cookieSent: boolean
+): string | null => {
+  if (!signals.robotsTag?.toLowerCase().includes('noindex')) return null;
+  if (!signals.gateField) return null;
+  return cookieSent
+    ? "The gate page answered although a gate cookie was sent: the --gate-password does not match this site's SITE_GATE_PASSWORD, or the site answers from another host than --url (the cookie is scoped to it). Pass the production value, in single quotes; zsh rewrites $ and ! in an unquoted one."
+    : "The gate page answered: the site is gated. Pass --gate-password with the site's SITE_GATE_PASSWORD, in single quotes.";
+};
 
 /** `localhost:3000` as a folder name */
 export const hostFolder = (url: string): string =>

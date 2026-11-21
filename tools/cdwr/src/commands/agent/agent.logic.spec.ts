@@ -1,37 +1,80 @@
 import {
+  ENV_COPIES,
+  KEYCHAIN_CLIENT_ID_SERVICE,
+  KEYCHAIN_CLIENT_SECRET_SERVICE,
   KEYCHAIN_SERVICE,
   LABEL,
+  LINEAR_CLIENT_ID_ENV,
+  LINEAR_CLIENT_SECRET_ENV,
+  LINEAR_KEY_ENV,
   QUEUE_FILES,
   QUEUE_SOURCE_DIR,
   type QueueView,
   STALE_LOCK_MS,
+  STALE_WATCH_MS,
+  attendedLinearServer,
+  attendedLinearServerCurrent,
+  devlogSettings,
   domainTarget,
   drift,
+  envCopiesFor,
+  envWithheldFor,
   filesDrift,
+  formatBlocked,
+  formatDeployHold,
+  formatGaps,
   formatHeld,
   formatImplement,
   formatNext,
   formatParked,
+  formatRefused,
+  formatRenovate,
   formatTable,
+  formatWatchSource,
   formatWatching,
+  hostKind,
+  implementBudget,
   implementCap,
+  implementCapSource,
+  installWork,
+  installedEnv,
   lastImplementRun,
   lastSchedulerLine,
   latestRunLog,
   launchPath,
+  limitedUntil,
+  linearAuthSource,
+  linearCredentialFiles,
+  linearServerState,
   lockState,
+  memoryDir,
   nodeMajor,
   parseAttended,
   parseCheck,
+  parseDevlog,
   parseLaunchctlPrint,
+  parseLinear,
+  parseLoopPid,
   parseNotifyLevel,
   parseQueueView,
+  parseReview,
+  parseSuggest,
+  parseWatchSource,
   parseWatchState,
   plistPath,
+  queueLimit,
   queuePaths,
+  remoteCdwr,
+  remoteListLogs,
+  remoteLogFile,
+  remoteReadLog,
   renderPlist,
+  reviewSettings,
+  schedulerHere,
   serviceTarget,
   spendForDay,
+  suggestSettings,
+  summarizeSchedulerLine,
   tailLines
 } from './agent.logic';
 
@@ -103,15 +146,208 @@ describe('constants', () => {
   it('names the job, the keychain item and the queue files', () => {
     expect(LABEL).toBe('se.codeware.agent-queue');
     expect(KEYCHAIN_SERVICE).toBe('linear-agent-queue');
+    expect(KEYCHAIN_CLIENT_ID_SERVICE).toBe('linear-agent-queue-client-id');
+    expect(KEYCHAIN_CLIENT_SECRET_SERVICE).toBe(
+      'linear-agent-queue-client-secret'
+    );
+    expect(LINEAR_KEY_ENV).toBe('AGENT_QUEUE_LINEAR_KEY');
+    expect(LINEAR_CLIENT_ID_ENV).toBe('AGENT_QUEUE_LINEAR_CLIENT_ID');
+    expect(LINEAR_CLIENT_SECRET_ENV).toBe('AGENT_QUEUE_LINEAR_CLIENT_SECRET');
     expect(QUEUE_SOURCE_DIR).toBe('tools/cdwr/agent-queue');
     expect(QUEUE_FILES).toEqual([
       'run.sh',
       'implement.sh',
       'github-app.sh',
+      'checkin.sh',
       'lib.sh',
       'waits.sh',
-      'watch.jq'
+      'watch.jq',
+      'notify.sh',
+      'telemetry.sh',
+      'deploy-gate.sh',
+      'linear-tools.txt',
+      'hold-paths.txt'
     ]);
+  });
+});
+
+describe('envCopiesFor', () => {
+  it('copies both env files to an attended worktree', () => {
+    expect(envCopiesFor({})).toEqual(ENV_COPIES);
+    expect(envCopiesFor({ AGENT_QUEUE_SESSION_KIND: 'attended' })).toEqual(
+      ENV_COPIES
+    );
+  });
+
+  // The cdwr env holds the Supabase service key in the container (COD-657)
+  it('leaves tools/cdwr/.env out of an implement session worktree', () => {
+    expect(envCopiesFor({ AGENT_QUEUE_SESSION_KIND: 'implement' })).toEqual([
+      'apps/cms/.env.local'
+    ]);
+  });
+
+  // A worktree reused from an attended session loses its copy
+  it('withholds the cdwr env from an implement session only', () => {
+    expect(envWithheldFor({ AGENT_QUEUE_SESSION_KIND: 'implement' })).toEqual([
+      'tools/cdwr/.env'
+    ]);
+    expect(envWithheldFor({})).toEqual([]);
+  });
+});
+
+describe('linearAuthSource', () => {
+  const app = {
+    AGENT_QUEUE_LINEAR_CLIENT_ID: 'id',
+    AGENT_QUEUE_LINEAR_CLIENT_SECRET: 'secret'
+  };
+  it.each([
+    ['container', app, 'app-env'],
+    ['container', { ...app, AGENT_QUEUE_LINEAR_KEY: 'k' }, 'app-env'],
+    ['container', { AGENT_QUEUE_LINEAR_CLIENT_ID: 'id' }, 'none'],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_CLIENT_ID: 'id', AGENT_QUEUE_LINEAR_KEY: 'k' },
+      'key-env'
+    ],
+    ['container', { AGENT_QUEUE_LINEAR_KEY: 'k' }, 'key-env'],
+    ['container', { AGENT_QUEUE_LINEAR_KEY: '' }, 'none'],
+    ['container', {}, 'none'],
+    ['launchd', {}, 'keychain-possible'],
+    ['launchd', { ...app, AGENT_QUEUE_LINEAR_KEY: 'k' }, 'keychain-possible'],
+    [null, app, 'none']
+  ] as const)('%s with %j -> %s', (host, env, expected) => {
+    expect(linearAuthSource(host, env)).toBe(expected);
+  });
+
+  it.each([
+    ['container', app, { app: true, key: true }, 'app-env'],
+    ['container', {}, { app: true, key: true }, 'app-file'],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_CLIENT_ID: 'id' },
+      { app: true, key: false },
+      'app-file'
+    ],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_KEY: 'k' },
+      { app: true, key: false },
+      'app-file'
+    ],
+    [
+      'container',
+      { AGENT_QUEUE_LINEAR_KEY: 'k' },
+      { app: false, key: true },
+      'key-env'
+    ],
+    ['container', {}, { app: false, key: true }, 'key-file'],
+    ['container', {}, { app: false, key: false }, 'none'],
+    ['launchd', {}, { app: true, key: true }, 'keychain-possible'],
+    [null, {}, { app: true, key: true }, 'none']
+  ] as const)('%s with %j and files %j -> %s', (host, env, files, expected) => {
+    expect(linearAuthSource(host, env, files)).toBe(expected);
+  });
+});
+
+describe('linearCredentialFiles', () => {
+  it('falls back on the container paths', () => {
+    expect(linearCredentialFiles({})).toEqual({
+      app: '/run/agent/linear-app.env',
+      key: '/run/agent/linear.key'
+    });
+  });
+
+  it('takes the paths from the env', () => {
+    expect(
+      linearCredentialFiles({
+        AGENT_QUEUE_LINEAR_APP_FILE: '/a/app.env',
+        AGENT_QUEUE_LINEAR_KEY_FILE: '/a/key'
+      })
+    ).toEqual({ app: '/a/app.env', key: '/a/key' });
+  });
+
+  it('ignores empty values', () => {
+    expect(linearCredentialFiles({ AGENT_QUEUE_LINEAR_APP_FILE: '' }).app).toBe(
+      '/run/agent/linear-app.env'
+    );
+  });
+});
+
+describe('attendedLinearServer', () => {
+  it('signs Linear calls with the installed lib.sh', () => {
+    expect(attendedLinearServer('/h/.cdwr/agent-queue/lib.sh')).toEqual({
+      type: 'http',
+      url: 'https://mcp.linear.app/mcp',
+      headersHelper: 'zsh /h/.cdwr/agent-queue/lib.sh header'
+    });
+  });
+
+  it('quotes a path the shell would split, as lib.sh does', () => {
+    expect(attendedLinearServer('/Users/Me Too/lib.sh').headersHelper).toBe(
+      'zsh /Users/Me\\ Too/lib.sh header'
+    );
+  });
+});
+
+describe('attendedLinearServerCurrent', () => {
+  const lib = '/h/.cdwr/agent-queue/lib.sh';
+  it('is true when the server matches', () => {
+    expect(
+      attendedLinearServerCurrent(
+        { mcpServers: { agent_linear: attendedLinearServer(lib) } },
+        lib
+      )
+    ).toBe(true);
+  });
+  it.each([
+    ['null', null],
+    ['a string', 'x'],
+    ['no servers', {}],
+    ['another server', { mcpServers: { other: attendedLinearServer(lib) } }],
+    [
+      'another path',
+      { mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') } }
+    ],
+    [
+      'another url',
+      {
+        mcpServers: {
+          agent_linear: { ...attendedLinearServer(lib), url: 'https://x' }
+        }
+      }
+    ],
+    ['a null server', { mcpServers: { agent_linear: null } }]
+  ])('is false for %s', (_name, config) => {
+    expect(attendedLinearServerCurrent(config, lib)).toBe(false);
+  });
+});
+
+describe('linearServerState', () => {
+  const lib = '/h/.cdwr/agent-queue/lib.sh';
+  it.each([
+    ['current', { mcpServers: { agent_linear: attendedLinearServer(lib) } }],
+    [
+      'stale',
+      { mcpServers: { agent_linear: attendedLinearServer('/x/lib.sh') } }
+    ],
+    ['stale', { mcpServers: { agent_linear: null } }],
+    ['missing', { mcpServers: { other: attendedLinearServer(lib) } }],
+    ['missing', { mcpServers: null }],
+    ['missing', undefined]
+  ])('reads %s from %j', (expected, config) => {
+    expect(linearServerState(config, lib)).toBe(expected);
+  });
+});
+
+describe('hostKind', () => {
+  it.each([
+    ['darwin', {}, 'launchd'],
+    ['darwin', { AGENT_QUEUE_HOST: 'container' }, 'container'],
+    ['linux', { AGENT_QUEUE_HOST: 'container' }, 'container'],
+    ['linux', {}, null],
+    ['darwin', { AGENT_QUEUE_HOST: 'other' }, 'launchd']
+  ] as const)('%s with %j -> %s', (platform, env, expected) => {
+    expect(hostKind(platform, env)).toBe(expected);
   });
 });
 
@@ -124,16 +360,27 @@ describe('queuePaths', () => {
         'run.sh': '/h/.cdwr/agent-queue/run.sh',
         'implement.sh': '/h/.cdwr/agent-queue/implement.sh',
         'github-app.sh': '/h/.cdwr/agent-queue/github-app.sh',
+        'checkin.sh': '/h/.cdwr/agent-queue/checkin.sh',
         'lib.sh': '/h/.cdwr/agent-queue/lib.sh',
         'waits.sh': '/h/.cdwr/agent-queue/waits.sh',
-        'watch.jq': '/h/.cdwr/agent-queue/watch.jq'
+        'watch.jq': '/h/.cdwr/agent-queue/watch.jq',
+        'notify.sh': '/h/.cdwr/agent-queue/notify.sh',
+        'telemetry.sh': '/h/.cdwr/agent-queue/telemetry.sh',
+        'deploy-gate.sh': '/h/.cdwr/agent-queue/deploy-gate.sh',
+        'linear-tools.txt': '/h/.cdwr/agent-queue/linear-tools.txt',
+        'hold-paths.txt': '/h/.cdwr/agent-queue/hold-paths.txt'
       },
       watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
       notifyLevel: '/h/.cdwr/agent-queue/notify-level',
+      mirror: '/h/.cdwr/agent-queue/mirror',
       lock: '/h/.cdwr/agent-queue/lock',
       implementLock: '/h/.cdwr/agent-queue/implement.lock',
       implementSpend: '/h/.cdwr/agent-queue/implement-spend.jsonl',
+      limit: '/h/.cdwr/agent-queue/limit',
+      implementCap: '/h/.cdwr/agent-queue/implement-cap',
+      limitedUntil: '/h/.cdwr/agent-queue/limited-until.json',
+      loopPid: '/h/.cdwr/agent-queue/loop.pid',
       runs: '/h/.cdwr/agent-queue/runs.jsonl',
       logs: '/h/.cdwr/agent-queue/logs',
       schedulerLog: '/h/.cdwr/agent-queue/logs/scheduler.log',
@@ -179,7 +426,11 @@ describe('renderPlist', () => {
     script: '/h/.cdwr/agent-queue/run.sh',
     home: '/h/.cdwr/agent-queue',
     repo: '/w/codeware-agent',
-    path: '/opt/homebrew/bin:/usr/bin'
+    path: '/opt/homebrew/bin:/usr/bin',
+    memoryDir: '/h/.claude/projects/-w-dev/memory',
+    suggest: { budgetUsd: 5, hour: 6, days: 1 },
+    devlog: { budgetUsd: 5, days: 7 },
+    review: { budgetUsd: 5, days: 1 }
   };
 
   it('describes the job', () => {
@@ -192,6 +443,30 @@ describe('renderPlist', () => {
     expect(plist).toContain('<key>AbandonProcessGroup</key>\n  <true/>');
     expect(plist).toContain(
       '<key>AGENT_QUEUE_IMPLEMENT_CAP_USD</key>\n    <string>40</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_SUGGEST_BUDGET_USD</key>\n    <string>5</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_SUGGEST_HOUR</key>\n    <string>6</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_SUGGEST_DAYS</key>\n    <string>1</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_DEVLOG_BUDGET_USD</key>\n    <string>5</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_DEVLOG_DAYS</key>\n    <string>7</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_REVIEW_BUDGET_USD</key>\n    <string>5</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_REVIEW_DAYS</key>\n    <string>1</string>'
+    );
+    expect(plist).toContain(
+      '<key>AGENT_QUEUE_MEMORY_DIR</key>\n    <string>/h/.claude/projects/-w-dev/memory</string>'
     );
     expect(plist).toContain('<key>RunAtLoad</key>\n  <false/>');
     expect(plist).toContain(
@@ -219,7 +494,11 @@ describe('renderPlist', () => {
       script: '/a&b/run.sh',
       home: '/<h>',
       repo: '/"r"',
-      path: "/it's"
+      path: "/it's",
+      memoryDir: '/m',
+      suggest: { budgetUsd: 5, hour: 6, days: 1 },
+      devlog: { budgetUsd: 5, days: 7 },
+      review: { budgetUsd: 5, days: 1 }
     });
     expect(plist).toContain('/a&amp;b/run.sh');
     expect(plist).toContain('/&lt;h&gt;');
@@ -329,27 +608,48 @@ describe('filesDrift', () => {
     'run.sh': 'a',
     'implement.sh': 'i',
     'github-app.sh': 'g',
+    'checkin.sh': 'k',
     'lib.sh': 'c',
     'waits.sh': 'd',
-    'watch.jq': 'b'
+    'watch.jq': 'b',
+    'notify.sh': 'n',
+    'telemetry.sh': 't',
+    'deploy-gate.sh': 'q',
+    'linear-tools.txt': 'l',
+    'hold-paths.txt': 'h'
   };
 
   const all = {
     'run.sh': 'a',
     'implement.sh': 'i',
     'github-app.sh': 'g',
+    'checkin.sh': 'k',
     'lib.sh': 'c',
     'waits.sh': 'd',
-    'watch.jq': 'b'
+    'watch.jq': 'b',
+    'notify.sh': 'n',
+    'telemetry.sh': 't',
+    'deploy-gate.sh': 'q',
+    'linear-tools.txt': 'l',
+    'hold-paths.txt': 'h'
   };
 
   it.each([
     [all, 'current'],
+    [{ ...all, 'hold-paths.txt': undefined }, 'missing'],
+    [{ ...all, 'linear-tools.txt': undefined }, 'missing'],
+    [{ ...all, 'linear-tools.txt': 'x' }, 'stale'],
     [{ ...all, 'watch.jq': undefined }, 'missing'],
     [{ ...all, 'lib.sh': undefined }, 'missing'],
     [{ ...all, 'implement.sh': undefined }, 'missing'],
     [{ ...all, 'waits.sh': undefined }, 'missing'],
     [{ ...all, 'github-app.sh': undefined }, 'missing'],
+    [{ ...all, 'notify.sh': undefined }, 'missing'],
+    [{ ...all, 'telemetry.sh': undefined }, 'missing'],
+    [{ ...all, 'deploy-gate.sh': undefined }, 'missing'],
+    [{ ...all, 'deploy-gate.sh': 'x' }, 'stale'],
+    [{ ...all, 'notify.sh': 'x' }, 'stale'],
+    [{ ...all, 'telemetry.sh': 'x' }, 'stale'],
     [{ ...all, 'run.sh': undefined, 'watch.jq': 'x' }, 'missing'],
     [{ ...all, 'watch.jq': 'x' }, 'stale'],
     [{ ...all, 'implement.sh': 'x' }, 'stale'],
@@ -398,17 +698,103 @@ describe('parseWatchState', () => {
 });
 
 describe('formatWatching', () => {
-  it('lists ticket, PR and state', () => {
+  it('counts merged and lists open PRs', () => {
     expect(
       formatWatching([
-        { ticket: 'COD-524', pr: 570, state: 'merged' },
-        { ticket: 'COD-525', pr: 569, state: 'merged' }
+        { ticket: 'COD-524', pr: 570, state: 'open' },
+        { ticket: 'COD-525', pr: 569, state: 'open' },
+        { ticket: 'COD-526', pr: 568, state: 'merged' }
       ])
-    ).toBe('COD-524 #570 merged, COD-525 #569 merged');
+    ).toBe('3 PRs: 2 open (COD-524 #570, COD-525 #569), 1 merged');
+  });
+
+  it('lists every unfinished state with ticket and PR', () => {
+    expect(formatWatching([{ ticket: 'COD-9', pr: 4, state: 'failing' }])).toBe(
+      '1 PR: 1 failing (COD-9 #4)'
+    );
   });
 
   it('is empty for no entries', () => {
     expect(formatWatching([])).toBe('');
+  });
+});
+
+describe('summarizeSchedulerLine', () => {
+  it.each([
+    [
+      'watch: action COD-574 merged: hand-offs left: After deploy, run it',
+      'watch · action COD-574 merged: hand-offs left'
+    ],
+    [
+      'watch: action COD-524: PR #570 has failing checks',
+      'watch · action COD-524: PR #570 has failing checks'
+    ],
+    [
+      'watch: action COD-524: PR #570 left the merge queue (merge conflict)',
+      'watch · action COD-524: PR #570 left the merge queue (merge conflic…'
+    ],
+    [
+      'watch: info COD-524: PR #570 merged',
+      'watch · info COD-524: PR #570 merged'
+    ],
+    [
+      'implement: warn: could not settle the spend ledger',
+      'implement warn · could not settle the spend ledger'
+    ],
+    ['plan: COD-579 → /path/log', 'plan · COD-579 → /path/log'],
+    [
+      'attended: session polling · idle: waits on something',
+      'attended · session polling'
+    ],
+    [
+      'implement: fail: claude exited 1 (see /x.log)',
+      'implement fail · claude exited 1 (see /x.log)'
+    ],
+    ['implement: done: COD-579 ($2.10)', 'implement done · COD-579 ($2.10)'],
+    [
+      'implement: untried: COD-1 answered · x',
+      'implement untried · COD-1 answered: x'
+    ],
+    [
+      'plan: COD-579 COD-580 → /very/long/path/to/the/logs/2026-10-16_1200.log',
+      'plan · COD-579 COD-580 → /very/long/path/to/the/logs/2026-10-16_12…'
+    ],
+    [
+      'fail: SHA-256 mismatch for COD-579; not starting',
+      'fail · SHA-256 mismatch for COD-579; not starting'
+    ],
+    [
+      'warn: watch: could not read PR #570 (COD-524)',
+      'warn · watch · could not read PR #570 (COD-524)'
+    ],
+    [
+      'warn: watch: watch.jq failed on COD-524)',
+      'warn · watch · watch.jq failed on COD-524'
+    ],
+    [
+      'warn: watch: watch.jq failed on COD-627 (jq: error: merged_next/2 is not defined)',
+      'warn · watch · watch.jq failed on COD-627'
+    ],
+    [
+      'warn: watch failed (watch.jq failed (jq: error: prune/1 is not defined))',
+      'warn · watch failed'
+    ],
+    [
+      'warn: attended: watch.jq failed (jq: error: attended/4 is not defined)',
+      'warn · attended'
+    ],
+    [
+      'warn: attended: watch.jq failed (jq: error (at <stdin>:0): Cannot index array with "COD-12")',
+      'warn · attended'
+    ],
+    ['', '']
+  ])('%j -> %j', (message, expected) => {
+    expect(summarizeSchedulerLine(message)).toBe(expected);
+  });
+
+  it('cuts a long detail', () => {
+    const out = summarizeSchedulerLine(`note: ${'x'.repeat(100)}`);
+    expect(out).toBe(`note · ${'x'.repeat(59)}…`);
   });
 });
 
@@ -438,6 +824,8 @@ describe('parseAttended', () => {
     ['running: COD-545', 'running', 'COD-545'],
     ['run now: COD-543 answered', 'run', 'COD-543'],
     ['run now: COD-544 review feedback', 'run', 'COD-544'],
+    ['run now: COD-548 review feedback (Copilot review)', 'run', 'COD-548'],
+    ['run now: COD-9 merged comment', 'run', 'COD-9'],
     ['run now: COD-546 ready', 'run', 'COD-546'],
     ['run now: take over COD-540 (claim 3 h old)', 'run', 'COD-540'],
     ['run now: take over COD-540 (no claim)', 'run', 'COD-540'],
@@ -457,14 +845,205 @@ describe('parseAttended', () => {
   });
 });
 
+describe('parseLinear', () => {
+  it.each([
+    ['ok (key)', 'ok', 'ok, key mode'],
+    ['ok (connector)', 'ok', 'ok, connector mode'],
+    [
+      "missing (key: Linear's MCP answered 401)",
+      'missing',
+      "key: Linear's MCP answered 401"
+    ],
+    [
+      'missing (connector: the claude.ai Linear connector is not connected)',
+      'missing',
+      'connector: the claude.ai Linear connector is not connected'
+    ],
+    ['garbage', 'unknown', 'garbage'],
+    ['', 'unknown', '']
+  ])('%j -> %s', (line, kind, text) => {
+    expect(parseLinear(line)).toEqual({ kind, text });
+  });
+});
+
+describe('parseSuggest', () => {
+  it.each([
+    ['due (focus dx)', 'due', 'dx', undefined],
+    ['due (focus maintenance)', 'due', 'maintenance', undefined],
+    ['done today', 'done', undefined, undefined],
+    ['not before 06:00', 'early', undefined, undefined],
+    ['skipped, COD-580 is open', 'skipped', undefined, 'COD-580'],
+    ['off', 'off', undefined, undefined],
+    ['garbage', 'unknown', undefined, undefined],
+    ['', 'unknown', undefined, undefined]
+  ])('%j -> %s', (line, kind, focus, ticket) => {
+    const result = parseSuggest(line);
+    expect(result.kind).toBe(kind);
+    expect(result.focus).toBe(focus);
+    expect(result.ticket).toBe(ticket);
+    expect(result.text).toBe(line.trim());
+  });
+});
+
+describe('parseReview', () => {
+  it.each([
+    ['due', 'due'],
+    ['requested', 'requested'],
+    ['ran today', 'done'],
+    ['done, next in 1 day(s)', 'done'],
+    ['not before 06:00', 'early'],
+    ['off', 'off'],
+    ['garbage', 'unknown'],
+    ['', 'unknown']
+  ])('%j -> %s', (line, kind) => {
+    expect(parseReview(line)).toEqual({ kind, text: line.trim() });
+  });
+});
+
+describe('parseDevlog', () => {
+  it.each([
+    ['due', 'due'],
+    ['done, next in 6 day(s)', 'done'],
+    ['not before 06:00', 'early'],
+    ['off', 'off'],
+    ['garbage', 'unknown'],
+    ['', 'unknown']
+  ])('%j -> %s', (line, kind) => {
+    expect(parseDevlog(line)).toEqual({ kind, text: line.trim() });
+  });
+});
+
+describe('reviewSettings', () => {
+  it('defaults to $5 a day', () => {
+    expect(reviewSettings({})).toEqual({ budgetUsd: 5, days: 1 });
+  });
+
+  it('reads the environment, 0 days switching it off', () => {
+    expect(
+      reviewSettings({
+        AGENT_QUEUE_REVIEW_BUDGET_USD: '3',
+        AGENT_QUEUE_REVIEW_DAYS: '0'
+      })
+    ).toEqual({ budgetUsd: 3, days: 0 });
+  });
+
+  it('rejects a bad value', () => {
+    expect(() => reviewSettings({ AGENT_QUEUE_REVIEW_DAYS: 'daily' })).toThrow(
+      'AGENT_QUEUE_REVIEW_DAYS'
+    );
+  });
+});
+
+describe('devlogSettings', () => {
+  it('defaults without the environment', () => {
+    expect(devlogSettings({})).toEqual({ budgetUsd: 5, days: 7 });
+  });
+
+  it('takes the environment, 0 days switching it off', () => {
+    expect(
+      devlogSettings({
+        AGENT_QUEUE_DEVLOG_BUDGET_USD: '3',
+        AGENT_QUEUE_DEVLOG_DAYS: '0'
+      })
+    ).toEqual({ budgetUsd: 3, days: 0 });
+  });
+
+  it('names the variable that is not a non-negative integer', () => {
+    expect(() => devlogSettings({ AGENT_QUEUE_DEVLOG_DAYS: 'weekly' })).toThrow(
+      'AGENT_QUEUE_DEVLOG_DAYS'
+    );
+    expect(() =>
+      devlogSettings({ AGENT_QUEUE_DEVLOG_BUDGET_USD: '-1' })
+    ).toThrow('AGENT_QUEUE_DEVLOG_BUDGET_USD');
+  });
+});
+
+describe('suggestSettings', () => {
+  it('defaults without the environment', () => {
+    expect(suggestSettings({})).toEqual({ budgetUsd: 5, hour: 6, days: 1 });
+  });
+
+  it('takes the environment, 0 days switching it off', () => {
+    expect(
+      suggestSettings({
+        AGENT_QUEUE_SUGGEST_BUDGET_USD: '3',
+        AGENT_QUEUE_SUGGEST_HOUR: '7',
+        AGENT_QUEUE_SUGGEST_DAYS: '0'
+      })
+    ).toEqual({ budgetUsd: 3, hour: 7, days: 0 });
+  });
+
+  it('names the variable that is not a non-negative integer', () => {
+    expect(() =>
+      suggestSettings({ AGENT_QUEUE_SUGGEST_DAYS: 'weekly' })
+    ).toThrow('AGENT_QUEUE_SUGGEST_DAYS');
+    expect(() => suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '-1' })).toThrow(
+      'AGENT_QUEUE_SUGGEST_HOUR'
+    );
+  });
+
+  it('keeps the hour within a day', () => {
+    expect(() => suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '24' })).toThrow(
+      'AGENT_QUEUE_SUGGEST_HOUR'
+    );
+    expect(suggestSettings({ AGENT_QUEUE_SUGGEST_HOUR: '23' }).hour).toBe(23);
+  });
+});
+
+describe('installedEnv', () => {
+  it('reads the suggest values and the memory directory the plist carries', () => {
+    const plist = renderPlist({
+      script: '/h/.cdwr/agent-queue/run.sh',
+      home: '/h/.cdwr/agent-queue',
+      repo: '/w/codeware-agent',
+      path: '/opt/homebrew/bin:/usr/bin',
+      memoryDir: '/h/.claude/projects/-w-dev/memory',
+      suggest: { budgetUsd: 3, hour: 7, days: 0 },
+      devlog: { budgetUsd: 5, days: 7 },
+      review: { budgetUsd: 5, days: 1 }
+    });
+    expect(installedEnv(plist)).toMatchObject({
+      AGENT_QUEUE_SUGGEST_BUDGET_USD: '3',
+      AGENT_QUEUE_SUGGEST_HOUR: '7',
+      AGENT_QUEUE_SUGGEST_DAYS: '0',
+      AGENT_QUEUE_MEMORY_DIR: '/h/.claude/projects/-w-dev/memory'
+    });
+    expect(Object.keys(installedEnv(plist))).not.toContain('PATH');
+  });
+
+  it('is empty for no plist', () => {
+    expect(installedEnv('')).toEqual({});
+  });
+});
+
+describe('memoryDir', () => {
+  it('names the project directory after the repo path', () => {
+    expect(memoryDir('/Users/h', '/Users/h/Work/gh-repos/codeware-dev')).toBe(
+      '/Users/h/.claude/projects/-Users-h-Work-gh-repos-codeware-dev/memory'
+    );
+  });
+
+  it('replaces every character that is not a letter or digit', () => {
+    expect(memoryDir('/Users/h', '/Users/h/Work/my.repo_x')).toBe(
+      '/Users/h/.claude/projects/-Users-h-Work-my-repo-x/memory'
+    );
+  });
+});
+
 const EMPTY_VIEW: QueueView = {
   at: '2026-10-11T17:04:38Z',
   limit: { used: 0, max: 5 },
   session: null,
   next: [],
   held: { tickets: [], free: [] },
+  blocked: [],
+  refused: [],
+  deployHold: [],
   parked: [],
-  table: { before: [], after: [] }
+  renovate: [],
+  audit: [],
+  tree: [],
+  table: { before: [], after: [], label: [] }
 };
 
 const FILLED_VIEW: QueueView = {
@@ -488,6 +1067,15 @@ const FILLED_VIEW: QueueView = {
       { action: 'limit', value: 3 }
     ]
   },
+  blocked: [
+    { ticket: 'COD-702', blockers: ['COD-701'] },
+    { ticket: 'COD-710', blockers: ['COD-703', 'COD-704'] }
+  ],
+  refused: [
+    { ticket: 'COD-11', reason: 'agent:ready set by the app' },
+    { ticket: 'COD-12', reason: 'agent:ready set by the app' }
+  ],
+  deployHold: ['COD-13', 'COD-14'],
   parked: [
     {
       ticket: 'COD-6',
@@ -506,6 +1094,15 @@ const FILLED_VIEW: QueueView = {
       outcome: null
     }
   ],
+  renovate: [
+    {
+      pr: 662,
+      title: 'Update dependency zod',
+      state: 'tended',
+      ticket: 'COD-740'
+    },
+    { pr: 754, title: 'Update dependency vite', state: 'failing', ticket: null }
+  ],
   table: {
     before: [
       { ticket: 'COD-4', kind: 'plan' },
@@ -514,6 +1111,10 @@ const FILLED_VIEW: QueueView = {
     after: [
       { ticket: 'COD-3', kind: 'pr', pr: 7 },
       { ticket: 'COD-2', kind: 'handoffs', items: ['a', 'b'] }
+    ],
+    label: [
+      { ticket: 'COD-8', parent: 'COD-100', blockers: ['COD-3'] },
+      { ticket: 'COD-9', parent: 'COD-100', blockers: ['COD-2', 'COD-3'] }
     ]
   }
 };
@@ -524,9 +1125,73 @@ describe('parseQueueView', () => {
     expect(parseQueueView(JSON.stringify(EMPTY_VIEW))).toEqual(EMPTY_VIEW);
   });
 
+  it('reads the merge checks and plan approved reasons', () => {
+    const next = [
+      { ticket: 'COD-5', reason: 'merge checks', detail: '2 left' },
+      { ticket: 'COD-6', reason: 'plan approved', detail: null }
+    ];
+    expect(
+      parseQueueView(JSON.stringify({ ...EMPTY_VIEW, next }))?.next
+    ).toEqual(next);
+  });
+
   it('reads a view from before parked existed', () => {
     const { parked: _parked, ...old } = EMPTY_VIEW;
     expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before refused existed', () => {
+    const { refused: _refused, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before deployHold existed', () => {
+    const { deployHold: _deployHold, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads a view from before renovate existed', () => {
+    const { renovate: _renovate, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads renovate next items and PR held entries', () => {
+    const view = parseQueueView(
+      JSON.stringify({
+        ...EMPTY_VIEW,
+        next: [{ ticket: 'PR 754', reason: 'renovate', detail: 'failing' }],
+        held: { tickets: ['PR 754'], free: [] }
+      })
+    );
+    expect(formatNext(view!)).toBe('PR 754 renovate (failing)');
+    expect(formatHeld(view!)).toBe('PR 754');
+  });
+
+  it('reads a view from before label existed', () => {
+    const { label: _label, ...table } = EMPTY_VIEW.table;
+    expect(parseQueueView(JSON.stringify({ ...EMPTY_VIEW, table }))).toEqual(
+      EMPTY_VIEW
+    );
+  });
+
+  // The desk keeps the rest of the view too; one bad entry must not cost the status its queue
+  it('drops a malformed label entry alone and keeps a null parent', () => {
+    const view = parseQueueView(
+      JSON.stringify({
+        ...EMPTY_VIEW,
+        table: {
+          ...EMPTY_VIEW.table,
+          label: [
+            { ticket: 'COD-8', parent: null, blockers: ['COD-3'] },
+            { ticket: 42 }
+          ]
+        }
+      })
+    );
+    expect(view?.table.label).toEqual([
+      { ticket: 'COD-8', parent: null, blockers: ['COD-3'] }
+    ]);
+    expect(formatTable(view!)).toBe('label: COD-8');
   });
 
   it('is undefined for malformed JSON', () => {
@@ -590,6 +1255,97 @@ describe('formatHeld', () => {
   });
 });
 
+describe('formatBlocked', () => {
+  it('names each ticket and the blockers it waits on', () => {
+    expect(formatBlocked(FILLED_VIEW)).toBe(
+      'COD-702 after COD-701; COD-710 after COD-703, COD-704'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatBlocked(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('audit and tree in the queue view', () => {
+  const gap = {
+    id: 'COD-5:label-on-closed',
+    ticket: 'COD-5',
+    kind: 'label-on-closed',
+    what: 'COD-5 is Done but still agent:ready',
+    fix: 'Remove the label'
+  };
+  const leaf = {
+    ticket: 'COD-5',
+    title: 'T',
+    state: 'completed',
+    label: 'agent:ready',
+    pr: null,
+    blockers: [],
+    gaps: ['label-on-closed']
+  };
+
+  it('reads a view without them as empty', () => {
+    const { audit: _a, tree: _t, ...old } = EMPTY_VIEW;
+    expect(parseQueueView(JSON.stringify(old))).toEqual(EMPTY_VIEW);
+  });
+
+  it('reads the audit and the tree', () => {
+    const tree = [{ ...leaf, children: [{ ...leaf, children: [] }] }];
+    const view = parseQueueView(
+      JSON.stringify({ ...EMPTY_VIEW, audit: [gap], tree })
+    );
+    expect(view?.audit).toEqual([gap]);
+    expect(view?.tree).toEqual(tree);
+  });
+
+  it('drops a malformed entry alone', () => {
+    const view = parseQueueView(
+      JSON.stringify({ ...EMPTY_VIEW, audit: [gap, { id: 1 }], tree: ['x'] })
+    );
+    expect(view?.audit).toEqual([gap]);
+    expect(view?.tree).toEqual([]);
+  });
+
+  it('formats one line per gap, nothing when empty', () => {
+    expect(formatGaps({ ...EMPTY_VIEW, audit: [gap] })).toEqual([
+      'COD-5 label-on-closed: COD-5 is Done but still agent:ready. Remove the label'
+    ]);
+    expect(formatGaps(EMPTY_VIEW)).toEqual([]);
+  });
+
+  it('leaves candidate gaps out of the Gaps lines', () => {
+    expect(
+      formatGaps({
+        ...EMPTY_VIEW,
+        audit: [{ ...gap, id: 'COD-6:untouched', candidate: true }, gap]
+      })
+    ).toHaveLength(1);
+  });
+});
+
+describe('formatRefused', () => {
+  it('names each ticket with its reason', () => {
+    expect(formatRefused(FILLED_VIEW)).toBe(
+      'COD-11 (agent:ready set by the app), COD-12 (agent:ready set by the app)'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatRefused(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
+describe('formatDeployHold', () => {
+  it('names each ticket', () => {
+    expect(formatDeployHold(FILLED_VIEW)).toBe('COD-13, COD-14');
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatDeployHold(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
 describe('formatParked', () => {
   it('lists the waits, marking resolved ones', () => {
     expect(formatParked(FILLED_VIEW)).toBe(
@@ -602,18 +1358,47 @@ describe('formatParked', () => {
   });
 });
 
+describe('formatRenovate', () => {
+  it('names each PR with its state, title and tender', () => {
+    expect(formatRenovate(FILLED_VIEW)).toBe(
+      'PR #662 tended by COD-740 · Update dependency zod; PR #754 failing · Update dependency vite'
+    );
+  });
+
+  it('says nothing when empty', () => {
+    expect(formatRenovate(EMPTY_VIEW)).toBe('nothing');
+  });
+});
+
 describe('formatTable', () => {
   it('lists what waits before and after', () => {
     expect(formatTable(FILLED_VIEW)).toBe(
-      'before: COD-4 plan, COD-5 question · after: COD-3 PR #7, COD-2 hand-offs (2)'
+      'before: COD-4 plan, COD-5 question · after: COD-3 PR #7, COD-2 hand-offs (2) · label: COD-8 (COD-100), COD-9 (COD-100)'
     );
+  });
+
+  it('lists only the sub-issues to label', () => {
+    expect(
+      formatTable({
+        ...EMPTY_VIEW,
+        table: {
+          before: [],
+          after: [],
+          label: [{ ticket: 'COD-8', parent: 'COD-100', blockers: ['COD-3'] }]
+        }
+      })
+    ).toBe('label: COD-8 (COD-100)');
   });
 
   it('leaves out an empty side', () => {
     expect(
       formatTable({
         ...EMPTY_VIEW,
-        table: { before: [{ ticket: 'COD-4', kind: 'plan' }], after: [] }
+        table: {
+          before: [{ ticket: 'COD-4', kind: 'plan' }],
+          after: [],
+          label: []
+        }
       })
     ).toBe('before: COD-4 plan');
   });
@@ -641,6 +1426,20 @@ describe('implement spend', () => {
     expect(spendForDay(ledger, '2026-10-11')).toBeCloseTo(1.5);
   });
 
+  // COD-681's session reserved before midnight and settled after it
+  it('reads a settle that crossed midnight as 0 on its own day', () => {
+    const ledger = [row('2026-10-31', 15), row('2026-11-01', -9.1666)].join(
+      '\n'
+    );
+    expect(spendForDay(ledger, '2026-10-31')).toBe(15);
+    expect(spendForDay(ledger, '2026-11-01')).toBe(0);
+  });
+
+  it('reads a day that sums below zero as 0, not unreadable', () => {
+    const ledger = [row('2026-10-11', 2), row('2026-10-11', -5)].join('\n');
+    expect(spendForDay(ledger, '2026-10-11')).toBe(0);
+  });
+
   it('is zero for a missing or empty ledger', () => {
     expect(spendForDay(undefined, '2026-10-11')).toBe(0);
     expect(spendForDay('', '2026-10-11')).toBe(0);
@@ -666,6 +1465,62 @@ describe('implement spend', () => {
     ['25', 25]
   ])('cap %j is %i', (value, expected) => {
     expect(implementCap(value)).toBe(expected);
+  });
+
+  it.each([
+    [undefined, '0', 0, 'file'],
+    [undefined, '25\n', 25, 'file'],
+    ['10', '25', 25, 'file'],
+    ['10', 'x', 10, 'env'],
+    ['10', '-1', 10, 'env'],
+    ['10', '1e2', 10, 'env'],
+    ['10', '0x10', 10, 'env'],
+    ['10', '', 10, 'env'],
+    ['0', '', 40, 'default'],
+    ['0', 'x', 40, 'default'],
+    [undefined, undefined, 40, 'default']
+  ])(
+    'cap with env %j and file %j is %i from %s',
+    (env, file, expected, source) => {
+      expect(implementCap(env, file)).toBe(expected);
+      expect(implementCapSource(env, file)).toEqual({
+        cap: expected,
+        source
+      });
+    }
+  );
+
+  it.each([
+    [undefined, 5, 'default'],
+    ['', 5, 'default'],
+    ['3\n', 3, 'file'],
+    ['1', 1, 'file'],
+    ['20', 20, 'file'],
+    ['0', 5, 'default'],
+    ['21', 5, 'default'],
+    ['2.5', 5, 'default'],
+    ['-3', 5, 'default'],
+    ['x', 5, 'default']
+  ])('limit file %j is %i from %s', (file, value, source) => {
+    expect(queueLimit(file)).toEqual({ value, source });
+  });
+
+  it('marks where the cap came from', () => {
+    expect(formatImplement(1, 25, undefined, 15, 'file')).toBe(
+      'implement spend today $1.00 of $25 (desk), no implementing session yet'
+    );
+    expect(formatImplement(1, 30, undefined, 15, 'env')).toBe(
+      'implement spend today $1.00 of $30 (env), no implementing session yet'
+    );
+  });
+
+  it.each([
+    [undefined, 15],
+    ['0', 15],
+    ['abc', 15],
+    ['20', 20]
+  ])('budget %j is %i', (value, expected) => {
+    expect(implementBudget(value)).toBe(expected);
   });
 
   it('reads the last implementing row', () => {
@@ -698,6 +1553,36 @@ describe('implement spend', () => {
     );
   });
 
+  it.each([
+    [39.99, ''],
+    [40, ' (over; a run may overshoot by its $15 budget)'],
+    [44.76, ' (over; a run may overshoot by its $15 budget)']
+  ])('marks spend %s against the cap', (spent, over) => {
+    expect(formatImplement(spent, 40, undefined, 15)).toBe(
+      `implement spend today $${spent.toFixed(2)} of $40${over}, no implementing session yet`
+    );
+  });
+
+  it('counts limited as an implementing outcome and shows the hold', () => {
+    const until = Date.UTC(2026, 10, 15, 7, 10) / 1000;
+    expect(
+      lastImplementRun('{"when":"a","outcome":"limited","ticket":"COD-9"}')
+    ).toEqual({ when: 'a', outcome: 'limited', ticket: 'COD-9' });
+    expect(formatImplement(0, 40, undefined, 15, 'default', until)).toBe(
+      'held by the session limit until 07:10 UTC, implement spend today $0.00 of $40, no implementing session yet'
+    );
+  });
+
+  it.each([
+    ['{"until":2000,"text":"x","at":"y"}', 1000, 2000],
+    ['{"until":2000}', 2000, undefined],
+    ['{"until":"2000"}', 1000, undefined],
+    ['not json', 1000, undefined],
+    [undefined, 1000, undefined]
+  ])('limited-until %j at %i is %j', (text, now, expected) => {
+    expect(limitedUntil(text, now)).toBe(expected);
+  });
+
   it('warns when the ledger is unreadable', () => {
     expect(formatImplement(undefined, 40, undefined)).toBe(
       'implement spend unreadable: implement-spend.jsonl has a bad line; no launch until it is fixed'
@@ -709,7 +1594,11 @@ describe('implement spend', () => {
       script: '/h/run.sh',
       home: '/h',
       repo: '/r',
-      path: '/a&b/bin:/usr/bin'
+      path: '/a&b/bin:/usr/bin',
+      memoryDir: '/m',
+      suggest: { budgetUsd: 5, hour: 6, days: 1 },
+      devlog: { budgetUsd: 5, days: 7 },
+      review: { budgetUsd: 5, days: 1 }
     });
     expect(plistPath(plist)).toBe('/a&b/bin:/usr/bin');
   });
@@ -731,5 +1620,279 @@ describe('implement spend', () => {
     ['nope', undefined]
   ])('reads node major from %j', (text, expected) => {
     expect(nodeMajor(text)).toBe(expected);
+  });
+});
+
+describe('remote logs', () => {
+  it('lists the container log folder over ssh, one argv entry per word', () => {
+    expect(remoteListLogs('agent-host')).toEqual([
+      'agent-host',
+      'docker',
+      'exec',
+      'cdwr-agent',
+      'ls',
+      '-1',
+      '/home/agent/.cdwr/agent-queue/logs'
+    ]);
+  });
+
+  it('picks the scheduler log, or the newest run log', () => {
+    const names = [
+      '2026-10-18_0900.log',
+      '2026-10-19_0810.log',
+      'scheduler.log'
+    ];
+    expect(remoteLogFile(false, names)).toBe(
+      '/home/agent/.cdwr/agent-queue/logs/scheduler.log'
+    );
+    expect(remoteLogFile(true, names)).toBe(
+      '/home/agent/.cdwr/agent-queue/logs/2026-10-19_0810.log'
+    );
+    expect(remoteLogFile(true, ['scheduler.log'])).toBeUndefined();
+  });
+
+  it('tails, or cats for 0 lines', () => {
+    const file = '/f.log';
+    expect(remoteReadLog('h', file, 25).slice(4)).toEqual([
+      'tail',
+      '-n',
+      '25',
+      file
+    ]);
+    expect(remoteReadLog('h', file, 0).slice(4)).toEqual(['cat', file]);
+  });
+});
+
+describe('remoteCdwr', () => {
+  it('runs cdwr in the container checkout through secrets.sh, one argv entry per word', () => {
+    expect(remoteCdwr('agent-host', ['agent', 'notify', 'action'])).toEqual([
+      'agent-host',
+      'docker',
+      'exec',
+      '-w',
+      '/work/codeware-agent',
+      'cdwr-agent',
+      '/opt/agent-host/secrets.sh',
+      'node',
+      'tools/cdwr/bin/cdwr.mjs',
+      'agent',
+      'notify',
+      'action'
+    ]);
+  });
+});
+
+describe('remoteCdwr with ghToken', () => {
+  it('runs the wrapper right after secrets.sh', () => {
+    expect(
+      remoteCdwr('agent-host', ['agent', 'worktree', 'prune'], {
+        ghToken: true
+      }).slice(6, 10)
+    ).toEqual([
+      '/opt/agent-host/secrets.sh',
+      '/opt/agent-host/with-gh-token.sh',
+      'node',
+      'tools/cdwr/bin/cdwr.mjs'
+    ]);
+  });
+});
+
+describe('parseLoopPid', () => {
+  it.each([
+    ['123\n', 123],
+    ['1', 1],
+    ['', undefined],
+    [undefined, undefined],
+    ['abc', undefined],
+    ['-5', undefined],
+    ['0', undefined],
+    ['1.5', undefined]
+  ])('reads %j as %s', (text, expected) => {
+    expect(parseLoopPid(text)).toBe(expected);
+  });
+});
+
+describe('schedulerHere', () => {
+  it.each([
+    ['container', false, false, true],
+    ['launchd', true, false, true],
+    ['launchd', false, true, true],
+    ['launchd', false, false, false]
+  ] as const)(
+    '%s loaded=%s plist=%s -> %s',
+    (host, loaded, plist, expected) => {
+      expect(schedulerHere(host, { loaded }, plist)).toBe(expected);
+    }
+  );
+});
+
+describe('installWork', () => {
+  const fresh = {
+    schedulerHere: false,
+    schedulerFlag: false,
+    scripts: 'missing' as const,
+    appCredentials: false,
+    linearServerCurrent: false,
+    scheduler: {
+      worktreeExists: false,
+      envCopies: ['tools/cdwr/.env'],
+      depsInstalled: false,
+      plistCurrent: false,
+      jobLoaded: false,
+      jobScriptCurrent: false
+    }
+  };
+  const current = {
+    ...fresh,
+    scripts: 'current' as const,
+    appCredentials: true,
+    linearServerCurrent: true,
+    scheduler: {
+      worktreeExists: true,
+      envCopies: [],
+      depsInstalled: true,
+      plistCurrent: true,
+      jobLoaded: true,
+      jobScriptCurrent: true
+    }
+  };
+
+  it('sets up only the attended side by default', () => {
+    expect(installWork(fresh)).toEqual({
+      scheduler: false,
+      worktree: false,
+      envCopies: [],
+      deps: false,
+      script: true,
+      plist: false,
+      reload: false,
+      credentials: true,
+      mcp: true
+    });
+  });
+
+  it('adds the scheduler with the flag', () => {
+    expect(installWork({ ...fresh, schedulerFlag: true })).toEqual({
+      scheduler: true,
+      worktree: true,
+      envCopies: ['tools/cdwr/.env'],
+      deps: true,
+      script: true,
+      plist: true,
+      reload: true,
+      credentials: true,
+      mcp: true
+    });
+  });
+
+  it('keeps a job already here current without the flag', () => {
+    const work = installWork({
+      ...current,
+      schedulerHere: true,
+      scripts: 'stale',
+      scheduler: { ...current.scheduler, plistCurrent: false }
+    });
+    expect(work).toMatchObject({
+      scheduler: true,
+      script: true,
+      plist: true,
+      reload: true
+    });
+  });
+
+  it('reloads a job that runs another script', () => {
+    expect(
+      installWork({
+        ...current,
+        schedulerHere: true,
+        scheduler: { ...current.scheduler, jobScriptCurrent: false }
+      })
+    ).toMatchObject({ plist: false, reload: true });
+  });
+
+  it('refreshes stale copies on an attended Mac, nothing else', () => {
+    expect(installWork({ ...current, scripts: 'stale' })).toEqual({
+      scheduler: false,
+      worktree: false,
+      envCopies: [],
+      deps: false,
+      script: true,
+      plist: false,
+      reload: false,
+      credentials: false,
+      mcp: false
+    });
+  });
+
+  it.each([false, true])(
+    'has nothing to do when current (scheduler %s)',
+    (here) => {
+      expect(installWork({ ...current, schedulerHere: here })).toEqual({
+        scheduler: here,
+        worktree: false,
+        envCopies: [],
+        deps: false,
+        script: false,
+        plist: false,
+        reload: false,
+        credentials: false,
+        mcp: false
+      });
+    }
+  );
+});
+
+describe('parseWatchSource', () => {
+  const now = new Date('2026-11-05T00:12:00Z');
+
+  it('reads the four kinds', () => {
+    expect(parseWatchSource('local', now)).toEqual({ kind: 'local' });
+    expect(parseWatchSource('local, remote unreadable', now)).toEqual({
+      kind: 'fallback'
+    });
+    expect(parseWatchSource('nuc · 2026-11-05T00:00:00Z', now)).toEqual({
+      kind: 'remote',
+      host: 'nuc',
+      at: '2026-11-05T00:00:00Z',
+      ageMs: 12 * 60_000
+    });
+    expect(parseWatchSource('something else', now)).toEqual({
+      kind: 'unknown'
+    });
+    expect(parseWatchSource('nuc · not a date', now)).toEqual({
+      kind: 'unknown'
+    });
+  });
+
+  it('never gives a negative age', () => {
+    expect(parseWatchSource('nuc · 2026-11-06T00:00:00Z', now)).toMatchObject({
+      ageMs: 0
+    });
+  });
+
+  it('keeps the stale limit at two hours', () => {
+    expect(STALE_WATCH_MS).toBe(7_200_000);
+  });
+});
+
+describe('formatWatchSource', () => {
+  const remote = (ageMs: number) =>
+    formatWatchSource({ kind: 'remote', host: 'nuc', at: '', ageMs });
+
+  it.each([
+    [0, 'nuc, just now'],
+    [12 * 60_000, 'nuc, 12 min ago'],
+    [3 * 3_600_000, 'nuc, 3 h ago'],
+    [2 * 86_400_000, 'nuc, 2 d ago']
+  ])('formats a remote row %d ms old', (ageMs, text) => {
+    expect(remote(ageMs)).toBe(text);
+  });
+
+  it('formats the others', () => {
+    expect(formatWatchSource({ kind: 'local' })).toBe('local');
+    expect(formatWatchSource({ kind: 'fallback' })).toBe(
+      "local (the NUC's row is unreadable)"
+    );
+    expect(formatWatchSource({ kind: 'unknown' })).toBe('unknown');
   });
 });

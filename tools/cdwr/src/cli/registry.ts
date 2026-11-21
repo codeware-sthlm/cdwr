@@ -27,7 +27,11 @@ export function lookup(
   groups: Group[],
   entries: Entry[]
 ): Lookup {
-  const words = argv.filter((a) => !a.startsWith('-'));
+  // What follows `--` belongs to the command, never to its path
+  const end = argv.indexOf('--');
+  const words = (end === -1 ? argv : argv.slice(0, end)).filter(
+    (a) => !a.startsWith('-')
+  );
   for (const entry of [...entries].sort(
     (a, b) => b.path.length - a.path.length
   )) {

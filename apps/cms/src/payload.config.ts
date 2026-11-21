@@ -2,19 +2,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { getEnv } from '@codeware/app-cms/feature/env-loader';
-import { seed } from '@codeware/app-cms/feature/seed';
+import { applyPlatformFaq, seed } from '@codeware/app-cms/feature/seed';
 import {
   aboutBlock,
   blockGalleryBlock,
   calloutBlock,
   cardBlock,
   codeBlock,
+  comingSoonBlock,
   contentBlock,
   customComponentBlock,
   featureCardsBlock,
   featureSectionBlock,
   fileAreaBlock,
   formBlock,
+  galleryBlock,
   heroBlock,
   imageBlock,
   pillListBlock,
@@ -28,9 +30,10 @@ import {
   toursBlock
 } from '@codeware/app-cms/ui/blocks';
 import { defaultLexical } from '@codeware/app-cms/ui/fields';
-import { getEmailAdapter } from '@codeware/app-cms/util/email';
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
+import { getEmailAdapter, withTextPart } from '@codeware/app-cms/util/email';
 import { customTranslations } from '@codeware/app-cms/util/i18n';
-import { isTenant, isUser } from '@codeware/app-cms/util/misc';
+import { hasRole, isTenant, isUser } from '@codeware/app-cms/util/misc';
 import {
   getPlugins,
   withSubmissionDeliveryTracking
@@ -48,12 +51,15 @@ import { getAppInfo } from './app-info';
 import { collections, users } from './collections';
 import { createLegalPageEndpoint } from './endpoints/create-legal-page';
 import { domainDnsComparisonEndpoint } from './endpoints/domain-dns-comparison';
+import { firstSiteEndpoint } from './endpoints/first-site';
 import { formSubmissionsExportEndpoint } from './endpoints/form-submissions-export';
 import { formSubmissionsReadEndpoint } from './endpoints/form-submissions-read';
 import { paletteSearchEndpoint } from './endpoints/palette-search';
 import { perfStatsEndpoint } from './endpoints/perf-stats';
 import { platformDomainCertificateEndpoint } from './endpoints/platform-domain-certificate';
 import { platformMachineRestartEndpoint } from './endpoints/platform-machine-restart';
+import { siteStatsEndpoint } from './endpoints/site-stats';
+import { siteStatsAccountEndpoint } from './endpoints/site-stats-account';
 import { tenantConfigEndpoint } from './endpoints/tenant-config';
 import { tenantDomainCertificateEndpoint } from './endpoints/tenant-domain-certificate';
 import { tenantInfisicalStatusEndpoint } from './endpoints/tenant-infisical-status';
@@ -63,16 +69,19 @@ import { tourSignupsExportEndpoint } from './endpoints/tour-signups-export';
 import { tourSignupsReorderEndpoint } from './endpoints/tour-signups-reorder';
 import { anonymizeTourSignupsTask } from './jobs/anonymize-tour-signups.task';
 import { buildCustomComponentTask } from './jobs/build-custom-component.task';
+import { cleanUpIdleWorkspacesTask } from './jobs/clean-up-idle-workspaces.task';
 import { deleteExpiredFormSubmissionsTask } from './jobs/delete-expired-form-submissions.task';
 import {
   REQUEUE_INTERVAL_MS,
   recoverComponentBuilds
 } from './jobs/recover-component-builds';
 import { queryStatsLogger } from './perf/query-stats';
+import { getTotpPlugins } from './security/totp/get-totp-plugins';
 import { userOnlyAccess } from './security/user-only-access';
 import { userOrApiKeyAccess } from './security/user-or-api-key-access';
 import { adoptPlatformDomains } from './utils/adopt-platform-domains';
 import { adoptTenantDomains } from './utils/adopt-tenant-domains';
+import { isRefusedByCsrf } from './utils/is-refused-by-csrf';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -113,10 +122,14 @@ export default buildConfig({
           // resolved server-side at config load and passed as client props.
           path: '@codeware/apps/cms/components/admin/AboutDialogHost.client',
           clientProps: { appInfo: getAppInfo(env) }
-        }
+        },
+        // Onboarding tour, mounted (invisibly) like the About dialog; opened
+        // on `OPEN_TOUR_EVENT` by the dashboard, the palette and the help drawer
+        '@codeware/apps/cms/components/admin/onboarding/OnboardingTourHost.client'
       ],
       // The login screen is where a refused session lands, so it is the one
       // place the warning has to reach even when nothing else renders
+      afterLogin: ['@codeware/apps/cms/components/admin/AfterLogin'],
       beforeLogin: ['@codeware/apps/cms/components/admin/DomainMismatchNotice'],
       graphics: {
         Icon: '@codeware/apps/cms/components/Icon.client',
@@ -130,6 +143,12 @@ export default buildConfig({
         dashboard: {
           Component:
             '@codeware/apps/cms/components/admin/dashboard/AdminDashboardView'
+        },
+        // The guide that applies a starter site to an empty workspace
+        firstSite: {
+          Component:
+            '@codeware/apps/cms/components/admin/first-site/FirstSiteView',
+          path: '/first-site'
         },
         // Its own route rather than a field: a platform theme has no row to
         // hang one off, and what the view offers is a fork, not an edit
@@ -170,12 +189,14 @@ export default buildConfig({
     calloutBlock,
     cardBlock,
     codeBlock,
+    comingSoonBlock,
     contentBlock,
     customComponentBlock,
     featureCardsBlock,
     featureSectionBlock,
     fileAreaBlock,
     formBlock,
+    galleryBlock,
     heroBlock,
     imageBlock,
     pillListBlock,
@@ -199,7 +220,12 @@ export default buildConfig({
   csrf: env.CSRF_URLS ? env.CSRF_URLS.split(',').filter(Boolean) : undefined,
   db: postgresAdapter({
     pool: {
-      connectionString: env.DATABASE_URL
+      connectionString: env.DATABASE_URL,
+      max: env.DATABASE_POOL_MAX,
+      // A small pool can starve: a write holds a client for its transaction
+      // while a hook's query waits for another. Waiting ends in an error,
+      // which rolls the write back, instead of a process that hangs for good
+      connectionTimeoutMillis: 10_000
     },
     schemaName: env.DATABASE_SCHEMA,
     migrationDir: path.resolve(dirname, 'migrations'),
@@ -210,9 +236,12 @@ export default buildConfig({
     ...(env.DEPLOY_ENV === 'development' ? { logger: queryStatsLogger } : {})
   }),
   editor: defaultLexical,
-  email: emailAdapter && withSubmissionDeliveryTracking(emailAdapter),
+  // Outermost, so the text part is on the message every wrapper below sees
+  email:
+    emailAdapter && withTextPart(withSubmissionDeliveryTracking(emailAdapter)),
   endpoints: [
     createLegalPageEndpoint,
+    firstSiteEndpoint,
     domainDnsComparisonEndpoint,
     formSubmissionsExportEndpoint,
     formSubmissionsReadEndpoint,
@@ -220,6 +249,8 @@ export default buildConfig({
     perfStatsEndpoint,
     platformDomainCertificateEndpoint,
     platformMachineRestartEndpoint,
+    siteStatsEndpoint,
+    siteStatsAccountEndpoint,
     tenantConfigEndpoint,
     tenantDomainCertificateEndpoint,
     tenantInfisicalStatusEndpoint,
@@ -229,25 +260,53 @@ export default buildConfig({
     tourSignupsReorderEndpoint
   ],
   jobs: {
+    // `/api/payload-jobs/run` and `handle-schedules` run every queue with
+    // access overridden, and Payload adds them after every plugin, so neither
+    // TOTP wrapper sees them. The deployment runs its own queues; a person
+    // running them is a system user who has completed the second factor
+    access: {
+      run: ({ req: { user } }) =>
+        hasRole(user, 'system-user') && !isSecondFactorPending(user)
+    },
     tasks: [
       anonymizeTourSignupsTask,
       buildCustomComponentTask,
+      // Only the host schedules it, on a queue only the host runs
+      env.APP_MODE.type === 'host'
+        ? {
+            ...cleanUpIdleWorkspacesTask,
+            schedule: [{ cron: '0 3 * * *', queue: 'host-nightly' }]
+          }
+        : cleanUpIdleWorkspacesTask,
       deleteExpiredFormSubmissionsTask
     ],
     // Scheduling only queues the job; something has to run the queue. The
     // component queue has one consumer, the recovery pass in `onInit`, which
     // runs builds one at a time in the build turn: a cron here would run a
     // second build beside it, and each holds a few hundred MB
-    autoRun: serves ? [{ cron: '5 3 * * *', queue: 'nightly', limit: 10 }] : [],
+    // `host-nightly` holds jobs only the host may run, so a tenant app on the
+    // shared `nightly` queue can never claim them
+    autoRun: serves
+      ? [
+          { cron: '5 3 * * *', queue: 'nightly', limit: 10 },
+          ...(env.APP_MODE.type === 'host'
+            ? [{ cron: '10 3 * * *', queue: 'host-nightly', limit: 10 }]
+            : [])
+        ]
+      : [],
     deleteJobOnComplete: true
   },
-  plugins: getPlugins(env, {
-    access: {
-      read: userOrApiKeyAccess(),
-      readEditorsOnly: userOrApiKeyAccess({ editorsOnly: true }),
-      write: userOnlyAccess()
-    }
-  }),
+  plugins: [
+    ...getPlugins(env, {
+      access: {
+        read: userOrApiKeyAccess(),
+        readEditorsOnly: userOrApiKeyAccess({ editorsOnly: true }),
+        write: userOnlyAccess()
+      }
+    }),
+    // Last: both wrap the access of every collection before them
+    ...getTotpPlugins()
+  ],
   // A refused signup is an answer, not a fault: log the message and skip the
   // stack. The key is `SignupRefusedError`'s own name, so every other
   // `APIError` still logs in full.
@@ -394,11 +453,18 @@ export default buildConfig({
     }
     if (env.HUMAN_CHECK_MISSING) {
       payload.logger.warn(
-        `[human-check] Only one Turnstile key is set — ${env.HUMAN_CHECK_MISSING} is missing, so the pair is ignored and no widget is drawn`
+        `[human-check] Only one Turnstile key is set${env.HUMAN_CHECK_SOURCE ? ` in ${env.HUMAN_CHECK_SOURCE}` : ''} — ${env.HUMAN_CHECK_MISSING} is missing, so the pair is ignored and no widget is drawn`
       );
     }
 
     payload.logger.info('Payload is ready');
+
+    // Platform content, not seed data: every environment, production too, and
+    // `SEED_SOURCE=off` doesn't stop it. Logs and never throws
+    if (env.APP_MODE.type === 'host') {
+      await applyPlatformFaq(payload);
+    }
+
     if (
       env.APP_MODE.type === 'host' ||
       env.NX_RUN_TARGET === 'seed' ||
@@ -407,6 +473,7 @@ export default buildConfig({
       // Run seeding for app cms host, on demand via cli or for tenants in development
       await seed({
         environment: env.DEPLOY_ENV,
+        password: env.SEED_PASSWORD,
         payload,
         remoteDataUrl: env.SEED_DATA_URL,
         source: env.SEED_SOURCE,
@@ -452,13 +519,25 @@ export default buildConfig({
             ? error.status
             : 500;
 
-        // Capture server errors (500+)
-        if (status >= 500) {
+        const refusedByCsrf = isRefusedByCsrf({
+          status,
+          headers,
+          csrf: payload.config.csrf,
+          cookiePrefix: payload.config.cookiePrefix
+        });
+
+        // Capture server errors (500+) and session cookies refused by the CSRF check
+        if (status >= 500 || refusedByCsrf) {
           const email = isUser(user) ? user.email : 'n/a';
           const tenant_slug = isTenant(user) ? user.slug : '';
           const context: Sentry.ExclusiveEventHintOrCaptureContext = {
+            ...(refusedByCsrf && { tags: { refusal: 'csrf-origin' } }),
             extra: {
-              errorCollectionSlug: collection?.slug
+              errorCollectionSlug: collection?.slug,
+              ...(refusedByCsrf && {
+                refusedOrigin: headers?.get('Origin') ?? '(none)',
+                secFetchSite: headers?.get('Sec-Fetch-Site') ?? '(none)'
+              })
             },
             ...(user && {
               user: {

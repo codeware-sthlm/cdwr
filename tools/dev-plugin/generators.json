@@ -15,6 +15,11 @@
       "schema": "./src/generators/externalize-deps-sync/schema.json",
       "description": "Guard private manifests for internal libs importing un-bundleable deps"
     },
+    "lockstep-versions-sync": {
+      "factory": "./src/generators/lockstep-versions-sync/lockstep-versions-sync",
+      "schema": "./src/generators/lockstep-versions-sync/schema.json",
+      "description": "Keep each dependency family released in lockstep on one exact version in the root package.json"
+    },
     "theme-sync": {
       "factory": "./src/generators/theme-sync/theme-sync",
       "schema": "./src/generators/theme-sync/schema.json",
@@ -24,11 +29,6 @@
       "factory": "./src/generators/theme-write/theme-write",
       "schema": "./src/generators/theme-write/schema.json",
       "description": "Replace a built-in theme's colours with a theme studio export, leaving everything else in its folder untouched"
-    },
-    "web-package-sync": {
-      "factory": "./src/generators/web-package-sync/web-package-sync",
-      "schema": "./src/generators/web-package-sync/schema.json",
-      "description": "Pin apps/web/package.json to root-resolved versions and regenerate its lockfile"
     }
   }
 }

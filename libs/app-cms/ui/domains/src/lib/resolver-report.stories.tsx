@@ -22,6 +22,9 @@ const labels = {
 const negativeCacheNote =
   'This zone tells resolvers to remember a “does not exist” answer for up to 3600 seconds, so a record created recently can stay invisible that long.';
 
+const none = { a: [], aaaa: [], cname: [] };
+const flyApp = { a: [], aaaa: [], cname: ['cdwr-cms-demo.fly.dev'] };
+
 export const Cases: StoryObj = {
   render: () => (
     <div className="flex w-full max-w-160 flex-col gap-4">
@@ -30,9 +33,9 @@ export const Cases: StoryObj = {
       <ResolverReport
         agree
         answers={[
-          { resolver: 'Cloudflare', records: ['cdwr-cms-demo.fly.dev'] },
-          { resolver: 'Google', records: ['cdwr-cms-demo.fly.dev'] },
-          { resolver: 'Quad9', records: ['cdwr-cms-demo.fly.dev'] }
+          { resolver: 'Cloudflare', records: flyApp, challenge: [] },
+          { resolver: 'Google', records: flyApp, challenge: [] },
+          { resolver: 'Quad9', records: flyApp, challenge: [] }
         ]}
         negativeCacheNote={negativeCacheNote}
         labels={labels}
@@ -41,9 +44,13 @@ export const Cases: StoryObj = {
       <ResolverReport
         agree={false}
         answers={[
-          { resolver: 'Cloudflare', records: ['cdwr-cms-demo.fly.dev'] },
-          { resolver: 'Google', records: [] },
-          { resolver: 'Quad9', records: ['old-target.fly.dev'] }
+          { resolver: 'Cloudflare', records: flyApp, challenge: [] },
+          { resolver: 'Google', records: none, challenge: [] },
+          {
+            resolver: 'Quad9',
+            records: { a: [], aaaa: [], cname: ['old-target.fly.dev'] },
+            challenge: []
+          }
         ]}
         negativeCacheNote={negativeCacheNote}
         labels={labels}
@@ -52,11 +59,49 @@ export const Cases: StoryObj = {
       <ResolverReport
         agree
         answers={[
-          { resolver: 'Cloudflare', records: ['cdwr-cms-demo.fly.dev'] },
-          { resolver: 'Google', records: ['cdwr-cms-demo.fly.dev'] },
-          { resolver: 'Quad9', records: [], error: 'ETIMEOUT' }
+          { resolver: 'Cloudflare', records: flyApp, challenge: [] },
+          { resolver: 'Google', records: flyApp, challenge: [] },
+          {
+            resolver: 'Quad9',
+            records: none,
+            challenge: [],
+            error: 'ETIMEOUT'
+          }
         ]}
         negativeCacheNote={null}
+        labels={labels}
+      />
+    </div>
+  )
+};
+
+const kajstrobergRecords = {
+  a: ['46.30.213.129'],
+  aaaa: ['2a02:2350:5:100::1'],
+  cname: []
+};
+
+/**
+ * An apex served elsewhere: every resolver agrees, and what they agree on is
+ * another host's addresses. The name servers and the stray `*` record say why.
+ */
+export const Kajstroberg: StoryObj = {
+  render: () => (
+    <div className="flex w-full max-w-160 flex-col gap-4">
+      <ResolverReport
+        agree
+        answers={[
+          {
+            resolver: 'Cloudflare',
+            records: kajstrobergRecords,
+            challenge: []
+          },
+          { resolver: 'Google', records: kajstrobergRecords, challenge: [] },
+          { resolver: 'Quad9', records: kajstrobergRecords, challenge: [] }
+        ]}
+        nameServersNote="DNS for kajstroberg.se is served by ns01.one.com, ns02.one.com."
+        wildcardNote="A * record answers 46.30.213.129, 2a02:2350:5:100::1."
+        negativeCacheNote={negativeCacheNote}
         labels={labels}
       />
     </div>

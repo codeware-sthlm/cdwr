@@ -4,13 +4,19 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/tools/cdwr',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../tsconfig.base.json'] })],
   test: {
     name: 'cdwr',
     watch: false,
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.{ts,tsx}'],
+    // Nx loads tools/cdwr/.env into the task; no spec may reach the real telemetry database
+    env: { AGENT_SUPABASE_URL: '', AGENT_SUPABASE_SERVICE_KEY: '' },
+    include: [
+      'src/**/*.spec.{ts,tsx}',
+      'bin/**/*.spec.mjs',
+      'agent-queue/supabase/functions/**/*.spec.ts'
+    ],
     reporters: ['default'],
     coverage: {
       reportsDirectory: '../../coverage/tools/cdwr',

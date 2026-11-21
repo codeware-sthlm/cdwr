@@ -31,6 +31,8 @@ export type SeedEnvironment = 'development' | 'preview' | 'production';
  */
 export const seed = async (args: {
   environment: SeedEnvironment;
+  /** The seeded users' password in preview (`SEED_PASSWORD`); development always uses `dev` */
+  password: string | undefined;
   payload: Payload;
   remoteDataUrl: string | undefined;
   source: SeedSource;
@@ -70,6 +72,7 @@ export const seed = async (args: {
 /** Everything that writes, run while holding the seed lock */
 const seedLocked = async (args: {
   environment: SeedEnvironment;
+  password: string | undefined;
   payload: Payload;
   remoteDataUrl: string | undefined;
   strategy: SeedStrategy;
@@ -95,7 +98,14 @@ const seedLocked = async (args: {
   // Preview has no repository files, so it is the only environment that
   // downloads media; every other environment uses the bundled local files
   const mediaUrl = environment === 'preview' ? remoteDataUrl : undefined;
-  const password = environment === 'preview' ? 'pallevante' : 'dev';
+  const preview = environment === 'preview';
+  if (preview && !args.password) {
+    payload.logger.warn(
+      '[SEED] SEED_PASSWORD is not set, so the seeded users get a random password no one knows'
+    );
+  }
+  // A preview url is public, so its users never get a password from the repo
+  const password = preview ? (args.password ?? crypto.randomUUID()) : 'dev';
 
   // PLATFORM
 
@@ -103,7 +113,10 @@ const seedLocked = async (args: {
   // no single site owns
   const platformReport = await applyPlatformDefinition(payload, platform, {
     password,
-    mediaBaseUrl: mediaUrl
+    mediaBaseUrl: mediaUrl,
+    // A preview database outlives a change of password; reset the users it
+    // holds, but never to a random one, which would only lock them out
+    resetPassword: preview && Boolean(args.password)
   });
 
   if (platformReport.unresolved.length) {

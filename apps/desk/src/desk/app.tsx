@@ -1,0 +1,397 @@
+import { useEffect, useReducer } from 'react';
+
+import { platformHost } from '../tenants/host';
+import { TenantsPage } from '../tenants/page';
+
+import {
+  clickSettings,
+  closeSettings,
+  focusOpener,
+  frame,
+  hasAdapter,
+  healthActions,
+  hideSheet,
+  modelAt,
+  openTicket,
+  pauseQueue,
+  problemActions,
+  refresh,
+  reviewNow,
+  runNow,
+  sendPlatform,
+  setSnoozedOpen,
+  setTreeFilter,
+  setTreeOpen,
+  settingsClosed,
+  sheetActions,
+  showSheet,
+  showView,
+  store
+} from './actions';
+import { Capacity } from './components/capacity';
+import { Cards } from './components/cards';
+import { AgentHealth } from './components/health';
+import { Icon } from './components/icon';
+import {
+  Alert,
+  FrozenLabel,
+  Problems,
+  frozenLabel
+} from './components/problems';
+import { ReviewPanel } from './components/review';
+import { Search } from './components/search';
+import {
+  SETTINGS_SUB,
+  SETTINGS_TITLE,
+  SettingsForm
+} from './components/settings';
+import { Sheet } from './components/sheet';
+import { SHEETS, sheetTitle } from './components/sheets';
+import { Status, TreePill } from './components/status';
+import { Tiles } from './components/tiles';
+import { TreePage } from './components/tree';
+import { ViewSwitch } from './components/view-switch';
+import { AGENT_AVATAR } from './constants';
+import type { Model } from './model';
+import { notice } from './notice';
+import { type DeskState, bucketsLoaded } from './state';
+import { useStore } from './store';
+import { findingsByTicket } from './view/review';
+import { forgetLabelled } from './view/waiting';
+
+// The timers and the connection's grace move without an event. A healthy page checks every 15th tick: a host can go silent without one.
+const QUIET_TICKS = 15;
+
+/** Redraws every second while the page is visible; only every 15th second when `quiet` */
+const useTick = (quiet: boolean): void => {
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    let ticks = 0;
+    const id = setInterval(() => {
+      if (document.hidden) return;
+      ticks += 1;
+      if (quiet && ticks % QUIET_TICKS !== 0) return;
+      tick();
+    }, 1000);
+    return () => clearInterval(id);
+  }, [quiet]);
+};
+
+const fresh = (state: DeskState): string =>
+  frame.refreshing
+    ? 'Refreshing…'
+    : bucketsLoaded(state.data)
+      ? 'Updated ' +
+        new Date(state.data.storedAt || Date.now()).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      : hasAdapter()
+        ? 'Loading…'
+        : 'Waiting for settings';
+
+/** The frame every sheet and the settings form open in */
+const SheetFrame = ({ m, state, now }: Props) => {
+  if (frame.settingsShown)
+    return (
+      <Sheet
+        open={frame.settings !== null}
+        title={SETTINGS_TITLE}
+        sub={SETTINGS_SUB}
+        // The form focuses its first field
+        focus={false}
+        onClose={closeSettings}
+        onClosed={settingsClosed}
+      >
+        {frame.settings ? (
+          <SettingsForm
+            key={frame.settingsForm}
+            {...frame.settings}
+            onDone={closeSettings}
+          />
+        ) : null}
+      </Sheet>
+    );
+  const def = SHEETS[frame.shownSheet];
+  return (
+    <Sheet
+      open={state.ui.openSheet !== null}
+      title={sheetTitle(def, m, state)}
+      sub={def.sub}
+      focus={frame.sheetFocus}
+      onClose={hideSheet}
+      onClosed={focusOpener}
+    >
+      <def.Body m={m} state={state} now={now} actions={sheetActions} />
+    </Sheet>
+  );
+};
+
+type Props = { m: Model; state: DeskState; now: Date };
+
+/** The page: the header, the desk or a full-page view, and the sheet frame */
+export const App = () => {
+  const state = useStore(store);
+  const now = new Date();
+  const m = modelAt(now);
+  forgetLabelled(state.controls.labelled, m.v ? m.toLabel : null);
+  const problems = m.problems.length > 0;
+  useTick(state.data.connection.live && !problems);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // An open sheet closes on its own Escape, which marks the event handled
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Agent health and the tree are pages of Agent; Platform and Agent have nowhere to go back to
+      const view = store.state.ui.view;
+      if (view === 'health' || view === 'tree') showView('agent');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const view = state.ui.view;
+  const onAgent = view !== 'platform';
+  const label = frozenLabel(m);
+  const note = notice(state.errors, hasAdapter());
+  return (
+    <>
+      {problems ? (
+        <div
+          id="alert"
+          className="mt-[calc(-1*var(--pad-top))] mr-[calc(-1*var(--pad-right))] mb-[var(--pad-block)] ml-[calc(-1*var(--pad-left))] max-[600px]:mt-0 max-[600px]:mr-0 max-[600px]:mb-[var(--gap)] max-[600px]:ml-0"
+        >
+          <Alert m={m} onSeeProblems={problemActions.seeProblems} />
+        </div>
+      ) : null}
+      <div className="wrap mx-auto flex max-w-[1360px] flex-col gap-[var(--gap)]">
+        <header className="top flex flex-col gap-2">
+          <div className="flex min-w-0 items-center gap-x-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-x-[8px] max-[600px]:text-[11px]">
+            <span
+              id="status"
+              className="status flex min-w-0 items-center gap-[14px] text-[12px] text-[color:var(--muted)] max-[600px]:gap-[6px]"
+              aria-live="polite"
+            >
+              <Status
+                m={m}
+                connection={state.data.connection}
+                view={state.ui.view}
+                onView={(view) => showView(view)}
+                pill={onAgent}
+              />
+            </span>
+            <span id="fresh" className="min-w-0 truncate">
+              {fresh(state)}
+            </span>
+            <a
+              className="who ml-auto inline-flex flex-none items-center gap-[6px] hover:text-[color:var(--fg)]"
+              href="https://github.com/apps/codeware-agent"
+              target="_blank"
+              rel="noreferrer"
+              title="Commits, pull requests and review replies are made as this GitHub App"
+            >
+              <img
+                className="size-5 flex-none rounded-full"
+                src={AGENT_AVATAR}
+                alt=""
+              />
+              <span className="max-[600px]:sr-only">
+                on GitHub as codeware-agent[bot]
+              </span>
+            </a>
+          </div>
+          <div className="tools flex min-w-0 items-center gap-[10px] max-[600px]:gap-[6px]">
+            <div className="brand mr-auto flex min-w-0 items-baseline gap-[14px]">
+              <h1 className="truncate font-[family-name:var(--font-mono)] text-[13px] leading-[normal] font-semibold tracking-[0.18em] uppercase">
+                CDWR Desk
+              </h1>
+              <span className="sub text-[12px] text-[color:var(--muted)] max-[900px]:hidden">
+                {onAgent
+                  ? 'cdwr · what the work queue does next, and what waits on you'
+                  : 'cdwr · production: tenants, health and problems'}
+              </span>
+            </div>
+            <ViewSwitch
+              m={m}
+              details={state.details}
+              tenants={state.data.tenants}
+              now={now}
+              view={view}
+              onView={(next) => showView(next)}
+            />
+            {onAgent ? (
+              <>
+                <TreePill
+                  m={m}
+                  view={state.ui.view}
+                  onView={(view) => showView(view)}
+                />
+                <Search m={m} state={state} onOpen={(id) => openTicket(id)} />
+              </>
+            ) : null}
+            <button
+              id="refresh"
+              type="button"
+              className="tool inline-flex min-h-[var(--tap)] min-w-[var(--tap)] flex-none items-center justify-center p-0"
+              aria-label="Refresh"
+              title="Refresh"
+              onClick={refresh}
+            >
+              <Icon name="refresh" className="size-4" />
+            </button>
+            <button
+              id="settings"
+              type="button"
+              className="tool inline-flex min-h-[var(--tap)] min-w-[var(--tap)] flex-none items-center justify-center p-0"
+              aria-label="Settings"
+              title="Settings"
+              onClick={clickSettings}
+            >
+              <Icon name="settings" className="size-4" />
+            </button>
+          </div>
+        </header>
+
+        {note.hidden ? null : (
+          <div
+            id="notice"
+            className={
+              note.severe
+                ? 'rounded-[10px] bg-[color:var(--block-soft)] px-4 py-3 text-[0.9rem] text-[color:var(--block)]'
+                : 'rounded-[10px] bg-[color:var(--wait-soft)] px-4 py-3 text-[0.9rem] text-[color:var(--wait)]'
+            }
+          >
+            {note.text}
+          </div>
+        )}
+
+        {view === 'health' ? (
+          <main
+            id="health"
+            className="health-view flex flex-col gap-[var(--gap-card)]"
+            aria-labelledby="health-title"
+          >
+            <AgentHealth m={m} now={now} actions={healthActions} />
+          </main>
+        ) : view === 'platform' ? (
+          <main
+            id="platform"
+            className="platform-view flex flex-col gap-[var(--gap-card)]"
+            aria-labelledby="platform-title"
+          >
+            <TenantsPage
+              data={state.data.tenants}
+              now={now}
+              platform={{
+                can: state.controls.target !== null,
+                host: platformHost(
+                  m.runs?.host ?? null,
+                  m.runs?.job?.host ?? null
+                ),
+                commands: m.platformCommands,
+                send: sendPlatform
+              }}
+            />
+          </main>
+        ) : view === 'tree' ? (
+          <main
+            id="tree"
+            className="tree-view flex flex-col gap-[var(--gap-card)]"
+            aria-labelledby="tree-title"
+          >
+            <TreePage
+              m={m}
+              details={state.details}
+              now={now}
+              filter={state.ui.tree}
+              onFilter={setTreeFilter}
+              open={state.ui.treeOpen}
+              onOpen={setTreeOpen}
+              onAgent={() => showView('agent')}
+              onTicket={(id) => openTicket(id)}
+              findings={findingsByTicket(
+                state.data.reviews,
+                state.data.dismissals
+              )}
+              review={
+                <ReviewPanel
+                  review={state.data.reviews}
+                  now={now}
+                  can={state.controls.target !== null}
+                  busy={state.controls.reviewing}
+                  note={state.controls.reviewNote}
+                  onReview={reviewNow}
+                  onTicket={(id) => openTicket(id)}
+                />
+              }
+            />
+          </main>
+        ) : (
+          <>
+            <section
+              className="cards flex flex-wrap gap-[var(--gap-card)]"
+              id="cards"
+              aria-label="Session and what waits on you"
+            >
+              <Cards
+                m={m}
+                details={state.details}
+                now={now}
+                snoozedOpen={state.ui.snoozedOpen}
+                onSnoozedOpen={setSnoozedOpen}
+                onSheet={(id) => showSheet(id)}
+              />
+            </section>
+            {problems ? (
+              <section
+                className="problems flex flex-col gap-3"
+                id="problems"
+                aria-label="Problems"
+              >
+                <Problems m={m} now={now} actions={problemActions} />
+              </section>
+            ) : null}
+            {label ? (
+              <h2
+                className="frozen-label font-[family-name:var(--font-mono)] text-[11px] leading-[normal] font-medium tracking-[0.14em] text-[color:var(--muted)]"
+                id="frozen-label"
+              >
+                <FrozenLabel m={m} />
+              </h2>
+            ) : null}
+            <section
+              className={label ? 'capacity frozen opacity-[0.45]' : 'capacity'}
+              id="capacity"
+              aria-label="Capacity: limits and hosts"
+            >
+              <Capacity
+                m={m}
+                onSheet={(id) => showSheet(id)}
+                onView={(view) => showView(view)}
+                pause={pauseQueue}
+                run={runNow}
+              />
+            </section>
+            <nav
+              className={
+                label
+                  ? 'more frozen flex flex-col gap-3 opacity-[0.45]'
+                  : 'more flex flex-col gap-3'
+              }
+              id="more"
+              aria-label="More detail"
+            >
+              <Tiles
+                m={m}
+                state={state}
+                now={now}
+                onSheet={(id) => showSheet(id)}
+              />
+            </nav>
+          </>
+        )}
+      </div>
+      <SheetFrame m={m} state={state} now={now} />
+    </>
+  );
+};

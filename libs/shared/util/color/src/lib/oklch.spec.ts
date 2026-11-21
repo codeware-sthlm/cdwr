@@ -6,7 +6,8 @@ import {
   oklchToRgb,
   parseColor,
   relativeLuminance,
-  rgbToOklch
+  rgbToOklch,
+  toHex
 } from './oklch';
 
 const color = (value: string) => {
@@ -159,5 +160,20 @@ describe('formatOklch', () => {
     const original = { l: 0.704, c: 0.14, h: 182.503, alpha: 0.5 };
 
     expect(parseColor(formatOklch(original))).toEqual(original);
+  });
+});
+
+describe('toHex', () => {
+  it('writes lowercase #rrggbb and drops alpha', () => {
+    expect(toHex({ r: 255, g: 0, b: 171, a: 0.5 })).toBe('#ff00ab');
+    expect(toHex({ r: 0, g: 5, b: 16, a: 1 })).toBe('#000510');
+  });
+
+  it('clamps out-of-range channels', () => {
+    expect(toHex({ r: 300, g: -4, b: 127.6, a: 1 })).toBe('#ff0080');
+  });
+
+  it('round-trips a parsed hex', () => {
+    expect(toHex(oklchToRgb(color('#1a2b3c')))).toBe('#1a2b3c');
   });
 });

@@ -3,25 +3,102 @@ import {
   deploymentNameIssue,
   isDeployEnabled
 } from '@codeware/shared/util/pure';
+import { z } from 'zod';
 
 import type { Environment } from '../../services/infisical';
+import { TEAM_STEP_TEXT, type TeamStep } from '../../services/stats-team.logic';
 
 /** The workflow every deployment goes through, including one started here */
 export const DEPLOY_WORKFLOW = 'fly-deployment.yml';
 
 /** Apps a workspace can be deployed with, named as their Infisical folders */
-export const TENANT_APPS = ['cms', 'web'] as const;
+export const TENANT_APPS = ['cms', 'headless'] as const;
 
 export type AppKind = (typeof TENANT_APPS)[number];
 
 /** One workspace, as the listing script reports it */
-export interface TenantRow {
-  id: number;
-  name: string;
-  slug: string;
-  deployment: string | null;
-  apiKey: string | null;
+export const tenantRowSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  // Older deployments answer without a status; their workspaces are live
+  status: z.enum(['pending', 'active']).default('active'),
+  deployment: z.string().nullable(),
+  apiKey: z.string().nullable(),
+  statsWebsiteId: z.string().nullable(),
+  statsShareId: z.string().nullable(),
+  // Older deployments answer without a team
+  statsTeamId: z.string().nullable().optional(),
+  domains: z.array(
+    z.object({
+      hostname: z.string(),
+      app: z.string(),
+      isPrimary: z.boolean()
+    })
+  )
+});
+
+export type TenantRow = z.infer<typeof tenantRowSchema>;
+
+/** What the status write-back script reports */
+export const statusReportSchema = z.discriminatedUnion('outcome', [
+  z.object({ outcome: z.literal('set') }),
+  z.object({ outcome: z.literal('unchanged') }),
+  z.object({ outcome: z.literal('conflict'), current: z.string() }),
+  z.object({ outcome: z.literal('error'), message: z.string() })
+]);
+
+/**
+ * The workspaces that can be provisioned as choices: new signups first, since
+ * they are what waits for going live, then the rest in listed order.
+ */
+export function workspaceChoices(
+  rows: ReadonlyArray<TenantRow>
+): Array<{ value: string; hint: string }> {
+  const ready = rows.flatMap((row) =>
+    row.deployment && !reasonSkipped(row)
+      ? [{ row, deployment: row.deployment }]
+      : []
+  );
+  return [
+    ...ready.filter(({ row }) => row.status === 'pending'),
+    ...ready.filter(({ row }) => row.status !== 'pending')
+  ].map(({ row, deployment }) => ({
+    value: deployment,
+    hint:
+      row.status === 'pending'
+        ? `${row.name} (${row.slug}) · new signup`
+        : `${row.name} (${row.slug})`
+  }));
 }
+
+/** Whether going live also activates the workspace: a new signup that gets its cms */
+export const flipsStatus = (
+  tenant: Pick<TenantRow, 'status'>,
+  apps: ReadonlyArray<AppKind>,
+  wait: boolean,
+  flags: ReadonlyArray<FlagPlan> = []
+): boolean =>
+  tenant.status === 'pending' &&
+  apps.includes('cms') &&
+  wait &&
+  !cmsPaused(flags);
+
+/** Whether the plan leaves the cms deployment switched off */
+export const cmsPaused = (flags: ReadonlyArray<FlagPlan>): boolean =>
+  flags.some(({ app, action }) => app === 'cms' && action === 'paused');
+
+export const FLIP_STEP =
+  'Flip status pending → active after the deploy is healthy';
+
+/** How the status flip ended, for the summary and `--json` */
+export type FlipOutcome =
+  | 'not-applicable'
+  | 'no-wait'
+  | 'cms-paused'
+  | 'flipped'
+  | 'unchanged'
+  | 'left-pending';
 
 /** A folder to create, named by its parent path */
 export interface Folder {
@@ -108,12 +185,127 @@ export const flagActionOf = (stored: string | undefined): FlagAction =>
       ? 'enabled'
       : 'paused';
 
+/** Shared values arrive by reference, the signature through `/apps/headless`'s own import */
+export const HEADLESS_IMPORTS = ['/apps/headless'] as const;
+
+export interface ImportPlan {
+  app: AppKind;
+  importPath: string;
+  action: 'create' | 'present';
+}
+
+/**
+ * The imports a tenant folder needs, given what the headless folder already
+ * imports. Only the headless app has any; the cms gets none.
+ */
+export function planImports(
+  apps: ReadonlyArray<AppKind>,
+  imported: ReadonlyArray<string>
+): ImportPlan[] {
+  return apps.includes('headless')
+    ? HEADLESS_IMPORTS.map((importPath) => ({
+        app: 'headless',
+        importPath,
+        action: imported.includes(importPath) ? 'present' : 'create'
+      }))
+    : [];
+}
+
+/** A domain as Umami and the workspace's domains list it: lowercase, no scheme, path or trailing dot */
+export const normalizeDomain = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/\.+$/, '');
+
+/**
+ * The domain the workspace's statistics website is registered under: the
+ * primary domain of the app it is named after (the cms, else headless),
+ * otherwise that app's Fly hostname.
+ */
+export const statsDomain = (row: TenantRow, flyApp: string): string => {
+  const primary = row.domains.find(
+    ({ app, isPrimary }) => isPrimary && app === flyApp
+  );
+  return normalizeDomain(primary?.hostname ?? `${flyApp}.fly.dev`);
+};
+
+/**
+ * The recorded slug when Umami still lists it, `null` when it has lost it
+ * (it is created again under the same name). Without a recorded slug, the
+ * first listed.
+ */
+export const pickShare = (
+  slugs: ReadonlyArray<string>,
+  recorded: string | null
+): string | null =>
+  recorded ? (slugs.includes(recorded) ? recorded : null) : (slugs[0] ?? null);
+
+export type StatsSkipReason = 'preview' | 'unconfigured' | 'unreachable';
+
+/** What to do about the workspace's Umami website */
+export type StatsPlan =
+  | { action: 'skip'; reason: StatsSkipReason }
+  | { action: 'keep'; id: string; shareId: string | null }
+  | { action: 'adopt'; id: string; domain: string; shareId: string | null }
+  | { action: 'create'; name: string; domain: string }
+  | { action: 'unknown'; id: string };
+
+/**
+ * Writes the plan makes for the website: 1 when it creates the website or its
+ * share, or records an id or slug the workspace does not hold yet, otherwise 0
+ */
+export const statsWrites = (
+  plan: StatsPlan,
+  recorded: string | null
+): 0 | 1 => {
+  switch (plan.action) {
+    case 'create':
+    case 'adopt':
+      return 1;
+    case 'keep':
+      return plan.shareId && plan.shareId === recorded ? 0 : 1;
+    default:
+      return 0;
+  }
+};
+
+const SKIP_TEXT: Record<StatsSkipReason, string> = {
+  preview: 'preview',
+  unconfigured: 'Umami not configured',
+  unreachable: 'Umami did not answer'
+};
+
+/** The plan line for the statistics website */
+export const statsStep = (plan: StatsPlan): string => {
+  switch (plan.action) {
+    case 'skip':
+      return `Statistics skipped: ${SKIP_TEXT[plan.reason]}`;
+    case 'keep':
+      return plan.shareId
+        ? `Keep statistics website ${plan.id} and its share link`
+        : `Keep statistics website ${plan.id}; add a share link`;
+    case 'adopt':
+      return `Adopt statistics website ${plan.domain} (${plan.id}) ${plan.shareId ? 'and its' : 'with a'} share link`;
+    case 'create':
+      return `Create statistics website ${plan.domain} in Umami with a share link`;
+    case 'unknown':
+      return `Statistics website ${plan.id} is unknown to Umami; left as it is`;
+  }
+};
+
 /** The plan step lines shown before a provisioning write is confirmed */
 export function provisionSteps(
   deployment: string,
   folders: ReadonlyArray<Folder>,
   keys: ReadonlyArray<KeyPlan>,
-  flags: ReadonlyArray<FlagPlan> = []
+  flags: ReadonlyArray<FlagPlan> = [],
+  stats?: StatsPlan,
+  flip = false,
+  team: ReadonlyArray<TeamStep> = [],
+  imports: ReadonlyArray<ImportPlan> = []
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -122,6 +314,13 @@ export function provisionSteps(
         ? `Set PAYLOAD_API_KEY in /tenants/${deployment}/apps/${app}`
         : `Keep PAYLOAD_API_KEY in /tenants/${deployment}/apps/${app} (already matches)`
     ),
+    // In write order: a tenant is enabled only once its imports exist
+    ...imports.map(({ app, importPath, action }) => {
+      const path = `/tenants/${deployment}/apps/${app}`;
+      return action === 'create'
+        ? `Import ${importPath} into ${path}`
+        : `Keep import of ${importPath} in ${path} (already there)`;
+    }),
     ...flags.map(({ app, action, value }) => {
       const path = `/tenants/${deployment}/apps/${app}`;
       if (action === 'create')
@@ -129,7 +328,10 @@ export function provisionSteps(
       return action === 'enabled'
         ? `Keep ${DEPLOY_ENABLED_KEY} in ${path} (already true)`
         : `Keep ${DEPLOY_ENABLED_KEY}=${value} in ${path} (paused)`;
-    })
+    }),
+    ...team.map((step) => `Statistics: ${TEAM_STEP_TEXT[step]}`),
+    ...(stats ? [statsStep(stats)] : []),
+    ...(flip ? [FLIP_STEP] : [])
   ];
 }
 

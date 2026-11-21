@@ -12,6 +12,7 @@ import { ActionOutputsSchema } from './schemas/action-outputs.schema';
 import { type ActionOutputs } from './schemas/action-outputs.schema';
 import { type BuildingContext, ContextSchema } from './schemas/context.schema';
 import { getDeploymentConfig } from './utils/get-deployment-config';
+import { resolveTenantSecrets } from './utils/resolve-tenant-secrets';
 import { runDeployApps } from './utils/run-deploy-apps';
 
 /**
@@ -82,24 +83,6 @@ export async function flyDeployment(
         case 'push':
           context.action = 'deploy';
           break;
-
-        case 'workflow_run':
-          {
-            const wr = payload['workflow_run'] as
-              | {
-                  event: string;
-                  pull_requests: Array<{ number: number }>;
-                }
-              | undefined;
-            context.action = 'deploy';
-            if (wr?.event === 'pull_request') {
-              const prNumber = wr.pull_requests?.[0]?.number;
-              if (prNumber) {
-                context.pullRequest = prNumber;
-              }
-            }
-          }
-          break;
       }
     }
 
@@ -118,6 +101,15 @@ export async function flyDeployment(
 
     ContextSchema.parse(context);
 
+    // Pre-deploy hands over secret names only; the values are read here
+    core.startGroup('Read tenant secrets from Infisical');
+    const appDetails = await resolveTenantSecrets(
+      config.appDetails,
+      context.environment,
+      config.infisical
+    );
+    core.endGroup();
+
     const results: ActionOutputs = {
       environment: context.environment,
       projects: []
@@ -125,9 +117,11 @@ export async function flyDeployment(
 
     core.startGroup('Deploy affected applications');
     results.projects = await runDeployApps({
+      appDetails,
       config,
       environment: context.environment,
       fly,
+      gitSha: github.context.sha || undefined,
       imageMap: inputs.images,
       pullRequest: context.pullRequest
     });

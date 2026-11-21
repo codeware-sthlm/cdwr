@@ -1,0 +1,7 @@
+{
+  "name": "shared-util-agent-review",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/util/agent-review/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util"]
+}

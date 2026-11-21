@@ -21,12 +21,14 @@ const blocks: Record<BlockSlug, boolean> = {
   callout: true,
   card: true,
   code: true,
+  'coming-soon': true,
   'custom-component': true,
   content: true,
   'feature-cards': true,
   'feature-section': true,
   'file-area': true,
   form: true,
+  gallery: true,
   hero: true,
   image: true,
   'pill-list': true,
@@ -81,6 +83,10 @@ const pages: CollectionConfig<'pages'> = {
       }
     },
     {
+      type: 'row',
+      fields: [slugField({ sourceField: 'name' }), visibilityField()]
+    },
+    {
       type: 'tabs',
       tabs: [
         {
@@ -124,9 +130,7 @@ const pages: CollectionConfig<'pages'> = {
         },
         seoTab()
       ]
-    },
-    slugField({ sourceField: 'name' }),
-    visibilityField()
+    }
   ],
   versions: {
     drafts: {

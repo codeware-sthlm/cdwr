@@ -1,0 +1,825 @@
+import type {
+  DeskCommandRow,
+  GithubEventRow,
+  HostMetricRow,
+  RunsPayload,
+  SessionRow
+} from '../supabase';
+
+import {
+  CONNECT_GRACE_MS,
+  HOST_METRICS_MINUTES,
+  HOST_SPACING_SAMPLES,
+  HOST_STALE_SAMPLES,
+  LINEAR_STALE_MIN,
+  QUEUE_WRITER_MIN,
+  SESSION_ATTENDED_MIN,
+  SESSION_HANDBACK_MIN,
+  WEBHOOK_GRACE_MIN,
+  WEBHOOK_QUIET_HOURS
+} from './constants';
+import { dayTime, hhmm } from './format';
+import type { Connection } from './state';
+import type { DeployState, ViewIssue } from './types';
+
+// What the desk derives from the live tables: PR states, sessions per host, the pulse, problems and health.
+
+/** A PR's state as `github_events` names it; the newest event wins */
+export type PrStateName =
+  | 'checks running'
+  | 'checks passed'
+  | 'checks failed'
+  | 'checks finished'
+  | 'Copilot reviewed'
+  | 'reviewed'
+  | 'review requested'
+  | 'in merge queue'
+  | 'left merge queue'
+  | 'merged'
+  | 'closed';
+
+const PASSED = ['success', 'neutral', 'skipped'];
+const FAILED = ['failure', 'timed_out', 'action_required', 'startup_failure'];
+
+/** The state an action names; null for one the desk does not know */
+export const prState = (action: string): PrStateName | null => {
+  const [event, outcome = ''] = action.split(':');
+  if (event === 'pull_request') {
+    if (
+      ['opened', 'reopened', 'synchronize', 'ready_for_review'].includes(
+        outcome
+      )
+    )
+      return 'checks running';
+    if (outcome === 'review_requested') return 'review requested';
+    if (outcome === 'enqueued') return 'in merge queue';
+    if (outcome === 'dequeued') return 'left merge queue';
+    if (outcome === 'merged') return 'merged';
+    if (outcome === 'closed') return 'closed';
+    return null;
+  }
+  if (event === 'check_suite') {
+    if (!outcome) return null;
+    // A suite stored before the webhook kept its conclusion
+    if (outcome === 'completed') return 'checks finished';
+    if (PASSED.includes(outcome)) return 'checks passed';
+    // A cancelled or stale suite (the merge queue supersedes them) failed nothing
+    return FAILED.includes(outcome) ? 'checks failed' : 'checks finished';
+  }
+  if (event === 'pull_request_review')
+    return outcome === 'copilot' ? 'Copilot reviewed' : 'reviewed';
+  if (event === 'pull_request_review_comment') return 'reviewed';
+  return null;
+};
+
+export type AgentPr = {
+  pr: number;
+  ticket: string;
+  /** From the Linear poll; `github_events` has no title */
+  title: string;
+  state: PrStateName | null;
+  action: string;
+  /** When the newest event landed, in ms */
+  at: number;
+};
+
+/** The agent's PRs that GitHub has told about, newest event first; a PR no ticket names is left out */
+export const agentPrs = (
+  events: readonly GithubEventRow[] | null,
+  tickets: ReadonlyMap<number, string>,
+  title: (ticket: string) => string
+): AgentPr[] =>
+  (events ?? [])
+    .flatMap((e) => {
+      const ticket = e.pr === null ? undefined : tickets.get(e.pr);
+      if (e.pr === null || !ticket) return [];
+      return [
+        {
+          pr: e.pr,
+          ticket,
+          title: title(ticket),
+          state: prState(e.action),
+          action: e.action,
+          at: Date.parse(e.updated_at)
+        }
+      ];
+    })
+    .sort((a, b) => b.at - a.at);
+
+const median = (xs: readonly number[]): number | null => {
+  if (!xs.length) return null;
+  const sorted = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/** Minutes between the host's samples, the median of its newest spacings; HOST_METRICS_MINUTES without two samples */
+export const sampleMinutes = (
+  series: readonly Pick<HostMetricRow, 'at'>[]
+): number => {
+  const times = series
+    .map((r) => Date.parse(r.at))
+    .sort((a, b) => a - b)
+    .slice(-(HOST_SPACING_SAMPLES + 1));
+  const gaps = times.slice(1).map((t, i) => (t - times[i]) / 6e4);
+  const m = median(gaps.filter((g) => g > 0));
+  return m ?? HOST_METRICS_MINUTES;
+};
+
+/** Minutes after which a host that samples every `interval` minutes reads as silent */
+export const silentAfter = (interval: number): number =>
+  HOST_STALE_SAMPLES * interval;
+
+export type LiveSession = {
+  id: string;
+  kind: string;
+  /** Minutes since its last heartbeat */
+  ageMin: number;
+};
+
+export type HostSessions = {
+  host: string;
+  sessions: LiveSession[];
+  /** Minutes since the host's newest heartbeat of any session */
+  ageMin: number;
+};
+
+const ageOf = (iso: string, now: Date): number =>
+  (now.getTime() - Date.parse(iso)) / 6e4;
+
+/** Sessions seen within `maxAgeMin` (SESSION_HANDBACK_MIN, the live ones), per host, newest host first; an ended session is gone at once */
+export const hostSessions = (
+  rows: readonly SessionRow[] | null,
+  now: Date,
+  maxAgeMin = SESSION_HANDBACK_MIN
+): HostSessions[] => {
+  const hosts = new Map<string, HostSessions>();
+  for (const r of rows ?? []) {
+    if (r.state === 'ended') continue;
+    const ageMin = ageOf(r.last_seen, now);
+    if (ageMin > maxAgeMin) continue;
+    const h = hosts.get(r.host) ?? { host: r.host, sessions: [], ageMin };
+    h.sessions.push({ id: r.id, kind: r.kind, ageMin });
+    h.ageMin = Math.min(h.ageMin, ageMin);
+    hosts.set(r.host, h);
+  }
+  for (const h of hosts.values())
+    h.sessions.sort((a, b) => a.ageMin - b.ageMin);
+  return [...hosts.values()].sort((a, b) => a.ageMin - b.ageMin);
+};
+
+export type HostHeartbeat = {
+  host: string;
+  /** The newest row's state; null on a row from before states were sent */
+  state: string | null;
+  /** Minutes since that row's heartbeat */
+  ageMin: number;
+};
+
+/** Each host's newest session row, ended ones included, newest host first; the NUC has its own check */
+export const hostHeartbeats = (
+  rows: readonly SessionRow[] | null,
+  nucHost: string | null,
+  now: Date
+): HostHeartbeat[] => {
+  const hosts = new Map<string, HostHeartbeat>();
+  for (const r of rows ?? []) {
+    if (r.host === nucHost) continue;
+    const ageMin = ageOf(r.last_seen, now);
+    const h = hosts.get(r.host);
+    if (!h || ageMin < h.ageMin)
+      hosts.set(r.host, { host: r.host, state: r.state, ageMin });
+  }
+  return [...hosts.values()].sort((a, b) => a.ageMin - b.ageMin);
+};
+
+/**
+ * A host's heartbeat check from its newest row. Ended is no session, and a session
+ * at its prompt sends no beat, so only a turn that went quiet for SESSION_HANDBACK_MIN
+ * fails: a crash, or a terminal closed without SessionEnd. A turn is working from its
+ * prompt on, so one that hangs before its first tool fails too. A row without a state is
+ * from before states were sent and counts as ended once that old.
+ */
+export const heartbeatOk = (
+  h: HostHeartbeat
+): { ok: boolean; note: string | null } => {
+  const quiet = h.ageMin > SESSION_HANDBACK_MIN;
+  switch (h.state) {
+    case 'ended':
+      return { ok: true, note: 'no session' };
+    case 'stopped':
+    case 'waiting':
+    case 'polling':
+      return { ok: true, note: 'idle' };
+    case null:
+      return { ok: true, note: quiet ? 'no session' : null };
+    default:
+      return quiet
+        ? {
+            ok: false,
+            note: `no heartbeat for ${Math.round(h.ageMin)} m while a turn was running`
+          }
+        : { ok: true, note: null };
+  }
+};
+
+export type HandBackState =
+  'attended' | 'handing back' | 'handed back' | 'idle';
+
+export type HandBack = {
+  state: HandBackState;
+  /** The attended host; null when none has an attended session */
+  host: string | null;
+  /** Minutes since that host's newest attended heartbeat */
+  ageMin: number | null;
+};
+
+/**
+ * The Mac's hand-back, from `sessions` alone: its newest attended heartbeat within
+ * SESSION_ATTENDED_MIN is attended, within SESSION_HANDBACK_MIN handing back; after
+ * that the NUC's heartbeat decides between handed back and idle. The Mac is any
+ * host but the NUC, which is the host that sends samples, or without samples the
+ * host that launches implementing sessions.
+ */
+export const handBack = (
+  rows: readonly SessionRow[] | null,
+  nucHost: string | null,
+  nucFresh: boolean,
+  now: Date
+): HandBack => {
+  const nuc =
+    nucHost ?? (rows ?? []).find((r) => r.kind === 'implement')?.host ?? null;
+  const attended = (rows ?? [])
+    .filter(
+      (r) => r.kind === 'attended' && r.host !== nuc && r.state !== 'ended'
+    )
+    .reduce<SessionRow | null>(
+      (a, b) =>
+        a && Date.parse(a.last_seen) >= Date.parse(b.last_seen) ? a : b,
+      null
+    );
+  const ageMin = attended ? ageOf(attended.last_seen, now) : null;
+  const host = attended?.host ?? null;
+  if (ageMin !== null && ageMin <= SESSION_ATTENDED_MIN)
+    return { state: 'attended', host, ageMin };
+  if (ageMin !== null && ageMin <= SESSION_HANDBACK_MIN)
+    return { state: 'handing back', host, ageMin };
+  return { state: nucFresh ? 'handed back' : 'idle', host, ageMin };
+};
+
+export type Pulse = {
+  /** `#719` for a PR, the ticket id for an issue */
+  subject: string;
+  /** The PR's state, else the raw action */
+  what: string;
+  /** In ms */
+  at: number;
+};
+
+/** The newest event of each live table, newest first; empty before any */
+export const feed = (
+  events: readonly GithubEventRow[] | null,
+  connection: Connection
+): Pulse[] => {
+  const github = (events ?? []).reduce<GithubEventRow | null>(
+    (a, b) =>
+      a && Date.parse(a.updated_at) >= Date.parse(b.updated_at) ? a : b,
+    null
+  );
+  const fromGithub: Pulse | null = github
+    ? {
+        subject: github.pr === null ? github.subject : `#${github.pr}`,
+        what: prState(github.action) ?? github.action,
+        at: Date.parse(github.updated_at)
+      }
+    : null;
+  const issue = connection.lastIssue;
+  const fromIssue: Pulse | null =
+    issue && issue.updated_at
+      ? {
+          subject: issue.identifier ?? issue.issue_id,
+          what: issue.action,
+          at: Date.parse(issue.updated_at)
+        }
+      : null;
+  return [fromGithub, fromIssue]
+    .filter((p): p is Pulse => p !== null)
+    .sort((a, b) => b.at - a.at);
+};
+
+/** The newest event either live table brought; null before any */
+export const pulse = (
+  events: readonly GithubEventRow[] | null,
+  connection: Connection
+): Pulse | null => feed(events, connection)[0] ?? null;
+
+/** What the desk can see is wrong with what it shows; `since` is when it began, in ms */
+export type Problem =
+  | {
+      kind: 'connection';
+      text: string;
+      since: number;
+      retries: number;
+      status: Connection['status'];
+      nextAt: number | null;
+    }
+  | {
+      kind: 'data';
+      reason: 'parse';
+      text: string;
+      since: number;
+      /** When the kept view was written; null without one */
+      goodAt: number | null;
+      /** When the newest bad row was written */
+      rowAt: number;
+      view: unknown;
+      issues: ViewIssue[];
+    }
+  | {
+      kind: 'data';
+      reason: 'stale';
+      text: string;
+      since: number;
+      newestRun: number;
+    }
+  | {
+      kind: 'data';
+      reason: 'writers';
+      text: string;
+      /** When the newest other host last wrote */
+      since: number;
+      /** The host the desk reads */
+      used: string;
+      others: { host: string; at: number; paused: boolean }[];
+    }
+  | {
+      kind: 'unknown';
+      text: string;
+      since: number;
+      host: string;
+      ticket: string | null;
+      silentMin: number;
+      /** When the ticket's open run started, in ms */
+      started: number | null;
+    }
+  | {
+      /** A failing health check that no other problem covers */
+      kind: 'check';
+      name: CheckName;
+      text: string;
+      /** When it was last true or last seen; null when never */
+      since: number | null;
+    };
+
+export type ProblemKind = Problem['kind'];
+
+export type ProblemKey =
+  | 'connection'
+  | 'unknown'
+  | 'data-parse'
+  | 'data-stale'
+  | 'data-writers'
+  | 'check';
+
+/** The card a problem gets: its kind, and for data its reason */
+export const problemKey = (p: Problem): ProblemKey => {
+  switch (p.kind) {
+    case 'connection':
+    case 'unknown':
+    case 'check':
+      return p.kind;
+    case 'data':
+      return `data-${p.reason}`;
+    default: {
+      const unreachable: never = p;
+      return unreachable;
+    }
+  }
+};
+
+/** The problems of one kind, narrowed */
+export const ofKind = <K extends ProblemKind>(
+  list: readonly Problem[],
+  kind: K
+): Extract<Problem, { kind: K }>[] =>
+  list.filter((p): p is Extract<Problem, { kind: K }> => p.kind === kind);
+
+/** The id an Agent health row links to: one card per check, the first card of any other key */
+export const problemId = (p: Problem): string =>
+  p.kind === 'check'
+    ? `problem-check-${p.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`
+    : `problem-${problemKey(p)}`;
+
+/** The earliest `since` of the problems that freeze numbers (data, unknown); a down channel only lags, a second writer leaves the picked row current and a failing check says nothing of the queue, so none of those counts */
+export const frozenAt = (list: readonly Problem[]): number | null => {
+  const times = list.flatMap((p) =>
+    p.kind === 'connection' ||
+    p.kind === 'check' ||
+    (p.kind === 'data' && p.reason === 'writers')
+      ? []
+      : [p.since]
+  );
+  return times.length ? Math.min(...times) : null;
+};
+
+/** `host (paused, last HH:MM)` for each, comma separated; unescaped */
+export const writerList = (
+  others: readonly { host: string; at: number; paused: boolean }[]
+): string =>
+  others
+    .map((o) => `${o.host} (${o.paused ? 'paused, ' : ''}last ${hhmm(o.at)})`)
+    .join(', ');
+
+/** Down for longer than the grace, or dropped at least once */
+const channelDown = (connection: Connection, nowMs: number): boolean =>
+  !connection.live &&
+  (connection.retries > 0 ||
+    (connection.downSince !== null &&
+      nowMs - connection.downSince >= CONNECT_GRACE_MS));
+
+/** What the desk can see is wrong with what it shows */
+/**
+ * Whether the session the queue view calls alive has ended: its sessions row says so, or an
+ * abandon was applied on the host after the view was taken. The view's own time, not the row's,
+ * since a paused tick republishes the same view; the abandon also covers a session too old
+ * for the sessions read.
+ */
+export const sessionEnded = (
+  runs: RunsPayload | null,
+  sessions: readonly SessionRow[] | null,
+  deskCommands: readonly DeskCommandRow[] | null
+): boolean => {
+  const id = runs?.qv?.session.id;
+  if (!runs || !id) return false;
+  if ((sessions ?? []).some((r) => r.id === id && r.state === 'ended'))
+    return true;
+  const taken = Date.parse(runs.qv?.at ?? runs.at);
+  return (deskCommands ?? []).some(
+    (r) =>
+      r.host === runs.host &&
+      r.kind === 'abandon' &&
+      r.status === 'applied' &&
+      r.applied_at !== null &&
+      Date.parse(r.applied_at) >= taken
+  );
+};
+
+export const problems = ({
+  connection,
+  runs,
+  runMinutes,
+  host,
+  sessions,
+  deskCommands = null,
+  now
+}: {
+  connection: Connection;
+  runs: RunsPayload | null;
+  runMinutes: number;
+  /** The session rows, to tell whose session the snapshot calls alive; null before they load */
+  sessions: readonly SessionRow[] | null;
+  /** The desk's commands, to tell an abandon that ended the session; null before they load */
+  deskCommands?: readonly DeskCommandRow[] | null;
+  /** The NUC's newest sample (ms) and age, and its silent threshold; null without samples */
+  host: {
+    host: string;
+    at: number;
+    ageMin: number;
+    silentMin: number;
+  } | null;
+  now: Date;
+}): Problem[] => {
+  const out: Problem[] = [];
+  const nowMs = now.getTime();
+  if (channelDown(connection, nowMs))
+    out.push({
+      kind: 'connection',
+      text: connection.retries
+        ? `Realtime is down (dropped ${connection.retries}×); polling every 5 min`
+        : 'Realtime is not connected; polling every 5 min',
+      since: connection.downSince ?? nowMs,
+      retries: connection.retries,
+      status: connection.status,
+      nextAt: connection.nextAt
+    });
+  if (runs?.viewInvalid) {
+    const goodAt = runs.qv?.at ? Date.parse(runs.qv.at) : null;
+    out.push({
+      kind: 'data',
+      reason: 'parse',
+      text: 'The queue_state row does not parse; showing the last good snapshot',
+      since: goodAt ?? Date.parse(runs.at),
+      goodAt,
+      rowAt: Date.parse(runs.at),
+      view: runs.view,
+      issues: runs.viewIssues
+    });
+  }
+  const newestRun = Math.max(
+    0,
+    ...(runs?.rows ?? []).map((r) => Date.parse(r.started))
+  );
+  if (runs?.at && newestRun - Date.parse(runs.at) > 2 * runMinutes * 6e4)
+    out.push({
+      kind: 'data',
+      reason: 'stale',
+      text: 'The queue_state row is older than the newest run',
+      since: Date.parse(runs.at),
+      newestRun
+    });
+  // The payload may be older than the window, since Realtime skips the periodic read
+  const others = (runs?.others ?? [])
+    .map((o) => ({ host: o.host, at: Date.parse(o.at), paused: o.paused }))
+    .filter((o) => now.getTime() - o.at <= QUEUE_WRITER_MIN * 6e4);
+  if (runs && others.length) {
+    out.push({
+      kind: 'data',
+      reason: 'writers',
+      text: `${others.length === 1 ? 'Two hosts publish' : `${others.length + 1} hosts publish`} the queue: ${runs.host} (used) and ${writerList(others)}`,
+      since: Math.max(...others.map((o) => o.at)),
+      used: runs.host,
+      others
+    });
+  }
+  // A session on another host (the attended Mac) says nothing about the NUC's silence
+  const sessionId = runs?.qv?.session.id;
+  const sessionRow = sessionId
+    ? (sessions ?? []).find((r) => r.id === sessionId)
+    : undefined;
+  const sessionHost = sessionRow?.host;
+  // A runs row is written only when the run ends, so the open work is the session the snapshot calls alive
+  if (
+    runs?.qv?.session.state === 'alive' &&
+    host &&
+    host.ageMin > host.silentMin &&
+    !sessionEnded(runs, sessions, deskCommands) &&
+    (sessionHost === undefined || sessionHost === host.host)
+  ) {
+    const ticket = runs.qv.session.ticket ?? null;
+    const open = ticket
+      ? runs.rows.find((r) => r.ticket === ticket && r.finished === null)
+      : undefined;
+    out.push({
+      kind: 'unknown',
+      text: 'A session is alive while the NUC is silent; its state is unknown',
+      since: host.at,
+      host: host.host,
+      ticket,
+      silentMin: host.silentMin,
+      started: open ? Date.parse(open.started) : null
+    });
+  }
+  return out;
+};
+
+/** A health check's name; problems match checks by it */
+export type CheckName =
+  | 'Realtime'
+  | 'queue_state parses'
+  | 'Snapshot age'
+  | `${string} heartbeat`
+  | `${string} credentials`
+  | `${string} deploy`
+  | 'github_events last event'
+  | 'Linear poll';
+
+export type HealthCheck = {
+  name: CheckName;
+  ok: boolean;
+  /** When it was last true or last seen, in ms; null when never */
+  at: number | null;
+  /** Why it fails, or why a quiet check passes; null when there is nothing to say */
+  note: string | null;
+};
+
+/** A ticket's PR and when Linear last synced its attachment: GitHub activity the webhook should have stored */
+export type PrActivity = { pr: number; ticket: string; at: number };
+
+/** The webhook check: fails only when Linear saw a PR change after the newest `github_events` row, so a quiet day passes */
+export const missedEvent = (
+  events: readonly GithubEventRow[],
+  activity: readonly PrActivity[],
+  nowMs: number
+): Omit<HealthCheck, 'name'> => {
+  const newest = events.reduce<number | null>(
+    (a, e) => Math.max(a ?? 0, Date.parse(e.updated_at)),
+    null
+  );
+  const missed = activity
+    .filter((a) => newest === null || a.at - newest > WEBHOOK_GRACE_MIN * 6e4)
+    .reduce<PrActivity | null>((m, a) => (m && m.at >= a.at ? m : a), null);
+  if (missed)
+    return {
+      ok: false,
+      at: newest,
+      note: `PR #${missed.pr} (${missed.ticket}) changed ${dayTime(missed.at, nowMs)}, newest webhook event ${newest === null ? 'never' : dayTime(newest, nowMs)}`
+    };
+  return {
+    ok: true,
+    at: newest,
+    note:
+      newest === null || nowMs - newest > WEBHOOK_QUIET_HOURS * 36e5
+        ? 'quiet'
+        : null
+  };
+};
+
+/** A host's self-deploy as a check: it fails while its newest deploy is a rollback, until a later one turns ok */
+export const deployCheck = (
+  host: string,
+  d: DeployState
+): HealthCheck & { name: `${string} deploy` } => {
+  const at = Date.parse(d.at);
+  const base = { name: `${host} deploy` as const, at };
+  if (d.phase === 'rolled-back')
+    return {
+      ...base,
+      ok: false,
+      note: `Rolled back ${d.failed ?? d.previous ?? 'the new tag'} to ${d.tag}${d.reason ? `: ${d.reason}` : ''}`
+    };
+  if (d.phase === 'stuck')
+    return {
+      ...base,
+      ok: false,
+      note: `${d.tag} failed its check and was not rolled back${d.reason ? `: ${d.reason}` : ''}`
+    };
+  return {
+    ...base,
+    ok: true,
+    note: [
+      d.tag,
+      d.by ? `by ${d.by === 'mac' ? 'Mac' : 'self'}` : null,
+      d.phase === 'checking' ? 'checking first run' : null
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  };
+};
+
+/** The container's exposure check from its newest sample: a missing report fails, as the NUC always sends one */
+const credentialsCheck = (nuc: {
+  host: string;
+  at: number;
+  exposed?: readonly string[] | null;
+}): HealthCheck & { name: `${string} credentials` } => {
+  const base = { name: `${nuc.host} credentials` as const, at: nuc.at };
+  if (nuc.exposed == null) return { ...base, ok: false, note: 'not reported' };
+  return nuc.exposed.length
+    ? { ...base, ok: false, note: `exposed: ${nuc.exposed.join(', ')}` }
+    : {
+        ...base,
+        ok: true,
+        note: "no write credential in the agent's environment"
+      };
+};
+
+/** The Agent health view's checks, in the order it lists them */
+export const health = ({
+  connection,
+  runs,
+  staleHours,
+  nuc,
+  heartbeats,
+  deploys = [],
+  events,
+  activity,
+  storedAt,
+  now
+}: {
+  connection: Connection;
+  runs: RunsPayload | null;
+  staleHours: number;
+  /** The NUC's newest sample, its silent threshold and what it reported as exposed; null without samples */
+  nuc: {
+    host: string;
+    at: number;
+    silentMin: number;
+    exposed?: readonly string[] | null;
+  } | null;
+  /** Every other host seen in the last 24 hours, so a silent one fails rather than drops out */
+  heartbeats: readonly HostHeartbeat[];
+  /** The newest self-deploy of each host that has one */
+  deploys?: readonly { host: string; deploy: DeployState }[];
+  events: readonly GithubEventRow[] | null;
+  /** The PRs of the tickets whose details have loaded; none before they load, so a cold start reads quiet */
+  activity: readonly PrActivity[];
+  storedAt: number | null;
+  now: Date;
+}): HealthCheck[] => {
+  const nowMs = now.getTime();
+  const snapshot = runs?.at ? Date.parse(runs.at) : null;
+  const down = channelDown(connection, nowMs);
+  const nucQuiet = nuc ? (nowMs - nuc.at) / 6e4 : 0;
+  const linearAge = storedAt === null ? null : (nowMs - storedAt) / 6e4;
+  return [
+    {
+      name: 'Realtime',
+      ok: !down,
+      at: connection.upSince,
+      note: down
+        ? connection.retries
+          ? `dropped ${connection.retries}×`
+          : 'not connected'
+        : null
+    },
+    {
+      name: 'queue_state parses',
+      ok: runs !== null && !runs.viewInvalid,
+      at: snapshot,
+      note:
+        runs === null
+          ? 'not loaded'
+          : runs.viewInvalid
+            ? 'does not parse'
+            : null
+    },
+    {
+      name: 'Snapshot age',
+      ok: snapshot !== null && nowMs - snapshot <= staleHours * 36e5,
+      at: snapshot,
+      note:
+        snapshot === null
+          ? 'no snapshot'
+          : nowMs - snapshot > staleHours * 36e5
+            ? `older than ${staleHours} h`
+            : null
+    },
+    ...(nuc
+      ? [
+          {
+            name: `${nuc.host} heartbeat` as const,
+            ok: nucQuiet <= nuc.silentMin,
+            at: nuc.at,
+            note:
+              nucQuiet > nuc.silentMin
+                ? `no sample for ${Math.round(nucQuiet)} m, limit ${Math.round(nuc.silentMin)} m`
+                : null
+          },
+          credentialsCheck(nuc)
+        ]
+      : []),
+    ...heartbeats.map((h) => ({
+      name: `${h.host} heartbeat` as const,
+      ...heartbeatOk(h),
+      at: nowMs - h.ageMin * 6e4
+    })),
+    ...deploys.map((d) => deployCheck(d.host, d.deploy)),
+    {
+      name: 'github_events last event',
+      ...(events === null
+        ? { ok: false, at: null, note: 'not loaded' }
+        : missedEvent(events, activity, nowMs))
+    },
+    {
+      name: 'Linear poll',
+      ok: linearAge !== null && linearAge <= LINEAR_STALE_MIN,
+      at: storedAt,
+      note:
+        linearAge === null
+          ? 'not polled yet'
+          : linearAge > LINEAR_STALE_MIN
+            ? `last stored ${Math.round(linearAge)} m ago, limit ${LINEAR_STALE_MIN} m`
+            : null
+    }
+  ];
+};
+
+/** The problem that already explains a failing check, by its name */
+const covers = (p: Problem, name: CheckName): boolean => {
+  switch (p.kind) {
+    case 'connection':
+      return name === 'Realtime';
+    case 'data':
+      return (
+        name === (p.reason === 'parse' ? 'queue_state parses' : 'Snapshot age')
+      );
+    case 'unknown':
+      return name === `${p.host} heartbeat`;
+    case 'check':
+      return name === p.name;
+    default: {
+      const unreachable: never = p;
+      return unreachable;
+    }
+  }
+};
+
+/** The problem a check's row links to; undefined when none explains it */
+export const problemOf = (
+  list: readonly Problem[],
+  name: CheckName
+): Problem | undefined => list.find((p) => covers(p, name));
+
+/** A `check` problem for every failing check no other problem explains, so the main view shows whatever the pill counts */
+export const checkProblems = (
+  checks: readonly HealthCheck[],
+  found: readonly Problem[]
+): Problem[] =>
+  checks
+    .filter((c) => !c.ok && !problemOf(found, c.name))
+    .map((c) => ({
+      kind: 'check',
+      name: c.name,
+      text: c.note ?? 'failing',
+      since: c.at
+    }));

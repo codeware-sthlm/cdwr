@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { flyPrComment } from './fly-pr-comment';
 import { ActionInputsSchema } from './schemas/action-inputs.schema';
@@ -39,7 +40,8 @@ export async function run(): Promise<void> {
       token: core.getInput('token', { required: true })
     });
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     await flyPrComment(inputs);
   } catch (error) {

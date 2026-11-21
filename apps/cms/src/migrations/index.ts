@@ -80,6 +80,20 @@ import * as migration_20261004_120624_cod_522_rebuild_components from './2026100
 import * as migration_20261004_135735_cod_518_nested_navigation from './20261004_135735_cod_518_nested_navigation';
 import * as migration_20261006_232639_cod_534_payload_3_90 from './20261006_232639_cod_534_payload_3_90';
 import * as migration_20261010_154752_cod_541_apex_addresses from './20261010_154752_cod_541_apex_addresses';
+import * as migration_20261013_223952_cod_567_stats_website_id from './20261013_223952_cod_567_stats_website_id';
+import * as migration_20261015_053116_cod_561_invite_codes from './20261015_053116_cod_561_invite_codes';
+import * as migration_20261015_105327_cod_562_signup from './20261015_105327_cod_562_signup';
+import * as migration_20261016_190522_cod_577_stats_share_id from './20261016_190522_cod_577_stats_share_id';
+import * as migration_20261018_194351_tenants_stats_team_id from './20261018_194351_tenants_stats_team_id';
+import * as migration_20261018_224435_users_stats_account from './20261018_224435_users_stats_account';
+import * as migration_20261025_215835_idle_workspace_cleanup from './20261025_215835_idle_workspace_cleanup';
+import * as migration_20261025_222138_idle_workspace_jobs from './20261025_222138_idle_workspace_jobs';
+import * as migration_20261026_181739_totp from './20261026_181739_totp';
+import * as migration_20261106_185215_cod_717_blocks from './20261106_185215_cod_717_blocks';
+import * as migration_20261108_123050_cod_708_faq_topic from './20261108_123050_cod_708_faq_topic';
+import * as migration_20261110_225226_cod_769_coming_soon from './20261110_225226_cod_769_coming_soon';
+import * as migration_20261112_135923_cod_779_agents from './20261112_135923_cod_779_agents';
+import * as migration_20261113_232648_code_shell from './20261113_232648_code_shell';
 
 export const migrations = [
   {
@@ -491,5 +505,75 @@ export const migrations = [
     up: migration_20261010_154752_cod_541_apex_addresses.up,
     down: migration_20261010_154752_cod_541_apex_addresses.down,
     name: '20261010_154752_cod_541_apex_addresses'
+  },
+  {
+    up: migration_20261013_223952_cod_567_stats_website_id.up,
+    down: migration_20261013_223952_cod_567_stats_website_id.down,
+    name: '20261013_223952_cod_567_stats_website_id'
+  },
+  {
+    up: migration_20261015_053116_cod_561_invite_codes.up,
+    down: migration_20261015_053116_cod_561_invite_codes.down,
+    name: '20261015_053116_cod_561_invite_codes'
+  },
+  {
+    up: migration_20261015_105327_cod_562_signup.up,
+    down: migration_20261015_105327_cod_562_signup.down,
+    name: '20261015_105327_cod_562_signup'
+  },
+  {
+    up: migration_20261016_190522_cod_577_stats_share_id.up,
+    down: migration_20261016_190522_cod_577_stats_share_id.down,
+    name: '20261016_190522_cod_577_stats_share_id'
+  },
+  {
+    up: migration_20261018_194351_tenants_stats_team_id.up,
+    down: migration_20261018_194351_tenants_stats_team_id.down,
+    name: '20261018_194351_tenants_stats_team_id'
+  },
+  {
+    up: migration_20261018_224435_users_stats_account.up,
+    down: migration_20261018_224435_users_stats_account.down,
+    name: '20261018_224435_users_stats_account'
+  },
+  {
+    up: migration_20261025_215835_idle_workspace_cleanup.up,
+    down: migration_20261025_215835_idle_workspace_cleanup.down,
+    name: '20261025_215835_idle_workspace_cleanup'
+  },
+  {
+    up: migration_20261025_222138_idle_workspace_jobs.up,
+    down: migration_20261025_222138_idle_workspace_jobs.down,
+    name: '20261025_222138_idle_workspace_jobs'
+  },
+  {
+    up: migration_20261026_181739_totp.up,
+    down: migration_20261026_181739_totp.down,
+    name: '20261026_181739_totp'
+  },
+  {
+    up: migration_20261106_185215_cod_717_blocks.up,
+    down: migration_20261106_185215_cod_717_blocks.down,
+    name: '20261106_185215_cod_717_blocks'
+  },
+  {
+    up: migration_20261108_123050_cod_708_faq_topic.up,
+    down: migration_20261108_123050_cod_708_faq_topic.down,
+    name: '20261108_123050_cod_708_faq_topic'
+  },
+  {
+    up: migration_20261110_225226_cod_769_coming_soon.up,
+    down: migration_20261110_225226_cod_769_coming_soon.down,
+    name: '20261110_225226_cod_769_coming_soon'
+  },
+  {
+    up: migration_20261112_135923_cod_779_agents.up,
+    down: migration_20261112_135923_cod_779_agents.down,
+    name: '20261112_135923_cod_779_agents'
+  },
+  {
+    up: migration_20261113_232648_code_shell.up,
+    down: migration_20261113_232648_code_shell.down,
+    name: '20261113_232648_code_shell'
   }
 ];

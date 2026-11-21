@@ -1,9 +1,11 @@
 import type { CollectionConfig } from 'payload';
 
+import agents from './agents/agents.collection';
 import categories from './categories/categories.collection';
 import customComponents from './custom-components/custom-components.collection';
 import customThemes from './custom-themes/custom-themes.collection';
 import faq from './faq/faq.collection';
+import inviteCodes from './invite-codes/invite-codes.collection';
 import media from './media/media.collection';
 import navigation from './navigation/navigation.collection';
 import pages from './pages/pages.collection';
@@ -28,10 +30,12 @@ import users from './users/users.collection';
  * across this list, and a second hardcoded copy would defeat the point.
  */
 export const collections: Array<CollectionConfig> = [
+  agents,
   categories,
   customComponents,
   customThemes,
   faq,
+  inviteCodes,
   media,
   navigation,
   pages,

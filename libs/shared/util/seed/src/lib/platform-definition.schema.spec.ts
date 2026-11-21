@@ -15,7 +15,20 @@ const minimal = {
       supportedLocales: ['en']
     }
   ],
-  users: []
+  users: [],
+  signup: { open: false, inviteCodes: [] }
+};
+
+const inviteCode = {
+  code: 'SEED-MANY-0000-0001',
+  note: 'Seeded',
+  maxUses: 1
+};
+
+const faqEntry = {
+  topic: 'drafts' as const,
+  question: { en: 'What is a draft?', sv: 'Vad är ett utkast?' },
+  answer: { en: 'A saved version.', sv: 'En sparad version.' }
 };
 
 const errorsOf = (definition: unknown): Array<string> => {
@@ -162,5 +175,79 @@ describe('PlatformDefinitionSchema', () => {
     };
 
     expect(errorsOf(definition).join(' ')).toContain("'hut'");
+  });
+
+  it('accepts a FAQ entry with a known topic', () => {
+    const definition = { ...minimal, faq: [faqEntry] };
+
+    expect(errorsOf(definition)).toEqual([]);
+  });
+
+  it('refuses a FAQ entry without a topic, or with an unknown one', () => {
+    const withoutTopic = {
+      question: faqEntry.question,
+      answer: faqEntry.answer
+    };
+    for (const entry of [withoutTopic, { ...faqEntry, topic: 'other' }]) {
+      expect(errorsOf({ ...minimal, faq: [entry] }).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('refuses two FAQ entries sharing an English question', () => {
+    const definition = {
+      ...minimal,
+      faq: [faqEntry, { ...faqEntry, topic: 'pages' as const }]
+    };
+
+    expect(errorsOf(definition).join(' ')).toContain("'What is a draft?'");
+  });
+
+  it('accepts a well-formed invite code', () => {
+    const definition = {
+      ...minimal,
+      signup: { open: true, inviteCodes: [inviteCode] }
+    };
+
+    expect(errorsOf(definition)).toEqual([]);
+  });
+
+  it('refuses an invite code outside the Crockford alphabet or shape', () => {
+    for (const code of [
+      'SEED-ONCE-0000-0001',
+      'seed-many-0000-0001',
+      'SEEDMANY00000001',
+      'SEED-MANY-0000'
+    ]) {
+      const definition = {
+        ...minimal,
+        signup: { open: true, inviteCodes: [{ ...inviteCode, code }] }
+      };
+
+      expect(errorsOf(definition).join(' ')).toContain('Crockford');
+    }
+  });
+
+  it('refuses two invite codes sharing a lookup', () => {
+    const definition = {
+      ...minimal,
+      signup: {
+        open: true,
+        inviteCodes: [
+          inviteCode,
+          { ...inviteCode, code: 'SEED-MANY-0000-0002' }
+        ]
+      }
+    };
+
+    expect(errorsOf(definition).join(' ')).toContain("'SEEDMANY'");
+  });
+
+  it('refuses an invite code with no whole use', () => {
+    const definition = {
+      ...minimal,
+      signup: { open: true, inviteCodes: [{ ...inviteCode, maxUses: 0.5 }] }
+    };
+
+    expect(errorsOf(definition).length).toBeGreaterThan(0);
   });
 });

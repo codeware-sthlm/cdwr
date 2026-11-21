@@ -110,11 +110,13 @@ export default defineCommand<
     previewApp: previewAppInput(),
     name: input.string({
       prompt: 'What is the workspace called?',
+      short: 'n',
       description: 'Shown in the admin; the slug is derived from it',
       placeholder: 'cdwr.io'
     }),
     locales: input.multiselect<string>({
       prompt: 'Which locales should its site support?',
+      short: 'l',
       description: 'A single locale hides the language selector',
       initial: ['en'],
       min: 1,
@@ -125,12 +127,14 @@ export default defineCommand<
     }),
     slug: input.string({
       prompt: 'Slug? Leave empty to derive it from the name',
+      short: 's',
       description: 'Overrides the slug derived from the name',
       placeholder: 'derived from the name',
       optional: true
     }),
     deployment: input.string({
       prompt: 'Deployment name? Leave empty for a workspace that stays local',
+      short: 'D',
       placeholder: 'none',
       description:
         'Its Infisical folder and the end of its Fly app names. It cannot be changed later',

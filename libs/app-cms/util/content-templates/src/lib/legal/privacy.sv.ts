@@ -1,10 +1,13 @@
 /** Swedish counterpart of {@link privacyEn} */
-export const privacySv = `> **Utkast — läs igenom innan du publicerar.** Texten beskriver vilka uppgifter den här webbplatsen samlar in och varför. Den är en utgångspunkt, inte juridisk rådgivning. Stäm av den mot hur ni faktiskt arbetar, fyll i det som är markerat, lägg till annat ni samlar in och låt någon granska texten om du är osäker.
+export const privacySv = `{{^published}}
+> **Utkast — läs igenom innan du publicerar.** Texten beskriver vilka uppgifter den här webbplatsen samlar in och varför. Den är en utgångspunkt, inte juridisk rådgivning. Stäm av den mot hur ni faktiskt arbetar, fyll i det som är markerat, lägg till annat ni samlar in och låt någon granska texten om du är osäker.
+{{/published}}
 
 # Integritet
 
 {{tenantName}} ansvarar för de personuppgifter du lämnar på den här webbplatsen. Här förklarar vi vad vi samlar in, varför, hur länge vi sparar uppgifterna och vilka tjänster vi tar hjälp av för att driva webbplatsen.
 
+{{#forms}}
 ## Formulär
 
 När du skickar ett meddelande via ett formulär på webbplatsen sparar vi det du har skrivit och när du skickade meddelandet. Vilka uppgifter det gäller beror på formuläret — oftast ditt namn, din e-postadress och själva meddelandet.
@@ -19,6 +22,7 @@ Meddelanden raderas {{formsRetentionDays}} dagar efter att de skickades.
 {{^formsRetentionDays}}
 Vi sparar meddelanden tills vi raderar dem. **Fyll i:** hur länge det är, eller ange en sparandetid under Formulär i webbplatsens inställningar så att meddelandena raderas automatiskt.
 {{/formsRetentionDays}}
+{{/forms}}
 
 {{#tourSignups}}
 ## Reseanmälningar
@@ -57,10 +61,18 @@ Vi skickar e-post via en tjänst som levererar mejlen åt oss. **Fyll i:** vilke
 {{#errorMonitoring}}
 ## Felövervakning
 
-När något går fel på webbplatsen skickas en felrapport till Sentry, en tjänst som hjälper oss att hitta och rätta fel. Rapporten visar vilken sida du var på och vilken webbläsare du använder{{#errorMonitoringEu}}, och den lagras inom EU{{/errorMonitoringEu}}. Den innehåller inte din IP-adress eller något du har fyllt i på sidan. Vi spelar inte in vad du gör på sidan, och rapporterna används bara för att rätta fel.
+När något går fel på webbplatsen skickas en felrapport till Sentry, en tjänst som hjälper oss att hitta och rätta fel. Rapporten visar vilken sida du var på och vilken webbläsare du använder{{#errorMonitoringEu}}, och den lagras inom EU{{/errorMonitoringEu}}. Den innehåller inte din IP-adress eller något du har fyllt i på sidan. Rapporterna används inte för att följa vad du gör på sidan, bara för att rätta fel.
 
 Den rättsliga grunden är vårt berättigade intresse av att webbplatsen fungerar.
 {{/errorMonitoring}}
+
+{{#analytics}}
+## Besöksstatistik
+
+Vi räknar besöken på webbplatsen med Umami, en statistiktjänst som drivs för vår räkning. Tjänsten sätter inga cookies och sparar ingenting i din webbläsare. För varje sidvisning registreras vilken sida du besöker, vilken webbplats du kom från, vilken webbläsare, vilket operativsystem, vilken typ av enhet, vilken skärmstorlek och vilket språk du använder, samt ungefär var du befinner dig (land, region och ort). Vid en del besök registreras också var på sidan du klickar och hur långt ner du scrollar. Din IP-adress används för att avgöra var du ungefär befinner dig och, tillsammans med uppgifterna om din webbläsare, för att känna igen besök från samma webbläsare under innevarande månad. Själva IP-adressen sparas inte. Vi använder statistiken för att se vilka sidor som läses och hur webbplatsen används, inte för att ta reda på vem du är.
+
+Den rättsliga grunden är vårt berättigade intresse av att veta hur webbplatsen används.
+{{/analytics}}
 
 {{#humanCheck}}
 ## Skydd mot skräppost

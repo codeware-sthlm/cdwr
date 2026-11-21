@@ -1,0 +1,1106 @@
+import {
+  STALE_MS,
+  createHandler,
+  deviceFor,
+  parseCommand,
+  parseTokens,
+  sha256
+} from './handler';
+
+const NOW = Date.parse('2026-11-02T10:00:00Z');
+const AT = new Date(NOW).toISOString();
+const TOKEN = 'mac-token';
+const OTHER_TOKEN = 'phone-token';
+const BASE = 'https://x.supabase.co/rest/v1';
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status });
+
+type Options = {
+  tokens?: string | undefined;
+  supabaseUrl?: string | undefined;
+  serviceKey?: string | undefined;
+  /** queue_state rows, or a status to fail the read with */
+  queue?: unknown[] | number;
+  /** reviews rows, newest first; none by default */
+  reviews?: unknown[];
+  insert?: number;
+  /** desk_abandon, desk_snooze or desk_wake result rows, a status to fail with, or a throw */
+  rpc?: unknown[] | number | 'throw';
+  activity?: number | 'throw';
+  fail?: boolean;
+};
+
+const setup = async (options: Options = {}) => {
+  const tokens =
+    'tokens' in options
+      ? options.tokens
+      : JSON.stringify({
+          mac: await sha256(TOKEN),
+          phone: await sha256(OTHER_TOKEN)
+        });
+  const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(
+    async (url, init) => {
+      if (options.fail) throw new Error('offline');
+      const path = url.slice(BASE.length + 1);
+      const method = init.method;
+      if (path.startsWith('queue_state?') && method === 'GET') {
+        const queue = options.queue ?? [{ at: AT, view: {} }];
+        return typeof queue === 'number' ? json([], queue) : json(queue);
+      }
+      if (path.startsWith('reviews?') && method === 'GET')
+        return json(options.reviews ?? []);
+      if (path.startsWith('rpc/desk_') && method === 'POST') {
+        if (options.rpc === 'throw') throw new Error('offline');
+        const rpc = options.rpc ?? [{ id: 7, status: 'applied', note: null }];
+        return typeof rpc === 'number' ? json([], rpc) : json(rpc);
+      }
+      if (path.startsWith('desk_commands') && method === 'POST')
+        return options.insert && options.insert >= 400
+          ? json({}, options.insert)
+          : json([{ id: 7 }], 201);
+      if (path.startsWith('activity') && method === 'POST') {
+        if (options.activity === 'throw') throw new Error('reset');
+        return new Response(null, { status: options.activity ?? 201 });
+      }
+      return json({}, 404);
+    }
+  );
+  const log = vi.fn();
+  const handle = createHandler({
+    tokens,
+    supabaseUrl:
+      'supabaseUrl' in options ? options.supabaseUrl : 'https://x.supabase.co/',
+    serviceKey: 'serviceKey' in options ? options.serviceKey : 'service',
+    fetch,
+    now: () => NOW,
+    log
+  });
+  return { fetch, log, handle };
+};
+
+const post = (
+  payload: unknown,
+  {
+    token = TOKEN,
+    authorization,
+    method = 'POST'
+  }: { token?: string; authorization?: string | null; method?: string } = {}
+) => {
+  const headers = new Headers();
+  const auth = authorization === undefined ? `Bearer ${token}` : authorization;
+  if (auth !== null) headers.set('Authorization', auth);
+  return new Request('https://x.supabase.co/functions/v1/desk-command', {
+    method,
+    headers,
+    body:
+      method === 'POST'
+        ? typeof payload === 'string'
+          ? payload
+          : JSON.stringify(payload)
+        : undefined
+  });
+};
+
+const callsTo = (
+  fetch: { mock: { calls: [string, RequestInit][] } },
+  fragment: string,
+  method?: string
+) =>
+  fetch.mock.calls.filter(
+    ([url, init]) =>
+      url.includes(fragment) && (method === undefined || init.method === method)
+  );
+
+const bodyOf = (call: [string, RequestInit]) =>
+  JSON.parse(call[1].body as string) as Record<string, unknown>;
+
+const HEX = 'a'.repeat(64);
+const FINDING = 'stale:COD-9:0a1b2c3d';
+
+describe('sha256', () => {
+  it('matches the known vector', async () => {
+    expect(await sha256('abc')).toBe(
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+    );
+  });
+});
+
+describe('parseTokens', () => {
+  it('reads a device table and lowercases the hashes', () => {
+    expect(
+      parseTokens(JSON.stringify({ mac: HEX.toUpperCase(), phone: HEX }))
+    ).toEqual({ mac: HEX, phone: HEX });
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['empty', ''],
+    ['not JSON', '{nope'],
+    ['an array', JSON.stringify([HEX])],
+    ['an empty object', '{}'],
+    ['a non-hex hash', JSON.stringify({ mac: 'z'.repeat(64) })],
+    ['a short hash', JSON.stringify({ mac: 'abc' })],
+    ['a non-string hash', JSON.stringify({ mac: 5 })],
+    ['an empty device name', JSON.stringify({ '': HEX })]
+  ])('refuses %s', (_name, raw) => {
+    expect(parseTokens(raw)).toBeNull();
+  });
+});
+
+describe('deviceFor', () => {
+  const setupTokens = async () => ({
+    mac: await sha256('one'),
+    phone: await sha256('two'),
+    tablet: await sha256('three')
+  });
+
+  it('matches the right device among several', async () => {
+    const tokens = await setupTokens();
+    expect(await deviceFor(tokens, 'Bearer one')).toBe('mac');
+    expect(await deviceFor(tokens, 'Bearer two')).toBe('phone');
+    expect(await deviceFor(tokens, 'Bearer three')).toBe('tablet');
+  });
+
+  it.each([
+    ['a missing header', null],
+    ['another scheme', 'Basic one'],
+    ['a bare token', 'one'],
+    ['an empty bearer', 'Bearer '],
+    ['a wrong token', 'Bearer nope']
+  ])('refuses %s', async (_name, header) => {
+    expect(await deviceFor(await setupTokens(), header)).toBeNull();
+  });
+});
+
+describe('parseCommand', () => {
+  it.each(['pause', 'resume', 'run', 'abandon', 'review'])(
+    'accepts %s',
+    (kind) => {
+      expect(parseCommand({ host: 'nuc', kind })).toEqual({
+        host: 'nuc',
+        kind,
+        args: {}
+      });
+    }
+  );
+
+  it('accepts empty args on a kind that takes none', () => {
+    expect(parseCommand({ host: 'nuc', kind: 'pause', args: {} })).toEqual({
+      host: 'nuc',
+      kind: 'pause',
+      args: {}
+    });
+  });
+
+  it('accepts abandon with the session it showed', () => {
+    expect(
+      parseCommand({ host: 'nuc', kind: 'abandon', args: { session: 's1' } })
+    ).toEqual({ host: 'nuc', kind: 'abandon', args: { session: 's1' } });
+  });
+
+  it.each([
+    ['a number', { session: 5 }],
+    ['spaces', { session: 'a b' }],
+    ['another key', { session: 's1', value: 1 }]
+  ])('refuses abandon with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'abandon', args })).toBe(
+      'abandon takes only a session id'
+    );
+  });
+
+  it('accepts wake with a ticket', () => {
+    expect(
+      parseCommand({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-718' } })
+    ).toEqual({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-718' } });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no ticket', {}],
+    ['a lowercase ticket', { ticket: 'cod-1' }],
+    ['another team', { ticket: 'ENG-1' }],
+    ['another key', { ticket: 'COD-1', kind: 'plan' }]
+  ])('refuses wake with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'wake', args })).toBe(
+      'wake takes only a ticket'
+    );
+  });
+
+  it.each(['copilot', 'merge'])('accepts %s with a ticket and a PR', (kind) => {
+    expect(
+      parseCommand({ host: 'nuc', kind, args: { ticket: 'COD-742', pr: 812 } })
+    ).toEqual({ host: 'nuc', kind, args: { ticket: 'COD-742', pr: 812 } });
+  });
+
+  it.each(['copilot', 'merge'])('refuses %s with a bad payload', (kind) => {
+    const message = `${kind} takes a ticket and a PR number`;
+    for (const args of [
+      undefined,
+      { ticket: 'COD-1' },
+      { pr: 5 },
+      { ticket: 'COD-1', pr: 1.5 },
+      { ticket: 'COD-1', pr: '5' },
+      { ticket: 'COD-1', pr: 0 },
+      { ticket: 'COD-1', pr: -3 },
+      { ticket: 'COD-1', pr: 1_000_000 },
+      { ticket: 'cod-1', pr: 5 },
+      { ticket: 'ENG-1', pr: 5 },
+      { ticket: 'COD-1', pr: 5, value: 1 }
+    ])
+      expect(parseCommand({ host: 'nuc', kind, args })).toBe(message);
+  });
+
+  it('accepts restart with a sha, a null sha or no sha key', () => {
+    const base = { tenant: 'acme', app: 'cdwr-cms-acme' };
+    for (const [args, sha] of [
+      [{ ...base, sha: 'abc1234' }, 'abc1234'],
+      [{ ...base, sha: null }, null],
+      [base, null]
+    ] as const)
+      expect(parseCommand({ host: 'nuc', kind: 'restart', args })).toEqual({
+        host: 'nuc',
+        kind: 'restart',
+        args: { ...base, sha }
+      });
+  });
+
+  it('refuses restart with a bad payload', () => {
+    const message = 'restart takes a tenant, a cms app and a sha or null';
+    const ok = { tenant: 'acme', app: 'cdwr-cms-acme', sha: null };
+    for (const args of [
+      undefined,
+      { ...ok, app: 'cdwr-web-x' },
+      { ...ok, app: 'cdwr-cms-' },
+      { ...ok, tenant: 'Acme' },
+      { ...ok, sha: 'abc12' },
+      { ...ok, sha: 'ABC1234' },
+      { ...ok, sha: 'a'.repeat(41) },
+      { ...ok, sha: 5 },
+      { ...ok, extra: 1 }
+    ])
+      expect(parseCommand({ host: 'nuc', kind: 'restart', args })).toBe(
+        message
+      );
+  });
+
+  it('accepts gate open and close', () => {
+    for (const action of ['open', 'close'])
+      expect(
+        parseCommand({
+          host: 'nuc',
+          kind: 'gate',
+          args: { tenant: 'acme', action }
+        })
+      ).toEqual({
+        host: 'nuc',
+        kind: 'gate',
+        args: { tenant: 'acme', action }
+      });
+  });
+
+  it('refuses gate with a bad payload, a password included', () => {
+    const message = 'gate takes a tenant and open or close';
+    for (const args of [
+      undefined,
+      { tenant: 'acme' },
+      { tenant: 'acme', action: 'toggle' },
+      { tenant: 'Acme', action: 'open' },
+      { tenant: 'acme', action: 'open', password: 'secret' }
+    ])
+      expect(parseCommand({ host: 'nuc', kind: 'gate', args })).toBe(message);
+  });
+
+  it('accepts snooze and normalises the gate time', () => {
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'snooze',
+        args: {
+          ticket: 'COD-1',
+          kind: 'hand-offs',
+          eventAt: '2026-11-04T09:00:00+01:00'
+        }
+      })
+    ).toEqual({
+      host: 'nuc',
+      kind: 'snooze',
+      args: {
+        ticket: 'COD-1',
+        kind: 'hand-offs',
+        eventAt: '2026-11-04T08:00:00.000Z'
+      }
+    });
+  });
+
+  it.each([
+    ['a null gate time', { ticket: 'COD-1', kind: 'idea', eventAt: null }],
+    ['no gate time', { ticket: 'COD-1', kind: 'idea' }]
+  ])('accepts snooze with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'snooze', args })).toEqual({
+      host: 'nuc',
+      kind: 'snooze',
+      args: { ticket: 'COD-1', kind: 'idea', eventAt: null }
+    });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no ticket', { kind: 'plan' }],
+    ['a bad ticket', { ticket: 'COD-x', kind: 'plan' }],
+    ['no row kind', { ticket: 'COD-1' }],
+    ['an unknown row kind', { ticket: 'COD-1', kind: 'pause' }],
+    ['a date only', { ticket: 'COD-1', kind: 'plan', eventAt: '2026-11-04' }],
+    ['a number', { ticket: 'COD-1', kind: 'plan', eventAt: 5 }],
+    [
+      'an impossible time',
+      { ticket: 'COD-1', kind: 'plan', eventAt: '2026-13-40T99:00:00Z' }
+    ],
+    ['another key', { ticket: 'COD-1', kind: 'plan', session: 's1' }]
+  ])('refuses snooze with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'snooze', args })).toBe(
+      'snooze takes a ticket, a row kind and a gate time or null'
+    );
+  });
+
+  it('accepts dismiss with a finding and trims the note', () => {
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'dismiss',
+        args: { finding: FINDING, note: '  not a problem  ' }
+      })
+    ).toEqual({
+      host: 'nuc',
+      kind: 'dismiss',
+      args: { finding: FINDING, note: 'not a problem' }
+    });
+  });
+
+  it.each([
+    ['no note', { finding: FINDING }],
+    ['a null note', { finding: FINDING, note: null }],
+    ['a blank note', { finding: FINDING, note: '   ' }]
+  ])('accepts dismiss with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'dismiss', args })).toEqual({
+      host: 'nuc',
+      kind: 'dismiss',
+      args: { finding: FINDING, note: null }
+    });
+  });
+
+  it('accepts a note of 200 characters', () => {
+    const note = 'a'.repeat(200);
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'dismiss',
+        args: { finding: FINDING, note }
+      })
+    ).toMatchObject({ args: { note } });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no finding', {}],
+    ['an uppercase finding', { finding: 'Stale:COD-1:0a1b2c3d' }],
+    ['a short hash', { finding: 'stale:COD-1:0a1b2c' }],
+    ['a non-hex hash', { finding: 'stale:COD-1:0a1b2c3g' }],
+    ['no ticket', { finding: 'stale:0a1b2c3d' }],
+    ['a note too long', { finding: FINDING, note: 'a'.repeat(201) }],
+    ['a note that is not text', { finding: FINDING, note: 5 }],
+    ['another key', { finding: FINDING, ticket: 'COD-1' }]
+  ])('refuses dismiss with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'dismiss', args })).toBe(
+      'dismiss takes a finding id and a note of at most 200 characters'
+    );
+  });
+
+  it('refuses args on a kind that takes none', () => {
+    expect(
+      parseCommand({ host: 'nuc', kind: 'pause', args: { value: 1 } })
+    ).toBe('pause takes no args');
+  });
+
+  it.each([
+    ['limit', 1],
+    ['limit', 20],
+    ['cap', 0],
+    ['cap', 500],
+    ['cap', 12.5]
+  ])('accepts %s %s', (kind, value) => {
+    expect(parseCommand({ host: 'nuc', kind, args: { value } })).toEqual({
+      host: 'nuc',
+      kind,
+      args: { value }
+    });
+  });
+
+  it.each([
+    ['limit', 0],
+    ['limit', 21],
+    ['limit', 1.5],
+    ['cap', -1],
+    ['cap', 501],
+    ['limit', '3'],
+    ['cap', null],
+    ['cap', true]
+  ])('refuses %s %j', (kind, value) => {
+    expect(typeof parseCommand({ host: 'nuc', kind, args: { value } })).toBe(
+      'string'
+    );
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no value', {}],
+    ['args that are not an object', 3]
+  ])('refuses a limit with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'limit', args })).toBe(
+      'limit takes a value from 1 to 20'
+    );
+  });
+
+  it.each([
+    ['empty', ''],
+    ['with spaces', 'a b'],
+    ['with a slash', 'a/b'],
+    ['too long', 'a'.repeat(65)],
+    ['not a string', 5]
+  ])('refuses a host that is %s', (_name, host) => {
+    expect(parseCommand({ host, kind: 'pause' })).toBe('Bad host');
+  });
+
+  it('accepts a host of 64 characters', () => {
+    expect(typeof parseCommand({ host: 'a'.repeat(64), kind: 'pause' })).toBe(
+      'object'
+    );
+  });
+
+  it.each([['reboot'], [5], [undefined]])('refuses kind %j', (kind) => {
+    expect(parseCommand({ host: 'nuc', kind })).toBe('Bad kind');
+  });
+
+  it.each([
+    ['a string', 'x'],
+    ['null', null],
+    ['an array', []]
+  ])('refuses %s as the payload', (_name, payload) => {
+    expect(parseCommand(payload)).toBe('Not an object');
+  });
+});
+
+describe('createHandler', () => {
+  const session = (state: string) => [
+    { at: AT, view: { session: { state, id: 's1', ticket: 'COD-1' } } }
+  ];
+  const KNOWN = session('alive');
+  const stale = (ms: number) => [
+    { at: new Date(NOW - ms).toISOString(), view: {} }
+  ];
+
+  it('answers OPTIONS with CORS headers', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post(null, { method: 'OPTIONS' }));
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toContain(
+      'authorization'
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses GET', async () => {
+    const { handle } = await setup();
+    expect((await handle(post(null, { method: 'GET' }))).status).toBe(405);
+  });
+
+  it.each([
+    ['no tokens', { tokens: undefined }],
+    ['tokens that are not JSON', { tokens: '{nope' }],
+    ['no url', { supabaseUrl: undefined }],
+    ['no key', { serviceKey: undefined }]
+  ])('answers 500 with %s', async (_name, options) => {
+    const { handle, fetch, log } = await setup(options);
+    const res = await handle(post({ host: 'nuc', kind: 'pause' }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Not configured' });
+    expect(log).toHaveBeenCalledWith({ event: 'not configured' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a bad token before reading anything', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(
+      post({ host: 'nuc', kind: 'pause' }, { token: 'nope' })
+    );
+    expect(res.status).toBe(401);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body that is not JSON', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post('{nope'));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Not JSON' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed command with the message', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post({ host: 'nuc', kind: 'reboot' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Bad kind' });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('stores a pending command for a known host and writes no activity', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(
+      post({ host: 'nuc', kind: 'limit', args: { value: 3 } })
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+
+    const [read] = callsTo(fetch, 'queue_state');
+    expect(read[0]).toBe(`${BASE}/queue_state?host=eq.nuc&select=at,view`);
+    expect((read[1].headers as Record<string, string>)['apikey']).toBe(
+      'service'
+    );
+    expect((read[1].headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer service'
+    );
+
+    const [insert] = callsTo(fetch, 'desk_commands');
+    expect(insert[0]).toBe(`${BASE}/desk_commands?select=id`);
+    expect(insert[1].method).toBe('POST');
+    expect(bodyOf(insert)).toEqual({
+      host: 'nuc',
+      kind: 'limit',
+      args: { value: 3 },
+      at: AT,
+      actor: 'mac',
+      status: 'pending',
+      applied_at: null,
+      note: null
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('refuses a command for a host nothing reports from, and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post({ host: 'ghost', kind: 'pause' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no scheduler reports from ghost'
+    });
+
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      status: 'refused',
+      note: 'no scheduler reports from ghost',
+      applied_at: null
+    });
+    const [activity] = callsTo(fetch, 'activity');
+    expect(activity[0]).toBe(`${BASE}/activity?on_conflict=event_id`);
+    expect(bodyOf(activity)).toEqual({
+      event_id: 'desk:7',
+      at: AT,
+      ticket: null,
+      actor: 'human',
+      change:
+        'pause refused from the desk (mac): no scheduler reports from ghost',
+      host: 'ghost'
+    });
+  });
+
+  it.each([
+    ['no row', []],
+    ['a row exactly STALE_MS old', stale(STALE_MS), true],
+    ['a row STALE_MS + 1 old', stale(STALE_MS + 1)],
+    ['a row with a non-string at', [{ at: 5, view: {} }]]
+  ])('treats a host with %s', async (_name, queue, known = false) => {
+    const { handle } = await setup({ queue });
+    const res = await handle(post({ host: 'nuc', kind: 'pause' }));
+    expect(await res.json()).toEqual(
+      known
+        ? { id: 7, status: 'pending', note: null }
+        : { id: 7, status: 'refused', note: 'no scheduler reports from nuc' }
+    );
+  });
+
+  it.each([['alive'], ['waiting']])(
+    'abandons a %s session and records it as applied',
+    async (state) => {
+      const { handle, fetch } = await setup({ queue: session(state) });
+      const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        id: 7,
+        status: 'applied',
+        note: null
+      });
+
+      expect(
+        fetch.mock.calls.map(
+          ([url, init]) =>
+            `${init.method} ${url.slice(BASE.length + 1).split('?')[0]}`
+        )
+      ).toEqual(['GET queue_state', 'POST rpc/desk_abandon', 'POST activity']);
+      expect(callsTo(fetch, 'desk_commands', 'POST')).toHaveLength(0);
+      const [rpc] = callsTo(fetch, 'rpc/desk_abandon', 'POST');
+      expect(rpc[0]).toBe(`${BASE}/rpc/desk_abandon`);
+      expect(bodyOf(rpc)).toEqual({
+        p_host: 'nuc',
+        p_actor: 'mac',
+        p_at: AT,
+        p_session: 's1'
+      });
+      expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+        event_id: 'desk:7',
+        ticket: 'COD-1',
+        actor: 'human',
+        host: 'nuc',
+        change: 'abandoned COD-1 on nuc from the desk (mac)'
+      });
+    }
+  );
+
+  it.each([
+    ['the snapshot has no session', [{ at: AT, view: {} }]],
+    ['the session is not open', session('ended')]
+  ])('passes no session to the RPC when %s', async (_name, queue) => {
+    const { handle, fetch } = await setup({
+      queue,
+      rpc: [{ id: 7, status: 'refused', note: 'no open session to abandon' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no open session to abandon'
+    });
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_session: null
+    });
+    expect(callsTo(fetch, 'desk_commands', 'POST')).toHaveLength(0);
+    expect(callsTo(fetch, 'activity')).toHaveLength(1);
+  });
+
+  it('answers refused when the RPC finds the session already ended', async () => {
+    const { handle, fetch } = await setup({
+      queue: KNOWN,
+      rpc: [{ id: 7, status: 'refused', note: 'no open session to abandon' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no open session to abandon'
+    });
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toMatchObject({
+      p_session: 's1'
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(1);
+  });
+
+  it('abandons on a host whose queue_state is past STALE_MS', async () => {
+    const { handle, fetch } = await setup({
+      queue: [
+        {
+          at: new Date(NOW - STALE_MS - 60_000).toISOString(),
+          view: { session: { state: 'alive', id: 's1', ticket: 'COD-1' } }
+        }
+      ]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_abandon')[0])).toMatchObject({
+      p_session: 's1'
+    });
+  });
+
+  it('abandons when the session is the one the desk showed', async () => {
+    const { handle, fetch } = await setup({ queue: KNOWN });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'abandon', args: { session: 's1' } })
+    );
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+    expect(callsTo(fetch, 'rpc/desk_abandon')).toHaveLength(1);
+  });
+
+  it('refuses abandon when the host names another session, with no RPC', async () => {
+    const { handle, fetch } = await setup({ queue: KNOWN });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'abandon', args: { session: 's0' } })
+    );
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'the session changed; check the host again'
+    });
+    expect(callsTo(fetch, 'rpc/desk_abandon')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      kind: 'abandon',
+      args: { session: 's0' },
+      status: 'refused'
+    });
+  });
+
+  it('refuses abandon on an unknown host with a plain insert, no RPC', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post({ host: 'ghost', kind: 'abandon' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no scheduler reports from ghost'
+    });
+    expect(callsTo(fetch, 'rpc/desk_abandon')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      kind: 'abandon',
+      status: 'refused',
+      note: 'no scheduler reports from ghost'
+    });
+  });
+
+  it.each([
+    ['a failing RPC', 500],
+    ['a throwing RPC', 'throw' as const],
+    ['an empty RPC result', []],
+    ['an RPC row without an id', [{}]]
+  ])('answers 500 on %s and writes no activity', async (_name, rpc) => {
+    const { handle, fetch, log } = await setup({ queue: KNOWN, rpc });
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Write failed' });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'write failed' })
+    );
+  });
+
+  const SNOOZE = {
+    host: 'nuc',
+    kind: 'snooze',
+    args: { ticket: 'COD-9', kind: 'plan', eventAt: AT }
+  };
+
+  it('snoozes through desk_snooze without reading the host, and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post(SNOOZE));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+
+    expect(
+      fetch.mock.calls.map(
+        ([url, init]) =>
+          `${init.method} ${url.slice(BASE.length + 1).split('?')[0]}`
+      )
+    ).toEqual(['POST rpc/desk_snooze', 'POST activity']);
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_snooze')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_ticket: 'COD-9',
+      p_kind: 'plan',
+      p_event_at: AT
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toEqual({
+      event_id: 'desk:7',
+      at: AT,
+      ticket: 'COD-9',
+      actor: 'human',
+      change: 'snoozed COD-9 from the desk (mac)',
+      host: 'nuc'
+    });
+  });
+
+  it('wakes through desk_wake and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-9' } })
+    );
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+    expect(callsTo(fetch, 'queue_state')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_wake')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_ticket: 'COD-9'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      ticket: 'COD-9',
+      change: 'woke COD-9 from the desk (mac)'
+    });
+  });
+
+  it('answers refused when there is nothing to wake', async () => {
+    const { handle, fetch } = await setup({
+      rpc: [{ id: 7, status: 'refused', note: 'not snoozed' }]
+    });
+    const res = await handle(
+      post({ host: 'nuc', kind: 'wake', args: { ticket: 'COD-9' } })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'not snoozed'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      ticket: 'COD-9',
+      change: 'wake refused from the desk (mac): not snoozed'
+    });
+  });
+
+  const MERGE = {
+    host: 'nuc',
+    kind: 'merge',
+    args: { ticket: 'COD-9', pr: 812 }
+  };
+
+  it('stores a merge pending for a known host, with no RPC and no activity', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post(MERGE));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+    expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toEqual({
+      host: 'nuc',
+      kind: 'merge',
+      args: { ticket: 'COD-9', pr: 812 },
+      at: AT,
+      actor: 'mac',
+      status: 'pending',
+      applied_at: null,
+      note: null
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('refuses a merge for a host nothing reports from, naming the ticket', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post(MERGE));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no scheduler reports from nuc'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      ticket: 'COD-9',
+      change: 'merge refused from the desk (mac): no scheduler reports from nuc'
+    });
+  });
+
+  it.each([
+    [
+      'restart',
+      { tenant: 'acme', app: 'cdwr-cms-acme', sha: null },
+      'restart of cdwr-cms-acme asked from the desk (mac)'
+    ],
+    [
+      'gate',
+      { tenant: 'acme', action: 'open' },
+      'gate open for acme asked from the desk (mac)'
+    ]
+  ] as [string, Record<string, unknown>, string][])(
+    'stores %s pending for a known host',
+    async (kind, args) => {
+      const { handle, fetch } = await setup();
+      const res = await handle(post({ host: 'nuc', kind, args }));
+      expect(res.status).toBe(202);
+      expect(await res.json()).toEqual({
+        id: 7,
+        status: 'pending',
+        note: null
+      });
+      expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+      expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+        host: 'nuc',
+        kind,
+        args,
+        status: 'pending'
+      });
+      expect(callsTo(fetch, 'activity')).toHaveLength(0);
+    }
+  );
+
+  it.each([
+    [
+      'restart',
+      { tenant: 'acme', app: 'cdwr-cms-acme', sha: 'abc1234' },
+      'restart refused from the desk (mac): no scheduler reports from nuc'
+    ],
+    [
+      'gate',
+      { tenant: 'acme', action: 'close' },
+      'gate refused from the desk (mac): no scheduler reports from nuc'
+    ]
+  ] as [string, Record<string, unknown>, string][])(
+    'refuses %s for a host nothing reports from',
+    async (kind, args, change) => {
+      const { handle, fetch } = await setup({ queue: [] });
+      const res = await handle(post({ host: 'nuc', kind, args }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        id: 7,
+        status: 'refused',
+        note: 'no scheduler reports from nuc'
+      });
+      expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+        ticket: null,
+        change
+      });
+    }
+  );
+
+  it('stores a review pending for a known host, with no RPC and no activity', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(post({ host: 'nuc', kind: 'review' }));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+    expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toMatchObject({
+      host: 'nuc',
+      kind: 'review',
+      args: {},
+      status: 'pending'
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('refuses a review when one ran less than an hour ago', async () => {
+    const { handle, fetch } = await setup({
+      reviews: [{ at: '2026-11-02T09:30:00Z' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'review' }));
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'a review ran at 09:30 UTC'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      change: 'review refused from the desk (mac): a review ran at 09:30 UTC'
+    });
+  });
+
+  it('stores a review when the newest one is over an hour old', async () => {
+    const { handle } = await setup({
+      reviews: [{ at: '2026-11-02T08:59:00Z' }]
+    });
+    const res = await handle(post({ host: 'nuc', kind: 'review' }));
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+  });
+
+  it('refuses a review for a host nothing reports from', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(post({ host: 'ghost', kind: 'review' }));
+    expect(await res.json()).toEqual({
+      id: 7,
+      status: 'refused',
+      note: 'no scheduler reports from ghost'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toMatchObject({
+      change:
+        'review refused from the desk (mac): no scheduler reports from ghost'
+    });
+  });
+
+  it('dismisses through desk_dismiss without reading the host, and logs activity', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    const res = await handle(
+      post({
+        host: 'nuc',
+        kind: 'dismiss',
+        args: { finding: FINDING, note: ' fine ' }
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: 7, status: 'applied', note: null });
+
+    expect(
+      fetch.mock.calls.map(
+        ([url, init]) =>
+          `${init.method} ${url.slice(BASE.length + 1).split('?')[0]}`
+      )
+    ).toEqual(['POST rpc/desk_dismiss', 'POST activity']);
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_dismiss')[0])).toEqual({
+      p_host: 'nuc',
+      p_actor: 'mac',
+      p_at: AT,
+      p_finding: FINDING,
+      p_note: 'fine'
+    });
+    expect(bodyOf(callsTo(fetch, 'activity')[0])).toEqual({
+      event_id: 'desk:7',
+      at: AT,
+      ticket: 'COD-9',
+      actor: 'human',
+      change: `dismissed ${FINDING} from the desk (mac)`,
+      host: 'nuc'
+    });
+  });
+
+  it('passes a null note to desk_dismiss when there is none', async () => {
+    const { handle, fetch } = await setup({ queue: [] });
+    await handle(
+      post({ host: 'nuc', kind: 'dismiss', args: { finding: FINDING } })
+    );
+    expect(bodyOf(callsTo(fetch, 'rpc/desk_dismiss')[0])).toMatchObject({
+      p_note: null
+    });
+  });
+
+  it('answers 500 when desk_snooze fails, with no activity', async () => {
+    const { handle, fetch } = await setup({ rpc: 500 });
+    const res = await handle(post(SNOOZE));
+    expect(res.status).toBe(500);
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it.each([
+    ['a failing queue_state read', { queue: 500 }],
+    ['a failing insert', { queue: [], insert: 500 }],
+    ['fetch throwing', { fail: true }]
+  ])('answers 500 on %s', async (_name, options) => {
+    const { handle, log } = await setup(options);
+    const res = await handle(post({ host: 'nuc', kind: 'abandon' }));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Write failed' });
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'write failed' })
+    );
+  });
+
+  it('still succeeds when the activity upsert fails, and logs it', async () => {
+    const { handle, log } = await setup({ queue: [], activity: 500 });
+    const res = await handle(post({ host: 'ghost', kind: 'pause' }));
+    expect(res.status).toBe(200);
+    expect(log).toHaveBeenCalledWith({
+      event: 'activity failed',
+      status: 500,
+      id: 7
+    });
+  });
+
+  it('still succeeds when the activity upsert throws, and logs it', async () => {
+    const { handle, log } = await setup({ queue: [], activity: 'throw' });
+    const res = await handle(post({ host: 'ghost', kind: 'pause' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: 7, status: 'refused' });
+    expect(log).toHaveBeenCalledWith({
+      event: 'activity failed',
+      reason: 'reset',
+      id: 7
+    });
+  });
+});

@@ -2,6 +2,9 @@ import { basename, dirname, join } from 'node:path';
 
 export type Role = 'planning' | 'implementing' | 'orchestrating';
 
+/** `other` is a Claude project outside this repo */
+export type HourRole = Role | 'other';
+
 export interface Tokens {
   input: number;
   output: number;
@@ -14,7 +17,7 @@ export interface Tokens {
 export interface Reply {
   id?: string;
   timestamp: string;
-  role: Role;
+  role: HourRole;
   ticket: string;
   model: string;
   speed?: string;
@@ -22,7 +25,7 @@ export interface Reply {
 }
 
 export interface UsageRow {
-  role: Role;
+  role: HourRole;
   model: string;
   tokens: Tokens;
   cost: number | null;
@@ -63,23 +66,74 @@ export const countsDir = (dirName: string, base: string): boolean => {
   return dirName === encoded || dirName.startsWith(`${encoded}-`);
 };
 
-/** The planner runs in `<base>-agent`, subagents elsewhere implement, the rest orchestrates */
+/**
+ * Subagents implement and sessions orchestrate. In the planner checkout (`<base>-agent`) a session
+ * that never ran `session.sh register` plans (plan-only runs, `/suggest-improvement`), and so do
+ * its subagents. `registered` is the session's own, or the parent's for a subagent.
+ */
 export const roleOf = ({
   dirName,
   base,
-  subagent
+  subagent,
+  registered = false
 }: {
   dirName: string;
   base: string;
   subagent: boolean;
+  registered?: boolean;
 }): Role => {
-  if (dirName === `${encodeProjectPath(base)}-agent`) return 'planning';
+  if (dirName === `${encodeProjectPath(base)}-agent` && !registered) {
+    return 'planning';
+  }
   return subagent ? 'implementing' : 'orchestrating';
 };
 
 export const ticketOf = (gitBranch: string | undefined): string => {
   const match = /^cod-(\d+)/i.exec(gitBranch ?? '');
   return match ? `COD-${match[1]}` : 'unattributed';
+};
+
+/** From `timestamp` on the session holds `ticket`; `null` is `session.sh ticket -` */
+export interface TicketMark {
+  timestamp: string;
+  ticket: string | null;
+}
+
+/** What a session's own transcript says about it, from the lines `session.sh` printed */
+export interface SessionMarks {
+  registered: boolean;
+  tickets: TicketMark[];
+}
+
+/** The `session.sh` markers in one tool result's stdout; the last ticket line wins, as in the hook */
+export const marksIn = (
+  stdout: string
+): { registered: boolean; ticket?: string | null } => {
+  let registered = false;
+  let ticket: string | null | undefined;
+  for (const line of stdout.split('\n')) {
+    if (line === 'registered work-queue session') registered = true;
+    const match = /^work-queue ticket (COD-\d+|-)$/.exec(line);
+    if (match) ticket = match[1] === '-' ? null : match[1];
+  }
+  return ticket === undefined ? { registered } : { registered, ticket };
+};
+
+/**
+ * The ticket in hand at a moment: undefined before the first marker, so the caller falls back
+ * on the git branch, and `null` after a clear, when the session holds no ticket
+ */
+export const ticketAt = (
+  marks: TicketMark[],
+  timestamp: string
+): string | null | undefined => {
+  const at = Date.parse(timestamp);
+  let ticket: string | null | undefined;
+  for (const mark of marks) {
+    if (Date.parse(mark.timestamp) > at) break;
+    ticket = mark.ticket;
+  }
+  return ticket;
 };
 
 /** `claude-haiku-4-5-20251001` → `claude-haiku-4-5` */
@@ -188,7 +242,7 @@ const add = (sums: Map<string, Sum>, key: string, reply: Reply): void => {
   sums.set(key, sum);
 };
 
-// Rows keep full precision: the document sums them per day, role and ticket before rounding
+// Rows keep full precision: callers sum them per day, role and ticket before rounding
 const finish = (sum: Sum): { tokens: Tokens; cost: number | null } => ({
   tokens: sum.tokens,
   cost: sum.priced ? sum.cost : null
@@ -203,7 +257,7 @@ export const localDay = (timestamp: string): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-/** `2026-10-07 00:13` in local time, like the runs document */
+/** `2026-10-07 00:13` in local time, for the tables */
 export const localMinute = (d: Date): string => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -248,14 +302,14 @@ export const aggregate = (
   return {
     days: rows(days).map(({ parts, tokens, cost }) => ({
       day: parts[0],
-      role: parts[1] as Role,
+      role: parts[1] as HourRole,
       model: parts[2],
       tokens,
       cost
     })),
     tickets: rows(tickets).map(({ parts, tokens, cost }) => ({
       ticket: parts[0],
-      role: parts[1] as Role,
+      role: parts[1] as HourRole,
       model: parts[2],
       tokens,
       cost
@@ -271,104 +325,145 @@ export const aggregate = (
 
 export const ROLES: Role[] = ['planning', 'orchestrating', 'implementing'];
 
-/** Dollars with two decimals and no sign, so the Desk parses a plain number; `?` when unpriced */
-const money = (cost: number | null): string =>
-  cost === null ? '?' : cost.toFixed(2);
+const isRole = (role: HourRole): role is Role => ROLES.includes(role as Role);
 
-/** Cost per role and in total over some rows; any unpriced row makes that cell unknown */
-const byRole = (rows: UsageRow[]): string[] => {
-  const sum = (list: UsageRow[]) =>
-    list.some((r) => r.cost === null)
-      ? null
-      : list.reduce((acc, r) => acc + (r.cost ?? 0), 0);
-  return [
-    ...ROLES.map((role) => money(sum(rows.filter((r) => r.role === role)))),
-    money(sum(rows))
-  ];
-};
-
-const table = (head: string[], rows: string[][]): string =>
-  [
-    `| ${head.join(' | ')} |`,
-    `| ${head.map(() => '--').join(' | ')} |`,
-    ...rows.map((row) => `| ${row.join(' | ')} |`)
-  ].join('\n');
-
-const groups = <T, K extends string>(rows: T[], key: (row: T) => K) =>
-  [...new Set(rows.map(key))].map((k) => ({
-    key: k,
-    rows: rows.filter((row) => key(row) === k)
-  }));
+/** One row of the telemetry `usage` table */
+export interface UsageTelemetryRow {
+  day: string;
+  ticket: string | null;
+  model: string;
+  role: Role;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number;
+  host: string;
+}
 
 /**
- * The "Agent queue: usage" Linear document. The Agent Desk parses it, so the
- * line prefixes, headings and columns are a contract: change both together.
+ * Day, ticket, model and role rows for the telemetry table. `aggregate` sums by day and
+ * by ticket separately, so each ticket's replies go through it on their own. Input counts
+ * everything the model read (fresh, cached and cache writes); an unpriced model costs 0.
  */
-export const renderUsageDocument = (
-  result: Aggregate,
-  { updated, windowDays }: { updated: string; windowDays: number }
-): string => {
-  const { totals } = result;
-  const models = table(
-    ['Model', 'Input', 'Output', 'Cache read', 'Cache write', 'Cost'],
-    totals.byModel.map(({ model, tokens, cost }) => [
-      model,
-      String(tokens.input),
-      String(tokens.output),
-      String(tokens.cacheRead),
-      String(tokens.cacheWrite5m + tokens.cacheWrite1h),
-      money(cost)
-    ])
-  );
-  const daily = table(
-    ['Day', 'Planning', 'Orchestrating', 'Implementing', 'Total'],
-    groups(result.days, (r) => r.day).map(({ key, rows }) => [
-      key,
-      ...byRole(rows)
-    ])
-  );
-  const ticketRows = groups(result.tickets, (r) => r.ticket).map(
-    ({ key, rows }) => {
-      const tokens = noTokens();
-      for (const row of rows) addTokens(tokens, row.tokens);
-      const total = rows.reduce((acc, r) => acc + (r.cost ?? 0), 0);
-      return {
-        key,
-        total,
-        cells: [
-          key,
-          ...byRole(rows),
-          String(tokens.output),
-          String(tokens.cacheRead)
-        ]
-      };
-    }
-  );
-  // Most expensive first; unattributed last whatever it cost
-  ticketRows.sort(
-    (a, b) =>
-      Number(a.key === 'unattributed') - Number(b.key === 'unattributed') ||
-      b.total - a.total
-  );
-  const tickets = table(
-    [
-      'Ticket',
-      'Planning',
-      'Orchestrating',
-      'Implementing',
-      'Total',
-      'Output',
-      'Cache read'
-    ],
-    ticketRows.map((r) => r.cells)
-  );
+export const usageRows = (
+  replies: Reply[],
+  {
+    since,
+    host,
+    dayOf = (timestamp) => timestamp.slice(0, 10)
+  }: { since: Date; host: string; dayOf?: (timestamp: string) => string }
+): UsageTelemetryRow[] => {
+  const byTicket = new Map<string, Reply[]>();
+  for (const reply of replies) {
+    const bucket = byTicket.get(reply.ticket);
+    if (bucket) bucket.push(reply);
+    else byTicket.set(reply.ticket, [reply]);
+  }
+  return [...byTicket.entries()]
+    .sort(([a], [b]) => byText(a, b))
+    .flatMap(([ticket, list]) =>
+      aggregate(list, { since, dayOf }).days.flatMap((d) =>
+        !isRole(d.role)
+          ? []
+          : [
+              {
+                day: d.day,
+                ticket: ticket === 'unattributed' ? null : ticket,
+                model: d.model,
+                role: d.role,
+                input_tokens:
+                  d.tokens.input +
+                  d.tokens.cacheRead +
+                  d.tokens.cacheWrite5m +
+                  d.tokens.cacheWrite1h,
+                output_tokens: d.tokens.output,
+                cache_read_tokens: d.tokens.cacheRead,
+                cache_write_tokens:
+                  d.tokens.cacheWrite5m + d.tokens.cacheWrite1h,
+                cost_usd: d.cost ?? 0,
+                host
+              }
+            ]
+      )
+    );
+};
 
-  return [
-    `Updated: ${updated} · last ${windowDays} days · ${money(totals.cost)} USD`,
-    `Prices: ${PRICES_DATE}${totals.unpricedModels.length > 0 ? ` · not priced: ${totals.unpricedModels.join(', ')}` : ''}`,
-    'Written by the agent queue scheduler at most once an hour from the local Claude Code transcripts of this repo and its worktrees. Costs are API-equivalent USD; nothing is billed on Max. Only numbers, model names and ticket ids leave the machine, never transcript content.',
-    `## Models\n\n${models}`,
-    `## Daily\n\n${daily}`,
-    `## Tickets\n\n${tickets}`
-  ].join('\n\n');
+/**
+ * Local midnight `days` days back. Rows are upserted by day, so the window must start on a
+ * day boundary: a start mid-day would overwrite its first day with a partial sum.
+ */
+export const wholeDaysSince = (now: Date, days: number): Date =>
+  new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+
+/** The whole UTC hour of a timestamp, as an ISO string */
+export const hourOf = (timestamp: string): string => {
+  const d = new Date(timestamp);
+  d.setUTCMinutes(0, 0, 0);
+  return d.toISOString();
+};
+
+/**
+ * The whole UTC hour `hours` hours back. Rows are upserted by hour, so the window must start
+ * on an hour boundary: a start mid-hour would overwrite its first hour with a partial sum.
+ */
+export const wholeHoursSince = (now: Date, hours: number): Date => {
+  const start = new Date(now);
+  start.setUTCMinutes(0, 0, 0);
+  return new Date(start.getTime() - hours * 3_600_000);
+};
+
+/** One row of the telemetry `usage_hours` table */
+export interface UsageHourRow {
+  hour: string;
+  host: string;
+  model: string;
+  role: HourRole;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number;
+}
+
+/** Hour, model and role rows over every Claude project; sums as `usageRows` does */
+export const hourRows = (
+  replies: Reply[],
+  { since, host }: { since: Date; host: string }
+): UsageHourRow[] => {
+  const sums = new Map<string, Sum>();
+  for (const reply of replies) {
+    if (new Date(reply.timestamp) < since) continue;
+    add(
+      sums,
+      [hourOf(reply.timestamp), reply.role, reply.model].join('\t'),
+      reply
+    );
+  }
+  return [...sums.entries()]
+    .map(([key, sum]) => {
+      const [hour, role, model] = key.split('\t');
+      return { hour, role: role as HourRole, model, ...finish(sum) };
+    })
+    .sort(
+      (a, b) =>
+        byText(a.hour, b.hour) ||
+        byText(a.role, b.role) ||
+        byText(a.model, b.model)
+    )
+    .map((r) => ({
+      hour: r.hour,
+      host,
+      model: r.model,
+      role: r.role,
+      input_tokens:
+        r.tokens.input +
+        r.tokens.cacheRead +
+        r.tokens.cacheWrite5m +
+        r.tokens.cacheWrite1h,
+      output_tokens: r.tokens.output,
+      cache_read_tokens: r.tokens.cacheRead,
+      cache_write_tokens: r.tokens.cacheWrite5m + r.tokens.cacheWrite1h,
+      cost_usd: r.cost ?? 0
+    }));
 };

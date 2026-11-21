@@ -1,4 +1,3 @@
-import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import {
   type LegalTemplateKind,
   convertMarkdownToLexical,
@@ -14,22 +13,10 @@ import {
 
 import { getSingleTenantIdFromHeaders } from '../components/admin/utils/tenant-where';
 import { mayEditActiveTenant } from '../security/may-edit-active-tenant';
+import { deploymentPrivacyFacts } from '../utils/deployment-privacy-facts';
 
 /** Quoted in the starter text when the workspace has not set its own */
 const FALLBACK_RETENTION_DAYS = 365;
-
-/** Sentry's EU region, read from the DSN host rather than matched anywhere in the string */
-const isEuSentryHost = (dsn: string | undefined): boolean => {
-  if (!dsn) {
-    return false;
-  }
-  try {
-    const { hostname } = new URL(dsn);
-    return hostname === 'de.sentry.io' || hostname.endsWith('.de.sentry.io');
-  } catch {
-    return false;
-  }
-};
 
 const isKind = (value: unknown): value is LegalTemplateKind =>
   value === 'privacy' || value === 'terms';
@@ -103,7 +90,16 @@ export const createLegalPageEndpoint: Endpoint = {
         user,
         req
       });
-      const { EMAIL, HUMAN_CHECK, SENTRY } = getEnv();
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: tenantId,
+        depth: 0,
+        select: { statsWebsiteId: true },
+        overrideAccess: false,
+        user,
+        disableErrors: true,
+        req
+      });
       const contactEmail = settings?.footer?.contact?.find(
         (entry) => entry.platform === 'email'
       )?.email;
@@ -112,6 +108,8 @@ export const createLegalPageEndpoint: Endpoint = {
       const locale = req.locale === 'sv' ? 'sv' : 'en';
 
       const { markdown, title } = renderLegalTemplate(body.kind, locale, {
+        published: false,
+        forms: true,
         tenantName: settings?.general?.appName ?? '',
         // The published page must not carry an editor's own address, so the
         // public contact from the footer is used, or none at all
@@ -120,10 +118,7 @@ export const createLegalPageEndpoint: Endpoint = {
         tourRetentionDays:
           settings?.tourSignups?.retentionDays ?? FALLBACK_RETENTION_DAYS,
         formsRetentionDays: settings?.forms?.retentionDays ?? null,
-        humanCheck: Boolean(HUMAN_CHECK),
-        sendgrid: Boolean(EMAIL && 'sendgrid' in EMAIL),
-        errorMonitoring: Boolean(SENTRY),
-        errorMonitoringEu: isEuSentryHost(SENTRY?.dsn)
+        ...deploymentPrivacyFacts(tenant?.statsWebsiteId)
       });
 
       const page = await payload.create({

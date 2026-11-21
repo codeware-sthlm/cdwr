@@ -1,3 +1,15 @@
+/** Neutral link colour, used when there is no brand accent */
+export const NEUTRAL_ACCENT = '#666666';
+
+/** Who the mail is from: shown as a header, and colours links and the button */
+export type EmailBrand = {
+  name: string;
+  /** Absolute url to a square image */
+  logoUrl?: string;
+  /** Hex colour, `#rrggbb` */
+  accent?: string;
+};
+
 /** A label/value pair rendered as a row in the details table */
 export type DetailRow = [label: string, value: string];
 
@@ -9,10 +21,16 @@ export type EmailLayout = {
   /** Optional labelled details, rendered as a simple table */
   detailsHeading?: string;
   details?: Array<DetailRow>;
+  /** Optional value to copy, e.g. a password, set in a monospace block */
+  code?: DetailRow;
   /** Optional closing links, e.g. privacy and terms */
   links?: Array<{ label: string; url: string }>;
   /** Sender name, shown as the sign-off */
   from: string;
+  /** Optional header with logo and name; its accent colours links and the button */
+  brand?: EmailBrand;
+  /** Optional call to action, rendered as a button with the url spelled out below */
+  cta?: { label: string; url: string };
 };
 
 /**
@@ -26,7 +44,7 @@ export type EmailLayout = {
  * locale arrives as `undefined`, and a confirmation with a blank line in it
  * beats one that never sends because a template threw.
  */
-const escape = (value: unknown): string =>
+export const escape = (value: unknown): string =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -47,7 +65,45 @@ export function renderEmailLayout(layout: EmailLayout): {
   html: string;
   text: string;
 } {
-  const { details, detailsHeading, from, links, paragraphs, title } = layout;
+  const {
+    brand,
+    code,
+    cta,
+    details,
+    detailsHeading,
+    from,
+    links,
+    paragraphs,
+    title
+  } = layout;
+  const accent = brand?.accent ?? NEUTRAL_ACCENT;
+  const linkColor = brand ? accent : '#666';
+
+  const htmlBrand = brand
+    ? `<table style="border-collapse:collapse;margin:0 0 24px" role="presentation"><tr>${
+        brand.logoUrl
+          ? `<td style="padding:0 12px 0 0"><img src="${escape(
+              brand.logoUrl
+            )}" alt="" width="32" height="32" style="display:block;border:0"></td>`
+          : ''
+      }<td style="font-size:16px;font-weight:600">${escape(
+        brand.name
+      )}</td></tr></table>`
+    : '';
+
+  const htmlCta = cta
+    ? `<!--text:skip--><table style="border-collapse:collapse;margin:8px 0 16px" role="presentation"><tr><td style="background:${escape(
+        accent
+      )};border-radius:6px"><a href="${escape(
+        cta.url
+      )}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-weight:600">${escape(
+        cta.label
+      )}</a></td></tr></table><!--/text:skip--><p style="margin:0 0 16px;font-size:12px;color:#666">${escape(
+        cta.label
+      )}: <a href="${escape(cta.url)}" style="color:${escape(
+        linkColor
+      )}">${escape(cta.url)}</a></p>`
+    : '';
 
   const htmlParagraphs = paragraphs
     .map(
@@ -72,23 +128,35 @@ export function renderEmailLayout(layout: EmailLayout): {
         .join('')}</table>`
     : '';
 
+  const htmlCode = code
+    ? `<p style="margin:0 0 4px;color:#666">${escape(
+        code[0]
+      )}</p><p style="margin:0 0 16px;padding:12px 16px;background:#f2f2f2;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;word-break:break-all">${escape(
+        code[1]
+      )}</p>`
+    : '';
+
   const htmlLinks = links?.length
     ? `<p style="margin:24px 0 0;font-size:12px;color:#666">${links
         .map(
           ({ label, url }) =>
-            `<a href="${escape(url)}" style="color:#666">${escape(label)}</a>`
+            `<a href="${escape(url)}" style="color:${escape(
+              linkColor
+            )}">${escape(label)}</a>`
         )
         .join(' · ')}</p>`
     : '';
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escape(
     title
-  )}</title></head><body style="margin:0;padding:24px;background:#f7f7f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1a1a1a"><div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">${htmlParagraphs}${htmlDetails}<p style="margin:24px 0 0">${escape(
+  )}</title></head><body style="margin:0;padding:24px;background:#f7f7f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1a1a1a"><div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;padding:32px">${htmlBrand}${htmlParagraphs}${htmlCta}${htmlDetails}${htmlCode}<p style="margin:24px 0 0">${escape(
     from
   )}</p>${htmlLinks}</div></body></html>`;
 
   const text = [
+    ...(brand ? [brand.name, ''] : []),
     ...paragraphs,
+    ...(cta ? ['', `${cta.label}: ${cta.url}`] : []),
     ...(details?.length
       ? [
           '',
@@ -96,6 +164,7 @@ export function renderEmailLayout(layout: EmailLayout): {
           ...details.map(([label, value]) => `${label}: ${value}`)
         ]
       : []),
+    ...(code ? ['', `${code[0]}: ${code[1]}`] : []),
     '',
     from,
     ...(links?.length ? ['', ...links.map((l) => `${l.label}: ${l.url}`)] : [])

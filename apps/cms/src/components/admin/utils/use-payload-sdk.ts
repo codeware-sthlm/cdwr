@@ -16,7 +16,9 @@ export function usePayloadSdk(): {
 } {
   const { token } = useAuth<User>();
   const { config } = useConfig();
-  const apiRoute = `${config.serverURL ?? ''}${config.routes.api}`;
+  // Relative on purpose: the page's own origin, which the session cookie
+  // belongs to. `serverURL` is the adopted domain, cross-site on the Fly url
+  const apiRoute = config.routes.api;
 
   const sdk = useMemo(
     () =>

@@ -12,7 +12,8 @@ does not describe cdwr.io's database row.
 
 A site definition carries no identity on purpose — but something has to state
 the tenants, their users and memberships, the shared label vocabularies, the
-stock photo library and the FAQ. That's the **platform definition**,
+stock photo library, the FAQ and what self-serve signup needs. That's the
+**platform definition**,
 `platform/platform.ts`: the one thing in this package that does carry
 identity (tenant slugs, api keys, user emails), applied by
 `applyPlatformDefinition` before any site definition. `PlatformTenantSlug` —
@@ -22,6 +23,13 @@ compile.
 
 `findPlatformTenant` reads the platform definition directly; its
 runtime callers only ever read the `apiKey` it resolves to.
+
+Its `signup` section is what the host's `/signup` page checks before it takes
+anyone: the platform-settings switch, the notice address and the invite codes.
+A code is stated in plain here and nowhere else — the collection keeps its
+first half as a lookup and only a hash of the second — so `SEED-MANY-0000-0001`
+is what to type on a fresh development or preview database. The settings row
+and the codes are created once and then left alone, uses and all.
 
 ## Write one
 
@@ -54,7 +62,8 @@ are optional and follow the same shape as the collections they fill.
 A definition with no `siteSettings` still leaves the workspace with working
 ones: the apply fills in a standard footer, contact form recipient, app name,
 icon and theme, pointed at the definition's `home` page. State `siteSettings`
-only to override that.
+only to override that. `siteSettings.forms.retentionDays` states how many days
+submissions are kept, which the privacy page repeats.
 
 The block types come straight from Payload's generated types, so an editor
 completes them and a wrong field is a compile error rather than a surprise at
@@ -93,6 +102,12 @@ other reference:
 { blockType: 'form', form: { lookupTitle: 'Contact' }, enableIntro: true,
   introContent: { markdown: 'Leave your email.' } }
 ```
+
+A form states either `emailLabel` and `emailPlaceholder`, which gives the single
+email field, or `fields` of its own (`text`, `textarea`, `email` and `number`,
+each with `name`, `label` and optionally `placeholder`, `width` and `required`).
+`fields` must hold exactly one `email` field named `email`, since the
+notification subject uses `{{email}}`. A form is created once and never changed.
 
 Those are the only two places rich text exists. A post's `content` is a plain
 markdown string, because the field is called content and nothing else could be
@@ -186,7 +201,7 @@ safe answer.
 
 The same list rides along in the apply report as `extra`, so a plan shows it too.
 
-**Field-level drift is not detected.** A page that exists counts as present
+**Field-level drift is not detected,** SEO meta (`meta` on a page or post) apart: `diff-site` lists a `meta` row when a missing page will get meta or an existing one holds other. A page that exists counts as present
 however far its contents have wandered, so this answers "is it there", not "is
 it the same". Nor does it look at navigation or site settings, which are one
 document per tenant. Transcribing a site into a definition therefore needs the

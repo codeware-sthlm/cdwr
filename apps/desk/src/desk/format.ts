@@ -1,0 +1,136 @@
+// Pure formatting helpers. Whatever depends on the clock takes `now`.
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type Text = string | number | null | undefined;
+
+// Links in text from Linear can't be followed here, so show their name: [text](url) → text,
+// a Linear issue URL → its id (COD-123), a GitHub PR or issue URL → #n, any other URL → host and path
+const linkName = (u: string): string => {
+  const lin = u.match(/^https?:\/\/linear\.app\/[^/]+\/issue\/([A-Za-z]+-\d+)/);
+  if (lin) return lin[1].toUpperCase();
+  const gh = u.match(
+    /^https?:\/\/github\.com\/[^/]+\/[^/]+\/(?:pull|issues)\/(\d+)/
+  );
+  if (gh) return '#' + gh[1];
+  return u.replace(/^https?:\/\/(www\.)?/, '').replace(/[/?#]+$/, '');
+};
+
+export const tidy = (s: Text): string =>
+  String(s ?? '')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, t: string) =>
+      /^https?:\/\//.test(t.trim()) ? linkName(t.trim()) : t
+    )
+    .replace(/<(https?:\/\/[^>\s]+)>/g, (_m, u: string) => linkName(u))
+    .replace(
+      /https?:\/\/[^\s)\]>"']+/g,
+      (u) =>
+        linkName(u.replace(/[.,;:]+$/, '')) + (u.match(/[.,;:]+$/)?.[0] || '')
+    );
+
+export const plural = (n: number, one: string, many: string): string =>
+  `${n} ${n === 1 ? one : many}`;
+
+/** "5 min ago", "3 h ago", "4 days ago" from minutes */
+export const ageText = (min: number): string =>
+  min < 60
+    ? `${Math.max(0, Math.round(min))} min ago`
+    : min < 48 * 60
+      ? `${Math.round(min / 60)} h ago`
+      : `${Math.round(min / 1440)} days ago`;
+
+/** "12 s", "4 m", "2 h", "3 d" from minutes: the cards' compact age */
+export const shortAge = (min: number): string =>
+  min < 1
+    ? `${Math.max(0, Math.round(min * 60))} s`
+    : min < 60
+      ? `${Math.round(min)} m`
+      : min < 48 * 60
+        ? `${Math.round(min / 60)} h`
+        : `${Math.round(min / 1440)} d`;
+
+/** "1 h 5 min" from minutes */
+export const span = (min: number): string =>
+  min < 60
+    ? `${Math.round(min)} min`
+    : `${Math.floor(min / 60)} h ${Math.round(min % 60)} min`;
+
+/** How long ago an ISO time was, as text; empty without one */
+export const seenAgo = (iso: string | null | undefined, now: Date): string =>
+  iso ? ageText((now.getTime() - Date.parse(iso)) / 6e4) : '';
+
+export const hhmm = (t: number): string =>
+  new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** `hhmm` today, with the day in front on any other day, so an old time doesn't read as today's */
+export const dayTime = (t: number, nowMs: number): string =>
+  dayKey(t) === dayKey(nowMs) ? hhmm(t) : `${dayLabel(dayKey(t))} ${hhmm(t)}`;
+
+/** A time for a reset or a run-out: the clock time today, with the weekday when it is another day */
+export const planWhen = (at: Date, now: Date): string =>
+  at.toDateString() === now.toDateString()
+    ? hhmm(at.getTime())
+    : `${at.toLocaleDateString([], { weekday: 'short' })} ${hhmm(at.getTime())}`;
+
+export const hhmmss = (t: number): string =>
+  new Date(t).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+/** "41 s", "2 m 41 s", "1 h 05 m" from milliseconds: a timer that counts up */
+export const elapsed = (ms: number): string => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  return m < 60
+    ? `${m} m ${s % 60} s`
+    : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} m`;
+};
+
+/** The time of a `YYYY-MM-DD HH:MM` stamp, in local time */
+export const runTime = (when: string): number =>
+  Date.parse(when.replace(' ', 'T'));
+
+/** `YYYY-MM-DD` in local time */
+export const dayKey = (t: number | string | Date): string => {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+export const dayLabel = (key: string): string =>
+  new Date(key + 'T12:00').toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric'
+  });
+
+export const usd = (n: number | null | undefined, dp = 0): string =>
+  n == null
+    ? '?'
+    : '$' +
+      n.toLocaleString('en-US', {
+        minimumFractionDigits: dp,
+        maximumFractionDigits: dp
+      });
+
+/** A round number at or above `v` for an axis maximum: 1, 2, 2.5, 5 or 10 times a power of ten */
+export const niceCeil = (v: number): number => {
+  const p = 10 ** Math.floor(Math.log10(Math.max(v, 1)));
+  return [1, 2, 2.5, 5, 10].map((k) => k * p).find((x) => x >= v) ?? 10 * p;
+};
+
+export const mtok = (n: number): string =>
+  n >= 1e9
+    ? (n / 1e9).toFixed(2) + 'B'
+    : n >= 1e6
+      ? (n / 1e6).toFixed(1) + 'M'
+      : n >= 1e3
+        ? Math.round(n / 1e3) + 'k'
+        : String(n);
+
+/** Bytes as GiB, or MiB below one GiB */
+export const bytes = (n: number): string =>
+  n >= 2 ** 30
+    ? (n / 2 ** 30).toFixed(1) + ' GiB'
+    : Math.round(n / 2 ** 20) + ' MiB';

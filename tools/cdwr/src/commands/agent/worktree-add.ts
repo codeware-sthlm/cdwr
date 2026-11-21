@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { defineCommand } from '../../cli/command';
@@ -7,8 +7,8 @@ import { input } from '../../cli/inputs';
 import { readText, worktreeOf } from '../../services/agent-queue';
 import { CommandError, childEnv, run } from '../../services/shell';
 
-import { ENV_COPIES } from './agent.logic';
-import { isTicket, worktreePath } from './worktree.logic';
+import { envCopiesFor, envWithheldFor } from './agent.logic';
+import { isTicket, worktreePath, worktreeRepo } from './worktree.logic';
 
 /** Where the branch comes from when the checkout is created */
 type Source = 'remote' | 'local' | 'new';
@@ -55,6 +55,7 @@ export default defineCommand({
     }),
     branch: input.string({
       prompt: 'Which branch?',
+      short: 'b',
       description: "The ticket's git branch name"
     })
   },
@@ -66,7 +67,8 @@ export default defineCommand({
         'Use the form COD-529'
       );
     }
-    const path = worktreePath(ctx.root, ticket);
+    const repo = worktreeRepo(ctx.env, ctx.root);
+    const path = worktreePath(repo, ticket);
     if (resolve(path) === resolve(worktreeOf(ctx))) {
       throw new CliError(`${path} is the agent worktree`);
     }
@@ -74,7 +76,7 @@ export default defineCommand({
     if (exists && !existsSync(join(path, '.git'))) {
       throw new CliError(`${path} exists and is not a git checkout`);
     }
-    const commonDir = await gitCommonDir(ctx.root);
+    const commonDir = await gitCommonDir(repo);
     // An existing folder gets env files and an install only when it is ours, on this branch
     if (exists) {
       const theirs = await gitCommonDir(path).catch(() => undefined);
@@ -107,10 +109,10 @@ export default defineCommand({
     let source: Source = 'new';
     if (!exists) {
       // ls-remote reads without writing refs, so a dry run changes nothing
-      if (await onOrigin(ctx.root, branch)) {
+      if (await onOrigin(repo, branch)) {
         source = 'remote';
       } else if (
-        await succeeds(ctx.root, [
+        await succeeds(repo, [
           'rev-parse',
           '--verify',
           '-q',
@@ -120,10 +122,14 @@ export default defineCommand({
         source = 'local';
       }
     }
-    const envCopies = ENV_COPIES.filter((file) => {
+    const envCopies = envCopiesFor(ctx.env).filter((file) => {
       const ours = readText(join(envSource, file));
       return ours !== undefined && ours !== readText(join(path, file));
     });
+    // A worktree an attended session set up may hold a copy this session must not have
+    const envRemovals = envWithheldFor(ctx.env).filter((file) =>
+      existsSync(join(path, file))
+    );
     const deps = !existsSync(join(path, 'node_modules'));
 
     const labels: Record<Source, string> = {
@@ -137,17 +143,22 @@ export default defineCommand({
         label: `Copy ${file}`,
         detail: `from ${envSource}`
       })),
+      ...envRemovals.map((file) => ({
+        label: `Remove ${file}`,
+        detail: 'an implement session gets no copy'
+      })),
       deps && { label: 'Install dependencies', detail: 'pnpm install' }
     ].filter((step) => step !== false);
 
     const data = {
-      root: ctx.root,
+      root: repo,
       envSource,
       path,
       branch,
       source,
       exists,
       envCopies,
+      envRemovals,
       deps
     };
     if (steps.length === 0) {
@@ -189,6 +200,10 @@ export default defineCommand({
       copyFileSync(join(data.envSource, file), join(path, file));
       ctx.ui.info(`Copied ${file}`);
     }
+    for (const file of data.envRemovals) {
+      rmSync(join(path, file), { force: true });
+      ctx.ui.info(`Removed ${file}`);
+    }
     if (data.deps) {
       await ctx.ui.task('Installing dependencies in the worktree', () =>
         run('pnpm', ['install', '--frozen-lockfile'], {
@@ -206,6 +221,7 @@ export default defineCommand({
         created: !data.exists,
         source: data.source,
         envCopies: data.envCopies,
+        envRemovals: data.envRemovals,
         deps: data.deps
       }
     };

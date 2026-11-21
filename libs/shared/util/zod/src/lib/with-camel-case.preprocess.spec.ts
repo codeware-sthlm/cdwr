@@ -189,7 +189,7 @@ describe('withCamelCase', () => {
 
   it('should transform special values', () => {
     const schema = withCamelCase(
-      z.object({ id: z.string(), env: z.record(z.string()) })
+      z.object({ id: z.string(), env: z.record(z.string(), z.string()) })
     );
 
     const result = schema.parse({
@@ -213,7 +213,7 @@ describe('withCamelCase', () => {
 
   it('should not transform special values with preserve option', () => {
     const schema = withCamelCase(
-      z.object({ id: z.string(), env: z.record(z.string()) }),
+      z.object({ id: z.string(), env: z.record(z.string(), z.string()) }),
       { preserve: ['env'] }
     );
 
@@ -238,7 +238,7 @@ describe('withCamelCase', () => {
 
   it('should handle regex metacharacters in preserve paths', () => {
     const schema = withCamelCase(
-      z.object({ id: z.string(), 'a(b': z.record(z.string()) }),
+      z.object({ id: z.string(), 'a(b': z.record(z.string(), z.string()) }),
       { preserve: ['a(b'] }
     );
 
@@ -257,7 +257,7 @@ describe('withCamelCase', () => {
     const schema = withCamelCase(
       z.object({
         id: z.string(),
-        meta: z.object({ env: z.record(z.string()) })
+        meta: z.object({ env: z.record(z.string(), z.string()) })
       }),
       { preserve: ['meta.env'] }
     );
@@ -285,7 +285,7 @@ describe('withCamelCase', () => {
     const schema = withCamelCase(
       z.object({
         id: z.string(),
-        data: z.array(z.object({ env: z.record(z.string()) }))
+        data: z.array(z.object({ env: z.record(z.string(), z.string()) }))
       }),
       { preserve: ['data.env'] }
     );

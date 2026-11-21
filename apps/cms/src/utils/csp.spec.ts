@@ -1,4 +1,7 @@
-import { TURNSTILE_ORIGIN } from '@codeware/shared/util/csp';
+import {
+  SHOWCASE_STORAGE_ORIGIN,
+  TURNSTILE_ORIGIN
+} from '@codeware/shared/util/csp';
 
 import { cspForRequest } from './csp';
 
@@ -68,6 +71,17 @@ describe('cspForRequest', () => {
     ).toBe(allowed);
   });
 
+  it.each([
+    ['/admin', false],
+    ['/', true]
+  ])('%s allows the showcase images: %s', (pathname, allowed) => {
+    const { requestPolicy } = cspForRequest(pathname, {});
+
+    expect(
+      sourcesOf(requestPolicy, 'img-src').includes(SHOWCASE_STORAGE_ORIGIN)
+    ).toBe(allowed);
+  });
+
   it('allows the font origin', () => {
     const { requestPolicy } = cspForRequest('/', {
       FONT_ASSETS_BASE_URL: 'https://fonts.example.com/assets/'
@@ -89,6 +103,28 @@ describe('cspForRequest', () => {
 
     expect(allows('script-src', 'https://cdn.jsdelivr.net')).toBe(allowed);
     expect(allows('img-src', 'https://www.gravatar.com')).toBe(allowed);
+  });
+
+  it.each([
+    ['/', true],
+    ['/tours/moon', true],
+    ['/admin', false],
+    ['/admin/collections/pages', false],
+    ['/api/site-stats', false]
+  ])('%s may be framed by the Umami dashboard: %s', (pathname, allowed) => {
+    const { requestPolicy } = cspForRequest(pathname, {
+      UMAMI_URL: 'https://cdwr-umami.fly.dev/'
+    });
+
+    expect(sourcesOf(requestPolicy, 'frame-ancestors')).toEqual(
+      allowed ? ["'self'", 'https://cdwr-umami.fly.dev'] : ["'self'"]
+    );
+  });
+
+  it('lets only itself frame a site without Umami', () => {
+    expect(
+      sourcesOf(cspForRequest('/', {}).requestPolicy, 'frame-ancestors')
+    ).toEqual(["'self'"]);
   });
 
   it.each([

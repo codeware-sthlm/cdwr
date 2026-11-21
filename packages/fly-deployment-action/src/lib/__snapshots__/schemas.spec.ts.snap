@@ -29,6 +29,10 @@ exports[`Fly Deployment Action schema validation > validates all schemas against
   "flyOrg": "company",
   "flyRegion": "sea",
   "flyTraceCli": false,
+  "infisicalClientId": "infisical-client-id",
+  "infisicalClientSecret": "infisical-client-secret",
+  "infisicalProjectId": "infisical-project-id",
+  "infisicalSite": "eu",
   "optOutDepotBuilder": false,
   "secrets": [
     "SECRET_KEY1=secret-value1",
@@ -57,6 +61,11 @@ exports[`Fly Deployment Action schema validation > validates all schemas against
       "action": "failed",
       "appOrProject": "broken-project",
       "error": "No fly.toml file found",
+    },
+    {
+      "action": "skipped",
+      "appOrProject": "stale-project",
+      "reason": "641a9e3 is older than stale-project-1.2.3",
     },
   ],
 }
@@ -88,6 +97,12 @@ exports[`Fly Deployment Action schema validation > validates all schemas against
     "region": "sea",
     "token": "fly-token",
     "traceCLI": false,
+  },
+  "infisical": {
+    "clientId": "infisical-client-id",
+    "clientSecret": "infisical-client-secret",
+    "projectId": "infisical-project-id",
+    "site": "eu",
   },
   "secrets": {
     "SECRET_KEY1": "secret-value1",

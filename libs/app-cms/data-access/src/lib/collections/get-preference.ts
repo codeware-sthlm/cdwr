@@ -7,17 +7,17 @@ import type { PayloadRuntime } from '../payload-runtime.types';
  * Read a single admin-UI preference blob by key.
  *
  * Payload stores each preference as one `payload-preferences` row per user,
- * keyed by `key`; access control scopes rows to the requesting user. Returns
- * the stored value cast to `T`, or `null` when absent or on any failure.
+ * keyed by `key`; its access control scopes rows to the requesting user.
+ * Returns the stored value cast to `T`, or `null` when absent or on any
+ * failure.
  *
  * Keys are user-writable, so callers own the value shape and should validate
  * it rather than trust the cast.
  *
- * Unlike the other collection readers, an unauthenticated runtime returns `null`
- * rather than bypassing access control: preferences are per-user, and the query
- * filters on `key` alone, so `overrideAccess` here would not widen the view to a
- * system one — it would just drop the scoping and hand back an arbitrary user's
- * row. Without an identity there is no preference to read.
+ * Unlike the other collection readers, this one never bypasses access control:
+ * the query filters on `key` alone, and the Local API skips access control
+ * unless told otherwise, so a bypass would hand back whichever user's row
+ * happens to come first. Without an identity there is no preference to read.
  *
  * @param runtime - Authenticated Payload runtime or BasePayload instance
  * @param key - Preference key (e.g. `admin-dashboard`)
@@ -40,7 +40,8 @@ export async function getPreference<T>(
       where: { key: { equals: key } },
       limit: 1,
       depth: 0,
-      user
+      user,
+      overrideAccess: false
     });
     return (docs[0]?.value as T | undefined) ?? null;
   } catch {

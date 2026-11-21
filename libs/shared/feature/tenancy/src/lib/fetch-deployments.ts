@@ -89,10 +89,14 @@ export async function fetchDeployments(
     if (error instanceof Error) {
       core.error(`[fetch-deployments] Error: ${error.message}`);
       if (error.cause) {
-        core.error(`[fetch-deployments] Cause: ${JSON.stringify(error.cause)}`);
+        const cause =
+          error.cause instanceof Error
+            ? error.cause.message
+            : 'non-Error cause';
+        core.error(`[fetch-deployments] Cause: ${cause}`);
       }
     } else {
-      core.error(`[fetch-deployments] Unknown error: ${JSON.stringify(error)}`);
+      core.error(`[fetch-deployments] Unknown error of type ${typeof error}`);
     }
     throw error;
   }

@@ -1,14 +1,10 @@
-import { CdwrCloud } from '@codeware/shared/ui/primitives';
+import { AuthBrand } from '@codeware/app-cms/ui/auth';
 
+/** The login view's mark (`admin.components.graphics.Logo`), the same as the auth pages' */
 const Logo: React.FC = () => {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="text-black opacity-80 dark:text-white">
-        <CdwrCloud />
-      </div>
-      <span className="text-xl font-medium tracking-widest text-black opacity-30 dark:text-white">
-        Codeware CMS
-      </span>
+    <div className="codeware-admin twp">
+      <AuthBrand />
     </div>
   );
 };

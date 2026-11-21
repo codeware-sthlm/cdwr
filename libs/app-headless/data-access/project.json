@@ -1,0 +1,8 @@
+{
+  "name": "app-headless-data-access",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/app-headless/data-access/src",
+  "projectType": "library",
+  "tags": ["scope:app-headless", "type:data-access"],
+  "targets": {}
+}

@@ -6,9 +6,15 @@ import * as blocks from '../index';
 
 /**
  * The blocks that never draw a band: a gap, a container whose own blocks carry
- * theirs, and the gallery, which frames every example itself.
+ * theirs, the gallery, which frames every example itself, and a full-screen
+ * landing page.
  */
-const unbanded = ['block-gallery', 'reusable-content', 'spacing'];
+const unbanded = [
+  'block-gallery',
+  'coming-soon',
+  'reusable-content',
+  'spacing'
+];
 
 const all = Object.values(blocks) as Array<Block>;
 

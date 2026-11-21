@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: import.meta.dirname,
   cacheDir: '../../../../node_modules/.vite/libs/app-cms/feature/env-loader',
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ['../../../../tsconfig.base.json'] })],
   test: {
     name: 'app-cms-util-env-loader',
     watch: false,

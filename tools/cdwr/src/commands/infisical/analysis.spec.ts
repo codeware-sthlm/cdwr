@@ -11,8 +11,12 @@ vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
 vi.mock('@codeware/shared/feature/tenancy', () => ({
   fetchDeployments: vi.fn().mockResolvedValue({
-    deployments: { cms: [{}, { tenant: 'acme' }], web: [], builder: [] },
-    skipped: [{ app: 'web', tenant: 'acme', reason: 'flag-off' }]
+    deployments: {
+      cms: [{}, { tenant: 'acme' }],
+      builder: [],
+      headless: [{ tenant: 'moon', env: { PAYLOAD_URL: 'https://x' } }]
+    },
+    skipped: [{ app: 'builder', tenant: 'acme', reason: 'flag-off' }]
   })
 }));
 
@@ -63,7 +67,7 @@ describe('infisical analysis', () => {
         apps: Array<{
           app: string;
           host: string;
-          tenants: Array<{ tenant: string; flag: string }>;
+          tenants: Array<{ tenant: string; flag: string; missing?: string[] }>;
           secrets: Record<string, string>;
         }>;
       }>;
@@ -71,14 +75,22 @@ describe('infisical analysis', () => {
     expect(payload.result[0]?.apps[0]?.secrets['DATABASE_URL']).toBe('••••');
     expect(payload.result[0]?.apps.map(({ app }) => app)).toEqual([
       'cms',
-      'web',
-      'builder'
+      'headless',
+      'builder',
+      'umami'
     ]);
     expect(payload.result[0]?.apps[0]).toMatchObject({
       host: 'on',
       tenants: [{ tenant: 'acme', flag: 'on' }]
     });
-    expect(payload.result[0]?.apps[1]).toMatchObject({
+    expect(payload.result[0]?.apps[1]?.tenants).toEqual([
+      {
+        tenant: 'moon',
+        flag: 'on',
+        missing: ['PAYLOAD_API_KEY', 'SIGNATURE_SECRET']
+      }
+    ]);
+    expect(payload.result[0]?.apps[2]).toMatchObject({
       host: 'no flag',
       tenants: [{ tenant: 'acme', flag: 'off' }]
     });
@@ -116,8 +128,8 @@ describe('infisical analysis', () => {
     const payload = JSON.parse(stdout[0] ?? '{}') as {
       result: Array<{ apps: Array<{ app: string; host: string }> }>;
     };
-    expect(payload.result[0]?.apps[2]).toMatchObject({
-      app: 'builder',
+    expect(payload.result[0]?.apps[3]).toMatchObject({
+      app: 'umami',
       host: 'no flag'
     });
   });

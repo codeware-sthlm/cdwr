@@ -35,7 +35,7 @@
 - Match existing local plugin/package conventions before introducing new patterns
 - Prefer explicit project targets over inferred tasks unless a natural config file already exists
 - Avoid adding new dependencies unless clearly justified
-- Pin a dependency family released in lockstep (Nx, Payload, Remix, Storybook, Vitest, Tailwind, Playwright, Jest) exact on every member; a caret on one member floats on the next lockfile refresh while the rest stay put. Independent packages keep a caret
+- Pin a dependency family released in lockstep (Nx, Payload, Storybook, Vitest, Tailwind, Playwright, Jest) exact on every member; a caret on one member floats on the next lockfile refresh while the rest stay put. Independent packages keep a caret. The `dev-plugin:lockstep-versions-sync` sync generator enforces this on the root `package.json`; `nx sync` then `pnpm install` fixes a split
 - Do not add CI integration unless explicitly asked
 - Before making large structural changes, summarize the conventions found in the repo and the planned approach
 - Git commits should follow conventional commit pattern in commitlint.config.cjs
@@ -45,30 +45,7 @@
 
 ## Agent queue
 
-Tickets carrying a Linear `agent:*` label (Agent group, Codeware team) are worked by the
-`/work-queue` skill (`.claude/skills/work-queue`). It plans into the ticket, hands planned
-steps to the `implementer` subagent (`.claude/agents/implementer.md`, Sonnet) in a worktree
-per ticket, asks in Linear instead of waiting in the terminal, and keeps going until a limit
-of what waits on Håkan. The skill holds the queue order, the labels and how a gate asks.
-
-A launchd job runs it plan-only every 10 minutes on this machine; `cdwr agent install` sets that up
-and `cdwr agent status` says what it would take next. Launchd runs an installed copy of
-`tools/cdwr/agent-queue/run.sh` (and its `watch.jq`, `waits.sh`, `implement.sh` and `github-app.sh`), so a merged change to its guardrails
-waits for the next `install`. Before planning, the same job watches the PRs of `agent:review`
-tickets and sends a notice when one leaves the merge queue, fails, or merges with hand-offs left.
-Each run also keeps three Linear documents up to date: "Agent queue: runs", "Agent queue: usage" (`cdwr agent usage`)
-and "Agent queue: activity" (`cdwr agent activity`, from Linear's issue history), which the Agent Desk reads.
-The runs document also carries an `Attended:` line saying whether an attended `/work-queue` has something to do, and `cdwr agent status` shows it too.
-
-When that work waits and no session is alive, the job starts one itself: `implement.sh` runs
-`claude -p "/work-queue implement-only once"` detached, with deny-by-default permissions, a
-per-run budget (`AGENT_QUEUE_IMPLEMENT_BUDGET_USD`, $15) and a daily cap
-(`AGENT_QUEUE_IMPLEMENT_CAP_USD`, $40) kept in `implement-spend.jsonl`. It resumes approved,
-answered or reviewed work only, and never starts a new ticket. On GitHub it acts as the
-`codeware-agent` app (`github-app.sh`, credentials in `tools/cdwr/.env`), never as Håkan, so
-main's rulesets apply to it; without the app it does not start. After two launches that change
-nothing it stops and sends the "Start /work-queue" notice instead. `cdwr agent pause` stops
-launching too.
+Tickets with a Linear `agent:*` label are worked by `/work-queue` (`.claude/skills/work-queue`), which plans into the ticket and hands planned steps to the `implementer` subagent (Sonnet) in a worktree per ticket. Only Håkan sets `agent:ready`. CDWR Desk has two views: Agent (the queue and what waits on Håkan) and Platform (production tenants and their problems). Start an attended session with `cdwr agent attend [COD-n]`. How the scheduler, launches, telemetry, the desk and the GitHub and Linear apps work: [tools/cdwr/agent-queue/README.md](tools/cdwr/agent-queue/README.md). Read it before changing anything under `tools/cdwr/agent-queue`. Each run also audits tickets for states it cannot resolve itself (report-only gaps in `cdwr agent status` and the desk).
 
 ## Nx-generated projects cleanup
 
@@ -79,196 +56,22 @@ launching too.
 
 ## Common Commands
 
-### Shadcn UI Components
-
 ```sh
-# Add a new component
-nx shadcn:add -- <component>
-```
-
-### CMS Development
-
-Ensure Posgres cluster is running.
-
-```sh
-# Start Postgres container when needed
-nx dx:postgres cms
-```
-
-#### Dev email
-
-Mail sent in development goes to a local catcher — no account, nothing to expire:
-
-```sh
-# Start Mailpit; inbox on http://localhost:8025, SMTP on 1025
-nx dx:mail cms
-```
-
-Point `apps/cms/.env.local` at it (personal overrides; `.env` holds the shared defaults):
-
-```sh
-SMTP_HOST=localhost
-SMTP_PORT=1025
-SMTP_FROM_ADDRESS=dev@codeware.local
-SMTP_FROM_NAME=Codeware Dev
-```
-
-`SMTP_HOST`/`SMTP_PORT` take any relay, not just a credential-less local
-catcher — set `SMTP_USERNAME`/`SMTP_PASSWORD` too for an authenticated one
-such as Mailtrap. With nothing configured at all, development falls back to
-a disposable Ethereal inbox created on the first send, and logs a per-message
-preview link. Nothing is dropped silently.
-
-#### Dev secrets
-
-The `dev`, `seed`, `reset-db` and `verify` targets run through the `dev-plugin:infisical-run`
-executor, which reads the app's Infisical folder with your CLI session. Precedence: committed `.env` < vault < anything set on
-purpose (target env, `.env.local`, the shell). `OFFLINE=1` uses `apps/<app>/.env.offline`
-instead, refreshed with `nx dx:secrets <app>`; `CI` skips the vault. `cdwr infisical resolve`
-shows where each key comes from, `cdwr infisical session` whether you are logged in.
-
-#### Custom component builds
-
-Saving a custom component builds it. In development the cms builds in-process
-from the workspace on disk. Production has no toolchain in the cms image and
-calls the builder service (`apps/builder`) instead; a cms without
-`BUILDER_URL` and without a toolchain marks every build as failed.
-
-To run the service locally and make the cms use it, the way production does:
-
-```sh
-# Terminal 1: the service on http://localhost:3002, token `dev-token`
-nx serve builder
-
-# Or the image production runs, built from the repo root
-docker build -f apps/builder/Dockerfile -t builder .
-docker run --rm -p 3002:3002 -e BUILDER_TOKEN=dev-token builder
-```
-
-```sh
-# apps/cms/.env.local — unset both to build in-process again
-BUILDER_URL=http://localhost:3002
-BUILDER_TOKEN=dev-token
-```
-
-The same two values reach the deployed cms apps from Infisical (`/apps/cms/`),
-and the service reads its token from `/apps/builder/`. On Fly the url
-is the service's public address, `https://cdwr-builder.fly.dev`; the
-token is what keeps it closed. Preview apps are named after their pull
-request, so the preview value carries the placeholder every app url does,
-`https://cdwr-builder-pr-${PR_NUMBER}.fly.dev`, expanded by the cms at boot.
-It resolves only when that PR deployed the builder, which happens when the
-builder changed; otherwise `cdwr fly deploy` sends it there. Deployed without
-a token the service stays up and refuses every build, so a missing secret
-shows in the admin rather than as a failed deploy.
-
-The service logs one JSON line per outcome (`listening`, `build received`, `build finished`, `build refused`) tagged with a request id, never the token or the source; the cms sends the id as `x-request-id` and names it in `The build service did not answer (request <id>)`, so `fly logs -a cdwr-builder` filtered on that id finds the matching line.
-
-The studio's editor type-checks against the same declarations the build uses: `nx studio-types cms`
-collects them into `apps/cms/public/studio-types.json` (gitignored, cached on the lockfile and the kit).
-`build` depends on it and `dev` runs it first, inline. The admin loads it from `/studio-types.json`;
-without the file the editor is syntax-only and the build still decides.
-
-Rotating the token is `cdwr builder rotate-token`: the service accepts the previous token
-(`BUILDER_TOKEN_PREVIOUS`) while the cms switches over, so nothing is refused on the way.
-
-#### CMS admin components + import map
-
-Payload resolves custom admin components (`admin.components.*` in `payload.config.ts`) through the
-committed import map at `apps/cms/src/app/(payload)/admin/importMap.js`. Payload only regenerates it
-in `dev` — the committed map is what the production build/runtime uses. So whenever you **add, remove,
-or re-path an admin component**, regenerate and commit it, or the component silently fails to load:
-
-```sh
-nx payload cms generate:importmap
-```
-
-#### Content Security Policy
-
-Both apps send one, built by `@codeware/shared/util/csp`: the cms from `apps/cms/src/proxy.ts`,
-`apps/web` from `middlewares/csp.ts`. Framing, plugins, `base-uri` and form targets are always
-enforced. The full policy — a per-request nonce with `'strict-dynamic'` for scripts — goes out
-`Content-Security-Policy-Report-Only` until `CSP_ENFORCE=true`. A new third-party origin has to be
-added there, or it breaks the site once enforcement is on.
-
-Violations go to Sentry's security endpoint, derived from `SENTRY_DSN`. In Sentry they are
-issues of type _CSP_; without a DSN, locally, they appear only in the browser console.
-
-#### CMS Host mode + external web client
-
-Ensure `TENANT_ID` has no value in `apps/cms/.env.local`.
-
-```sh
-# Terminal 1: Serve the Payload admin UI (auto-seeds on start)
-nx dev cms
-
-# Terminal 2: Serve web client
-nx dev web
-```
-
-| View            | URL                    | Credentials                |
-| --------------- | ---------------------- | -------------------------- |
-| Tenant client   | `localhost:4200`       |                            |
-| Tenant admin UI | `localhost:3000/admin` | `titan@local.dev` / `dev`  |
-| CMS admin UI    | `localhost:3000/admin` | `system@local.dev` / `dev` |
-
-#### CMS Tenant mode
-
-Ensure `TENANT_ID` is set to `'moon'` in `apps/cms/.env.local`.
-
-```sh
-# Serve the Payload tenant client and admin UI (auto-seeds on start)
-nx dev cms
-```
-
-| View            | URL                    | Credentials                |
-| --------------- | ---------------------- | -------------------------- |
-| Tenant client   | `localhost:3000`       |                            |
-| Tenant admin UI | `localhost:3000/admin` | `titan@local.dev` / `dev`  |
-| CMS admin UI    | `localhost:3000/admin` | `system@local.dev` / `dev` |
-
-### Database Operations
-
-```sh
-# Reset database for a fresh start
-nx reset-db cms
-
-# Seed database
+pnpm cdwr                       # cdwr <group> <command> --help: db, fly, tenant, infisical, signature, media, agent, release
+nx dx:postgres cms              # Postgres for the cms
+nx dev cms                      # admin on localhost:3000/admin (auto-seeds)
+nx reset-db cms                 # fresh database
 nx seed cms
+nx shadcn:add -- <component>
+pnpm run c                      # conventional commit
+cdwr release                    # interactive release
 ```
 
-### The cdwr CLI (database / Fly.io / tenants / Infisical / media / release)
+- Every `cdwr` command takes `-d/--dry-run`, `-y/--yes`, `-j/--json` and `-i/--interactive`. A command prompts for what is missing until one of its own inputs is given (global flags don't count), and destructive ones make you type the target's name on production. The contract is in [tools/cdwr/README.md](tools/cdwr/README.md). `media generate-images` is the only command that spends money (Replicate).
+- After adding, removing or re-pathing a Payload admin component, run `nx payload cms generate:importmap` and commit the result. Otherwise the component silently fails to load in production.
+- A new third-party origin must be added to the CSP (`@codeware/shared/util/csp` for the cms, `@codeware/app-headless/feature/security` for headless). Otherwise it breaks once `CSP_ENFORCE=true`.
 
-```sh
-pnpm cdwr                         # the app; `cdwr` after `pnpm cdwr setup`
-cdwr <group> <command> --help     # db, fly, tenant, infisical, signature, media, agent, release
-cdwr db backup --env production   # flags first, prompts for the rest
-cdwr fly info --json              # machine output, never prompts
-cdwr tenant gate close --dry-run  # the plan, nothing applied
-```
-
-`tools/cdwr` holds it; see [tools/cdwr/README.md](tools/cdwr/README.md) for the command
-contract. Every command takes `--dry-run`, `--yes`, `--json` and `--non-interactive`. Danger
-levels decide confirmations: destructive commands make you type the target's name on
-production. Credentials go in `tools/cdwr/.env`; `cdwr doctor` says what is missing.
-
-`media generate-images` is the only command that **spends money** — it bills Replicate per
-image. It writes to a gitignored `.showcase-images/` and never uploads: the gallery's
-examples end up in Chromatic snapshots, so replacing one is a deliberate visual review.
-
-### Release Packages
-
-```sh
-# Interactive release process (generates changelog, bumps versions, creates GitHub releases)
-cdwr release        # or `nx release-cli`, an alias
-```
-
-### Commits
-
-```sh
-# Interactive conventional commit (czg)
-pnpm run c
-```
+Dev email, secrets, the builder service, Umami, host and tenant mode, and the seeded credentials are in [apps/cms/DEVELOPMENT.md](apps/cms/DEVELOPMENT.md).
 
 ## Architecture
 
@@ -286,7 +89,7 @@ e2e/         # End-to-end tests
 
 **`apps/cms`** — the platform itself: Payload CMS v3 on Next.js 16, serving the admin UI and the tenant-facing site from one app (`(payload)` and `(site)` route groups). **This is the preferred client for a tenant** — deployed in tenant mode it serves that tenant's site with its admin pages scoped to it. Uses PostgreSQL, S3 storage, Lexical rich text, and Sentry for error tracking.
 
-**`apps/web`** — a technical showcase, not the default client. A Remix v2 + Hono app (Hono wraps Remix for a unified Node server) proving a second React framework can consume the headless API and render the same content through the shared `cms-renderer` components. Reach for `apps/cms` when serving a real tenant.
+**`apps/headless`** — a headless client for a tenant: TanStack Start on Nitro, deployed only as tenant apps (`cdwr-headless-<tenant>`), with no host app. `/apps/headless` holds what all tenants share, such as Sentry; each tenant's own settings are in `/tenants/<tenant>/apps/headless`. It replaces the retired Remix showcase `apps/web`.
 
 ### Publishable Packages (`packages/`)
 
@@ -316,15 +119,19 @@ consumable from npm, so these carry `private: true` and are excluded from `nx re
 - `ui/` — blocks, components, fields, Lexical plugins, tabs
 - `util/` — access control, db utils, email, env schema, filters, hooks, plugins
 
+**`libs/app-headless/`** — the headless client's code, so `apps/headless` keeps only routes and framework wiring:
+
+- `data-access/` — signed cms requests, tenant config, site and document loading, sitemap entries; each takes a server context the app builds
+- `feature/security` — the request pipeline: CSP, the site gate, debug headers
+- `util/` — env schema, routing, SEO
+
+No lib imports `@tanstack/react-start`: server functions, response statuses and request headers stay in the app.
+
 **`libs/shared/ui/`** — React component library (shadcn/Radix UI based): cms-renderer, code highlighting, color-picker, copy-button, file-area, icon-picker, image, primitives, shadcn components, video.
 
 **`libs/shared/util/`** — Utility libraries: `github` (GitHub Actions/API helpers), `misc` (node/process/CLI utils), `node`, `nx-deploy` (Nx affected-apps deploy analysis), `payload-api`, `payload-types`, `payload-utils`, `pure`, `release` (Nx release CLI), `schemas`, `seed`, `signature`, `tailwind`, `testing` (+ `/vitest` schema-test helpers), `typesafe`, `ui`, `zod`.
 
-**Internal-lib build convention:** internal libs are **not buildable** — they have no `build` target and are consumed by bundling their _source_ via `@codeware/*` tsconfig path aliases (nothing consumes a lib's `dist`), so `enforceBuildableLibDependency` is disabled workspace-wide. A lib only needs a private `package.json` (no `publishConfig`, `private: true`) when it imports an **un-bundleable** dep — a native `.node` module or a package with unresolvable dynamic requires — so esbuild externalizes it in every consumer that bundles it. Today only `nx-deploy` (`@nx/devkit`) and `misc` (`node-pty`) need one; consumers list those in the `@nx/dependency-checks` `ignoredDependencies`.
-
-> ⚠️ Any such private `package.json` **must include `"type": "module"`** (the repo is ESM). Without it, node treats that lib's files as CommonJS, and a `tsx`-run script that imports the lib's barrel fails with `does not provide an export named …` (this broke the `release-cli` target and `pnpm cdwr`). Files under a package.json inherit its module type, not the root's.
->
-> These manifests are **generated and guarded** by the `dev-plugin:externalize-deps-sync` global sync generator (registered in `nx.json` → `sync.globalGenerators`, enforced in CI via `nx sync --check`). It scans each `libs/` project's source imports against a curated denylist of un-bundleable packages, and for any lib that **both** imports one **and** is reached by a bundling consumer (esbuild/webpack — `tsx`-only libs like `release` are skipped), it ensures a private `package.json` exists declaring those deps (pinned to root-resolved versions) with `"type": "module"` and `"private": true`. Run `nx sync` to fix an out-of-sync manifest; add new un-bundleable packages to the generator's denylist. Consumer-side `ignoredDependencies` are still hand-maintained (see the generator's header for the deferred Phase 2).
+**Internal libs are not buildable.** They are bundled from source through `@codeware/*` aliases. A lib gets a private `package.json` only for an un-bundleable dependency. That file is generated by `dev-plugin:externalize-deps-sync` (fix it with `nx sync`) and must contain `"type": "module"`. Details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **`libs/shared/feature/infisical`** — Infisical SDK integration for secrets management.
 
@@ -345,20 +152,7 @@ that signal.
 
 ### Multi-Tenant Architecture
 
-The platform is multi-tenant. Tenants are configured via Infisical secrets. The Nginx reverse proxy (`nx payload-proxy:up`) can optionally be used to simulate multi-tenancy in local development by routing hostnames to the appropriate apps.
-
-In production, multi-tenancy is handled automatically by the `nx-pre-deploy-action` and `fly-deployment-action` GitHub Actions, which fetch tenant configs from Infisical and deploy accordingly.
-
-#### Deployment switches
-
-A deployment is switched on per environment by an Infisical secret `DEPLOY_ENABLED=true` in the app's own folder; anything else, or absent, is off. Release analysis decides _when_ an app deploys, the flags decide _where_.
-
-| Folder                         | Switch on deploys                                          |
-| ------------------------------ | ---------------------------------------------------------- |
-| `/apps/<app>`                  | host app `cdwr-<app>`                                      |
-| `/tenants/<tenant>/apps/<app>` | tenant app `cdwr-<app>-<tenant>` with `TENANT_ID=<tenant>` |
-
-A host app reads `/apps/<app>` itself at boot, so the deploy pushes no folder secrets to it. The flag never reaches Fly. `cdwr infisical analysis` prints the matrix, and `cdwr tenant provision` sets a tenant's flags.
+Tenants are configured in Infisical. Deploys are switched on per environment by `DEPLOY_ENABLED=true` ([ARCHITECTURE.md](ARCHITECTURE.md)).
 
 #### Tenancy & Authentication Model
 
@@ -387,10 +181,4 @@ A host app reads `/apps/<app>` itself at boot, so the deploy pushes no folder se
 - **Vitest** — used for React/browser libraries and pure utility libs
 - Both are inferred automatically by Nx plugins; no manual target configuration needed
 
-### CI/CD
-
-GitHub Actions (`.github/workflows/ci.yml`) runs lint/test/build on PRs using Nx affected detection and Nx Cloud caching. Deployment selection is separate and **not** affected-based: the deployment workflow ships an app when `nx release` resolves a version bump for it from its conventional commits since the last release tag. A bump alone is not enough: the app also needs a runtime change in its range, meaning a changed file outside the ignore list (`ignoredFiles` in `nx-deploy`: Markdown, `.claude/**`, specs, stories, snapshots) that makes it affected. A preview's range is its own PR (`merge-base(origin/main, PR head)..PR head`), so unreleased commits on main and docs-only PRs deploy nothing. Production's range runs from the app's last release tag. Every dropped app is logged as `Skip: <app> - bumped by nx release, but no runtime change in <range>`. A manual dispatch naming an app skips both checks. Preview environments are created for each PR with temporary Postgres databases from a dedicated preview cluster.
-
-### Release Process
-
-Published packages use a hybrid `nx release` model (`nx.json` → `release.groups`): a **fixed** group for the Nx-plugin suite (`nx-payload` + `create-nx-payload`) and an **independent** group for `fly-node`. `cdwr release` (alias `nx release-cli`) is an interactive command in `tools/cdwr` that calls `nx release` — which bumps versions, generates changelogs, and tags releases. GitHub Actions then publish tagged packages to npm.
+CI/CD, preview deploys and the release model: [ARCHITECTURE.md](ARCHITECTURE.md).

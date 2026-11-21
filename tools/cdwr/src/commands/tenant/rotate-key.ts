@@ -98,6 +98,7 @@ export default defineCommand({
     previewApp: previewAppInput(),
     tenant: input.select<string>({
       prompt: 'Which tenant?',
+      short: 't',
       description: 'Deployment id under /tenants',
       choices: async (ctx, resolved) => {
         const environment = resolved['environment'] as Environment;

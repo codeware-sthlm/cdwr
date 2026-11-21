@@ -1,4 +1,5 @@
 import {
+  canResetTotp,
   editorUserAccess,
   systemUserAccess,
   systemUserOrTenantAdminAccess
@@ -16,11 +17,24 @@ import { User } from '@codeware/shared/util/payload-types';
 import { CollectionConfig, Condition } from 'payload';
 
 import { adminAccessToAllDocTenants } from './access/admin-access-to-all-doc-tenants';
+import { statsAccountField } from './fields/stats-account.field';
 import { tenantsArrayField } from './fields/tenants-array.field';
+import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
+import { loginThrottleHook } from './hooks/login-throttle.hook';
+import { mailVerificationAfterCreateHook } from './hooks/mail-verification-after-create.hook';
+import { passwordPolicyHook } from './hooks/password-policy.hook';
+import {
+  deleteStatsAccountHook,
+  rememberStatsAccountHook,
+  removeStatsTeamMembershipHook
+} from './hooks/stats-account-lifecycle.hook';
 import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-access.hook';
+import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
+import { userTotpResetEndpoint } from './totp-reset.endpoint';
+import { verifyEmailMail } from './verify-email';
 
 /**
  * Condition function to determine whether the Workspaces tab should be shown in the admin UI for a user document.
@@ -50,7 +64,38 @@ const showWorkspacesTab: Condition<User> = (data, _, { user }) => {
  */
 const users: CollectionConfig<'users'> = {
   slug: 'users',
-  auth: { maxLoginAttempts: 5, lockTime: 1000 * 60 * 60 * 24 },
+  auth: {
+    maxLoginAttempts: 5,
+    lockTime: 1000 * 60 * 60 * 24,
+    // Payload's default, stated so a change to it is a deliberate one. The
+    // site's members share this cookie, so it bounds their session too
+    tokenExpiration: 60 * 60 * 2,
+    // Only self-serve signups are left unverified; see verifyOnlySelfServeHook
+    verify: {
+      generateEmailHTML: ({ req, token, user }) =>
+        verifyEmailMail(req.payload, {
+          token,
+          name: user?.name,
+          locale: req.i18n.language === 'sv' ? 'sv' : 'en'
+        }).html,
+      generateEmailSubject: ({ req, token, user }) =>
+        verifyEmailMail(req.payload, {
+          token,
+          name: user?.name,
+          locale: req.i18n.language === 'sv' ? 'sv' : 'en'
+        }).subject
+    },
+    forgotPassword: {
+      generateEmailHTML: async ({ req, token, user } = {}) =>
+        req && token && user
+          ? (await forgotPasswordMail({ req, token, user })).html
+          : '',
+      generateEmailSubject: async ({ req, token, user } = {}) =>
+        req && token && user
+          ? (await forgotPasswordMail({ req, token, user })).subject
+          : ''
+    }
+  },
   admin: {
     group: adminGroups.settings,
     useAsTitle: 'name',
@@ -79,12 +124,34 @@ const users: CollectionConfig<'users'> = {
     update: adminAccessToAllDocTenants('allowSelf'),
     delete: adminAccessToAllDocTenants('denySelf')
   },
+  endpoints: [userTotpResetEndpoint],
   hooks: {
+    beforeOperation: [
+      loginThrottleHook,
+      passwordPolicyHook,
+      verifyOnlySelfServeHook
+    ],
     beforeValidate: [ensureTenantHook],
     beforeChange: [validateTenantsArrayAccessHook],
+    beforeDelete: [rememberStatsAccountHook],
+    afterChange: [
+      mailVerificationAfterCreateHook,
+      removeStatsTeamMembershipHook
+    ],
+    afterDelete: [deleteStatsAccountHook],
     afterLogin: [verifyTenantModeAccessHook, applyTenantLocaleHook]
   },
   fields: [
+    // Payload's own verification flag, which any signed-in user could set;
+    // merged over it so only system users can mark an address confirmed
+    {
+      name: '_verified',
+      type: 'checkbox',
+      access: {
+        create: systemUserAccess,
+        update: systemUserAccess
+      }
+    },
     {
       type: 'tabs',
       tabs: [
@@ -122,6 +189,30 @@ const users: CollectionConfig<'users'> = {
               },
               required: true,
               defaultValue: 'user'
+            },
+            {
+              name: 'description',
+              type: 'textarea',
+              label: { en: 'Description', sv: 'Beskrivning' },
+              admin: {
+                description: {
+                  en: 'Short description of the user.',
+                  sv: 'Kort beskrivning av användaren.'
+                }
+              },
+              maxLength: 200
+            },
+            {
+              name: 'totpReset',
+              type: 'ui',
+              admin: {
+                disableListColumn: true,
+                condition: (data, _, { user }) => canResetTotp(user, data),
+                components: {
+                  Field:
+                    '@codeware/apps/cms/components/admin/users/TotpReset.client'
+                }
+              }
             }
           ]
         },
@@ -134,19 +225,7 @@ const users: CollectionConfig<'users'> = {
         }
       ]
     },
-    {
-      name: 'description',
-      type: 'textarea',
-      label: { en: 'Description', sv: 'Beskrivning' },
-      admin: {
-        description: {
-          en: 'Short description of the user.',
-          sv: 'Kort beskrivning av användaren.'
-        },
-        position: 'sidebar'
-      },
-      maxLength: 200
-    }
+    statsAccountField()
   ]
 };
 

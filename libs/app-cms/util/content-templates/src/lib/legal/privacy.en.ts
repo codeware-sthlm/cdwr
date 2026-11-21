@@ -4,15 +4,18 @@
  * Describes what this platform actually does with a visitor's details, so the
  * editor is correcting and extending real text rather than starting from
  * nothing. Sections for what the workspace does not use are left out when the
- * page is created. It is not legal advice, and the draft says so in its first
- * line — the page is created unpublished precisely so nobody ships it unread.
+ * page is created. It is not legal advice, and an unpublished draft says so in its
+ * first line — the page is created unpublished precisely so nobody ships it unread.
  */
-export const privacyEn = `> **Draft — review before publishing.** This text describes what this website collects and why. It is a starting point, not legal advice. Check it against how you actually work, fill in what is marked, add anything else you collect, and have it reviewed if you are unsure.
+export const privacyEn = `{{^published}}
+> **Draft — review before publishing.** This text describes what this website collects and why. It is a starting point, not legal advice. Check it against how you actually work, fill in what is marked, add anything else you collect, and have it reviewed if you are unsure.
+{{/published}}
 
 # Privacy
 
 {{tenantName}} is responsible for the personal data you give us on this website. This page explains what we collect, why, how long we keep it, and which services help us run the website.
 
+{{#forms}}
 ## Forms
 
 When you send a message through a form on this website, we store what you wrote in the form and when you sent it. Which details that is depends on the form — usually your name, your email address and your message.
@@ -27,6 +30,7 @@ Messages are deleted {{formsRetentionDays}} days after they were sent.
 {{^formsRetentionDays}}
 We keep messages until we delete them. **Fill in:** how long that is, or set a retention period under Forms in the site settings so messages are deleted automatically.
 {{/formsRetentionDays}}
+{{/forms}}
 
 {{#tourSignups}}
 ## Tour signups
@@ -65,10 +69,18 @@ We send email through a service that delivers the messages on our behalf. **Fill
 {{#errorMonitoring}}
 ## Error monitoring
 
-When something goes wrong on this website, an error report is sent to Sentry, a service that helps us find and fix errors. A report shows which page you were on and which browser you use{{#errorMonitoringEu}}, and it is stored in the EU{{/errorMonitoringEu}}. It does not include your IP address or anything you entered on the page. We do not record what you do on the page, and we use the reports only to fix errors.
+When something goes wrong on this website, an error report is sent to Sentry, a service that helps us find and fix errors. A report shows which page you were on and which browser you use{{#errorMonitoringEu}}, and it is stored in the EU{{/errorMonitoringEu}}. It does not include your IP address or anything you entered on the page. The reports are not used to follow what you do on the page, only to fix errors.
 
 The legal basis is our legitimate interest in keeping the website working.
 {{/errorMonitoring}}
+
+{{#analytics}}
+## Visitor statistics
+
+We count visits to this website with Umami, a statistics service that is run on our behalf. It sets no cookies and stores nothing in your browser. For each page view it records the page, the website you came from, your browser, operating system, device type, screen size and language, and your approximate location (country, region and city). On some visits it also records where on the page you click and how far you scroll. Your IP address is used to work out that location and, together with your browser details, to recognise visits from the same browser during the current month. The IP address itself is not stored. We use the statistics to see which pages people read and how the website is used, not to find out who you are.
+
+The legal basis is our legitimate interest in knowing how the website is used.
+{{/analytics}}
 
 {{#humanCheck}}
 ## Spam protection

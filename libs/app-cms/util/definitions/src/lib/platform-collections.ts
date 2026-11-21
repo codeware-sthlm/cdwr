@@ -23,3 +23,15 @@ export type PlatformCollectionSlug = (typeof platformCollectionSlugs)[number];
  */
 export const isPlatformCollectionSlug = (slug: string): boolean =>
   (platformCollectionSlugs as readonly string[]).includes(slug);
+
+/**
+ * Collections only system users can see or touch.
+ *
+ * Platform owned like {@link platformCollectionSlugs}, but not even readable
+ * by an editor or a tenant api key, so there is nothing for them to browse.
+ */
+export const systemCollectionSlugs = [
+  'invite-codes'
+] as const satisfies readonly CollectionSlug[];
+
+export type SystemCollectionSlug = (typeof systemCollectionSlugs)[number];

@@ -1,4 +1,5 @@
 import * as core from '@actions/core';
+import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { nxMigrate } from './nx-migrate';
 import { ActionInputsSchema } from './utils/schema';
@@ -25,7 +26,8 @@ export async function run(): Promise<void> {
       dryRun: core.getBooleanInput('dry-run')
     } satisfies ActionInputs);
 
-    core.debug(`Inputs:\n${JSON.stringify(inputs, null, 2)}`);
+    maskSecretsIn(inputs);
+    core.debug(`Inputs:\n${JSON.stringify(redactConfig(inputs), null, 2)}`);
 
     // Run nx migration
     const {
