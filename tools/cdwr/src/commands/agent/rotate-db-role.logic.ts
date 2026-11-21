@@ -118,11 +118,11 @@ export function sameServer(admin: string, target: string): ServerMatch {
     const parsed = parse(url, what);
     return `${parsed.hostname.toLowerCase()}:${parsed.port || '5432'}`;
   };
-  const ah = hostOf(admin, 'the admin url');
-  const th = hostOf(target, 'the target url');
-  return server(admin, 'the admin url') === server(target, 'the target url')
+  const as = server(admin, 'the admin url');
+  const ts = server(target, 'the target url');
+  return as === ts
     ? { ok: true }
-    : { ok: false, why: `the admin url reaches ${ah}, the target ${th}` };
+    : { ok: false, why: `the admin url reaches ${as}, the target ${ts}` };
 }
 
 /**
