@@ -53,18 +53,12 @@ devlog_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/devlog-line"; }
 review_line() { print -r -- "$(date +%F) · $*" > "$HOME_DIR/review-line"; }
 note() { print -r -- "$(date '+%F %T') $*" >> "$LOGS/scheduler.log"; }
 say() { note "$*"; $check && print -r -- "$*"; return 0; }
-# Always action-level: a run that planned something or went wrong needs Håkan. No webhook, no-op.
-notify() {
-  local hook="$HOME_DIR/notify.sh"
-  [[ -x "$hook" ]] || hook="$HOME/.claude/hooks/notify-slack.sh"
-  [[ -x "$hook" ]] || return 0
-  jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
-}
-# notice <action|info> <message>: info is dropped when notify-level says action.
+# notice <urgent|action|info> <source> <message>: notify.sh applies the dial and spools or posts.
+# No notify.sh, no-op.
 notice() {
-  local level; level="$(tr -d '[:space:]' 2>/dev/null < "$HOME_DIR/notify-level" || true)"
-  [[ "$1" == info && "$level" == action ]] && return 0
-  notify "$2"
+  local hook="$HOME_DIR/notify.sh"
+  [[ -x "$hook" ]] || return 0
+  ( cd "$REPO" 2>/dev/null; "$hook" --level "$1" --source "$2" "$3" ) || true
 }
 check=false; [[ "${1:-}" == "--check" ]] && check=true
 # Set by the container loop when the listener woke this run
@@ -174,6 +168,8 @@ source "${0:A:h}/telemetry.sh"
 telemetry_env_search "$REPO"
 # Where session-hook.sh finds the key: the path goes to the sessions, never the key
 [[ -r "$REPO/tools/cdwr/.env" ]] && export AGENT_QUEUE_ENV_FILE="$REPO/tools/cdwr/.env"
+# Every tick drains the notify spool, the platform and paused ones too (they exit below)
+$check || notices_drain "$HOME_DIR" || true
 
 source "${0:A:h}/github-app.sh"
 
@@ -603,6 +599,7 @@ platform_warn() {
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
   record warn "" "platform: $1"
+  notice urgent platform "Platform: $1"
 }
 # True unless a collection started under 5 minutes ago (platform-ran-at, epoch seconds), so a loop
 # step right after a queue run doesn't read the platform twice
@@ -709,6 +706,7 @@ backup_warn() {
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
   record warn "" "backup: $1"
+  notice urgent backup "Backup: $1"
 }
 record_backup() {
   $check && return 0
@@ -894,7 +892,8 @@ record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view watch renovate devlog review deploy
+  local last attended suggested jl view watch renovate devlog review deploy notify
+  notify="$("$HOME_DIR/notify.sh" --dial 2>/dev/null)"
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
   attended="${attended_line:-$(cat "$HOME_DIR/attended-line" 2>/dev/null || cat "$HOME_DIR/attended-published" 2>/dev/null)}"
@@ -906,7 +905,7 @@ record_queue_state() {
   devlog="$(cat "$HOME_DIR/devlog-line" 2>/dev/null)"
   review="$(cat "$HOME_DIR/review-line" 2>/dev/null)"
   deploy="$(cat "$HOME_DIR/deploy.json" 2>/dev/null)"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" "$deploy" ) &!
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" "$deploy" "$notify" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so
@@ -930,7 +929,7 @@ linear_ok() {
   linear_gate "$HOME_DIR" && return 0
   note "fail: no Linear tools ($linear_why)"
   record "no Linear tools" "" "$linear_why"
-  $linear_new && notify "Agent queue: the claude runs have no Linear tools ($linear_why); nothing starts until they do."
+  $linear_new && notice urgent scheduler "Agent queue: the claude runs have no Linear tools ($linear_why); nothing starts until they do."
   return 1
 }
 
@@ -1325,7 +1324,7 @@ watch_prs() {
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
       note "watch: $level $msg"
-      notice "$level" "$msg"
+      notice "$level" watch "$msg"
     done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
     for ev in ${(f)"$(jq -c '.own[]?' <<<"$out")"}; do own_event "$ev"; done
     # GitHub's automatic review skips a PR the app opened, so a ticket parked on Copilot gets one
@@ -1342,7 +1341,7 @@ watch_prs() {
       else
         msg="$id: could not request Copilot on PR $pr: ${why:-GitHub refused}"
         note "watch: action $msg"
-        notice action "$msg"
+        notice action watch "$msg"
       fi
     fi
     # The merge: step says enqueue only when merge_verdict said ok on this very node, so its node id
@@ -1353,13 +1352,13 @@ watch_prs() {
       oid="$(jq -r '.headRefOid' <<<"$now")"
       if why="$(desk_pr_act merge "$pr" "$nodeid" "$oid")"; then
         note "watch: $id PR #$pr merging on its own"
-        notice info "$id: PR $pr merging on its own"
+        notice info watch "$id: PR $pr merging on its own"
         record auto-merge "$id" "PR $pr enqueued"
       else
         out="$(jq -c '.entry.autoMerge = .autoMergeFailed' <<<"$out")"
         msg="$id: PR $pr could not join the merge queue: ${why:-GitHub refused}"
         note "watch: action $msg"
-        notice action "$msg"
+        notice action watch "$msg"
         own_event "$(jq -nc --arg id "$id" --argjson pr "$pr" --arg oid "$oid" --arg why "${why:-GitHub refused}" \
           --arg title "$(jq -r '.title // ""' <<<"$now")" '{event_id: "merge:\($id):\($pr):refused:\($oid)", kind: "merge",
             ticket: $id, pr: $pr, title: (if $title == "" then null else $title end), result: "refused", reason: $why}')"
@@ -1690,7 +1689,7 @@ apply_list() {
   # Once only: a done list comes back while a tick is left to retry
   if [[ "$(jq -r '.apply.done == true and .apply.told != true' <<<"$entry")" == true ]]; then
     summary="$(watch -r --arg id "$id" 'include "watch"; .apply | apply_summary($id) | "\(.level)\t\(.message)"' <<<"$entry")" &&
-      { note "watch: ${summary/$'\t'/ }"; notice "${summary%%$'\t'*}" "${summary#*$'\t'}"; }
+      { note "watch: ${summary/$'\t'/ }"; notice "${summary%%$'\t'*}" watch "${summary#*$'\t'}"; }
     entry="$(jq -c '.apply.told = true' <<<"$entry")"
   fi
   print -r -- "$entry"
@@ -1794,7 +1793,7 @@ close_parents() {
     fi
     note "close: $id closed, all sub-issues are closed"
     record closed "$id" "all sub-issues are closed"
-    notice info "$id: closed, all sub-issues are closed"
+    notice info scheduler "$id: closed, all sub-issues are closed"
   done
   return 0
 }
@@ -1881,7 +1880,7 @@ label_parts() {
     fi
     note "label: $id labelled agent:ready, every blocker is closed"
     record labelled "$id" "every blocker is closed"
-    notice info "$id labelled agent:ready: every blocker is closed"
+    notice info scheduler "$id labelled agent:ready: every blocker is closed"
   done
   return 0
 }
@@ -1954,7 +1953,7 @@ watch_renovate() {
   while IFS=$'\t' read -r level msg; do
     [[ -z "$level" ]] && continue
     note "renovate: $level $msg"
-    notice "$level" "$msg"
+    notice "$level" watch "$msg"
   done <<<"$(jq -r '.notices[] | "\(.level)\t\(.message)"' <<<"$out")"
   return 0
 }
@@ -2008,10 +2007,10 @@ audit_notices() {
   jq -c '.state' <<<"$out" > "$file.tmp" && mv "$file.tmp" "$file" || return 0
   n="$(jq '.due | length' <<<"$out")"
   if (( n > 3 )); then
-    notice action "Agent queue: $n new gaps, e.g. $(jq -r '.due[0].what' <<<"$out"). See cdwr agent status or the desk."
+    notice action scheduler "Agent queue: $n new gaps, e.g. $(jq -r '.due[0].what' <<<"$out"). See cdwr agent status or the desk."
   elif (( n > 0 )); then
     local line
-    jq -r '.due[] | "Gap: \(.what). \(.fix)"' <<<"$out" | while IFS= read -r line; do notice action "$line"; done
+    jq -r '.due[] | "Gap: \(.what). \(.fix)"' <<<"$out" | while IFS= read -r line; do notice action scheduler "$line"; done
   fi
 }
 
@@ -2192,7 +2191,7 @@ attended() {
     # The key goes to the launcher alone; implement.sh un-exports it before claude starts.
     AGENT_SUPABASE_SERVICE_KEY="${AGENT_SUPABASE_SERVICE_KEY:-}" nohup "$HOME_DIR/implement.sh" "$(jq -r '.key' <<<"$decision")" >/dev/null 2>&1 &
     note "launch: $(jq -r '.key' <<<"$decision") (pid $!)"
-    notice info "Agent queue: started an implementing session, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision")."
+    notice info scheduler "Agent queue: started an implementing session, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision")."
     return 0
   fi
   # Once per change, only with no live session (a live one picks the work up), and not for a
@@ -2212,7 +2211,7 @@ attended() {
     if [[ -n "$(jq -r '.pick.ticket // empty' <<<"$decision")" &&
           ( "$sstate" == none || "$sstate" == stopped ) && ! $locked ]]; then
       note "attended: $attended_line"
-      notice action "Agent queue: no session running, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision").$why Start /work-queue."
+      notice action scheduler "Agent queue: no session running, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision").$why Start /work-queue."
     fi
   fi
 }
@@ -2347,17 +2346,17 @@ run_outcome() {
   if limit_hold "$result"; then
     outcome=limited
     note "limited: ${tag:+$tag }$LIMIT_TEXT (see $log)"
-    $LIMIT_NEW && notice info "Agent queue: session limit reached, launches held until $(limit_held || print 'the reset')"
+    $LIMIT_NEW && notice info scheduler "Agent queue: session limit reached, launches held until $(limit_held || print 'the reset')"
     record limited "" "${tag:+$tag: }$LIMIT_TEXT, log $log$spent"
   elif [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
     outcome=cap
     note "cap: ${tag:+$tag }stopped at the \$$budget budget (see $log)"
-    notify "Agent queue: $label hit the \$$budget cap and stopped. Log: $log"
+    notice urgent scheduler "Agent queue: $label hit the \$$budget cap and stopped. Log: $log"
     record cap "" "${tag:+$tag: }stopped at the \$$budget budget, log $log"
   else
     outcome=failed
     note "fail: ${tag:+$tag }claude exited $rc (see $log)"
-    notify "Agent queue: $label failed (exit $rc). Log: $log"
+    notice urgent scheduler "Agent queue: $label failed (exit $rc). Log: $log"
     record failed "" "${tag:+$tag: }claude exited $rc, log $log$spent"
   fi
 }
@@ -2412,7 +2411,7 @@ suggest_run() {
     [[ "$title" == "$verdict" ]] && title=""
     note "suggested: $id $title"
     record suggested "$id" "$title$spent"
-    notice action "Agent idea: $id $title. Accept with agent:ready, or cancel with one word."
+    notice action suggest "Agent idea: $id $title. Accept with agent:ready, or cancel with one word."
     suggested_line "$id $title"
   elif [[ "$line" == "nothing today" ]]; then
     note "suggest: nothing today"
@@ -2472,7 +2471,7 @@ devlog_run() {
     [[ "$title" == "$verdict" ]] && title=""
     note "devlog: drafted $id $title"
     record drafted "$id" "$title$spent"
-    notice action "Devlog draft: ${title:-post $id}. Publish or delete it in the admin."
+    notice action devlog "Devlog draft: ${title:-post $id}. Publish or delete it in the admin."
     (( ++count ))
   done <<<"$verdicts"
   line="$(print -r -- "$verdicts" | tail -n 1)"
@@ -2481,7 +2480,7 @@ devlog_run() {
   elif [[ "$line" == "failed: "* ]]; then
     note "fail: devlog: $line"
     record failed "" "devlog: ${line#failed: }$spent"
-    notice action "Devlog: ${line#failed: }"
+    notice action devlog "Devlog: ${line#failed: }"
     if (( count > 0 )); then devlog_line "$count draft(s), failed: ${line#failed: }"; else devlog_line "failed: ${line#failed: }"; fi
   elif (( count > 0 )); then
     devlog_line "$count draft(s)"
@@ -2513,13 +2512,13 @@ own_read() {
     items: ([$rows[] | {at, kind, ticket, pr, title, target, result, reason}] | sort_by(.at))}' > "$1"
 }
 # The daily notice of what the queue did on its own, once a review is stored (watch.jq own_notice).
-# Through notify, so notify-level never silences it: it is the audit in place of Håkan's approval.
+# An action notice, so the dial's info level never drops it: it is the audit in place of Håkan's approval.
 review_notice() {
   local msg
   msg="$(watch -r --arg desk "${AGENT_DESK_URL:-}" 'include "watch"; own_notice($desk)' <<<"$1")"
   [[ -n "$msg" ]] || { note "warn: review: no daily notice$(watch_err)"; return 0; }
   note "review: notice: $msg"
-  notify "$msg"
+  notice action review "$msg"
 }
 
 # The daily backlog review: reads the queue view the run just wrote (tree and audit candidates) and
@@ -2741,15 +2740,15 @@ if after="$(linear "$PLANNED")" && [[ -n "$after" ]] && ! jq -e '.errors' >/dev/
     id="${row%%:*}"
     note "planned: $id (${row#*:})"
     record planned "$id" "log $log$spent"
-    if [[ "${row#*:}" == ask ]]; then notify "$id: plan ready, needs your approval"
-    else notice info "$id: plan approved, an implementing run follows"; fi
+    if [[ "${row#*:}" == ask ]]; then notice action plan "$id: plan ready, needs your approval"
+    else notice info plan "$id: plan approved, an implementing run follows"; fi
     (( ++planned ))
   done
   # A clean exit that planned nothing is a failure all the same, e.g. no Linear tools.
   # Planned tickets are left out of `ready`, so this fires only for a ticket that really needed a plan.
   if (( rc == 0 && planned == 0 )); then
     note "fail: planned nothing (see $log)"
-    notify "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
+    notice action plan "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
     record "planned nothing" "" "log $log$spent"
   fi
 else

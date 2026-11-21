@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   utimesSync,
   writeFileSync
@@ -136,9 +137,11 @@ describe('run.sh', () => {
     expect(planned).toContain('(^|\\n)##\\\\s+plan\\\\s*(\\n|$)');
     expect(planned).toContain('record planned "$id"');
     expect(planned).toContain(
-      'notice info "$id: plan approved, an implementing run follows"'
+      'notice info plan "$id: plan approved, an implementing run follows"'
     );
-    expect(planned).toContain('notify "$id: plan ready, needs your approval"');
+    expect(planned).toContain(
+      'notice action plan "$id: plan ready, needs your approval"'
+    );
   });
 
   it('fails a clean run that planned nothing', () => {
@@ -663,7 +666,6 @@ describe('run.sh review own list', () => {
           'note() { print -r -- "$*" >> "$HOME_DIR/notes"; }',
           'watch() { jq -L "$WATCH_DIR" "$@"; }',
           'watch_err() { :; }',
-          'notify() { print -r -- "$1" >> "$HOME_DIR/notified"; }',
           'notice() { print -r -- "$*" >> "$HOME_DIR/noticed"; }',
           fn('own_read'),
           fn('review_notice'),
@@ -788,28 +790,27 @@ describe('run.sh review own list', () => {
       }
     });
 
-    it('sends the jq message through notify, never notice', () => {
+    it('sends the jq message as an action notice from review', () => {
       sh([`review_notice '${row}'`], {
         AGENT_DESK_URL: 'https://desk.example.com'
       });
-      expect(file('notified')?.trim()).toBe(
-        'Nothing on its own since 19 Nov. See https://desk.example.com'
+      expect(file('noticed')?.trim()).toBe(
+        'action review Nothing on its own since 19 Nov. See https://desk.example.com'
       );
-      expect(file('noticed')).toBeNull();
       expect(file('notes')).toContain('review: notice: Nothing on its own');
     });
 
     it('says "See the desk." without a desk url', () => {
       sh([`review_notice '${row}'`]);
-      expect(file('notified')?.trim()).toBe(
-        'Nothing on its own since 19 Nov. See the desk.'
+      expect(file('noticed')?.trim()).toBe(
+        'action review Nothing on its own since 19 Nov. See the desk.'
       );
     });
 
     it('notes a warning and sends nothing when jq fails', () => {
       const r = sh([`review_notice 'not json'; print -r -- "rc=$?"`]);
       expect(r.stdout.trim()).toBe('rc=0');
-      expect(file('notified')).toBeNull();
+      expect(file('noticed')).toBeNull();
       expect(file('notes')).toContain('warn: review: no daily notice');
     });
   });
@@ -1112,7 +1113,10 @@ describe('run.sh telemetry', () => {
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
     expect(SCRIPT).toMatch(
-      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" "\$deploy" \) &!/s
+      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" "\$deploy" "\$notify" \) &!/s
+    );
+    expect(SCRIPT).toContain(
+      'notify="$("$HOME_DIR/notify.sh" --dial 2>/dev/null)"'
     );
     expect(SCRIPT).toContain(
       'deploy="$(cat "$HOME_DIR/deploy.json" 2>/dev/null)"'
@@ -1123,6 +1127,49 @@ describe('run.sh telemetry', () => {
     expect(SCRIPT).toContain(
       'renovate="$(cat "$HOME_DIR/renovate.json" 2>/dev/null)"'
     );
+  });
+
+  describe('notify dial in the queue state', () => {
+    let home: string;
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), 'queue-state-'));
+    });
+    afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+    const record = (dial: string | null) => {
+      if (dial !== null) {
+        writeFileSync(
+          join(home, 'notify.sh'),
+          `#!/bin/sh\n[ "$1" = "--dial" ] && echo '${dial}'\n`
+        );
+        chmodSync(join(home, 'notify.sh'), 0o755);
+      }
+      const fn = SCRIPT.match(
+        /^record_queue_state\(\) \{\n[\s\S]*?\n\}\n/m
+      )?.[0];
+      const script = [
+        `HOME_DIR="${home}"; check=false; last_outcome=idle; launch_note=""; paused=false`,
+        'telemetry_on() { return 0; }',
+        'queue_job_line() { :; }',
+        `telemetry_queue_state() { print -r -- "$#|\${11}" > "${home}/state"; }`,
+        fn ?? '',
+        'record_queue_state',
+        'sleep 0.5'
+      ].join('\n');
+      spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+      return existsSync(join(home, 'state'))
+        ? readFileSync(join(home, 'state'), 'utf8').trim()
+        : null;
+    };
+
+    it('passes the dial as the 11th argument', () => {
+      const dial = '{"level":"action","muteUntil":null}';
+      expect(record(dial)).toBe(`11|${dial}`);
+    });
+
+    it('passes an empty 11th argument without an executable notify.sh', () => {
+      expect(record(null)).toBe('11|');
+    });
   });
 
   // A refused launch shows on the desk and in `cdwr agent status`, not only in the log
@@ -1858,7 +1905,7 @@ describe('run.sh close_parents', () => {
     ]);
     expect(read('records')).toBe('closed COD-100 all sub-issues are closed\n');
     expect(read('notices')).toBe(
-      'info COD-100: closed, all sub-issues are closed\n'
+      'info scheduler COD-100: closed, all sub-issues are closed\n'
     );
     expect(read('closed-parents')).toBe('COD-100\n');
   });
@@ -1994,7 +2041,7 @@ describe('run.sh label_parts', () => {
     ]);
     expect(read('records')).toBe('labelled COD-102 every blocker is closed\n');
     expect(read('notices')).toBe(
-      'info COD-102 labelled agent:ready: every blocker is closed\n'
+      'info scheduler COD-102 labelled agent:ready: every blocker is closed\n'
     );
     expect(read('labelled-parts')).toBe('COD-102\n');
   });
@@ -2265,7 +2312,7 @@ describe('run.sh watch_prs', () => {
       });
       expect(entry().copilot).toBe('none');
       expect(read('notices')).toBe(
-        'action COD-5: could not request Copilot on PR 754: no Copilot seat\n'
+        'action watch COD-5: could not request Copilot on PR 754: no Copilot seat\n'
       );
     });
 
@@ -2330,7 +2377,9 @@ describe('run.sh watch_prs', () => {
       expect(result.stdout).toContain('rc=0');
       expect(read('act')).toBe('merge 754 PR_node abc123\n');
       expect(read('records')).toBe('auto-merge COD-5 PR 754 enqueued\n');
-      expect(read('notices')).toBe('info COD-5: PR 754 merging on its own\n');
+      expect(read('notices')).toBe(
+        'info watch COD-5: PR 754 merging on its own\n'
+      );
       expect(entry().autoMerge).toMatchObject({ tries: 1, oid: 'abc123' });
       expect(entry().autoMerge).not.toHaveProperty('failed');
     });
@@ -2352,7 +2401,7 @@ describe('run.sh watch_prs', () => {
       expect(read('act')).toBe('merge 754 PR_node abc123\n');
       expect(read('records')).toBe('');
       expect(read('notices')).toBe(
-        'action COD-5: PR 754 could not join the merge queue: GitHub said no\n'
+        'action watch COD-5: PR 754 could not join the merge queue: GitHub said no\n'
       );
       expect(entry().autoMerge).toMatchObject({
         failed: true,
@@ -2768,7 +2817,7 @@ describe('run.sh watch_renovate', () => {
       ticket: null
     });
     expect(read('notices')).toBe(
-      'info Renovate PR #754 has failing checks: chore(deps): update zod\n'
+      'info watch Renovate PR #754 has failing checks: chore(deps): update zod\n'
     );
   });
 
@@ -3472,7 +3521,7 @@ describe('run.sh audit', () => {
       const script = [
         'set -uo pipefail',
         `HOME_DIR="${home}"`,
-        `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`,
+        `notice() { print -r -- "$1|$3" >> "${home}/notices"; }`,
         fn('audit_notices'),
         `audit_notices '${JSON.stringify(audit === undefined ? {} : { audit })}'`
       ].join('\n');
@@ -5128,7 +5177,7 @@ describe('run.sh apply list', () => {
           'note() { :; }',
           'record() { :; }',
           `own_event() { print -r -- "$1" >> "${home}/own.calls"; }`,
-          `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`
+          `notice() { print -r -- "$1|$3" >> "${home}/notices"; }`
         ]
       );
       return {
@@ -6168,11 +6217,10 @@ describe('run.sh review session', () => {
         'linear_ok() { return 0; }',
         'to_main() { :; }',
         'gh_identity_or_note() { :; }',
-        'notify() { :; }',
         'telemetry_host() { print nuc; }',
         `note() { print -r -- "$*" >> "${t('note')}"; }`,
         `record() { print -r -- "$*" >> "${t('record')}"; }`,
-        `notice() { print -r -- "$1|$2" >> "${t('notice')}"; }`,
+        `notice() { print -r -- "$1|$3" >> "${t('notice')}"; }`,
         `claude() { ${out}print -r -- '${result}'; ${opts.limited ? 'return 1' : 'return 0'}; }`,
         `supabase_select() { print -r -- "$*" >> "${t('select')}"; case "$1" in
           review_dismissals) print -r -- '[{"finding_id":"a:COD-1:0123abcd","at":"2026-11-01T08:00:00Z","note":"fine"},{"finding_id":"b:COD-2:0123abcd","at":"2026-11-02T08:00:00Z","note":null}]' ;;
@@ -6502,6 +6550,7 @@ describe('run.sh platform step', () => {
       `HOME_DIR="${root}"; LOGS="${root}"; REPO="${move ? `${root}/work` : root}"; check=false`,
       `note() { print -r -- "$*" >> "${root}/notes"; }`,
       `record() { print -r -- "$*" >> "${root}/records"; }`,
+      `notice() { print -r -- "$*" >> "${root}/notices"; }`,
       'telemetry_on() { return 0; }',
       // plain shell variables, as telemetry_env leaves them after reading the .env file
       'typeset +x AGENT_SUPABASE_URL=https://supabase.test AGENT_SUPABASE_SERVICE_KEY=svc',
@@ -6910,6 +6959,10 @@ describe('run.sh platform step', () => {
     // Noted each time, a row for the first only
     expect(read('notes').match(/warn: platform rows:/g)).toHaveLength(3);
     expect(read('records').match(/platform:/g)).toHaveLength(1);
+    // An urgent notice inside the same throttle
+    expect(read('notices')).toBe(
+      'urgent platform Platform: cdwr agent platform-record failed (3)\n'
+    );
     // The queue is never stopped: the stub ran every tick
     expect(read('node.calls').split('\n').filter(Boolean)).toHaveLength(4);
   });
@@ -6972,6 +7025,7 @@ describe('run.sh backup step', () => {
       `HOME_DIR="${root}"; REPO="${root}"; check=false`,
       `note() { print -r -- "$*" >> "${root}/notes"; }`,
       `record() { print -r -- "$*" >> "${root}/records"; }`,
+      `notice() { print -r -- "$*" >> "${root}/notices"; }`,
       // The script's own list, so a name missing from it shows here
       SCRIPT.match(/^PLATFORM_VARS=\(.*\)$/m)?.[0] ?? '',
       fn('unexported_env'),
@@ -7087,6 +7141,105 @@ describe('run.sh backup step', () => {
     );
     expect(existsSync(join(root, 'backup-failed'))).toBe(false);
     expect(calls()).toBe(1);
+  });
+
+  it('sends one urgent notice per hour of throttle', async () => {
+    stubNode('exit 3');
+    const env = {
+      PLATFORM_BACKUP_DATABASE_URL: URL,
+      AGENT_QUEUE_BACKUP_HOUR: '05'
+    };
+    await tick(env);
+    expect(read('notices')).toBe('');
+    await tick(env);
+    expect(read('notices')).toBe(
+      'urgent backup Backup: cdwr agent backup failed (3)\n'
+    );
+    // a second failure inside the hour is noted, not sent again
+    writeFileSync(
+      join(root, 'backup-failed'),
+      'cdwr agent backup failed (4)\n'
+    );
+    await tick(env);
+    expect(read('notices')).toBe(
+      'urgent backup Backup: cdwr agent backup failed (3)\n'
+    );
+    expect(read('notes')).toContain(
+      'warn: backup: cdwr agent backup failed (4)'
+    );
+  });
+});
+
+describe('run.sh notice', () => {
+  let root: string;
+  let repo: string;
+  const notice = SCRIPT.match(/^notice\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'notice-'));
+    repo = realpathSync(mkdtempSync(join(tmpdir(), 'notice-repo-')));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  const run = (call: string) =>
+    spawnSync(
+      'zsh',
+      ['-c', [`HOME_DIR="${root}"; REPO="${repo}"`, notice, call].join('\n')],
+      { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '', HOME: root } }
+    );
+
+  it('is found in run.sh, with no notify and no fallback hook', () => {
+    expect(notice).toContain('notice() {');
+    expect(SCRIPT).not.toMatch(/^notify\(\) \{/m);
+    expect(SCRIPT).not.toContain('notify-slack.sh');
+    expect(SCRIPT).not.toContain('notify-level');
+    expect(SCRIPT).not.toMatch(/\bnotify "/);
+  });
+
+  it('runs notify.sh from the repo with the level, source and message', () => {
+    writeFileSync(
+      join(root, 'notify.sh'),
+      `#!/bin/sh\necho "$PWD $@" >> "${root}/calls"\n`
+    );
+    chmodSync(join(root, 'notify.sh'), 0o755);
+    const r = run(
+      'notice urgent scheduler "Agent queue: it broke"; print -r -- "rc=$?"'
+    );
+    expect(r.stdout.trim()).toBe('rc=0');
+    expect(readFileSync(join(root, 'calls'), 'utf8')).toBe(
+      `${repo} --level urgent --source scheduler Agent queue: it broke\n`
+    );
+  });
+
+  it('returns 0 when notify.sh fails', () => {
+    writeFileSync(join(root, 'notify.sh'), '#!/bin/sh\nexit 4\n');
+    chmodSync(join(root, 'notify.sh'), 0o755);
+    expect(
+      run('notice info watch "x"; print -r -- "rc=$?"').stdout.trim()
+    ).toBe('rc=0');
+  });
+
+  it('does nothing without an executable notify.sh', () => {
+    writeFileSync(join(root, 'notify.sh'), '#!/bin/sh\necho ran >> calls\n');
+    const r = run('notice action plan "x"; print -r -- "rc=$?"');
+    expect(r.stdout.trim()).toBe('rc=0');
+    expect(existsSync(join(root, 'calls'))).toBe(false);
+  });
+});
+
+describe('run.sh notice drain', () => {
+  it('drains the spool every tick, before the platform and paused exits, never on --check', () => {
+    const drain = SCRIPT.indexOf('notices_drain "$HOME_DIR"');
+    expect(drain).toBeGreaterThan(
+      SCRIPT.indexOf('telemetry_env_search "$REPO"')
+    );
+    expect(drain).toBeLessThan(SCRIPT.indexOf('if $platform; then\n'));
+    expect(drain).toBeLessThan(SCRIPT.indexOf('if $paused; then\n'));
+    expect(SCRIPT).toContain('$check || notices_drain "$HOME_DIR" || true');
+    expect(SCRIPT.match(/notices_drain "\$HOME_DIR"/g)).toHaveLength(1);
   });
 });
 
