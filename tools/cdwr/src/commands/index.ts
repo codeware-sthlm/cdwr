@@ -362,6 +362,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/rotate-db-role').then((m) => m.default)
   },
   {
+    path: ['agent', 'rotate', 'supabase'],
+    summary: "A new Supabase secret key for the agent host's telemetry",
+    danger: 'destructive',
+    load: () => import('./agent/rotate-supabase').then((m) => m.default)
+  },
+  {
     path: ['agent', 'notify'],
     summary: 'Which notices the queue sends: all, or only what needs you',
     danger: 'mutate',

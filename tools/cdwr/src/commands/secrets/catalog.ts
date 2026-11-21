@@ -794,10 +794,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'AGENT_SUPABASE_SERVICE_KEY',
     kind: 'api-key',
     purpose: 'Service key the queue writes telemetry to Supabase with',
-    rotation: {
-      manual:
-        'Roll the key in Supabase, write to agent-host /agent-queue, restart the agent container (cdwr agent rotate, COD-879)'
-    },
+    rotation: { command: ['agent', 'rotate', 'supabase'] },
     expiry: { source: 'unknown' }
   },
   {

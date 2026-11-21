@@ -174,6 +174,10 @@ export interface DeployRecord {
   failed: string | null;
 }
 
+/** Prints the container's short hostname, the host its telemetry rows carry */
+export const containerHostname = (host: string): Remote =>
+  ssh(host, 'docker', 'exec', CONTAINER, 'hostname', '-s');
+
 /** Exits 0 when the file is executable in the container; older images have no deploy-gate.sh */
 export const isExecutable = (host: string, path: string): Remote =>
   ssh(host, 'docker', 'exec', CONTAINER, 'test', '-x', path);
