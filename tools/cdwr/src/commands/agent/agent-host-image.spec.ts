@@ -10,13 +10,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 import { QUEUE_FILES, RUN_FALLBACK_SECONDS } from './agent.logic';
 
 const read = (path: string) =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
-
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
-const hasJq = spawnSync('jq', ['--version']).status === 0;
 
 // The image copies the queue files by name; a file install copies but the image lacks breaks the container
 describe('agent-host image', () => {
@@ -304,7 +303,9 @@ describe('agent-host entrypoint', () => {
     );
   });
 
-  describe.skipIf(!hasZsh || !hasJq)('trust_checkout', () => {
+  describe('trust_checkout', () => {
+    requireTools('zsh', 'jq');
+
     const fn = entrypoint.match(/^trust_checkout\(\) \{\n[\s\S]*?\n\}\n/m)?.[0];
     let home: string;
 

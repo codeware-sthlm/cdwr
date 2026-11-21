@@ -12,13 +12,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../agent-queue/notify.sh', import.meta.url)
 );
 
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+describe('notify.sh', () => {
+  requireTools('zsh');
 
-describe.skipIf(!hasZsh)('notify.sh', () => {
   let dir: string;
   let body: string;
 

@@ -12,13 +12,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../agent-queue/statusline.sh', import.meta.url)
 );
-
-// The queue scripts run on macOS and Linux with zsh; a CI runner without it skips them
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
-const hasJq = spawnSync('jq', ['--version']).status === 0;
 
 const PAYLOAD = {
   model: { display_name: 'Opus' },
@@ -36,7 +34,9 @@ interface Hit {
   body: string;
 }
 
-describe.skipIf(!hasZsh || !hasJq)('statusline.sh', () => {
+describe('statusline.sh', () => {
+  requireTools('zsh', 'jq');
+
   let dir: string;
   let server: Server;
   let origin: string;
@@ -99,6 +99,8 @@ describe.skipIf(!hasZsh || !hasJq)('statusline.sh', () => {
   });
 
   afterAll(async () => {
+    // Unset when requireTools failed the suite first
+    if (!server) return;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 

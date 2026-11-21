@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/implement.sh', import.meta.url)
 );
@@ -20,8 +22,6 @@ const SCRIPT = readFileSync(SCRIPT_PATH, 'utf8');
 const code = SCRIPT.split('\n')
   .filter((line) => !line.trim().startsWith('#'))
   .join('\n');
-
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 
 // The Bash rules of the DENY array, `Bash(...)` stripped
 const denied: string[] = (/^DENY=\(\n([\s\S]*?)^\)$/m.exec(code)?.[1] ?? '')
@@ -321,7 +321,9 @@ describe('implement.sh', () => {
     expect(isDenied(command)).toBe(true);
   });
 
-  describe.skipIf(!hasZsh)('run', () => {
+  describe('run', () => {
+    requireTools('zsh');
+
     let dir: string;
     let bin: string;
     let queueHome: string;

@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/force-push.sh', import.meta.url)
 );
@@ -20,8 +22,6 @@ const SCRIPT_PATH = fileURLToPath(
 const SETTINGS_PATH = fileURLToPath(
   new URL('../../../../../.claude/settings.json', import.meta.url)
 );
-
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 
 describe('.claude/settings.json', () => {
   const allow: string[] = JSON.parse(readFileSync(SETTINGS_PATH, 'utf8'))
@@ -38,7 +38,9 @@ describe('.claude/settings.json', () => {
 const BRANCH = 'cod-705-let-attended-sessions-force-push';
 const SHA = '0123456789abcdef0123456789abcdef01234567';
 
-describe.skipIf(!hasZsh)('force-push.sh', () => {
+describe('force-push.sh', () => {
+  requireTools('zsh');
+
   let dir: string;
   let bin: string;
   let wt: string;

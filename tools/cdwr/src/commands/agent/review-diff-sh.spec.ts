@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/review-diff.sh', import.meta.url)
 );
@@ -33,8 +35,6 @@ const SETTINGS_PATH = fileURLToPath(
   new URL('../../../../../.claude/settings.json', import.meta.url)
 );
 
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
-
 describe('.claude/settings.json', () => {
   it('allows the review diff helper', () => {
     const allow: string[] = JSON.parse(readFileSync(SETTINGS_PATH, 'utf8'))
@@ -45,7 +45,9 @@ describe('.claude/settings.json', () => {
 
 const BRANCH = 'cod-705-let-the-review-read-a-file';
 
-describe.skipIf(!hasZsh)('review-diff.sh', () => {
+describe('review-diff.sh', () => {
+  requireTools('zsh');
+
   let dir: string;
   let wt: string;
 

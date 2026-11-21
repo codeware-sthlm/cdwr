@@ -1,14 +1,14 @@
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { type Server, createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+
+import { requireTools } from '../../testing/require-tools';
 
 const CHECKIN_SH = fileURLToPath(
   new URL('../../../agent-queue/checkin.sh', import.meta.url)
 );
 const execAsync = promisify(execFile);
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
-const hasJq = spawnSync('jq', ['--version']).status === 0;
 
 interface Hit {
   method?: string;
@@ -16,7 +16,9 @@ interface Hit {
   body: Record<string, unknown>;
 }
 
-describe.skipIf(!hasZsh || !hasJq)('checkin.sh', () => {
+describe('checkin.sh', () => {
+  requireTools('zsh', 'jq');
+
   let server: Server;
   let origin: string;
   let hits: Hit[];
@@ -61,6 +63,8 @@ describe.skipIf(!hasZsh || !hasJq)('checkin.sh', () => {
   });
 
   afterAll(async () => {
+    // Unset when requireTools failed the suite first
+    if (!server) return;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 

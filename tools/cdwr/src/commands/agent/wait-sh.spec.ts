@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../agent-queue/wait.sh', import.meta.url)
 );
@@ -69,10 +71,9 @@ const session = (
 const response = (...nodes: ReturnType<typeof ticket>[]) =>
   JSON.stringify({ data: { issues: { nodes } } });
 
-// The queue scripts run on macOS only; a CI runner without zsh skips them
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+describe('wait.sh', () => {
+  requireTools('zsh');
 
-describe.skipIf(!hasZsh)('wait.sh', () => {
   let dir: string;
 
   // A fake linear: answers[n] for call n (the last one repeats)
@@ -859,7 +860,9 @@ while true; do beat "$1" "$2"; sleep 1; done`
   });
 });
 
-describe.skipIf(!hasZsh)('parked_waits', () => {
+describe('parked_waits', () => {
+  requireTools('zsh');
+
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'waits-sh-'));
@@ -969,7 +972,9 @@ const LIB = fileURLToPath(
   new URL('../../../agent-queue/lib.sh', import.meta.url)
 );
 
-describe.skipIf(!hasZsh)('lib.sh attended_nodes', () => {
+describe('lib.sh attended_nodes', () => {
+  requireTools('zsh');
+
   const fold = (input: unknown): unknown =>
     JSON.parse(
       spawnSync('zsh', ['-c', `source "${LIB}"; attended_nodes`], {
