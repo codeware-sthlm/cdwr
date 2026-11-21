@@ -94,7 +94,8 @@ const sample = (min: number): HostMetricRow => ({
   disk_total: 100 * GIB,
   disk_free: 60 * GIB,
   cgroup_mem_current: null,
-  cgroup_mem_max: null
+  cgroup_mem_max: null,
+  exposed: []
 });
 
 const run = (
@@ -943,7 +944,12 @@ describe('health', () => {
     connection: connection(),
     runs: runs(ago(5)),
     staleHours: 2,
-    nuc: { host: 'nuc', at: NOW.getTime() - 2 * MIN, silentMin: 30 },
+    nuc: {
+      host: 'nuc',
+      at: NOW.getTime() - 2 * MIN,
+      silentMin: 30,
+      exposed: []
+    },
     heartbeats: [],
     events: [event()],
     activity: [],
@@ -967,6 +973,7 @@ describe('health', () => {
       'queue_state parses',
       'Snapshot age',
       'nuc heartbeat',
+      'nuc credentials',
       'mac heartbeat',
       'github_events last event',
       'Linear poll'
@@ -999,6 +1006,7 @@ describe('health', () => {
         'queue_state parses',
         'Snapshot age',
         'nuc heartbeat',
+        'nuc credentials',
         'nuc deploy',
         'github_events last event',
         'Linear poll'
@@ -1048,7 +1056,49 @@ describe('health', () => {
     const checks = health({ ...fresh(), heartbeats: [mac(2)] });
     expect(checks.every((c) => c.ok)).toBe(true);
     expect(checks.every((c) => c.at !== null)).toBe(true);
-    expect(checks.every((c) => c.note === null)).toBe(true);
+    expect(checks.filter((c) => c.note !== null).map((c) => c.name)).toEqual([
+      'nuc credentials'
+    ]);
+  });
+
+  describe('credentials', () => {
+    const find = (exposed?: readonly string[] | null) =>
+      health({
+        ...fresh(),
+        nuc: {
+          host: 'nuc',
+          at: NOW.getTime() - 2 * MIN,
+          silentMin: 30,
+          exposed
+        }
+      }).find((c) => c.name === 'nuc credentials');
+
+    it('is ok for an empty list, dated from the sample', () => {
+      expect(find([])).toEqual({
+        name: 'nuc credentials',
+        ok: true,
+        at: NOW.getTime() - 2 * MIN,
+        note: "no write credential in the agent's environment"
+      });
+    });
+
+    it('fails with the names when something is exposed', () => {
+      const c = find(['GH_TOKEN', 'claude as agent (pid 42)']);
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('exposed: GH_TOKEN, claude as agent (pid 42)');
+    });
+
+    it('fails when the sample does not report it', () => {
+      const c = find(null);
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('not reported');
+    });
+
+    it('reads a row from before the column like a missing report', () => {
+      const c = find(undefined);
+      expect(c?.ok).toBe(false);
+      expect(c?.note).toBe('not reported');
+    });
   });
 
   it('fails each check that is stale, and says why', () => {
@@ -1056,7 +1106,12 @@ describe('health', () => {
       connection: connection({ live: false, upSince: null, retries: 2 }),
       runs: runs(ago(180), [], true),
       staleHours: 2,
-      nuc: { host: 'nuc', at: NOW.getTime() - 45 * MIN, silentMin: 30 },
+      nuc: {
+        host: 'nuc',
+        at: NOW.getTime() - 45 * MIN,
+        silentMin: 30,
+        exposed: ['GH_TOKEN']
+      },
       heartbeats: [mac(31)],
       events: [],
       activity: [{ pr: 7, ticket: 'COD-1', at: NOW.getTime() - 10 * MIN }],
@@ -1070,6 +1125,7 @@ describe('health', () => {
       'queue_state parses': [false, 'does not parse'],
       'Snapshot age': [false, 'older than 2 h'],
       'nuc heartbeat': [false, 'no sample for 45 m, limit 30 m'],
+      'nuc credentials': [false, 'exposed: GH_TOKEN'],
       'mac heartbeat': [
         false,
         'no heartbeat for 31 m while a turn was running'
@@ -1301,6 +1357,7 @@ describe('checkProblems', () => {
     'queue_state parses',
     'Snapshot age',
     'nuc heartbeat',
+    'nuc credentials',
     'mac heartbeat',
     'nuc deploy',
     'github_events last event',

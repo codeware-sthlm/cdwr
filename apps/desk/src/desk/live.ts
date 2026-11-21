@@ -578,6 +578,7 @@ export type CheckName =
   | 'queue_state parses'
   | 'Snapshot age'
   | `${string} heartbeat`
+  | `${string} credentials`
   | `${string} deploy`
   | 'github_events last event'
   | 'Linear poll';
@@ -655,6 +656,23 @@ export const deployCheck = (
   };
 };
 
+/** The container's exposure check from its newest sample: a missing report fails, as the NUC always sends one */
+const credentialsCheck = (nuc: {
+  host: string;
+  at: number;
+  exposed?: readonly string[] | null;
+}): HealthCheck & { name: `${string} credentials` } => {
+  const base = { name: `${nuc.host} credentials` as const, at: nuc.at };
+  if (nuc.exposed == null) return { ...base, ok: false, note: 'not reported' };
+  return nuc.exposed.length
+    ? { ...base, ok: false, note: `exposed: ${nuc.exposed.join(', ')}` }
+    : {
+        ...base,
+        ok: true,
+        note: "no write credential in the agent's environment"
+      };
+};
+
 /** The Agent health view's checks, in the order it lists them */
 export const health = ({
   connection,
@@ -671,8 +689,13 @@ export const health = ({
   connection: Connection;
   runs: RunsPayload | null;
   staleHours: number;
-  /** The NUC's newest sample and its silent threshold; null without samples */
-  nuc: { host: string; at: number; silentMin: number } | null;
+  /** The NUC's newest sample, its silent threshold and what it reported as exposed; null without samples */
+  nuc: {
+    host: string;
+    at: number;
+    silentMin: number;
+    exposed?: readonly string[] | null;
+  } | null;
   /** Every other host seen in the last 24 hours, so a silent one fails rather than drops out */
   heartbeats: readonly HostHeartbeat[];
   /** The newest self-deploy of each host that has one */
@@ -731,7 +754,8 @@ export const health = ({
               nucQuiet > nuc.silentMin
                 ? `no sample for ${Math.round(nucQuiet)} m, limit ${Math.round(nuc.silentMin)} m`
                 : null
-          }
+          },
+          credentialsCheck(nuc)
         ]
       : []),
     ...heartbeats.map((h) => ({
