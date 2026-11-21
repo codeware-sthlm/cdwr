@@ -1,4 +1,4 @@
-import { parseFlyTokens, tokenExpiryByName } from './fly';
+import { ownFlyEnv, parseFlyTokens, tokenExpiryByName } from './fly';
 
 const OUTPUT = `Tokens for organization "codeware":
  ID                                         │ NAME               │ CREATED BY                 │ EXPIRES AT                    │ REVOKED AT                    
@@ -92,5 +92,21 @@ describe('tokenExpiryByName', () => {
     expect(tokenExpiryByName(lapsed, 'Same', now)).toEqual({
       state: 'ambiguous'
     });
+  });
+});
+
+describe('ownFlyEnv', () => {
+  it('drops the Fly tokens and keeps the rest', () => {
+    vi.stubEnv('FLY_API_TOKEN', 'a');
+    vi.stubEnv('FLY_ACCESS_TOKEN', 'b');
+    vi.stubEnv('KEEP_ME', 'c');
+    try {
+      const env = ownFlyEnv();
+      expect(env['FLY_API_TOKEN']).toBeUndefined();
+      expect(env['FLY_ACCESS_TOKEN']).toBeUndefined();
+      expect(env['KEEP_ME']).toBe('c');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

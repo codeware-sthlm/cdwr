@@ -33,6 +33,7 @@ import {
   unpause,
   up,
   uploadCompose,
+  vaultHash,
   waitPlan,
   writeHold,
   writeTag
@@ -206,6 +207,13 @@ describe('remote commands', () => {
       '-e',
       '/home/agent/.cdwr/agent-queue/implement.lock'
     ]);
+  });
+
+  it('hashes the vault line through one quoted script', () => {
+    const args = vaultHash('nuc', 'FLY_API_TOKEN').args;
+    expect(args.slice(3, 8)).toEqual(['docker', 'exec', CONTAINER, 'sh', '-c']);
+    expect(args).toHaveLength(9);
+    expect(args[8]).toMatch(/^'.*FLY_API_TOKEN=.*'$/);
   });
 
   it('pulls and starts with the image env file', () => {

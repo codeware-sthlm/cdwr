@@ -5,7 +5,7 @@ import { defineCommand } from '../../cli/command';
 import type { Context } from '../../cli/context';
 import { CliError, EXIT } from '../../cli/errors';
 import { input } from '../../cli/inputs';
-import { CommandError, hold, run, sleep } from '../../services/shell';
+import { CommandError, run, sleep } from '../../services/shell';
 
 import {
   COMPOSE_SOURCE,
@@ -13,18 +13,14 @@ import {
   DEFAULT_WAIT_MINUTES,
   DEPLOY_GATE,
   IMAGE_WORKFLOW,
-  LOCKED,
-  LOCK_BUSY,
   PAUSED,
   REMOTE_COMPOSE,
-  REMOTE_DIR,
   REMOTE_HOLD,
   REMOTE_IMAGE_ENV,
   REMOTE_LOCK,
   assertHost,
   assertTag,
   clearHold,
-  deployLock,
   headShaOf,
   holdFor,
   isExecutable,
@@ -46,7 +42,15 @@ import {
   writeHold,
   writeTag
 } from './deploy.logic';
-import { type Queue, awaitIdle, queue, running, ssh, succeeds } from './host';
+import {
+  type Queue,
+  awaitIdle,
+  lockHost,
+  queue,
+  running,
+  ssh,
+  succeeds
+} from './host';
 
 const REPO = 'codeware-sthlm/cdwr';
 
@@ -184,40 +188,6 @@ interface DeployData {
   compose: string;
   wait: number;
   force: boolean;
-}
-
-/**
- * Takes the host's deploy lock, so the self-deploy timer never swaps files,
- * pauses or records while this deploy does. The timer holds it for a whole
- * tick, up to its own 30-minute wait for the queue, so this waits as long as
- * the queue wait. A lock that can't be taken at all stops the deploy too:
- * going on without it is the race the lock is there for.
- */
-async function lockHost(
-  ctx: Context,
-  host: string,
-  wait: number
-): Promise<() => Promise<void>> {
-  try {
-    return await ctx.ui.task(
-      'Taking the host deploy lock',
-      () => hold('ssh', deployLock(host, wait * 60).args, LOCKED),
-      () => 'Holding the host deploy lock'
-    );
-  } catch (error) {
-    if (error instanceof CommandError && error.code === LOCK_BUSY) {
-      throw new CliError(
-        `The host's self-deploy held ${REMOTE_LOCK} for ${wait} minutes; nothing was changed`,
-        EXIT.failed,
-        'It is deploying a new build: try again later, or raise --wait'
-      );
-    }
-    throw new CliError(
-      `Could not take ${REMOTE_LOCK} on ${host}: ${error instanceof Error ? error.message : String(error)}`,
-      EXIT.failed,
-      `The host needs flock (util-linux) and ${REMOTE_DIR} writable by the ssh user`
-    );
-  }
 }
 
 async function deployHeld(

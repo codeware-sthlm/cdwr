@@ -214,20 +214,23 @@ export function tokenExpiryByName(
     : { state: 'expired', expiresAt: lapsed.expiresAt };
 }
 
+/** The user's own Fly login: a token in the environment would act instead */
+export function ownFlyEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env['FLY_API_TOKEN'];
+  delete env['FLY_ACCESS_TOKEN'];
+  return env;
+}
+
 /**
  * The org's tokens. Runs on the user's own fly login: a token in the env
  * would list that token's org view instead.
  */
 export async function listOrgTokens(org = 'codeware'): Promise<FlyToken[]> {
-  const env = { ...process.env };
-  delete env['FLY_API_TOKEN'];
-  delete env['FLY_ACCESS_TOKEN'];
   const { stdout } = await run(
     'flyctl',
     ['tokens', 'list', '-o', org, '-s', 'org'],
-    {
-      env
-    }
+    { env: ownFlyEnv() }
   );
   return parseFlyTokens(stdout);
 }
