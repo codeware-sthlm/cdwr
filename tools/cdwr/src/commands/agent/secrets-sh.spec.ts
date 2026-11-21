@@ -14,12 +14,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../../../apps/agent-host/secrets.sh', import.meta.url)
 );
-const hasTools =
-  spawnSync('zsh', ['-c', 'true']).status === 0 &&
-  spawnSync('jq', ['--version']).status === 0;
 
 const PEM = '-----BEGIN KEY-----\nline2\n-----END KEY-----';
 const VAULT = JSON.stringify([
@@ -53,7 +52,9 @@ const PROBE = [
   'two'
 ];
 
-describe.skipIf(!hasTools)('secrets.sh', () => {
+describe('secrets.sh', () => {
+  requireTools('zsh', 'jq');
+
   let dir: string;
 
   beforeEach(() => {

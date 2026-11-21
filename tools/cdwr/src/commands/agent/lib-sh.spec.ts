@@ -14,12 +14,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const LIB = fileURLToPath(
   new URL('../../../agent-queue/lib.sh', import.meta.url)
 );
 const SCRIPT = readFileSync(LIB, 'utf8');
 const REAL_LIB = realpathSync(LIB);
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 
 describe('lib.sh', () => {
   it('keeps the credentials out of the curl command line', () => {
@@ -37,7 +38,9 @@ describe('lib.sh', () => {
     );
   });
 
-  describe.skipIf(!hasZsh)('Linear MCP', () => {
+  describe('Linear MCP', () => {
+    requireTools('zsh');
+
     let dir: string;
 
     beforeEach(() => {
@@ -727,7 +730,9 @@ describe('lib.sh', () => {
     });
   });
 
-  describe.skipIf(!hasZsh)('the scheduler elsewhere', () => {
+  describe('the scheduler elsewhere', () => {
+    requireTools('zsh');
+
     let dir: string;
 
     beforeEach(() => {

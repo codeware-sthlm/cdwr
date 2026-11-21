@@ -13,6 +13,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/github-app.sh', import.meta.url)
 );
@@ -22,7 +24,6 @@ const code = SCRIPT.split('\n')
   .join('\n');
 
 const exec = promisify(execFile);
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 const hasOpenssl = spawnSync('openssl', ['version']).status === 0;
 
 const APP_ID = '5282871';
@@ -57,7 +58,9 @@ describe('github-app.sh', () => {
     expect(code).toContain('export GIT_SSH_COMMAND=false');
   });
 
-  describe.skipIf(!hasZsh || !hasOpenssl)('run', () => {
+  describe.skipIf(!hasOpenssl)('run', () => {
+    requireTools('zsh');
+
     let dir: string;
     let key: string;
     let pub: string;
@@ -169,6 +172,8 @@ describe('github-app.sh', () => {
     });
 
     afterAll(async () => {
+      // Unset when requireTools failed the suite first
+      if (!server) return;
       await new Promise<void>((resolve) => server.close(() => resolve()));
       rmSync(dir, { recursive: true, force: true });
     });

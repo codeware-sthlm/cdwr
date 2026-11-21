@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../agent-queue/session-hook.sh', import.meta.url)
 );
@@ -27,10 +29,9 @@ const REGISTER = {
   cwd: '/work'
 };
 
-// The queue scripts run on macOS only; a CI runner without zsh skips them
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+describe('session-hook.sh', () => {
+  requireTools('zsh');
 
-describe.skipIf(!hasZsh)('session-hook.sh', () => {
   let dir: string;
 
   const run = (payload: unknown, sessions = dir) =>
@@ -497,7 +498,9 @@ describe.skipIf(!hasZsh)('session-hook.sh', () => {
   });
 });
 
-describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
+describe('session-hook.sh telemetry heartbeat', () => {
+  requireTools('zsh');
+
   let dir: string;
   let server: Server;
   let origin: string;
@@ -552,6 +555,8 @@ describe.skipIf(!hasZsh)('session-hook.sh telemetry heartbeat', () => {
     origin = `http://127.0.0.1:${address.port}`;
   });
   afterAll(async () => {
+    // Unset when requireTools failed the suite first
+    if (!server) return;
     await new Promise<void>((r) => server.close(() => r()));
   });
   beforeEach(() => {

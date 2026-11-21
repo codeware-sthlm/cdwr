@@ -4,14 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../agent-queue/session.sh', import.meta.url)
 );
 
-// The queue scripts run on macOS only; a CI runner without zsh skips them
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+describe('session.sh id', () => {
+  requireTools('zsh');
 
-describe.skipIf(!hasZsh)('session.sh id', () => {
   let dir: string;
 
   const run = () =>

@@ -1,4 +1,4 @@
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
@@ -12,11 +12,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { requireTools } from '../../testing/require-tools';
+
 const TELEMETRY_SH = fileURLToPath(
   new URL('../../../agent-queue/telemetry.sh', import.meta.url)
 );
 const execAsync = promisify(execFile);
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
 
 const KEY = 'sb_secret_0123456789abcdef';
 
@@ -27,7 +28,9 @@ interface Hit {
   body: string;
 }
 
-describe.skipIf(!hasZsh)('telemetry.sh', () => {
+describe('telemetry.sh', () => {
+  requireTools('zsh');
+
   let server: Server;
   let origin: string;
   let hits: Hit[];
@@ -80,6 +83,8 @@ describe.skipIf(!hasZsh)('telemetry.sh', () => {
   });
 
   afterAll(async () => {
+    // Unset when requireTools failed the suite first
+    if (!server) return;
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 

@@ -11,12 +11,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../../../apps/agent-host/nuc/self-deploy.sh', import.meta.url)
 );
 
 const hasBash = spawnSync('bash', ['-c', 'true']).status === 0;
-const hasJq = spawnSync('jq', ['--version']).status === 0;
 const hasGnuDate =
   spawnSync('date', ['-u', '-d', '@0', '+%Y']).stdout?.toString().trim() ===
   '1970';
@@ -101,7 +102,9 @@ const PREV_TAG = 'sha-ccccccc';
 const iso = (seconds: number) =>
   new Date(seconds * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
 
-describe.skipIf(!hasBash || !hasJq || !hasGnuDate)('self-deploy.sh', () => {
+describe.skipIf(!hasBash || !hasGnuDate)('self-deploy.sh', () => {
+  requireTools('jq');
+
   let root: string;
   let dir: string;
   let fake: string;

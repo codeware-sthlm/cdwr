@@ -13,14 +13,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { requireTools } from '../../testing/require-tools';
+
 const SCRIPT = fileURLToPath(
   new URL('../../../agent-queue/deploy-gate.sh', import.meta.url)
 );
 
-const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
-const hasJq = spawnSync('jq', ['--version']).status === 0;
+describe('deploy-gate.sh', () => {
+  requireTools('zsh', 'jq');
 
-describe.skipIf(!hasZsh || !hasJq)('deploy-gate.sh', () => {
   let root: string;
   let home: string;
   let proc: string;
