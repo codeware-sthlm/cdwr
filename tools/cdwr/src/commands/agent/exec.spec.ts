@@ -3,7 +3,7 @@ import { memoryPrefs } from '../../cli/prefs';
 import { runCommand } from '../../cli/run';
 import { fakeUi } from '../../testing/fake-ui';
 
-import command, { execArgv, shownArgs } from './exec';
+import command, { execArgv, needsGh, shownArgs } from './exec';
 
 vi.mock('../../cli/preflight', () => ({ preflight: vi.fn() }));
 
@@ -62,6 +62,35 @@ describe('execArgv', () => {
     expect(execArgv(HOST, ['agent', 'notify', "it's done; reboot"])).toEqual(
       expect.arrayContaining([`'it'\\''s done; reboot'`])
     );
+  });
+});
+
+describe('execArgv with a GitHub token', () => {
+  it('puts the wrapper right after secrets.sh', () => {
+    const argv = execArgv(HOST, ['agent', 'worktree', 'prune'], true);
+    const at = argv.indexOf('/opt/agent-host/secrets.sh');
+    expect(argv.slice(at, at + 3)).toEqual([
+      '/opt/agent-host/secrets.sh',
+      '/opt/agent-host/with-gh-token.sh',
+      'node'
+    ]);
+  });
+
+  it('leaves it out by default', () => {
+    expect(execArgv(HOST, ['agent', 'status'])).not.toContain(
+      '/opt/agent-host/with-gh-token.sh'
+    );
+  });
+});
+
+describe('needsGh', () => {
+  it('is true for a command that declares gh', async () => {
+    expect(needsGh((await import('./worktree-prune')).default)).toBe(true);
+  });
+
+  it('is false for one without, and for an unknown command', async () => {
+    expect(needsGh((await import('./status')).default)).toBe(false);
+    expect(needsGh(undefined)).toBe(false);
   });
 });
 
@@ -137,6 +166,65 @@ describe('cdwr agent exec', () => {
       'ssh',
       execArgv(HOST, ['agent', 'usage-record', '--dry-run'])
     );
+  });
+
+  it('runs a command that needs gh through the token wrapper, and one that does not without', async () => {
+    await run([
+      '--host',
+      HOST,
+      '--',
+      'agent',
+      'worktree',
+      'prune',
+      '--dry-run'
+    ]);
+    expect(runInteractive).toHaveBeenLastCalledWith(
+      'ssh',
+      execArgv(HOST, ['agent', 'worktree', 'prune', '--dry-run'], true)
+    );
+    expect(runInteractive.mock.calls[0]?.[1]).toContain(
+      '/opt/agent-host/with-gh-token.sh'
+    );
+
+    await run(['--host', HOST, '--', 'agent', 'status']);
+    expect(runInteractive.mock.calls[1]?.[1]).not.toContain(
+      '/opt/agent-host/with-gh-token.sh'
+    );
+  });
+
+  it('names the github app when no token could be minted', async () => {
+    runInteractive.mockResolvedValue(75);
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      const exit = await run([
+        '--host',
+        HOST,
+        '--',
+        'agent',
+        'worktree',
+        'prune',
+        '--dry-run'
+      ]);
+      expect(exit).toBe(75);
+      expect(stderr.mock.calls.join('')).toContain(
+        'github app: no token for cdwr agent worktree prune --dry-run on agent-host'
+      );
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it("reports 75 as the command's own exit when no wrapper ran", async () => {
+    runInteractive.mockResolvedValue(75);
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      expect(await run(['--host', HOST, '--', 'agent', 'status'])).toBe(75);
+      const written = stderr.mock.calls.join('');
+      expect(written).toContain('exited with 75');
+      expect(written).not.toContain('github app');
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   it("exits with the remote's exit code", async () => {
