@@ -528,6 +528,19 @@ then the old secret and any earlier run's `cdwr: <KEY>` leftover are revoked; ot
 identity are listed and left alone. Universal auth keeps several secrets live at once, so a run that
 stops part way leaves a working secret in the vault.
 
+`cdwr agent rotate db-role <platform|backup|desk> --host agent-host` sets a new password on the role behind
+`PLATFORM_DATABASE_URL`, `PLATFORM_BACKUP_DATABASE_URL` or `DESK_SUPABASE_DB_URL`. The role is read from the url's user
+(a Supabase pooler's `.<project ref>` suffix stripped). It runs on the Mac with your own Infisical login and `psql`, every url
+passed through libpq's environment, never argv. The admin connection is a hidden input: for `platform` and `backup` it
+defaults to the cms's `DIRECT_DATABASE_URL`, and `desk` asks for the agent-queue Supabase owner url (prefer the prompt to
+`--admin-url`, which lands in shell history). The plan refuses an admin url for another server (compared by Supabase
+project ref, else by host and port) or one that may not alter the role. Postgres keeps one password per role, so the
+old url stops working at the alter: the run holds the host deploy lock and keeps the queue paused and idle from before
+the alter to the restart. The password reaches the server only as a SCRAM-SHA-256 verifier on psql's stdin. Then it logs
+in with the new url, rewrites only the password in the vault's url, reads it back, restarts the container and checks
+its `/run/agent/vault.env` by sha256. A run that stops after the alter leaves the container on a dead url; run it again,
+it sets a fresh password.
+
 The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so
 the claude runs reach Linear without holding the token. On a Mac nothing changes: the
 `headersHelper` stays.
