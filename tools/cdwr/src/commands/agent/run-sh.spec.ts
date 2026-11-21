@@ -1359,6 +1359,8 @@ describe('run.sh GitHub identity', () => {
     });
 
     afterAll(async () => {
+      // Unset when requireTools failed the suite first
+      if (!server) return;
       await new Promise<void>((resolve) => server.close(() => resolve()));
       rmSync(dir, { recursive: true, force: true });
     });
