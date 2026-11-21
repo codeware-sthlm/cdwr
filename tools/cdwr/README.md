@@ -534,7 +534,8 @@ stops part way leaves a working secret in the vault.
 passed through libpq's environment, never argv. The admin connection is a hidden input: for `platform` and `backup` it
 defaults to the cms's `DIRECT_DATABASE_URL`, and `desk` asks for the agent-queue Supabase owner url (prefer the prompt to
 `--admin-url`, which lands in shell history). The plan refuses an admin url for another server (compared by Supabase
-project ref, else by host and port) or one that may not alter the role. Postgres keeps one password per role, so the
+project ref, else by host and port), one that may not alter the role, and a role another agent-host url logs in as
+too. Postgres keeps one password per role, so the
 old url stops working at the alter: the run holds the host deploy lock and keeps the queue paused and idle from before
 the alter to the restart. The password reaches the server only as a SCRAM-SHA-256 verifier on psql's stdin. Then it logs
 in with the new url, rewrites only the password in the vault's url, reads it back, restarts the container and checks

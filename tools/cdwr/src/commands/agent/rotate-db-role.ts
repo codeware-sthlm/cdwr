@@ -405,6 +405,30 @@ export default defineCommand({
         'Rotating it would break every other url of that role, the cms among them; give the agent host its own role'
       );
     }
+    const sharing = await ctx.ui.task(
+      `Checking no other agent-host url logs in as "${role}"`,
+      async () =>
+        TARGET_NAMES.filter((other) => other !== target).flatMap((other) => {
+          const otherKey = DB_ROLE_TARGETS[other].key;
+          const otherUrl = readSharedValue({ ...VAULT, key: otherKey });
+          if (!otherUrl) return [];
+          try {
+            return roleOf(otherUrl, otherKey) === role &&
+              sameServer(otherUrl, url).ok
+              ? [otherKey]
+              : [];
+          } catch {
+            return [];
+          }
+        })
+    );
+    if (sharing.length > 0) {
+      throw new CliError(
+        `${key} logs in as "${role}", and so does ${sharing.join(' and ')}`,
+        EXIT.failed,
+        'A new password would break the other url; give each url its own role'
+      );
+    }
     if (!rights.canAlter) {
       throw new CliError(
         `"${admin}" may not set the password of "${role}"`,
