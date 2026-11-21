@@ -1,3 +1,5 @@
+import type { DEPLOYED } from '../../services/environment';
+
 /** The Infisical projects `secrets list` reads, each with the environments it holds */
 export const PROJECTS = {
   codeware: {
@@ -13,8 +15,14 @@ export const PROJECTS = {
   { id: string; environments: readonly SecretEnvironment[] }
 >;
 
-export type SecretEnvironment = 'production' | 'preview';
+export type SecretEnvironment = (typeof DEPLOYED)[number];
 export type ProjectName = keyof typeof PROJECTS;
+
+/** The project names in reading order; a spec keeps them equal to `PROJECTS` */
+export const PROJECT_NAMES = [
+  'codeware',
+  'agent-host'
+] as const satisfies readonly ProjectName[];
 
 /** What a value is; every kind but `setting` is a credential */
 export type SecretKind =

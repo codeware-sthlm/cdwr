@@ -99,6 +99,23 @@ cdwr infisical cache --path=/apps/cms      # refresh apps/cms/.env.offline for O
 writes a local file (mode 600, gitignored) so it asks first; `--dry-run` lists the folders it
 would read and fetches no value. `nx dx:secrets <app>` runs it.
 
+## Secrets
+
+`cdwr secrets list` lists every key in both Infisical projects (codeware: production and preview;
+agent-host: production only), folder by folder, through your own `infisical login`. A value is never
+shown, only `set · <n> chars` or `empty`. Each row says what the key is for, when it expires and how
+to rotate it. Expiry comes from the Fly token of that name (revoked tokens are ignored); a key the
+catalog does not know reads `not in the catalog`, and the catalog is
+`tools/cdwr/src/commands/secrets/catalog.ts`. One table per folder; a rotation by hand reads `by hand`
+until `-v` or `--json` shows its steps.
+
+```sh
+cdwr secrets list                           # everything
+cdwr secrets list --project agent-host      # one project (--project codeware|agent-host)
+cdwr secrets list --env preview --json      # one environment (--env production|preview)
+cdwr secrets list -v                        # adds the purpose and the full manual rotation steps
+```
+
 ## Seeing a site
 
 `cdwr tenant snapshot` screenshots a running site: every page of a site definition (or `--routes`),

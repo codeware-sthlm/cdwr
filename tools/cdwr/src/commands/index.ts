@@ -15,6 +15,10 @@ export const GROUPS: Group[] = [
     name: 'infisical',
     summary: 'Look at what Infisical holds, and cache it for offline work'
   },
+  {
+    name: 'secrets',
+    summary: 'Every secret across Infisical, redacted, with expiry and rotation'
+  },
   { name: 'signature', summary: 'Request signing between web and cms' },
   { name: 'builder', summary: 'The component build service' },
   { name: 'media', summary: 'Showcase imagery' },
@@ -197,6 +201,12 @@ export const ENTRIES: Entry[] = [
     summary: 'Whether the Infisical CLI is installed and logged in',
     danger: 'read',
     load: () => import('./infisical/session').then((m) => m.default)
+  },
+  {
+    path: ['secrets', 'list'],
+    summary: 'Every secret, redacted, with its purpose, expiry and rotation',
+    danger: 'read',
+    load: () => import('./secrets/list').then((m) => m.default)
   },
   {
     path: ['signature', 'rotate'],

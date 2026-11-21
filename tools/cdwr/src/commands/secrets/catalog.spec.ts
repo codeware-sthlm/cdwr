@@ -2,6 +2,8 @@ import { ENTRIES } from '../index';
 
 import {
   CATALOG,
+  PROJECTS,
+  PROJECT_NAMES,
   type ProjectName,
   type SecretEnvironment,
   environmentsOf,
@@ -11,6 +13,12 @@ import {
 
 const envsOf = (entry: (typeof CATALOG)[number]) =>
   entry.environments ?? environmentsOf(entry.project);
+
+describe('PROJECT_NAMES', () => {
+  it('names every project once', () => {
+    expect([...PROJECT_NAMES].sort()).toEqual(Object.keys(PROJECTS).sort());
+  });
+});
 
 describe('CATALOG', () => {
   it('points every rotation command at a registered command', () => {
