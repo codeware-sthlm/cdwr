@@ -56,38 +56,71 @@ const transcriptsIn = (
   return found;
 };
 
+/** The homes whose Claude transcripts this host reads: its own, plus the container's session user */
+export const transcriptHomes = (env: NodeJS.ProcessEnv): string[] => {
+  const homes = [homedir()];
+  if (env['AGENT_QUEUE_HOST'] === 'container') {
+    homes.push(env['AGENT_QUEUE_SESSION_HOME'] ?? '/home/session');
+  }
+  return [...new Set(homes)];
+};
+
+/** The project directories of one home that count; an unreadable home gives none */
+const projectDirs = (
+  projects: string,
+  keep: (name: string) => boolean
+): string[] => {
+  try {
+    return readdirSync(projects, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && keep(e.name))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+};
+
 /**
  * The transcripts of this repo and its worktrees touched within the window; reads nothing but
- * directory entries. `allProjects` keeps every Claude project, `after` (ms) replaces the day window.
+ * directory entries. `homes` are scanned in turn (unreadable ones skipped), `allProjects` keeps
+ * every Claude project, `after` (ms) replaces the day window.
  */
 export const findTranscripts = (
   root: string,
   days: number,
-  options: { allProjects?: boolean; after?: number } = {}
+  options: { allProjects?: boolean; after?: number; homes?: string[] } = {}
 ): { base: string; dirs: string[]; transcripts: Transcript[] } => {
-  const projects = join(homedir(), '.claude', 'projects');
   const base = familyBase(root);
-  const dirs = existsSync(projects)
-    ? readdirSync(projects, { withFileTypes: true })
-        .filter(
-          (e) =>
-            e.isDirectory() && (options.allProjects || countsDir(e.name, base))
-        )
-        .map((e) => e.name)
-        .sort()
-    : [];
   const after = options.after ?? Date.now() - (days + 1) * DAY_MS;
-  const transcripts = dirs.flatMap((dir) =>
-    transcriptsIn(projects, dir, after)
-  );
-  return { base, dirs, transcripts };
+  const names = new Set<string>();
+  const transcripts: Transcript[] = [];
+  for (const home of options.homes ?? [homedir()]) {
+    const projects = join(home, '.claude', 'projects');
+    for (const dir of projectDirs(
+      projects,
+      (name) => options.allProjects || countsDir(name, base)
+    )) {
+      try {
+        transcripts.push(...transcriptsIn(projects, dir, after));
+        names.add(dir);
+      } catch {
+        // unreadable project directory
+      }
+    }
+  }
+  return { base, dirs: [...names].sort(), transcripts };
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- transcript lines are untyped JSON */
 const parseLines = (file: string): { lines: any[]; skipped: number } => {
   const lines: any[] = [];
   let skipped = 0;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
+  let text: string;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    return { lines, skipped };
+  }
+  for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     try {
       lines.push(JSON.parse(line));

@@ -88,7 +88,8 @@ COPY --chmod=755 tools/cdwr/agent-queue/run.sh \
   /opt/agent-queue/
 COPY --chmod=755 apps/agent-host/secrets.sh apps/agent-host/entrypoint.sh apps/agent-host/git-credential-app.sh \
   apps/agent-host/with-gh-token.sh \
-  apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/
+  apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/devlog-cms.sh \
+  apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/
 COPY --chmod=440 apps/agent-host/sudoers /etc/sudoers.d/agent-host
 RUN visudo -cf /etc/sudoers.d/agent-host
 
@@ -98,6 +99,7 @@ ENV AGENT_QUEUE_HOST=container \
     AGENT_QUEUE_LINEAR_KEY_FILE=/run/agent/linear.key \
     AGENT_QUEUE_LINEAR_APP_FILE=/run/agent/linear-app.env \
     AGENT_QUEUE_LINEAR_TOKEN_FILE=/run/agent/linear.token \
+    AGENT_QUEUE_VAULT_FILE=/run/agent/vault.env \
     AGENT_QUEUE_LINEAR_PROXY_PORT=8790 \
     RUN_INTERVAL_SECONDS=600 \
     RUN_FALLBACK_SECONDS=3600 \

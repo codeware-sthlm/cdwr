@@ -20,6 +20,7 @@ const findCalls: unknown[] = [];
 
 vi.mock('./usage.collect', () => ({
   DAY_MS: 86_400_000,
+  transcriptHomes: () => ['/home/x'],
   findTranscripts: (_root: string, _days: number, options?: unknown) => {
     findCalls.push(options);
     return { base: '/b', dirs: [], transcripts: [] };
@@ -188,7 +189,7 @@ describe('agent usage-record', () => {
     expect(exit).toBe(EXIT.ok);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/rest/v1/usage?');
-    expect(findCalls[0]).toBeUndefined();
+    expect(findCalls[0]).toEqual({ homes: ['/home/x'] });
   });
 
   it("deletes after the upsert only this host's rows the send no longer has", async () => {

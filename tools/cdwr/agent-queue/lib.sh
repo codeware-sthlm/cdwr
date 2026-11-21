@@ -168,6 +168,18 @@ LINEAR_MCP_URL=https://mcp.linear.app/mcp
 claude_env=(env -u AGENT_QUEUE_LINEAR_KEY -u AGENT_QUEUE_LINEAR_CLIENT_ID -u AGENT_QUEUE_LINEAR_CLIENT_SECRET
   -u AGENT_QUEUE_LINEAR_KEY_FILE -u AGENT_QUEUE_LINEAR_APP_FILE -u AGENT_QUEUE_LINEAR_TOKEN_FILE)
 
+# claude_launch: what every claude run starts with, after claude_env. In the container it is the
+# session user's launcher (apps/agent-host/session-launch.sh), so no claude process runs as the
+# queue's user and none can read its environment or files; elsewhere it is claude itself.
+# AGENT_QUEUE_SESSION_LAUNCH replaces it in the specs, which have no sudo.
+if [[ -n "${AGENT_QUEUE_SESSION_LAUNCH:-}" ]]; then
+  claude_launch=(${=AGENT_QUEUE_SESSION_LAUNCH})
+elif [[ "${AGENT_QUEUE_HOST:-}" == container ]]; then
+  claude_launch=(sudo -n -u session /opt/agent-host/session-launch.sh)
+else
+  claude_launch=(claude)
+fi
+
 # linear_header [force]: the MCP header as JSON, for the headersHelper and the container's proxy;
 # nothing without a token. force buys a new token, after Linear refused the cached one.
 linear_header() {

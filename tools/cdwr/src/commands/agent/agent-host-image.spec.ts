@@ -1,9 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -43,7 +47,7 @@ describe('agent-host image', () => {
     expect(dockerfile).toContain('AGENT_QUEUE_LINEAR_PROXY_PORT=8790');
   });
 
-  it('runs implement sessions as a second user, with two sudo crossings and nothing else', () => {
+  it('runs implement sessions as a second user, with four sudo crossings (launcher, stop, git helper, devlog) and nothing else', () => {
     expect(dockerfile).toMatch(/^\s+sudo \\$/m);
     expect(dockerfile).toContain('groupadd --gid 1002 queue');
     expect(dockerfile).toContain('useradd --uid 1001 --user-group');
@@ -51,8 +55,12 @@ describe('agent-host image', () => {
     expect(dockerfile).toContain('usermod -aG queue session');
     expect(dockerfile).toContain('chmod 2770 /home/session/.claude');
     expect(dockerfile).toContain(
-      'apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/linear-mcp-proxy.mjs /opt/agent-host/'
+      'apps/agent-host/session-launch.sh apps/agent-host/session-stop.sh apps/agent-host/devlog-cms.sh'
     );
+    expect(dockerfile).toMatch(
+      /COPY --chmod=755 apps\/agent-host\/secrets\.sh[^]*?devlog-cms\.sh[^]*?\/opt\/agent-host\//
+    );
+    expect(ignore).toContain('!/apps/agent-host/devlog-cms.sh');
     expect(dockerfile).toContain(
       'COPY --chmod=440 apps/agent-host/sudoers /etc/sudoers.d/agent-host'
     );
@@ -63,7 +71,8 @@ describe('agent-host image', () => {
     expect(sudoers.split('\n').filter((l) => l.includes('NOPASSWD'))).toEqual([
       'agent ALL=(session) NOPASSWD: /opt/agent-host/session-launch.sh',
       'agent ALL=(session) NOPASSWD: /opt/agent-host/session-stop.sh',
-      'session ALL=(agent) NOPASSWD: /opt/agent-host/git-credential-app.sh'
+      'session ALL=(agent) NOPASSWD: /opt/agent-host/git-credential-app.sh',
+      'session ALL=(agent) NOPASSWD: /opt/agent-host/devlog-cms.sh'
     ]);
     expect(ignore).toContain('!/apps/agent-host/session-stop.sh');
     expect(dockerfile).toContain('apps/agent-host/session-stop.sh');
@@ -109,9 +118,27 @@ describe('agent-host session launcher', () => {
     expect(launcher).toContain(
       'export AGENT_QUEUE_NOTIFY_SPOOL="$CDWR_HOME/agent-queue/notify-spool"'
     );
-    expect(launcher).toMatch(/exec claude "\$@"\s*$/);
+    // Run in the background so a stop reaches it through the trap, with the transcripts shared around it
+    expect(launcher).not.toMatch(/exec claude/);
+    expect(launcher).toContain('claude "$@" &');
     expect(launcher).toContain(
-      'git config --global --add safe.directory "${AGENT_QUEUE_REPO:?}"'
+      "trap 'kill -TERM $pid 2>/dev/null' TERM INT HUP"
+    );
+    expect(launcher.match(/^share_transcripts$/gm)).toHaveLength(2);
+    const before = launcher.indexOf('\nshare_transcripts\n');
+    expect(before).toBeGreaterThan(-1);
+    expect(before).toBeLessThan(launcher.indexOf('claude "$@" &'));
+    expect(launcher.lastIndexOf('\nshare_transcripts\n')).toBeGreaterThan(
+      launcher.indexOf('wait $pid')
+    );
+    // What the session writes is readable by the queue group only
+    expect(launcher).toContain('umask 027');
+    // Written only when it differs: another claude may be running
+    expect(launcher).toContain(
+      'git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${AGENT_QUEUE_REPO:?}" ||'
+    );
+    expect(launcher).toContain(
+      'if [[ "$(git config --global --get-all credential.https://github.com.helper 2>/dev/null || true)" != $\'\\n\'"$helper" ]]; then'
     );
   });
 
@@ -172,9 +199,9 @@ describe('agent-host entrypoint', () => {
     // The desk's NUC heartbeat: three missed samples read as silent
     expect(dockerfile).toContain('HOST_METRICS_INTERVAL_SECONDS=60');
     expect(entrypoint.match(/telemetry_host_metrics/g)).toHaveLength(1);
-    expect(entrypoint.match(/telemetry_env/g)).toHaveLength(2); // comment + call
+    expect(entrypoint.match(/telemetry_env/g)).toHaveLength(3); // comment + two calls
     expect(entrypoint).toMatch(
-      /\n\(\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}telemetry_host_metrics \|\| true\n {4}relay_sessions \|\| true\n {4}relay_notices \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
+      /\n\(\n {2}telemetry_env "\$\{AGENT_QUEUE_VAULT_FILE:-\}"\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}exposed="\$\(exposed_credentials\)" \|\| exposed=\n {4}\[\[ -n "\$exposed" \]\] && \{ exposed_notice "\$exposed" \|\| true \}\n {4}telemetry_host_metrics "\$exposed" \|\| true\n {4}relay_sessions \|\| true\n {4}relay_notices \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
     );
     // Never in the loop's own shell: it un-exports the key every run.sh needs
     expect(entrypoint).not.toMatch(/^telemetry_env/m);
@@ -185,6 +212,10 @@ describe('agent-host entrypoint', () => {
 
   it('shares /work, the queue home and the sessions dir with the session user at every start', () => {
     expect(entrypoint).toContain('chgrp queue /work && chmod 1775 /work');
+    expect(entrypoint).toContain('install -d -m 755 /work/node_modules');
+    expect(
+      entrypoint.indexOf('install -d -m 755 /work/node_modules')
+    ).toBeGreaterThan(entrypoint.indexOf('chgrp queue /work'));
     // Only what the queue user owns: a session's file would fail the chgrp and end the start
     expect(entrypoint).toContain(
       'own=("$AGENT_QUEUE_HOME" "$AGENT_QUEUE_HOME"/**/*(DNU))'
@@ -193,7 +224,7 @@ describe('agent-host entrypoint', () => {
       'chgrp queue "${own[@]}" && chmod g+rX "${own[@]}" && chmod 750 "$AGENT_QUEUE_HOME"'
     );
     expect(entrypoint).toContain(
-      'install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"'
+      'install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool" \\\n  "$AGENT_QUEUE_HOME/devlog-drafts" "$AGENT_QUEUE_HOME/review-out"'
     );
     expect(entrypoint).toContain(
       'own=("$AGENT_QUEUE_HOME"/{sessions,notify-spool}/**/*(DNU))'
@@ -216,14 +247,217 @@ describe('agent-host entrypoint', () => {
     );
   });
 
-  it('writes the checkout env file as mode 600 and seeds the session memory once', () => {
+  it('writes the checkout env file as mode 600', () => {
     expect(entrypoint).toMatch(/umask 077\n\s+\{\n\s+\(\( \$\{#keep\} \)\)/);
     expect(entrypoint).toContain('chmod 600 "$ENV_FILE.tmp"');
-    expect(entrypoint).toContain(
-      'dst="/home/session/.claude/projects/$slug/memory"'
+  });
+
+  // The desk's credentials check: names in the loop's environment, never a value
+  describe('exposed_credentials', () => {
+    requireTools('zsh', 'jq');
+    const start = entrypoint.indexOf('CREDENTIAL_NAMES=(');
+    const fn = entrypoint.slice(
+      start,
+      entrypoint.indexOf(
+        '\n}\n',
+        entrypoint.indexOf('exposed_credentials() {')
+      ) + 3
     );
-    expect(entrypoint).toContain('[[ -d "$src" && ! -d "$dst" ]] || return 0');
-    expect(entrypoint).toContain('cp -n "$src"/*.md "$dst"/');
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'exposed-'));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+    const exposed = (env: Record<string, string>): string[] => {
+      const r = spawnSync('zsh', ['-c', `${fn}\nexposed_credentials`], {
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'] ?? '', ...env }
+      });
+      expect(r.status).toBe(0);
+      return (JSON.parse(r.stdout) as string[]).filter(
+        (name) => !name.startsWith('claude as agent')
+      );
+    };
+
+    it('names a listed credential and a vault key the environment holds, and nothing else', () => {
+      const vault = join(dir, 'vault.env');
+      writeFileSync(vault, 'CMS_URL=https://x\nOTHER_TOKEN=y\n');
+      const out = exposed({
+        AGENT_QUEUE_VAULT_FILE: vault,
+        FLY_API_TOKEN: 'secret-fly',
+        OTHER_TOKEN: 'secret-other',
+        SLACK_WEBHOOK_URL: 'https://hooks/x'
+      });
+      expect(out.sort()).toEqual(['FLY_API_TOKEN', 'OTHER_TOKEN']);
+      expect(JSON.stringify(out)).not.toContain('secret');
+    });
+
+    it('names what reads like a credential, and skips the loop own tokens and file paths', () => {
+      expect(
+        exposed({
+          GH_TOKEN: 'secret-gh',
+          SOME_DB_URL: 'postgres://secret',
+          AGENT_QUEUE_LINEAR_KEY_FILE: '/run/x',
+          AGENT_GITHUB_APP_KEY_PATH: '/run/y',
+          CLAUDE_CODE_OAUTH_TOKEN: 'secret-oauth',
+          AGENT_SUPABASE_ANON_KEY: 'anon'
+        }).sort()
+      ).toEqual(['GH_TOKEN', 'SOME_DB_URL']);
+    });
+
+    it('is empty for a clean environment', () => {
+      expect(exposed({ SLACK_WEBHOOK_URL: 'https://hooks/x' })).toEqual([]);
+    });
+  });
+
+  // The planners' memory is staged for the session, which merges it as itself
+  describe('stage_memory', () => {
+    requireTools('zsh');
+    const fn = entrypoint.slice(
+      entrypoint.indexOf('stage_memory() {'),
+      entrypoint.indexOf('\n}\n', entrypoint.indexOf('stage_memory() {')) + 3
+    );
+    let dir: string;
+    const src = () =>
+      join(dir, 'a', '.claude', 'projects', '-work-x', 'memory');
+    const stage = () => join(dir, 'q', 'memory-from-agent');
+    const mode = (path: string) => statSync(path).mode & 0o777;
+    // install -g and chgrp need the queue group: a stub keeps the mode and skips the group
+    const stub = () => {
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      writeFileSync(
+        join(bin, 'install'),
+        '#!/bin/sh\nwhile [ $# -gt 0 ]; do case "$1" in -d) ;; -m) m=$2; shift;; -g) shift;; *) d=$1;; esac; shift; done\nmkdir -p "$d" && chmod "$m" "$d"\n',
+        { mode: 0o755 }
+      );
+      writeFileSync(join(bin, 'chgrp'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      return bin;
+    };
+    const run = () =>
+      spawnSync(
+        'zsh',
+        ['-c', `setopt err_exit pipe_fail no_unset\n${fn}\nstage_memory`],
+        {
+          encoding: 'utf8',
+          env: {
+            PATH: `${stub()}:${process.env['PATH'] ?? ''}`,
+            HOME: join(dir, 'a'),
+            AGENT_QUEUE_HOME: join(dir, 'q'),
+            AGENT_QUEUE_REPO: '/work/x'
+          }
+        }
+      );
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'stage-memory-'));
+      mkdirSync(join(dir, 'q'));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('copies the markdown files with their times kept, as mode 640', () => {
+      mkdirSync(src(), { recursive: true });
+      writeFileSync(join(src(), 'MEMORY.md'), '- [A](a.md)\n');
+      writeFileSync(join(src(), 'a.md'), 'a\n');
+      writeFileSync(join(src(), 'notes.txt'), 'not memory\n');
+      utimesSync(join(src(), 'a.md'), 1e9, 1e9);
+      expect(run().status).toBe(0);
+      expect(readdirSync(stage()).sort()).toEqual(['MEMORY.md', 'a.md']);
+      expect(statSync(join(stage(), 'a.md')).mtimeMs).toBe(1e12);
+      expect(mode(join(stage(), 'a.md'))).toBe(0o640);
+      expect(mode(join(stage(), 'MEMORY.md'))).toBe(0o640);
+      expect(mode(stage())).toBe(0o750);
+    });
+
+    it('stages nothing without a memory, and removes an old stage', () => {
+      mkdirSync(stage());
+      writeFileSync(join(stage(), 'old.md'), 'old\n');
+      expect(run().status).toBe(0);
+      expect(existsSync(stage())).toBe(false);
+    });
+
+    it('creates the stage for the queue group, as mode 750', () => {
+      expect(entrypoint).toContain('install -d -m 750 -g queue "$stage"');
+      expect(entrypoint).toContain(
+        'chgrp queue "$stage"/*(N) && chmod 640 "$stage"/*(N)'
+      );
+    });
+  });
+
+  // The session merges the staged planners' memory into its own, as itself
+  describe('merge_memory', () => {
+    requireTools('zsh');
+    const launcher = read('../../../../../apps/agent-host/session-launch.sh');
+    const fn = launcher.slice(
+      launcher.indexOf('merge_memory() {'),
+      launcher.indexOf('\n}\n', launcher.indexOf('merge_memory() {')) + 3
+    );
+    let dir: string;
+    const stage = () => join(dir, 'cdwr', 'agent-queue', 'memory-from-agent');
+    const mem = () =>
+      join(dir, 'home', '.claude', 'projects', '-work-x', 'memory');
+    const putStage = (name: string, text: string, old = false) => {
+      mkdirSync(stage(), { recursive: true });
+      writeFileSync(join(stage(), name), text);
+      if (old) utimesSync(join(stage(), name), 1e9, 1e9);
+    };
+    const putOwn = (name: string, text: string, old = false) => {
+      mkdirSync(mem(), { recursive: true });
+      writeFileSync(join(mem(), name), text);
+      if (old) utimesSync(join(mem(), name), 1e9, 1e9);
+    };
+    const own = (name: string) => readFileSync(join(mem(), name), 'utf8');
+    const mode = (name: string) => statSync(join(mem(), name)).mode & 0o777;
+    const merge = () =>
+      spawnSync(
+        'zsh',
+        ['-c', `setopt err_exit pipe_fail no_unset\n${fn}\n( merge_memory )`],
+        {
+          encoding: 'utf8',
+          env: {
+            PATH: process.env['PATH'] ?? '',
+            HOME: join(dir, 'home'),
+            CDWR_HOME: join(dir, 'cdwr'),
+            AGENT_QUEUE_REPO: '/work/x'
+          }
+        }
+      );
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'merge-memory-'));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('copies what the session lacks, keeps its newer files and adds the missing index lines, once', () => {
+      putStage('MEMORY.md', '- [A](a.md) — a\n- [T](taste.md) — t\n');
+      putStage('taste.md', 'taste\n');
+      putStage('a.md', 'agent\n', true);
+      putOwn('a.md', 'session\n');
+      putOwn('MEMORY.md', '- [A](a.md) — a\n- [I](impl.md) — i\n');
+      expect(merge().status).toBe(0);
+      expect(merge().status).toBe(0);
+      expect(own('taste.md')).toBe('taste\n');
+      expect(own('a.md')).toBe('session\n');
+      expect(own('MEMORY.md')).toBe(
+        '- [A](a.md) — a\n- [I](impl.md) — i\n- [T](taste.md) — t\n'
+      );
+      expect(mode('taste.md')).toBe(0o640);
+      expect(mode('MEMORY.md')).toBe(0o640);
+      expect(readdirSync(mem()).filter((f) => f.startsWith('.merge'))).toEqual(
+        []
+      );
+    });
+
+    it('replaces an older session copy', () => {
+      putOwn('taste.md', 'old\n', true);
+      putStage('taste.md', 'new\n');
+      expect(merge().status).toBe(0);
+      expect(own('taste.md')).toBe('new\n');
+      expect(mode('taste.md')).toBe(0o640);
+    });
+
+    it('does nothing without a stage', () => {
+      expect(merge().status).toBe(0);
+      expect(existsSync(join(mem(), 'MEMORY.md'))).toBe(false);
+    });
   });
 
   it('relays the session rows and the spooled notices from the sampler, as the queue user', () => {

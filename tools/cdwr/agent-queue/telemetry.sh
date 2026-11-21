@@ -143,15 +143,16 @@ telemetry_env() {
   return 0
 }
 
-# telemetry_env_search <checkout>: the env file named in the environment (AGENT_QUEUE_ENV_FILE), the
-# checkout's tools/cdwr/.env, else the main checkout's, where a linked worktree has it
+# telemetry_env_search <checkout>: the container's vault file (AGENT_QUEUE_VAULT_FILE), the env file
+# named in the environment (AGENT_QUEUE_ENV_FILE), the checkout's tools/cdwr/.env, else the main
+# checkout's, where a linked worktree has it
 telemetry_env_search() {
   local checkout=$1 common env_file
   # A key the shell exported stays out of every child's environment, git's included, whether
   # or not a file is read
   [[ -z "${AGENT_SUPABASE_SERVICE_KEY+x}" ]] || typeset +x AGENT_SUPABASE_SERVICE_KEY
   common="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
-  for env_file in "${AGENT_QUEUE_ENV_FILE:-}" "$checkout/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
+  for env_file in "${AGENT_QUEUE_VAULT_FILE:-}" "${AGENT_QUEUE_ENV_FILE:-}" "$checkout/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
     [[ -n "$env_file" ]] && telemetry_env "$env_file"
     telemetry_on && break
   done
@@ -221,6 +222,8 @@ telemetry_session() {
   supabase_upsert sessions id "$body" merge "${5:-}"
 }
 
+# telemetry_host_metrics [exposed]: exposed is a JSON array of names, the container's credentials
+# check (entrypoint.sh), sent as the row's `exposed`; left out without it
 telemetry_host_metrics() {
   telemetry_on || return 0
   [[ "${HOST_METRICS_OS:-$(uname)}" == Linux ]] || return 0
@@ -249,15 +252,23 @@ telemetry_host_metrics() {
   body="$(jq -nc --arg host "$host" --arg cores "$cores" --arg l1 "${load[1]:-}" --arg l5 "${load[2]:-}" \
     --arg l15 "${load[3]:-}" --arg mt "$mem_total" --arg ma "$mem_available" --arg st "$swap_total" \
     --arg sf "$swap_free" --arg dt "${df_out[1]:-}" --arg df "${df_out[2]:-}" \
-    --arg cc "$cg_current" --arg cm "$cg_max" '
+    --arg cc "$cg_current" --arg cm "$cg_max" --arg exposed "${1:-}" '
     def num: tonumber? // null;
     {host: $host, cores: ($cores | num), load1: ($l1 | num), load5: ($l5 | num), load15: ($l15 | num),
      mem_total: ($mt | num), mem_available: ($ma | num), swap_total: ($st | num), swap_free: ($sf | num),
      disk_total: ($dt | num), disk_free: ($df | num), cgroup_mem_current: ($cc | num), cgroup_mem_max: ($cm | num)}
     | if [.cores, .load1, .load5, .load15, .mem_total, .mem_available, .swap_total, .swap_free, .disk_total, .disk_free]
-        | any(. == null) then empty else . end')" || return 0
+        | any(. == null) then empty else . end
+    | if $exposed == "" then . else .exposed = ($exposed | fromjson) end')" || return 0
   [[ -n "$body" ]] || return 0
-  supabase_insert host_metrics "$body"
+  # Before the exposed column exists (its migration and the image deploy race) the row goes without
+  # it, so the heartbeat never stops for want of it
+  if [[ -n "${1:-}" ]]; then
+    _supabase_post "${AGENT_SUPABASE_URL%/}/rest/v1/host_metrics" 'return=minimal' "$body" strict ||
+      supabase_insert host_metrics "$(jq -c 'del(.exposed)' <<<"$body")"
+  else
+    supabase_insert host_metrics "$body"
+  fi
   cutoff="$(jq -nr 'now - 7 * 86400 | todate')" || return 0
   supabase_delete host_metrics "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&at=lt.$cutoff"
   return 0

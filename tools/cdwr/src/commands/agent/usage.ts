@@ -2,7 +2,12 @@ import { defineCommand, readOnly } from '../../cli/command';
 import { input } from '../../cli/inputs';
 import { theme } from '../../ui/theme';
 
-import { DAY_MS, findTranscripts, readReplies } from './usage.collect';
+import {
+  DAY_MS,
+  findTranscripts,
+  readReplies,
+  transcriptHomes
+} from './usage.collect';
 import {
   ROLES,
   aggregate,
@@ -26,7 +31,12 @@ export default defineCommand({
   },
 
   async plan(ctx, { days }) {
-    return readOnly({ days, ...findTranscripts(ctx.root, days) });
+    return readOnly({
+      days,
+      ...findTranscripts(ctx.root, days, {
+        homes: transcriptHomes(ctx.env)
+      })
+    });
   },
 
   async apply(ctx, { base, days, dirs, transcripts }) {

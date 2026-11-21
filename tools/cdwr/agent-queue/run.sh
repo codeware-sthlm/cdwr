@@ -36,6 +36,11 @@ REVIEW_BUDGET_USD="${AGENT_QUEUE_REVIEW_BUDGET_USD:-5}"
 REVIEW_DAYS="${AGENT_QUEUE_REVIEW_DAYS:-1}"
 # The dev checkout's Claude memory directory; empty means no memory file is writable.
 MEMORY_DIR="${AGENT_QUEUE_MEMORY_DIR:-}"
+# In the container every claude run is the session user's (claude_launch in lib.sh), so the memory
+# it reads and writes is that user's, whatever the setting says
+if [[ "${AGENT_QUEUE_HOST:-}" == container ]]; then
+  MEMORY_DIR="${AGENT_QUEUE_SESSION_HOME:-/home/session}/.claude/projects/${AGENT_QUEUE_REPO//\//-}/memory"
+fi
 OTHER_REPOS='["nx-plugins","enjinex"]'
 LOGS="$HOME_DIR/logs"
 mkdir -p "$LOGS"
@@ -191,7 +196,7 @@ unexported_env() {
     [[ -z "${(P)v+x}" ]] || typeset -g +x "$v"
   done
   common="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || common=""
-  for file in "${AGENT_QUEUE_ENV_FILE:-}" "$REPO/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
+  for file in "${AGENT_QUEUE_VAULT_FILE:-}" "${AGENT_QUEUE_ENV_FILE:-}" "$REPO/tools/cdwr/.env" "${common:+${common:h}/tools/cdwr/.env}"; do
     [[ -n "$file" && -r "$file" ]] || continue
     for line in "${(@f)$(<"$file")}"; do
       [[ "$line" == [A-Z_]*=* ]] || continue
@@ -209,6 +214,7 @@ platform_env
 unexported_env $DESK_VARS
 # The desk's address for the review's daily notice; not a secret, read the same way
 unexported_env AGENT_DESK_URL
+unexported_env AGENT_COPILOT_TOKEN
 platform_on() { [[ -n "${PLATFORM_DATABASE_URL:-}" && -n "${FLY_API_TOKEN:-}" ]]; }
 desk_platform_on() {
   [[ -n "${DESK_FLY_TOKEN:-}" && -n "${DESK_INFISICAL_CLIENT_ID:-}" && -n "${DESK_INFISICAL_CLIENT_SECRET:-}" && -n "${DESK_INFISICAL_PROJECT_ID:-}" ]]
@@ -297,17 +303,9 @@ gh_identity_or_note() {
   return 0
 }
 
-# Håkan's fine-grained token for the Copilot request, used only when the app is refused: the env,
-# else its line in tools/cdwr/.env, read as text and never sourced. Empty when there is none.
-copilot_token() {
-  setopt local_options no_err_exit
-  local line=""
-  if [[ -n "${AGENT_COPILOT_TOKEN:-}" ]]; then print -r -- "$AGENT_COPILOT_TOKEN"; return 0; fi
-  [[ -r "$REPO/tools/cdwr/.env" ]] || return 0
-  line="$(grep -m1 '^AGENT_COPILOT_TOKEN=' "$REPO/tools/cdwr/.env")"
-  line="${line#*=}"
-  print -r -- "${${line#[\"\']}%[\"\']}"
-}
+# Håkan's fine-grained token for the Copilot request, used only when the app is refused: read by
+# unexported_env like the platform's, from the vault file or tools/cdwr/.env. Empty when there is none.
+copilot_token() { print -r -- "${AGENT_COPILOT_TOKEN:-}"; }
 
 # desk_pr_check <copilot|merge> <ticket> <pr>: prints `ok <node id> <head oid>` when the command
 # may go ahead, else the reason to refuse it. Only a PR the watch already holds for that ticket is
@@ -2314,7 +2312,7 @@ suggest_run() {
   # The memory rules start with `//`: one leading slash is project-relative, two anchor at the root.
   # In a subshell: the App token is minted fresh for this run and reaches only this claude
   ( gh_identity_or_note
-  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none} runs=$RUNS" \
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${claude_launch[@]}" -p "/suggest-improvement focus=$focus memory=${MEMORY_DIR:-none} runs=$RUNS" \
     --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs "Bash(*force-push.sh*)" \
@@ -2375,7 +2373,7 @@ devlog_run() {
 
   # Same shape as the suggest call; the draft files go under devlog-drafts, written with `//` roots.
   ( gh_identity_or_note
-  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/devlog-draft home=$HOME_DIR" \
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${claude_launch[@]}" -p "/devlog-draft home=$HOME_DIR" \
     --model opus "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs "Bash(*force-push.sh*)" \
@@ -2383,7 +2381,7 @@ devlog_run() {
     --permission-mode dontAsk --permission-prompts none \
     --max-budget-usd "$DEVLOG_BUDGET_USD" --output-format json \
     --allowedTools Skill Read Grep Glob "$L"__get_issue "$L"__list_comments \
-      "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(node tools/cdwr/bin/cdwr.mjs devlog covered*)" "Bash(node tools/cdwr/bin/cdwr.mjs devlog draft *)" \
+      "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/devlog.sh covered*)" "Bash(tools/cdwr/agent-queue/devlog.sh draft *)" \
       "Write(/$HOME_DIR/devlog-drafts/**)" "Edit(/$HOME_DIR/devlog-drafts/**)"
   ) > "$result" 2> "$log" || rc=$?
 
@@ -2457,12 +2455,13 @@ review_notice() {
 
 # The daily backlog review: reads the queue view the run just wrote (tree and audit candidates) and
 # the last 90 days of dismissals, each with the finding it names, and writes its brief, actions and
-# findings to review-out.json.
+# findings to review-out/review-out.json: a dir of its own, which the container makes writable for
+# the session user, while the files this user writes stay in the queue home.
 # It ends with `REVIEWED <n> actions` or `failed: <line>`. `cdwr agent review-check` validates the
 # file and prints the reviews row; nothing is stored for a file it refuses.
 review_run() {
   local log result rc=0 spent="" outcome line cost row out_json issue n since own_file
-  local out="$HOME_DIR/review-out.json" model=opus requested=false
+  local out="$HOME_DIR/review-out/review-out.json" model=opus requested=false
   run_kind=review
   [[ -e "$HOME_DIR/review-requested" ]] && requested=true
   linear_ok || { review_line "no Linear tools"; return 0; }
@@ -2475,6 +2474,7 @@ review_run() {
   # desk command's one-hour limit. The request is consumed here, a stale result removed.
   date +%F > "$HOME_DIR/review-ran-on"
   date +%s > "$HOME_DIR/review-ran-at"
+  mkdir -p "${out:h}"
   rm -f "$HOME_DIR/review-requested" "$out"
 
   if [[ -n "$queue_view" ]]; then print -r -- "$queue_view" > "$HOME_DIR/review-view.json"
@@ -2502,7 +2502,7 @@ review_run() {
 
   # Same shape as the suggest call; it writes only the out file and its taste file in memory.
   ( gh_identity_or_note
-  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/review-backlog memory=${MEMORY_DIR:-none} view=$HOME_DIR/review-view.json dismissed=$HOME_DIR/review-dismissed.json out=$out" \
+  "${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${claude_launch[@]}" -p "/review-backlog memory=${MEMORY_DIR:-none} view=$HOME_DIR/review-view.json dismissed=$HOME_DIR/review-dismissed.json out=$out" \
     --model "$model" "${LINEAR_MCP_ARGS[@]}" \
     --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
     --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \
@@ -2533,7 +2533,17 @@ review_run() {
 
   line="$(jq -r '.result // empty' "$result" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
     grep -E '^(REVIEWED [0-9]+ actions?|failed: .+)$' | tail -n 1 || true)"
-  if [[ "$line" == "REVIEWED "* ]]; then
+  # The session writes the file as another user, in a dir any session can change: it is moved into
+  # the queue home first (a rename moves a link, never what it points to) and read there, only as a
+  # plain file, so nothing can swap it between the check and the read
+  local got="$HOME_DIR/review-in.json"
+  rm -f "$got"
+  [[ "$line" == "REVIEWED "* ]] && { mv -f "$out" "$got" 2>/dev/null || true; }
+  if [[ "$line" == "REVIEWED "* && ( -L "$got" || ! -f "$got" ) ]]; then
+    note "warn: review: the out file is not a plain file (see $log)"
+    record warn "" "review: the out file is not a plain file"
+    review_line "failed: the out file is not a plain file"
+  elif [[ "$line" == "REVIEWED "* ]]; then
     n="${${line#REVIEWED }%% *}"
     cost="$(jq -r '.total_cost_usd // empty' "$result" 2>/dev/null || true)"
     [[ "$cost" == <->(|.<->) ]] || cost=0
@@ -2542,7 +2552,7 @@ review_run() {
     rm -f "$own_file"
     own_read "$own_file" || { own_file=""; note "warn: review: own_actions not read"; }
     # With --json the check prints {"ok":true,"result":<row>}, or {"ok":false,"error":{"message":"failed: …"}}
-    out_json="$(node "$REPO/tools/cdwr/bin/cdwr.mjs" agent review-check "$out" --host "$(telemetry_host)" --cost "$cost" --model "$model" \
+    out_json="$(node "$REPO/tools/cdwr/bin/cdwr.mjs" agent review-check "$got" --host "$(telemetry_host)" --cost "$cost" --model "$model" \
       ${own_file:+--own "$own_file"} --json 2>> "$log" </dev/null || true)"
     if row="$(jq -ce 'select(.ok == true) | .result | objects' <<<"$out_json" 2>/dev/null)"; then
       if ! supabase_insert_checked reviews "$row"; then
@@ -2619,7 +2629,7 @@ note "plan: $(print -r -- "$ready" | tr '\n' ' ')→ $log"
 
 rc=0
 # Tool search would defer the Linear tools behind ToolSearch, which --tools leaves out.
-"${claude_env[@]}" ENABLE_TOOL_SEARCH=false claude -p "/work-queue unattended once plan-only" \
+"${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${claude_launch[@]}" -p "/work-queue unattended once plan-only" \
   --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \

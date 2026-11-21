@@ -29,16 +29,20 @@ fi
 # The queue files the image carries, where run.sh compares them with origin/main
 cp /opt/agent-queue/* "$AGENT_QUEUE_HOME/"
 
-# The implement sessions run as another user, and the queue group is what the two share: /work
-# takes their clone and ticket worktrees beside this checkout, the queue home is theirs to read,
-# the sessions dir and the notice spool theirs to write. Docker applies the image's modes to a
-# new, empty volume only, so this runs at every start.
+# Every claude run is another user's, and the queue group is what the two share: /work takes the
+# session's clone and ticket worktrees beside this checkout, the queue home is theirs to read, the
+# sessions dir, the notice spool and the devlog and review runs' output dirs theirs to write.
+# Docker applies the image's modes to a new, empty volume only, so this runs at every start.
 chgrp queue /work && chmod 1775 /work
+# Node looks for a module in /work/node_modules when a checkout lacks it: this user's, empty and
+# read-only to the session, so no session can plant one there. The sticky /work keeps it in place.
+install -d -m 755 /work/node_modules
 # Only what this user owns: a file a session wrote is the session's, already in the queue group
 # through the setgid dir, and a chgrp or chmod on it fails and ends the start
 own=("$AGENT_QUEUE_HOME" "$AGENT_QUEUE_HOME"/**/*(DNU))
 chgrp queue "${own[@]}" && chmod g+rX "${own[@]}" && chmod 750 "$AGENT_QUEUE_HOME"
-install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool"
+install -d -m 2770 -g queue "$AGENT_QUEUE_HOME/sessions" "$AGENT_QUEUE_HOME/notify-spool" \
+  "$AGENT_QUEUE_HOME/devlog-drafts" "$AGENT_QUEUE_HOME/review-out"
 own=("$AGENT_QUEUE_HOME"/{sessions,notify-spool}/**/*(DNU))
 (( ! ${#own} )) || chmod g+rwX "${own[@]}"
 # Ticket worktrees from before the session user are linked to this checkout and are this user's:
@@ -109,15 +113,19 @@ trust_checkout() {
 }
 (umask 077; trust_checkout) || print -r -- "agent-host: could not trust $AGENT_QUEUE_REPO in ~/.claude.json"
 
-# The implement sessions' project memory, seeded once from this user's into their claude home
-# (group-writable for this): what an implement run may and may not do lives there
-seed_session_memory() {
-  local slug="${AGENT_QUEUE_REPO//\//-}"
-  local src="$HOME/.claude/projects/$slug/memory" dst="/home/session/.claude/projects/$slug/memory"
-  [[ -d "$src" && ! -d "$dst" ]] || return 0
-  (umask 002; mkdir -p "$dst" && cp -n "$src"/*.md "$dst"/)
+# Every claude run is the session user's, so its project memory is the one memory. What the
+# planners learned as this user is staged in the queue home, which the session reads and cannot
+# write, and the launcher merges it into the session's memory as the session: this user never
+# writes where the session can.
+stage_memory() {
+  local src="$HOME/.claude/projects/${AGENT_QUEUE_REPO//\//-}/memory" stage="$AGENT_QUEUE_HOME/memory-from-agent"
+  rm -rf "$stage"
+  [[ -d "$src" ]] || return 0
+  install -d -m 750 -g queue "$stage"
+  cp -p "$src"/*.md(N) "$stage"/
+  chgrp queue "$stage"/*(N) && chmod 640 "$stage"/*(N)
 }
-seed_session_memory || print -r -- "agent-host: could not seed the session memory"
+stage_memory || print -r -- "agent-host: could not stage the memory for the session"
 
 # The listener runs from the checkout, so a start (a deploy) brings it to origin/main first, the way
 # run.sh's to_main does before it plans: same lockfile marker, and a dirty checkout stays as it is
@@ -255,10 +263,58 @@ relay_notices() {
     fi
   done
 }
+# The desk's credentials check, names only: every credential name this loop's environment holds (as
+# it was given, and as exported now), and every claude process of this user. Both stay empty while
+# each claude run is the session user's. A credential is a name below, a vault.env key, or any name
+# that reads like one, apart from the OAuth token and the publishable key the loop is meant to hold,
+# and the variables that name a file.
+# PID 1 (tini) is left out: it keeps the Infisical identity from the compose file, which only this
+# user can read. Prints a JSON array.
+CREDENTIAL_NAMES=(AGENT_SUPABASE_SERVICE_KEY AGENT_GITHUB_APP_KEY AGENT_QUEUE_LINEAR_KEY
+  AGENT_QUEUE_LINEAR_CLIENT_SECRET AGENT_COPILOT_TOKEN CMS_AGENT_API_KEY CMS_SIGNATURE_SECRET
+  DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID
+  DESK_SUPABASE_DB_URL FLY_API_TOKEN FLY_ACCESS_TOKEN INFISICAL_CLIENT_SECRET INFISICAL_TOKEN
+  PLATFORM_BACKUP_DATABASE_URL PLATFORM_DATABASE_URL PLATFORM_INFISICAL_CLIENT_ID
+  PLATFORM_INFISICAL_CLIENT_SECRET PLATFORM_INFISICAL_PROJECT_ID PLATFORM_SENTRY_AUTH_TOKEN
+  PLATFORM_UMAMI_API_KEY)
+exposed_credentials() {
+  local name pid
+  local -a names held found
+  names=(${(k)parameters[(R)*export*]})
+  [[ -r "/proc/$$/environ" ]] && names+=("${(@f)$(tr '\0' '\n' < "/proc/$$/environ" | cut -d= -f1)}")
+  held=($CREDENTIAL_NAMES)
+  [[ -r "${AGENT_QUEUE_VAULT_FILE:-}" ]] && held+=("${(@f)$(cut -d= -f1 < "$AGENT_QUEUE_VAULT_FILE")}")
+  for name in ${(u)names}; do
+    # A path to a key is not the key: the queue's file variables name the tmpfs
+    [[ "$name" == (CLAUDE_CODE_OAUTH_TOKEN|AGENT_SUPABASE_ANON_KEY|*_FILE|*_PATH) ]] && continue
+    if (( ${held[(Ie)$name]} )) || [[ "$name" == *(TOKEN|SECRET|KEY|PASSWORD|DATABASE_URL|DB_URL)* ]]; then
+      found+=("$name")
+    fi
+  done
+  for pid in $(pgrep -u "$(id -u)" -f '(^|/)claude( |$)' 2>/dev/null); do
+    found+=("claude as agent (pid $pid)")
+  done
+  jq -nc '$ARGS.positional' --args "${found[@]}"
+}
+# One notice each time the set changes to a non-empty one, through the spool relay_notices posts
+exposed_notice() {
+  local last="$AGENT_QUEUE_HOME/exposed-last"
+  [[ "$1" == "$(cat "$last" 2>/dev/null)" ]] && return 0
+  print -r -- "$1" > "$last"
+  [[ "$1" == '[]' ]] && return 0
+  # Written here and renamed into the spool, which the session can write: a rename never follows a
+  # link the session left under that name
+  jq -nc --arg t "Agent host: a credential is readable where claude runs: $(jq -r 'join(", ")' <<<"$1")" '{text: $t}' \
+    > "$AGENT_QUEUE_HOME/exposed-notice.json" &&
+    mv -f "$AGENT_QUEUE_HOME/exposed-notice.json" "$AGENT_QUEUE_HOME/notify-spool/exposed-$(date +%s).json"
+}
 (
+  telemetry_env "${AGENT_QUEUE_VAULT_FILE:-}"
   telemetry_env "$ENV_FILE"
   while true; do
-    telemetry_host_metrics || true
+    exposed="$(exposed_credentials)" || exposed=
+    [[ -n "$exposed" ]] && { exposed_notice "$exposed" || true }
+    telemetry_host_metrics "$exposed" || true
     relay_sessions || true
     relay_notices || true
     sleep "${HOST_METRICS_INTERVAL_SECONDS:-$RUN_INTERVAL_SECONDS}"
