@@ -7926,6 +7926,46 @@ describe('merge_verdict', () => {
     ).toBe('the report says Ask me before merging');
   });
 
+  it('holds when the Apply list writes a secret', () => {
+    expect(
+      verdict(
+        prNode(),
+        withComments(
+          READY_BODY(
+            ...GOOD_LINES,
+            '',
+            'Apply list:',
+            '',
+            '- [ ] agent-deploy',
+            '- [ ] secret-set production /apps/cms DATABASE_POOL_MAX 8'
+          )
+        )
+      )
+    ).toEqual({
+      verdict: 'the Apply list writes a secret',
+      claimed: true,
+      transient: false
+    });
+  });
+
+  it('merges past a dropped secret item and other apply kinds', () => {
+    expect(
+      verdict(
+        prNode(),
+        withComments(
+          READY_BODY(
+            ...GOOD_LINES,
+            '',
+            'Apply list:',
+            '',
+            '- [ ] agent-deploy',
+            '- [ ] ~~secret-copy production /apps/cms A B~~'
+          )
+        )
+      ).verdict
+    ).toBe('ok PR_node1 h1');
+  });
+
   it('ignores the marker below the plan heading', () => {
     expect(
       verdict(
