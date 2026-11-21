@@ -149,3 +149,85 @@ export async function setSecretsTogether(
     await fly().secrets.deploy(app);
   }
 }
+
+export interface FlyToken {
+  id: string;
+  name: string;
+  /** ISO 8601 */
+  expiresAt: string;
+  /** ISO 8601, set once the token is revoked */
+  revokedAt?: string;
+}
+
+/** `2046-11-11 06:47:50 +0000 UTC` to `2046-11-11T06:47:50Z`, undefined when it is not that */
+const flyTimestamp = (cell: string): string | undefined => {
+  const match = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) \+0000 UTC$/.exec(
+    cell
+  );
+  return match ? `${match[1]}T${match[2]}Z` : undefined;
+};
+
+/** Parses the table `fly tokens list` prints, which has no JSON output */
+export function parseFlyTokens(output: string): FlyToken[] {
+  const tokens: FlyToken[] = [];
+  for (const line of output.split(/\r?\n/)) {
+    const cells = line.split('│').map((cell) => cell.trim());
+    const [id, name, , expires, revoked] = cells;
+    if (cells.length < 4 || !id || !name || !expires) continue;
+    const expiresAt = flyTimestamp(expires);
+    if (!expiresAt) continue;
+    const revokedAt = revoked ? flyTimestamp(revoked) : undefined;
+    tokens.push({ id, name, expiresAt, ...(revokedAt ? { revokedAt } : {}) });
+  }
+  return tokens;
+}
+
+export type TokenExpiry =
+  | { state: 'found'; expiresAt: string }
+  | { state: 'expired'; expiresAt: string }
+  | { state: 'missing' }
+  | { state: 'ambiguous' };
+
+/**
+ * The expiry of the one unexpired token with this name. Revoked tokens do not
+ * count; with none unexpired, one expired token is reported as expired.
+ */
+export function tokenExpiryByName(
+  tokens: FlyToken[],
+  name: string,
+  now: Date = new Date()
+): TokenExpiry {
+  const live = tokens.filter(
+    (token) => token.name === name && !token.revokedAt
+  );
+  const unexpired = live.filter((token) => new Date(token.expiresAt) > now);
+  const [current] = unexpired;
+  if (current) {
+    return unexpired.length > 1
+      ? { state: 'ambiguous' }
+      : { state: 'found', expiresAt: current.expiresAt };
+  }
+  const [lapsed] = live;
+  if (!lapsed) return { state: 'missing' };
+  return live.length > 1
+    ? { state: 'ambiguous' }
+    : { state: 'expired', expiresAt: lapsed.expiresAt };
+}
+
+/**
+ * The org's tokens. Runs on the user's own fly login: a token in the env
+ * would list that token's org view instead.
+ */
+export async function listOrgTokens(org = 'codeware'): Promise<FlyToken[]> {
+  const env = { ...process.env };
+  delete env['FLY_API_TOKEN'];
+  delete env['FLY_ACCESS_TOKEN'];
+  const { stdout } = await run(
+    'fly',
+    ['tokens', 'list', '-o', org, '-s', 'org'],
+    {
+      env
+    }
+  );
+  return parseFlyTokens(stdout);
+}
