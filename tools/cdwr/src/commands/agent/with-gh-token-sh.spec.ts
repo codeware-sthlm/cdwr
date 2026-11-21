@@ -129,6 +129,18 @@ describe.skipIf(!hasOpenssl)('with-gh-token.sh', () => {
     expect(result.stdout).toBe(TOKEN);
   });
 
+  it.each([
+    [0, 0],
+    [3, 3],
+    [75, 1]
+  ])(
+    'passes the command exit %i on as %i, keeping 75 for the mint',
+    async (code, expected) => {
+      const result = await wrapper(dir, ['sh', '-c', `exit ${code}`]);
+      expect(result.status).toBe(expected);
+    }
+  );
+
   it('exits 75 with the reason, and never runs the command, when it cannot mint', async () => {
     const empty = mkdtempSync(join(dir, 'empty-'));
     const marker = join(dir, 'ran');
