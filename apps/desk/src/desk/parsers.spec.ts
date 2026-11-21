@@ -846,7 +846,7 @@ describe('validateQueueView', () => {
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
         label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],
-        after: [{ ticket: 'COD-6', kind: 'handoffs', items: ['a'] }]
+        after: [{ ticket: 'COD-6', kind: 'handoffs', items: ['a'], held: null }]
       }
     };
     expect(validateQueueView(view)).toEqual(view);
@@ -901,8 +901,26 @@ describe('validateQueueView', () => {
       { ticket: 'COD-8', kind: 'plan' }
     ]);
     expect(view?.table.after).toEqual([
-      { ticket: 'COD-9', kind: undefined, items: undefined },
-      { ticket: 'COD-10', kind: 'handoffs', items: ['a'] }
+      { ticket: 'COD-9', kind: undefined, items: undefined, held: null },
+      { ticket: 'COD-10', kind: 'handoffs', items: ['a'], held: null }
+    ]);
+  });
+
+  it('reads why a PR row is held, null on an older view or a mistyped one', () => {
+    const view = validateQueueView({
+      limit,
+      table: {
+        after: [
+          { ticket: 'COD-1', kind: 'pr', pr: 5 },
+          { ticket: 'COD-2', kind: 'pr', pr: 6, held: 'a hold' },
+          { ticket: 'COD-3', kind: 'pr', pr: 7, held: 3 }
+        ]
+      }
+    });
+    expect(view?.table.after.map((x) => x.held)).toEqual([
+      null,
+      'a hold',
+      null
     ]);
   });
 

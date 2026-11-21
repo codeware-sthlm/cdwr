@@ -1801,6 +1801,7 @@ describe('step', () => {
         copilot: 'none',
         threads: 0,
         mergeStateStatus: null,
+        mergeWhy: null,
         oid: null,
         mergedAt: null,
         mergeCommit: null,
@@ -1838,6 +1839,7 @@ describe('step', () => {
         copilot: 'none',
         threads: 0,
         mergeStateStatus: null,
+        mergeWhy: null,
         oid: null,
         mergedAt: null,
         mergeCommit: null,
@@ -4523,8 +4525,22 @@ describe('attended picks', () => {
         'COD-2': { pr: 7 }
       });
       expect(r.table.after).toEqual([
-        { ticket: 'COD-2', kind: 'pr', pr: 7 },
+        { ticket: 'COD-2', kind: 'pr', pr: 7, held: null },
         { ticket: 'COD-3', kind: 'handoffs', items: ['check'] }
+      ]);
+    });
+
+    it('carries the merge verdict on a pr row as held', () => {
+      const r = view([review('COD-2')], 5, {
+        'COD-2': { pr: 7, mergeWhy: "the ruleset requires Håkan's review" }
+      });
+      expect(r.table.after).toEqual([
+        {
+          ticket: 'COD-2',
+          kind: 'pr',
+          pr: 7,
+          held: "the ruleset requires Håkan's review"
+        }
       ]);
     });
 
@@ -7856,6 +7872,22 @@ describe('merge_verdict', () => {
     });
   });
 
+  it("holds for a lasting reason while the ruleset requires Håkan's review", () => {
+    expect(verdict(prNode({ reviewDecision: 'REVIEW_REQUIRED' }))).toEqual({
+      verdict: "the ruleset requires Håkan's review",
+      claimed: true,
+      transient: false
+    });
+  });
+
+  it('is ok when the review decision is APPROVED', () => {
+    expect(verdict(prNode({ reviewDecision: 'APPROVED' }))).toEqual({
+      verdict: 'ok PR_node1 h1',
+      claimed: true,
+      transient: false
+    });
+  });
+
   it('reads a bold Merge label and a list item as the claim', () => {
     expect(
       verdict(
@@ -8429,6 +8461,25 @@ describe('step with merge', () => {
 
     it('is silent outside agent:review', () => {
       expect(step({ merge: HELD, label: 'agent:working' }).notices).toEqual([]);
+    });
+  });
+
+  describe('mergeWhy', () => {
+    it('stores the verdict while the merge is not ok', () => {
+      expect(step({ merge: HELD }).entry['mergeWhy']).toBe(HELD.verdict);
+    });
+
+    it('is null when the verdict is ok', () => {
+      expect(step({ merge: OK }).entry['mergeWhy']).toBeNull();
+    });
+
+    it('is null without a verdict', () => {
+      expect(step({ merge: null }).entry['mergeWhy']).toBeNull();
+    });
+
+    it('is not carried from the previous entry', () => {
+      const r = step({ merge: OK, prev: prev({ mergeWhy: HELD.verdict }) });
+      expect(r.entry['mergeWhy']).toBeNull();
     });
   });
 

@@ -22,6 +22,7 @@ import {
   type WaitRow,
   awaitsWatch,
   copilotView,
+  heldText,
   labelState,
   mergeBlocker,
   rowLabel,
@@ -321,6 +322,7 @@ const WaitCard = ({
     hasPr ||
     prCtl.note !== null ||
     note !== '' ||
+    r.held !== null ||
     label.note !== null ||
     snooze.note !== null;
   return (
@@ -355,6 +357,9 @@ const WaitCard = ({
               <LinkIds text={note} />
             </div>
           ) : null}
+          {r.held === null ? null : (
+            <div className={WC_NOTE}>{heldText(r.held)}</div>
+          )}
           {label.note}
           {snooze.note}
         </div>

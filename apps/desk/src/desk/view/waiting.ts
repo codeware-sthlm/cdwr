@@ -38,6 +38,8 @@ export type WaitRow = {
   blockers: string;
   /** Plain-text note on a PR parked on review fixes; empty otherwise */
   wait: string;
+  /** Why the watch's own merge holds, as the queue view says it; null when it does not */
+  held: string | null;
   /** ISO time of the activity event the wait counts from; null without activity */
   gateAt: string | null;
   /** Snoozed until something changes; such a row leaves every count */
@@ -196,6 +198,15 @@ export const rowLabel = (r: WaitRow): string =>
       ? `hand-offs · ${r.count ?? 0}`
       : r.kind;
 
+/** The merge verdict the watch gives while a ruleset review is missing */
+const RULESET_HELD = "the ruleset requires Håkan's review";
+
+/** The held line under a review row: the ruleset named as the blocker, any other verdict as it is */
+export const heldText = (held: string): string =>
+  held === RULESET_HELD
+    ? "Needs your approval on GitHub: main's ruleset requires your review"
+    : `Merge held: ${held}`;
+
 /** What waits on you, furthest along first: PRs to review, hand-offs, questions, plans, tickets to label, ideas; approved plans held by a blocker come last */
 export const waitRows = (
   m: Model,
@@ -209,6 +220,7 @@ export const waitRows = (
       blockers?: readonly Blocker[];
       count?: number;
       stall?: string | null;
+      held?: string | null;
     } = {}
   ): WaitRow => {
     const { title, url } = m.get(id);
@@ -223,6 +235,7 @@ export const waitRows = (
       count: opts.count ?? null,
       blockers: blockerText(opts.blockers ?? []),
       wait: [prWaitPlain(m, id), opts.stall].filter(Boolean).join('. '),
+      held: opts.held ?? null,
       gateAt,
       snoozed: isSnoozed({ id, kind }, gateAt, m.snoozes)
     };
@@ -238,7 +251,8 @@ export const waitRows = (
     ...m.prs.map((x) =>
       row(x.ticket, 'review', {
         blockers: open(x.ticket),
-        stall: stall(m.prWaits.get(x.ticket))
+        stall: stall(m.prWaits.get(x.ticket)),
+        held: x.held ?? null
       })
     ),
     // A stalled wait on Copilot whose PR is not among the open ones still wants the Copilot button
@@ -269,6 +283,7 @@ export const waitRows = (
         count: null,
         blockers: '',
         wait: '',
+        held: null,
         gateAt,
         snoozed: isSnoozed({ id: i.id, kind: 'idea' }, gateAt, m.snoozes)
       };

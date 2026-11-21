@@ -167,6 +167,8 @@ export type QueueAfter = {
   kind?: string;
   pr?: PrRef | null;
   items?: string[];
+  /** Why the watch's own merge holds, on a PR row; older views have none */
+  held?: string | null;
 };
 
 /**
