@@ -356,6 +356,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/rotate-infisical').then((m) => m.default)
   },
   {
+    path: ['agent', 'rotate', 'db-role'],
+    summary: 'A new password for an agent-host database role',
+    danger: 'destructive',
+    load: () => import('./agent/rotate-db-role').then((m) => m.default)
+  },
+  {
     path: ['agent', 'notify'],
     summary: 'Which notices the queue sends: all, or only what needs you',
     danger: 'mutate',
