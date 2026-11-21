@@ -24,13 +24,13 @@ export const TARGET_NAMES = Object.keys(DB_ROLE_TARGETS) as DbRoleTarget[];
 /** The targets on the cms database, whose admin url defaults to the cms's own */
 export const CMS_TARGETS: readonly DbRoleTarget[] = ['platform', 'backup'];
 
-/** The `--admin-url` value that stands for the cms's `DIRECT_DATABASE_URL` */
+/** The `--admin-url` value that stands for the cms's `DATABASE_URL`, its IPv4 pooler */
 export const CMS_ADMIN = 'cms';
 
 export const CMS_ADMIN_SECRET = {
   path: '/apps/cms',
   environment: 'production',
-  key: 'DIRECT_DATABASE_URL'
+  key: 'DATABASE_URL'
 } as const;
 
 const POOLER_HOST = /\.pooler\.supabase\.com$/i;
