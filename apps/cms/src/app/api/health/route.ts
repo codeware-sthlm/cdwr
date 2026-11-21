@@ -1,6 +1,36 @@
+import * as Sentry from '@sentry/nextjs';
 import { getPayload } from 'payload';
 
 import config from '../../../payload.config';
+
+/** Under Fly's 5 s check timeout, so the check reads a 503, not a timeout */
+export const HEALTH_DEADLINE_MS = 4_000;
+
+type Step = 'init' | 'query';
+
+class DeadlineError extends Error {
+  override name = 'DeadlineError';
+
+  constructor() {
+    super(`No answer within ${HEALTH_DEADLINE_MS} ms`);
+  }
+}
+
+const headers = {
+  'Content-Type': 'text/plain',
+  'Cache-Control': 'no-cache, no-store, must-revalidate'
+};
+
+/**
+ * Whether the last check failed. Fly checks every 20 s, so only the first
+ * failure of a run goes to Sentry
+ */
+let failing = false;
+
+/** Lets a spec start from a healthy process */
+export const resetHealthState = () => {
+  failing = false;
+};
 
 /**
  * Health check endpoint for Fly.io health checks.
@@ -9,25 +39,59 @@ import config from '../../../payload.config';
  * Returns 200 OK with "Pong!" when healthy, 503 when the database
  * is unreachable — allowing Fly's rolling deploy to stall on a
  * broken machine rather than routing traffic to it.
+ *
+ * One deadline covers Payload's start and the query, so a hung pool
+ * answers 503 instead of hanging the check. The first failure after a
+ * success goes to Sentry with the step and the pool's counts.
  */
 export async function GET() {
-  try {
+  let step: Step = 'init';
+  let pool: { totalCount?: number; idleCount?: number; waitingCount?: number } =
+    {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DeadlineError()), HEALTH_DEADLINE_MS);
+  });
+
+  const check = async () => {
     const payload = await getPayload({ config });
-    await payload.db.pool.query('SELECT 1');
-    return new Response('Pong!', {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/plain',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-  } catch {
-    return new Response('DB unavailable', {
-      status: 503,
-      headers: {
-        'Content-Type': 'text/plain',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
+    pool = payload.db.pool;
+    step = 'query';
+    // Its own timeout, so a hung query fails and the pool drops its client:
+    // otherwise every check past the deadline would hold one more. Safe
+    // here, unlike pool-wide, since this query runs in no transaction. pg
+    // reads `query_timeout` per query; its types only know it pool-wide, so
+    // the config is a variable, which skips the excess property check
+    const query = {
+      text: 'SELECT 1',
+      query_timeout: HEALTH_DEADLINE_MS
+    };
+    await payload.db.pool.query(query);
+  };
+
+  try {
+    await Promise.race([check(), deadline]);
+    failing = false;
+    return new Response('Pong!', { status: 200, headers });
+  } catch (error) {
+    if (!failing) {
+      Sentry.captureException(error, {
+        fingerprint: ['cms-health-check-failed'],
+        tags: {
+          health_step: step,
+          health_timeout: error instanceof DeadlineError
+        },
+        extra: {
+          poolTotal: pool.totalCount,
+          poolIdle: pool.idleCount,
+          poolWaiting: pool.waitingCount
+        }
+      });
+    }
+    failing = true;
+    return new Response('DB unavailable', { status: 503, headers });
+  } finally {
+    clearTimeout(timer);
   }
 }

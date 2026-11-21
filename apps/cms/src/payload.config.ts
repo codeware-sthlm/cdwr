@@ -225,7 +225,16 @@ export default buildConfig({
       // A small pool can starve: a write holds a client for its transaction
       // while a hook's query waits for another. Waiting ends in an error,
       // which rolls the write back, instead of a process that hangs for good
-      connectionTimeoutMillis: 10_000
+      connectionTimeoutMillis: 10_000,
+      // Lets the OS notice a peer that died without closing an idle socket:
+      // the client errors and the pool drops it. A socket with a query in
+      // flight is left to TCP's retries, which take minutes. A client that
+      // errors while checked out has no listener, so Next logs the error,
+      // its query fails and the pool drops the client on release. No query
+      // timeout: a timed-out client inside a Drizzle transaction goes back
+      // to the pool still stuck
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000
     },
     schemaName: env.DATABASE_SCHEMA,
     migrationDir: path.resolve(dirname, 'migrations'),

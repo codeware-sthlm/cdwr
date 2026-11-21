@@ -1,0 +1,120 @@
+/** @jest-environment node */
+import * as Sentry from '@sentry/nextjs';
+import { getPayload } from 'payload';
+
+import { GET, HEALTH_DEADLINE_MS, resetHealthState } from './route';
+
+jest.mock('@sentry/nextjs', () => ({ captureException: jest.fn() }));
+jest.mock('payload', () => ({ getPayload: jest.fn() }));
+jest.mock('../../../payload.config', () => ({}));
+
+const pool = {
+  query: jest.fn(),
+  totalCount: 4,
+  idleCount: 0,
+  waitingCount: 7
+};
+
+const never = () => new Promise<never>(() => undefined);
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  jest.useRealTimers();
+  resetHealthState();
+  jest.mocked(getPayload).mockResolvedValue({ db: { pool } } as never);
+  pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+});
+
+describe('GET /api/health', () => {
+  it('answers 200 when the query answers', async () => {
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('Pong!');
+    expect(pool.query).toHaveBeenCalledWith({
+      text: 'SELECT 1',
+      query_timeout: HEALTH_DEADLINE_MS
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 when the query fails, and reports the pool', async () => {
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+
+    const res = await GET();
+
+    expect(res.status).toBe(503);
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'connection terminated' }),
+      expect.objectContaining({
+        fingerprint: ['cms-health-check-failed'],
+        tags: { health_step: 'query', health_timeout: false },
+        extra: { poolTotal: 4, poolIdle: 0, poolWaiting: 7 }
+      })
+    );
+  });
+
+  it('answers 503 at the deadline when the query hangs', async () => {
+    jest.useFakeTimers();
+    pool.query.mockImplementation(never);
+
+    const pending = GET();
+    await jest.advanceTimersByTimeAsync(HEALTH_DEADLINE_MS);
+    const res = await pending;
+
+    expect(res.status).toBe(503);
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'DeadlineError' }),
+      expect.objectContaining({
+        tags: { health_step: 'query', health_timeout: true }
+      })
+    );
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('reports once per run of failures, and again after a success', async () => {
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+    await GET();
+    await GET();
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+
+    pool.query.mockResolvedValue({ rows: [] });
+    expect((await GET()).status).toBe(200);
+
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+    expect((await GET()).status).toBe(503);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers 503 at the deadline when Payload never starts', async () => {
+    jest.useFakeTimers();
+    jest.mocked(getPayload).mockImplementation(never);
+
+    const pending = GET();
+    await jest.advanceTimersByTimeAsync(HEALTH_DEADLINE_MS);
+    const res = await pending;
+
+    expect(res.status).toBe(503);
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        tags: { health_step: 'init', health_timeout: true },
+        extra: {
+          poolTotal: undefined,
+          poolIdle: undefined,
+          poolWaiting: undefined
+        }
+      })
+    );
+  });
+
+  it('clears its timer once answered', async () => {
+    jest.useFakeTimers();
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
