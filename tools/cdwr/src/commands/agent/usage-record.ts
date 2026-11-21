@@ -4,7 +4,7 @@ import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
 
 import { hostId } from './host-id';
-import { findTranscripts, readReplies } from './usage.collect';
+import { findTranscripts, readReplies, transcriptHomes } from './usage.collect';
 import {
   type UsageHourRow,
   type UsageTelemetryRow,
@@ -102,7 +102,9 @@ export default defineCommand({
     const since = wholeDaysSince(new Date(), days);
     const fromDay = localDay(since.toISOString());
     if (kind !== 'hour') {
-      const { base, transcripts } = findTranscripts(ctx.root, days);
+      const { base, transcripts } = findTranscripts(ctx.root, days, {
+        homes: transcriptHomes(ctx.env)
+      });
       const { records } = readReplies(base, transcripts);
       rows = usageRows(dedupeReplies(records), {
         since,
@@ -115,7 +117,8 @@ export default defineCommand({
       const sinceHour = wholeHoursSince(new Date(), hours);
       const { base, transcripts } = findTranscripts(ctx.root, days, {
         allProjects: true,
-        after: sinceHour.getTime()
+        after: sinceHour.getTime(),
+        homes: transcriptHomes(ctx.env)
       });
       const { records } = readReplies(base, transcripts);
       hourList = hourRows(dedupeReplies(records), { since: sinceHour, host });

@@ -103,8 +103,14 @@ describe('run.sh', () => {
   // Tool search hides the Linear tools from a run limited by --tools
   it('runs claude without tool search', () => {
     expect(SCRIPT).toMatch(
-      /^\s*"\$\{claude_env\[@\]\}" ENABLE_TOOL_SEARCH=false claude -p /m
+      /^\s*"\$\{claude_env\[@\]\}" ENABLE_TOOL_SEARCH=false "\$\{claude_launch\[@\]\}" -p /m
     );
+    // The plan-only, suggest, devlog and review runs all go through the launcher
+    expect(
+      SCRIPT.match(/ENABLE_TOOL_SEARCH=false "\$\{claude_launch\[@\]\}" -p /g)
+    ).toHaveLength(4);
+    expect(SCRIPT).not.toMatch(/ENABLE_TOOL_SEARCH=false claude /);
+    expect(SCRIPT).not.toMatch(/^\s*claude -p /m);
   });
 
   // A dark wake has no network; that is not a Linear failure worth a record
@@ -2561,6 +2567,31 @@ describe('run.sh copilot_request', () => {
     rmSync(dir, { recursive: true, force: true });
     return { stdout: r.stdout, calls };
   };
+
+  it('reads the token from the vault file, through unexported_env', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-token-'));
+    writeFileSync(join(dir, 'vault.env'), 'AGENT_COPILOT_TOKEN=vault-tok\n');
+    const fn = (name: string) =>
+      SCRIPT.match(
+        new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+      )?.[0] ?? '';
+    const script = [
+      `REPO="${dir}"`,
+      fn('unexported_env'),
+      SCRIPT.match(/^copilot_token\(\) \{.*\}$/m)?.[0] ?? '',
+      'unexported_env AGENT_COPILOT_TOKEN',
+      'print -r -- "$(copilot_token)|$(env | grep -c vault-tok)"'
+    ].join('\n');
+    const r = spawnSync('zsh', ['-c', script], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env['PATH'] ?? '',
+        AGENT_QUEUE_VAULT_FILE: join(dir, 'vault.env')
+      }
+    });
+    rmSync(dir, { recursive: true, force: true });
+    expect(r.stdout).toBe('vault-tok|0\n');
+  });
 
   it('asks as the app and stops there when it worked', () => {
     const r = request(true, 'tok', 'app');
@@ -5397,6 +5428,17 @@ describe('run.sh devlog session', () => {
       expect(allowed).not.toContain('mcp__claude_ai_Claude_Docs');
     });
 
+    it('reaches the cms only through devlog.sh', () => {
+      const bash = allowed.match(/"Bash\([^"]*\)"/g) ?? [];
+      expect(bash).toEqual(
+        expect.arrayContaining([
+          '"Bash(tools/cdwr/agent-queue/devlog.sh covered*)"',
+          '"Bash(tools/cdwr/agent-queue/devlog.sh draft *)"'
+        ])
+      );
+      expect(allowed).not.toContain('cdwr.mjs devlog');
+    });
+
     it('writes only under devlog-drafts', () => {
       const writes = allowed.match(/"(?:Write|Edit)\([^"]*\)"/g) ?? [];
       expect(writes).toEqual([
@@ -5599,9 +5641,16 @@ describe('run.sh review session', () => {
       check?: 'pass' | 'fail';
       store?: 'pass' | 'fail';
       limited?: boolean;
+      // What the session leaves at the out file: a plain file unless told
+      out?: 'plain' | 'symlink' | 'missing';
       files?: Record<string, string>;
     }) => {
       const t = (name: string) => join(home, `t-${name}`);
+      const out = {
+        plain: `print -r -- '{}' > "$HOME_DIR/review-out/review-out.json"; `,
+        symlink: `ln -s /etc/hostname "$HOME_DIR/review-out/review-out.json"; `,
+        missing: ''
+      }[opts.out ?? 'plain'];
       for (const [name, content] of Object.entries(opts.files ?? {})) {
         writeFileSync(join(home, name), content);
       }
@@ -5637,7 +5686,7 @@ describe('run.sh review session', () => {
         `note() { print -r -- "$*" >> "${t('note')}"; }`,
         `record() { print -r -- "$*" >> "${t('record')}"; }`,
         `notice() { print -r -- "$1|$2" >> "${t('notice')}"; }`,
-        `claude() { print -r -- '${result}'; ${opts.limited ? 'return 1' : 'return 0'}; }`,
+        `claude() { ${out}print -r -- '${result}'; ${opts.limited ? 'return 1' : 'return 0'}; }`,
         `supabase_select() { print -r -- "$*" >> "${t('select')}"; case "$1" in
           review_dismissals) print -r -- '[{"finding_id":"a:COD-1:0123abcd","at":"2026-11-01T08:00:00Z","note":"fine"},{"finding_id":"b:COD-2:0123abcd","at":"2026-11-02T08:00:00Z","note":null}]' ;;
           *) print -r -- '[{"findings":[{"id":"a:COD-1:0123abcd","ticket":"COD-1","kind":"a","key":"k","severity":"note","evidence":[],"fix":"do it"}]}]' ;;
@@ -5683,9 +5732,14 @@ describe('run.sh review session', () => {
       expect(r.inserts).toEqual(['reviews|{"host":"nuc","brief":"b"}']);
       expect(r.nodes).toHaveLength(1);
       expect(r.nodes[0]).toMatch(
-        /review-check .*review-out\.json --host nuc --cost 1\.2 --model opus --json$/
+        /review-check \S*\/review-in\.json --host nuc --cost 1\.2 --model opus --json$/
       );
       expect(r.records.join('\n')).not.toContain('warn');
+      // The session's file was moved into the queue home before it was read
+      expect(existsSync(join(home, 'review-out', 'review-out.json'))).toBe(
+        false
+      );
+      expect(file('review-in.json')).toBe('{}');
       expect(file('review-requested')).toBeNull();
       expect(file('review-ran-on')).toBe(day(0));
       expect(file('review-ran-at')).toMatch(/^\d+$/);
@@ -5739,6 +5793,21 @@ describe('run.sh review session', () => {
       expect(r.records).toEqual(['warn  review: action 2 has no ticket']);
       expect(file('review-line')).toMatch(/ · failed: action 2 has no ticket$/);
     });
+
+    it.each(['symlink', 'missing'] as const)(
+      'stores nothing and warns when the out file is %s',
+      (out) => {
+        const r = review({ out });
+        expect(r.nodes).toEqual([]);
+        expect(r.inserts).toEqual([]);
+        expect(r.records).toEqual([
+          'warn  review: the out file is not a plain file'
+        ]);
+        expect(file('review-line')).toMatch(
+          / · failed: the out file is not a plain file$/
+        );
+      }
+    );
 
     it('stores nothing and warns on a failed: verdict', () => {
       const r = review({ result: 'failed: no queue to read' });
@@ -5802,6 +5871,46 @@ describe('run.sh review session', () => {
       // The notices file accumulates: the second run adds none
       expect(again.notices).toHaveLength(1);
     });
+  });
+});
+
+// In the container every claude run is the session user's, so the memory path is that user's
+describe('run.sh MEMORY_DIR', () => {
+  requireTools('zsh');
+
+  const block =
+    SCRIPT.match(
+      /^MEMORY_DIR=.*\n(?:#.*\n)*if \[\[ "\$\{AGENT_QUEUE_HOST:-\}" == container \]\]; then\n[\s\S]*?\nfi\n/m
+    )?.[0] ?? '';
+
+  const memoryDir = (env: Record<string, string>) =>
+    spawnSync('zsh', ['-c', `${block}\nprint -r -- "$MEMORY_DIR"`], {
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'] ?? '', ...env }
+    }).stdout.trim();
+
+  it("is the session user's in the container, whatever the setting says", () => {
+    expect(block).not.toBe('');
+    expect(
+      memoryDir({
+        AGENT_QUEUE_HOST: 'container',
+        AGENT_QUEUE_REPO: '/work/codeware-dev',
+        AGENT_QUEUE_MEMORY_DIR: '/elsewhere/memory'
+      })
+    ).toBe('/home/session/.claude/projects/-work-codeware-dev/memory');
+    expect(
+      memoryDir({
+        AGENT_QUEUE_HOST: 'container',
+        AGENT_QUEUE_REPO: '/work/codeware-dev',
+        AGENT_QUEUE_SESSION_HOME: '/h/s'
+      })
+    ).toBe('/h/s/.claude/projects/-work-codeware-dev/memory');
+  });
+
+  it('is the setting elsewhere', () => {
+    expect(
+      memoryDir({ AGENT_QUEUE_REPO: '/r', AGENT_QUEUE_MEMORY_DIR: '/m' })
+    ).toBe('/m');
   });
 });
 
@@ -6254,6 +6363,39 @@ describe('run.sh platform step', () => {
     expect(read('sibling.env')).not.toMatch(
       /DESK_|from-file|from-env|file-secret/
     );
+  });
+
+  it('reads the platform and desk credentials from the vault file, unexported', () => {
+    writeFileSync(
+      join(root, 'vault.env'),
+      [
+        'FLY_API_TOKEN=vault-fly',
+        'PLATFORM_DATABASE_URL=postgres://vault-db',
+        'DESK_FLY_TOKEN=vault-desk',
+        'AGENT_COPILOT_TOKEN=vault-copilot'
+      ].join('\n') + '\n'
+    );
+    const script = [
+      `REPO="${root}"`,
+      fn('unexported_env'),
+      'unexported_env FLY_API_TOKEN PLATFORM_DATABASE_URL DESK_FLY_TOKEN AGENT_COPILOT_TOKEN',
+      'print -r -- "$FLY_API_TOKEN|$PLATFORM_DATABASE_URL|$DESK_FLY_TOKEN|$AGENT_COPILOT_TOKEN" > "$ROOT/vars"',
+      'env > "$ROOT/sibling.env"'
+    ].join('\n');
+    const res = spawnSync('zsh', ['-c', script], {
+      env: {
+        PATH: process.env['PATH'] ?? '',
+        HOME: root,
+        ROOT: root,
+        AGENT_QUEUE_VAULT_FILE: join(root, 'vault.env')
+      },
+      stdio: 'ignore'
+    });
+    expect(res.status).toBe(0);
+    expect(read('vars')).toBe(
+      'vault-fly|postgres://vault-db|vault-desk|vault-copilot\n'
+    );
+    expect(read('sibling.env')).not.toMatch(/vault-/);
   });
 
   it('keeps the Sentry and Umami reads optional', () => {

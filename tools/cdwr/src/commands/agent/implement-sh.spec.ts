@@ -785,10 +785,17 @@ describe('implement.sh', () => {
       });
 
       it('launches the session as the second user through the launcher, by default', () => {
-        expect(code).toContain(
-          'launch=(${=AGENT_QUEUE_SESSION_LAUNCH:-sudo -n -u session /opt/agent-host/session-launch.sh})'
+        expect(code).toContain('"${claude_launch[@]}" -p "$prompt"');
+        expect(code).not.toContain('launch=(');
+        const lib = readFileSync(
+          fileURLToPath(
+            new URL('../../../agent-queue/lib.sh', import.meta.url)
+          ),
+          'utf8'
         );
-        expect(code).toContain('"${launch[@]}" -p "$prompt"');
+        expect(lib).toContain(
+          'claude_launch=(sudo -n -u session /opt/agent-host/session-launch.sh)'
+        );
         // The stop crosses into the session user too, and liveness is read with ps
         expect(code).toContain(
           '${=AGENT_QUEUE_SESSION_STOP:-sudo -n -u session /opt/agent-host/session-stop.sh} "$child"'

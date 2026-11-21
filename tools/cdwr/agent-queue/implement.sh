@@ -70,6 +70,7 @@ trap '[[ "$(cat "$LOCK/pid" 2>/dev/null)" == "$$" ]] && rm -rf "$LOCK"' EXIT
 source "${0:A:h}/github-app.sh"
 source "${0:A:h}/telemetry.sh"
 source "${0:A:h}/lib.sh"
+telemetry_env "${AGENT_QUEUE_VAULT_FILE:-}"
 telemetry_env "$REPO/tools/cdwr/.env"
 errf="$LOGS/github-app.err"
 if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
@@ -188,13 +189,11 @@ trap 'interrupted=true; stop_session' TERM INT
 export AGENT_QUEUE_SESSION_KIND=implement
 prompt="/work-queue implement-only once"
 [[ -n "$KEY" ]] && prompt+=" key=\"$KEY\""
-# The session runs as its own user: sudo keeps only what the sudoers file lists, and the launcher
-# sets the rest (the session's home, the queue home it reads, its clone, its credential helper).
-# The container's tmpfs keys, this checkout's .env and the queue home's writes stay the queue
-# user's. AGENT_QUEUE_SESSION_LAUNCH replaces the launcher in the specs, which have no sudo.
-typeset -a launch
-launch=(${=AGENT_QUEUE_SESSION_LAUNCH:-sudo -n -u session /opt/agent-host/session-launch.sh})
-"${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${launch[@]}" -p "$prompt" \
+# The session runs as its own user (claude_launch in lib.sh): sudo keeps only what the sudoers file
+# lists, and the launcher sets the rest (the session's home, the queue home it reads, its clone,
+# its credential helper). The container's tmpfs keys, this checkout's .env and the queue home's
+# writes stay the queue user's.
+"${claude_env[@]}" ENABLE_TOOL_SEARCH=false "${claude_launch[@]}" -p "$prompt" \
   --model opus "${LINEAR_MCP_ARGS[@]}" \
   --settings '{"disabledMcpjsonServers":["linear","sentry"]}' \
   --disallowedTools mcp__linear mcp__sentry mcp__claude_ai_Sentry mcp__claude_ai_Supabase mcp__claude_ai_Claude_Docs \

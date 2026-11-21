@@ -40,7 +40,7 @@ one entry; one pull request rarely makes two.
 
 Stop early when the table is full (step 1) or nothing is left (step 3).
 
-1. **What was drafted before**: `node tools/cdwr/bin/cdwr.mjs devlog covered --json`.
+1. **What was drafted before**: `tools/cdwr/agent-queue/devlog.sh covered --json`.
    It reads every drafted post back from the cms and prints the rows under
    `result`: `{ postId, prs, title, at, outcome, checkedAt }`, with `outcome`
    one of `draft`, `published` or `deleted`. Three things come out of it:
@@ -114,13 +114,13 @@ Then post it. First a dry run, which validates the title, the body and the
 conversion without sending anything:
 
 ```sh
-node tools/cdwr/bin/cdwr.mjs devlog draft --file <home>/devlog-drafts/<file>.md --covers <n,n> --dry-run
+tools/cdwr/agent-queue/devlog.sh draft --file <home>/devlog-drafts/<file>.md --covers <n,n> --dry-run
 ```
 
 Fix what it refuses. Then, unless the run has `dry-run`:
 
 ```sh
-node tools/cdwr/bin/cdwr.mjs devlog draft --file <home>/devlog-drafts/<file>.md --covers <n,n> --yes --json
+tools/cdwr/agent-queue/devlog.sh draft --file <home>/devlog-drafts/<file>.md --covers <n,n> --yes --json
 ```
 
 `--yes` is required: the command confirms before it changes anything, and

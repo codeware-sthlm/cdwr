@@ -7,13 +7,35 @@
 # and everything it starts holds none of them: they go to files on the tmpfs, mode 600, where
 # lib.sh and the credential helper read them. In plain .env mode Docker still puts them in
 # /proc/1/environ (tini), the weaker mode; the vault keeps them out of it.
+#
+# The run loop gets only what loop_env allows; every other vault key goes to vault.env on the same
+# tmpfs, mode 600, where the scripts that need one read it as text. A command given on the line
+# (`cdwr agent exec`, the self-deploy's notice) is a hand command with no claude in it, and gets
+# the whole vault exported as before.
 setopt err_exit pipe_fail no_unset
 
+loop="${AGENT_HOST_LOOP:-/opt/agent-host/entrypoint.sh}"
 typeset -a run
 run=("$@")
-(( ${#run} )) || run=(/opt/agent-host/entrypoint.sh)
+(( ${#run} )) || run=("$loop")
+is_loop=false
+[[ "${run[1]}" == "$loop" ]] && is_loop=true
 
 run_dir="${AGENT_HOST_RUN_DIR:-/run/agent}"
+vault_file="${AGENT_QUEUE_VAULT_FILE:-$run_dir/vault.env}"
+
+# What the loop may hold in its environment: what claude, git, the listener and the loop read from
+# it, and the queue's non-secret settings. The Linear keys are AGENT_QUEUE_* too, and never get
+# here: write_keys takes them first.
+loop_env() {
+  case "$1" in
+    CLAUDE_CODE_OAUTH_TOKEN | AGENT_GITHUB_APP_ID | AGENT_GITHUB_APP_INSTALLATION_ID) return 0 ;;
+    AGENT_SUPABASE_URL | AGENT_SUPABASE_ANON_KEY | SLACK_WEBHOOK_URL | SENTRY_DSN) return 0 ;;
+    AGENT_QUEUE_* | RUN_* | HOST_METRICS_*) return 0 ;;
+  esac
+  return 1
+}
+
 typeset -a key_names
 key_names=(AGENT_GITHUB_APP_KEY AGENT_QUEUE_LINEAR_KEY AGENT_QUEUE_LINEAR_CLIENT_ID AGENT_QUEUE_LINEAR_CLIENT_SECRET)
 # The vault's key secrets, held here and never exported
@@ -64,6 +86,7 @@ write_keys() {
 
 if [[ -z "${INFISICAL_CLIENT_ID:-}" ]]; then
   print -r -- "secrets: no INFISICAL_CLIENT_ID, using the environment as given"
+  $is_loop && rm -f "$vault_file"
   write_keys
   exec "${run[@]}"
 fi
@@ -102,7 +125,7 @@ vault="$(INFISICAL_TOKEN="$token" infisical export --domain "$domain" --silent \
 pairs="$(jq -c 'if type == "array" then map({key, value}) else to_entries end | .[]' <<<"$vault")" ||
   { print -ru2 -- "secrets: the vault's answer is not JSON"; exit 1; }
 
-typeset -a from_vault kept
+typeset -a from_vault kept held vault_lines
 [[ -n "$pairs" ]] || print -ru2 -- "secrets: $environment $folder holds no secrets"
 while IFS= read -r pair; do
   [[ -n "$pair" ]] || continue
@@ -116,16 +139,33 @@ while IFS= read -r pair; do
     kept+=("$key")
     continue
   fi
+  value="$(jq -r .value <<<"$pair")"
   if (( ${key_names[(Ie)$key]} )); then
-    keys[$key]="$(jq -r .value <<<"$pair")"
+    keys[$key]="$value"
+  elif $is_loop && ! loop_env "$key"; then
+    # One KEY=value line each, read as text, so a value over several lines can't be one
+    if [[ "$value" == *$'\n'* ]]; then
+      print -ru2 -- "secrets: skipping $key, its value is not one line"
+      continue
+    fi
+    vault_lines+=("$key=$value")
+    held+=("$key")
   else
-    export "$key=$(jq -r .value <<<"$pair")"
+    export "$key=$value"
   fi
   from_vault+=("$key")
 done <<<"$pairs"
+value=
 
 print -r -- "secrets: $environment $folder: ${#from_vault} from the vault${from_vault:+ (${(j:, :)from_vault})}"
 (( ${#kept} )) && print -r -- "secrets: kept from the environment: ${(j:, :)kept}"
+(( ${#held} )) && print -r -- "secrets: out of the loop's environment, in ${vault_file:t}: ${(j:, :)held}"
+
+# Only the loop rewrites the file: a hand command exports what it needs and leaves the loop's alone
+if $is_loop; then
+  if (( ${#vault_lines} )); then write_secret "$vault_file" "${vault_lines[@]}"; else rm -f "$vault_file"; fi
+fi
+vault_lines=()
 
 # Out of the loop's own environment. PID 1 (tini) still holds it in /proc/1/environ, readable by
 # the same uid; accepted because the identity is a Viewer of a project that holds only this folder.

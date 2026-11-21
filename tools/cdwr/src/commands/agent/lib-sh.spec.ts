@@ -707,6 +707,30 @@ describe('lib.sh', () => {
         expect(result.stdout.trim()).toBe('u|u|u|u|u|u');
       });
 
+      describe('claude_launch', () => {
+        const launch = (env: Record<string, string>) =>
+          run('print -r -- "${(j: :)claude_launch}"', env).stdout.trim();
+
+        it('is the override when set, split on spaces', () => {
+          expect(
+            launch({
+              AGENT_QUEUE_SESSION_LAUNCH: 'stub-launch --x',
+              AGENT_QUEUE_HOST: 'container'
+            })
+          ).toBe('stub-launch --x');
+        });
+
+        it('is the session launcher in the container', () => {
+          expect(launch({ AGENT_QUEUE_HOST: 'container' })).toBe(
+            'sudo -n -u session /opt/agent-host/session-launch.sh'
+          );
+        });
+
+        it('is claude elsewhere', () => {
+          expect(launch({})).toBe('claude');
+        });
+      });
+
       it('in the container the credential files have their fixed places without the variables', () => {
         const result = run(
           'print -r -- "$LINEAR_TOKEN_FILE|${AGENT_QUEUE_LINEAR_KEY_FILE}|${AGENT_QUEUE_LINEAR_APP_FILE}"',

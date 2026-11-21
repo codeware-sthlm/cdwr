@@ -21,4 +21,5 @@
 !/apps/agent-host/linear-mcp-proxy.mjs
 !/apps/agent-host/session-launch.sh
 !/apps/agent-host/session-stop.sh
+!/apps/agent-host/devlog-cms.sh
 !/apps/agent-host/sudoers

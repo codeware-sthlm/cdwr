@@ -46,7 +46,7 @@ esac
 const PROBE = [
   'jq',
   '-nc',
-  '{key: env.AGENT_GITHUB_APP_KEY, linear: env.AGENT_QUEUE_LINEAR_KEY, clientId: env.AGENT_QUEUE_LINEAR_CLIENT_ID, clientSecret: env.AGENT_QUEUE_LINEAR_CLIENT_SECRET, slack: env.SLACK_WEBHOOK_URL, secret: env.INFISICAL_CLIENT_SECRET, id: env.INFISICAL_CLIENT_ID, args: $ARGS.positional}',
+  '{key: env.AGENT_GITHUB_APP_KEY, linear: env.AGENT_QUEUE_LINEAR_KEY, clientId: env.AGENT_QUEUE_LINEAR_CLIENT_ID, clientSecret: env.AGENT_QUEUE_LINEAR_CLIENT_SECRET, slack: env.SLACK_WEBHOOK_URL, fly: env.FLY_API_TOKEN, desk: env.DESK_FLY_TOKEN, cms: env.CMS_AGENT_API_KEY, secret: env.INFISICAL_CLIENT_SECRET, id: env.INFISICAL_CLIENT_ID, args: $ARGS.positional}',
   '--args',
   'one',
   'two'
@@ -255,5 +255,111 @@ describe('secrets.sh', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(message);
     expect(result.stdout).not.toContain('"args"');
+  });
+
+  describe('as the loop', () => {
+    const LOOP_VAULT = JSON.stringify([
+      { key: 'FLY_API_TOKEN', value: 'fly-secret' },
+      { key: 'DESK_FLY_TOKEN', value: 'desk-secret' },
+      { key: 'CMS_AGENT_API_KEY', value: 'cms-secret' },
+      { key: 'SLACK_WEBHOOK_URL', value: 'https://hooks/x' }
+    ]);
+    const loop = { ...identity, AGENT_HOST_LOOP: 'jq' };
+    const vaultFile = () => join(runDir(), 'vault.env');
+
+    it('keeps the other keys out of the environment, in vault.env', () => {
+      const result = run(loop, LOOP_VAULT);
+      expect(result.status).toBe(0);
+      const seen = seenBy(result.stdout);
+      expect([seen.fly, seen.desk, seen.cms]).toEqual([null, null, null]);
+      expect(seen.slack).toBe('https://hooks/x');
+      expect(secretFile('vault.env')).toEqual({
+        text: 'FLY_API_TOKEN=fly-secret\nDESK_FLY_TOKEN=desk-secret\nCMS_AGENT_API_KEY=cms-secret\n',
+        mode: 0o600
+      });
+    });
+
+    it('logs the names and never a value', () => {
+      const result = run(loop, LOOP_VAULT);
+      const log = result.stdout + result.stderr;
+      expect(log).toContain(
+        "out of the loop's environment, in vault.env: FLY_API_TOKEN, DESK_FLY_TOKEN, CMS_AGENT_API_KEY"
+      );
+      expect(log).not.toMatch(/fly-secret|desk-secret|cms-secret/);
+    });
+
+    it('skips a value over several lines', () => {
+      const result = run(
+        loop,
+        JSON.stringify([
+          { key: 'FLY_API_TOKEN', value: 'fly-secret' },
+          { key: 'CMS_AGENT_API_KEY', value: 'two\nlines' }
+        ])
+      );
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain(
+        'skipping CMS_AGENT_API_KEY, its value is not one line'
+      );
+      expect(secretFile('vault.env').text).toBe('FLY_API_TOKEN=fly-secret\n');
+      expect(seenBy(result.stdout).cms).toBeNull();
+    });
+
+    it('writes no vault.env without such a key, and removes a stale one', () => {
+      mkdirSync(runDir());
+      writeFileSync(vaultFile(), 'OLD=1\n');
+      const result = run(loop, VAULT);
+      expect(result.status).toBe(0);
+      expect(result.stdout + result.stderr).not.toContain(
+        "out of the loop's environment"
+      );
+      expect(existsSync(vaultFile())).toBe(false);
+    });
+
+    it('removes a stale vault.env in plain .env mode', () => {
+      mkdirSync(runDir());
+      writeFileSync(vaultFile(), 'OLD=1\n');
+      const result = run({ AGENT_HOST_LOOP: 'jq' });
+      expect(result.status).toBe(0);
+      expect(existsSync(vaultFile())).toBe(false);
+    });
+
+    it('writes where AGENT_QUEUE_VAULT_FILE points', () => {
+      const elsewhere = join(dir, 'else', 'v.env');
+      mkdirSync(join(dir, 'else'));
+      const result = run(
+        { ...loop, AGENT_QUEUE_VAULT_FILE: elsewhere },
+        LOOP_VAULT
+      );
+      expect(result.status).toBe(0);
+      expect(readFileSync(elsewhere, 'utf8')).toContain(
+        'FLY_API_TOKEN=fly-secret\n'
+      );
+      expect(statSync(elsewhere).mode & 0o777).toBe(0o600);
+      expect(existsSync(vaultFile())).toBe(false);
+      expect(result.stdout + result.stderr).toContain('in v.env: ');
+    });
+  });
+
+  describe('as a hand command', () => {
+    const HAND_VAULT = JSON.stringify([
+      { key: 'FLY_API_TOKEN', value: 'fly-secret' },
+      { key: 'CMS_AGENT_API_KEY', value: 'cms-secret' }
+    ]);
+
+    it('exports everything and writes no vault.env', () => {
+      const result = run(identity, HAND_VAULT);
+      expect(result.status).toBe(0);
+      const seen = seenBy(result.stdout);
+      expect(seen.fly).toBe('fly-secret');
+      expect(seen.cms).toBe('cms-secret');
+      expect(existsSync(join(runDir(), 'vault.env'))).toBe(false);
+    });
+
+    it("leaves the loop's vault.env alone", () => {
+      mkdirSync(runDir());
+      writeFileSync(join(runDir(), 'vault.env'), 'KEEP=1\n');
+      run(identity, HAND_VAULT);
+      expect(secretFile('vault.env').text).toBe('KEEP=1\n');
+    });
   });
 });
