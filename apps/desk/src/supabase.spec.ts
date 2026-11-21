@@ -828,7 +828,8 @@ describe('createSupabase readHostMetrics', () => {
     disk_total: 1,
     disk_free: 1,
     cgroup_mem_current: null,
-    cgroup_mem_max: null
+    cgroup_mem_max: null,
+    exposed: null
   });
 
   it('reads a window past one page across pages', async () => {

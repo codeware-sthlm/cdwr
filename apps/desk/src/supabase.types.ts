@@ -262,6 +262,7 @@ export type Database = {
           disk_free: number;
           cgroup_mem_current: number | null;
           cgroup_mem_max: number | null;
+          exposed: string[] | null;
         };
         Insert: {
           id?: never;
@@ -279,6 +280,7 @@ export type Database = {
           disk_free: number;
           cgroup_mem_current?: number | null;
           cgroup_mem_max?: number | null;
+          exposed?: string[] | null;
         };
         Update: {
           id?: never;
@@ -296,6 +298,7 @@ export type Database = {
           disk_free?: number;
           cgroup_mem_current?: number | null;
           cgroup_mem_max?: number | null;
+          exposed?: string[] | null;
         };
         Relationships: [];
       };

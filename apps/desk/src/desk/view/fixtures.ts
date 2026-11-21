@@ -238,6 +238,7 @@ export const hostSample = (
   disk_free: 60 * 2 ** 30,
   cgroup_mem_current: null,
   cgroup_mem_max: null,
+  exposed: [],
   ...over
 });
 

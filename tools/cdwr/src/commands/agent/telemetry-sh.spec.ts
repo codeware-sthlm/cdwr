@@ -37,6 +37,8 @@ describe('telemetry.sh', () => {
   let status: number;
   // What the fake server answers with
   let reply: string;
+  // Refuses a request by its body, ahead of `status`
+  let refuse: ((body: string) => boolean) | null;
 
   // Runs a snippet with telemetry.sh sourced; the fake server shares this process, so async
   const zsh = async (
@@ -68,7 +70,7 @@ describe('telemetry.sh', () => {
           headers: req.headers,
           body: raw
         });
-        res.writeHead(status);
+        res.writeHead(refuse?.(raw) ? 400 : status);
         res.end(reply);
       });
     });
@@ -92,6 +94,7 @@ describe('telemetry.sh', () => {
     hits = [];
     status = 201;
     reply = '{}';
+    refuse = null;
   });
 
   it.each([
@@ -431,6 +434,20 @@ describe('telemetry.sh', () => {
         `telemetry_env_search /nonexistent; print -r -- "\${(t)AGENT_SUPABASE_SERVICE_KEY}"`
       );
       expect(out.stdout).toBe('scalar\nrc=0');
+    });
+
+    it('reads the service key from the vault file and leaves it unexported', async () => {
+      const file = join(tmpdir(), 'telemetry-vault.env');
+      writeFileSync(file, 'AGENT_SUPABASE_SERVICE_KEY=vault-key\n');
+      const out = await zsh(
+        {
+          AGENT_SUPABASE_URL: 'https://x.supabase.co',
+          AGENT_QUEUE_VAULT_FILE: file
+        },
+        `telemetry_env_search /nonexistent; print -r -- "$AGENT_SUPABASE_SERVICE_KEY \${(t)AGENT_SUPABASE_SERVICE_KEY}"; env | grep -c vault-key || true`
+      );
+      rmSync(file, { force: true });
+      expect(out.stdout).toBe('vault-key scalar\n0\nrc=0');
     });
   });
 
@@ -812,6 +829,51 @@ describe('telemetry.sh', () => {
       expect(Date.now() - cutoff).toBeGreaterThan(7 * 86400_000 - 60_000);
       expect(Date.now() - cutoff).toBeLessThan(7 * 86400_000 + 60_000);
       expect(hits[1]?.headers['apikey']).toBe(KEY);
+    });
+
+    it('sends exposed as given, and leaves it out without the argument', async () => {
+      fixture('max');
+      await zsh(
+        env(),
+        `telemetry_host_metrics '["GH_TOKEN","claude as agent (pid 7)"]'`
+      );
+      await zsh(env(), `telemetry_host_metrics '[]'`);
+      await zsh(env(), 'telemetry_host_metrics');
+      const bodies = hits
+        .filter((h) => h.method === 'POST')
+        .map((h) => JSON.parse(h.body ?? '') as Record<string, unknown>);
+      expect(bodies).toHaveLength(3);
+      expect(bodies[0]?.['exposed']).toEqual([
+        'GH_TOKEN',
+        'claude as agent (pid 7)'
+      ]);
+      expect(bodies[1]?.['exposed']).toEqual([]);
+      expect(bodies[2]).not.toHaveProperty('exposed');
+    });
+
+    it('retries once without exposed when the strict post fails', async () => {
+      fixture('max');
+      refuse = (body) => body.includes('"exposed"');
+      const out = await zsh(env(), `telemetry_host_metrics '["GH_TOKEN"]'`);
+      expect(out.stdout).toBe('rc=0');
+      const posts = hits.filter((h) => h.method === 'POST');
+      expect(posts).toHaveLength(2);
+      expect(JSON.parse(posts[0]?.body ?? '')).toHaveProperty('exposed');
+      expect(JSON.parse(posts[1]?.body ?? '')).not.toHaveProperty('exposed');
+      expect(JSON.parse(posts[1]?.body ?? '')).toHaveProperty('load1');
+    });
+
+    it('sends one post when the exposed post succeeds', async () => {
+      fixture('max');
+      await zsh(env(), `telemetry_host_metrics '[]'`);
+      expect(hits.filter((h) => h.method === 'POST')).toHaveLength(1);
+    });
+
+    it('does not retry without exposed: one post, as before', async () => {
+      fixture('max');
+      status = 400;
+      await zsh(env(), 'telemetry_host_metrics');
+      expect(hits.filter((h) => h.method === 'POST')).toHaveLength(1);
     });
 
     it.each([['max'], [null]])(

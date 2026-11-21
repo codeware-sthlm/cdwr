@@ -1578,6 +1578,7 @@ describe('hostHealth', () => {
     disk_free: 60 * GIB,
     cgroup_mem_current: null,
     cgroup_mem_max: null,
+    exposed: [],
     ...over
   });
 
@@ -1897,6 +1898,7 @@ describe('limits, nuc and versions in the model', () => {
     disk_free: 60 * GIB,
     cgroup_mem_current: null,
     cgroup_mem_max: null,
+    exposed: [],
     ...over
   });
   const run = (
@@ -1982,6 +1984,13 @@ describe('limits, nuc and versions in the model', () => {
       expect(m.nuc?.cpu).toBeCloseTo(0.25);
       expect(m.nuc?.memory).toBeCloseTo(0.25);
       expect(m.nuc?.disk).toBeCloseTo(0.4);
+    });
+
+    it('reads a sample from before the exposed column without throwing', () => {
+      const old = sample(0);
+      Reflect.deleteProperty(old, 'exposed');
+      expect(() => at({}, [old])).not.toThrow();
+      expect(at({}, [old]).nuc?.host).toBe('nuc');
     });
 
     it('prefers the container memory when both cgroup figures are set', () => {

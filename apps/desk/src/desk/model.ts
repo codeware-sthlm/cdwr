@@ -1253,7 +1253,8 @@ export const model = (
         host: host.host,
         at: Date.parse(host.latest.at),
         ageMin: host.ageMin,
-        silentMin: host.silentMin
+        silentMin: host.silentMin,
+        exposed: host.latest.exposed ?? null
       }
     : null;
   const found = problems({
