@@ -1,5 +1,6 @@
 // Web APIs only, so the same file runs in Deno on Supabase and under vitest
 import { sameText } from '../_shared/hmac.ts';
+import { keyHeaders } from '../_shared/keys.ts';
 
 export const KINDS = [
   'pause',
@@ -357,8 +358,7 @@ export const createHandler = ({
     fetch(`${base}/${path}`, {
       method: init.method,
       headers: {
-        apikey: serviceKey ?? '',
-        Authorization: `Bearer ${serviceKey ?? ''}`,
+        ...keyHeaders(serviceKey ?? ''),
         'Content-Type': 'application/json',
         ...(init.prefer ? { Prefer: init.prefer } : {})
       },

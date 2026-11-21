@@ -215,9 +215,9 @@ describe('agent platform-record', () => {
     expect(url).toBe(`${URL}/rest/v1/tenant_state?on_conflict=key`);
     expect(init?.headers).toMatchObject({
       apikey: KEY,
-      Authorization: `Bearer ${KEY}`,
       Prefer: 'resolution=merge-duplicates,return=minimal'
     });
+    expect(init?.headers).not.toHaveProperty('Authorization');
     const rows = JSON.parse(String(init?.body)) as { key: string }[];
     expect(rows.map((r) => r.key)).toEqual(['acme', '_shared']);
     const [delUrl] = fetchMock.mock.calls[1] ?? [];

@@ -137,9 +137,9 @@ describe('agent usage-record', () => {
     );
     expect(init?.headers).toMatchObject({
       apikey: KEY,
-      Authorization: `Bearer ${KEY}`,
       Prefer: 'resolution=merge-duplicates,return=minimal'
     });
+    expect(init?.headers).not.toHaveProperty('Authorization');
     const rows = JSON.parse(String(init?.body)) as Record<string, unknown>[];
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
@@ -182,6 +182,7 @@ describe('agent usage-record', () => {
       method: 'DELETE',
       headers: { apikey: KEY, Prefer: 'return=minimal' }
     });
+    expect(delInit?.headers).not.toHaveProperty('Authorization');
   });
 
   it('sends only day rows with --kind day', async () => {
