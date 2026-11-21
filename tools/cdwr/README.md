@@ -511,10 +511,9 @@ uses its environment as given. Secrets are read once per start, so a rotated one
 `DESK_FLY_TOKEN` (org deploy); `--key` takes one of them. It runs on the Mac with your own Fly and Infisical logins, never
 on the NUC. Before any token exists it probes a write to the folder. Each new token is named after its use and key, `agent-host platform read (FLY_API_TOKEN)`
 and `agent-host desk deploy (DESK_FLY_TOKEN)`, valid one
-year, and proven on a Fly read before it is written (through a file, never argv). The container then restarts under the
-deploy lock with the queue idle, and the old tokens are revoked only once the container's `/run/agent/vault.env` holds
+year, and proven on a Fly read before it is written (through a file, never argv). The whole run holds the host deploy lock, so two runs cannot interleave and the self-deploy cannot swap the container mid-rotation. The container restarts with the queue idle, and only the old tokens the plan listed are revoked, and only once the container's `/run/agent/vault.env` holds
 the new value, compared by sha256. A key set in the NUC's `.env` wins over the vault; the check then fails and the old
-token stays. `--dry-run` lists every token it would revoke, by id, name and expiry. A run that stops part way leaves a
+token stays. `--dry-run` lists every token it would revoke, by id, name and expiry. A live token the plan did not show is left alone and fails the run, so a rerun's plan lists it. A run that stops part way leaves a
 working token in the vault; run it again to finish, and it revokes the strays.
 
 The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so

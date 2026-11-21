@@ -16,6 +16,7 @@ import {
   newTokenId,
   revokeSet,
   sha256Hex,
+  toRevoke,
   vaultLineHashCommand
 } from './rotate-fly.logic';
 
@@ -201,5 +202,36 @@ describe('vaultLineHashCommand', () => {
     const result = exec('FLY_API_TOKEN', vault('DESK_FLY_TOKEN=y\n'));
     expect(result.status).toBe(NOT_READY);
     expect(result.stdout).toBe('');
+  });
+});
+
+describe('toRevoke', () => {
+  const a = token('a', 'n');
+  const b = token('b', 'n');
+  const fresh = token('new', 'n');
+
+  it('revokes the planned tokens that are still live', () => {
+    expect(toRevoke(['a', 'b'], [a, b], 'new')).toEqual({
+      revoke: ['a', 'b'],
+      unplanned: []
+    });
+  });
+
+  it('skips a planned token that is gone', () => {
+    expect(toRevoke(['a', 'b'], [b], 'new').revoke).toEqual(['b']);
+  });
+
+  it('leaves a live token the plan did not show, and returns it', () => {
+    expect(toRevoke(['a'], [a, b], 'new')).toEqual({
+      revoke: ['a'],
+      unplanned: [b]
+    });
+  });
+
+  it('never revokes the kept token', () => {
+    expect(toRevoke(['a', 'new'], [a, fresh], 'new')).toEqual({
+      revoke: ['a'],
+      unplanned: []
+    });
   });
 });
