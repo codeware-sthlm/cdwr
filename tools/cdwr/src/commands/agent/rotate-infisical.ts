@@ -22,12 +22,7 @@ import { probeSession } from '../infisical/session.logic';
 import { PROJECTS } from '../secrets/catalog';
 
 import { CONTAINER, DEFAULT_WAIT_MINUTES, assertHost } from './deploy.logic';
-import {
-  POLL_MAX_MS,
-  containerHash,
-  lockHost,
-  restartIdleLocked
-} from './host';
+import { containerProblem, lockHost, restartIdleLocked } from './host';
 import { hostInput } from './remote';
 import { VAULT_FILE, sha256Hex } from './rotate-fly.logic';
 import {
@@ -193,17 +188,11 @@ async function rotate(ctx: Context, plan: Planned) {
 
   const resumed = await restartIdleLocked(ctx, plan.host, plan.wait);
 
-  let problem: string | undefined;
-  try {
-    const held = await containerHash(plan.host, key);
-    if (held.kind === 'not-ready') {
-      problem = `the container never wrote ${VAULT_FILE} within ${POLL_MAX_MS / 1000} s; check \`cdwr agent logs\``;
-    } else if (held.hash !== sha256Hex(fresh.value)) {
-      problem = `the container does not hold the new value. A key set in the NUC's compose .env wins over the vault (the start log says "secrets: kept from the environment"); remove it there`;
-    }
-  } catch (error) {
-    problem = `the container's value could not be read: ${messageOf(error)}`;
-  }
+  const problem = await containerProblem(
+    plan.host,
+    key,
+    sha256Hex(fresh.value)
+  );
 
   const paused = resumed
     ? []
