@@ -7,12 +7,13 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review] [deploy json]
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review] [deploy json] [notify json]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
 #                                                            a view that isn't JSON too; a watch and a renovate state, when
 #                                                            given, are each patched on after (empty or invalid: null), then
 #                                                            a devlog line (empty: null), then a review line (same), then
-#                                                            a deploy state (empty or invalid: null)
+#                                                            a deploy state (empty or invalid: null), then the notify dial (same)
+#   notices_drain <queue home>                               moves the notify spool into `notices` (see the function)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
 #   supabase_delete <table> <query>                          DELETE the rows a PostgREST filter matches
@@ -214,6 +215,60 @@ telemetry_queue_state() {
   (( $# >= 10 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
     "$(jq -nc --rawfile d <(print -rn -- "${10}") '{deploy: ($d | try fromjson catch null)}')" >/dev/null || return 0
+  # And the notify dial, {level, muteUntil}, the same way
+  (( $# >= 11 )) || return 0
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --rawfile n <(print -rn -- "${11}") '{notify: ($n | try fromjson catch null)}')" >/dev/null || return 0
+}
+
+# notices_drain <queue home>: moves the queue home's notify spool into `notices`, oldest file first.
+# A row's id is `<host>:<file name>`, so a resent row is ignored; a file goes once its row is in.
+# A pass where no insert failed stamps notices-drained-at (epoch seconds), which tells notify.sh a
+# drain is alive and it may spool. An urgent file still there 10 minutes after its `at` is posted
+# straight to Slack and goes. Without the key nothing is inserted: each file the dial lets through
+# is posted, and every file goes once posted or held. notify.sh beside the spool decides and posts.
+# A notices-drain.lock directory keeps the scheduler's drain and the container sampler's apart.
+notices_drain() {
+  local home=$1 spool="$1/notify-spool" lock="$1/notices-drain.lock" notify="$1/notify.sh"
+  local file host row level text age failed=false rc
+  [[ -x "$notify" ]] || return 0
+  if [[ -d "$lock" && -n "$(find "$lock" -maxdepth 0 -mmin +5 2>/dev/null)" ]]; then rm -rf "$lock"; fi
+  mkdir "$lock" 2>/dev/null || return 0
+  host="$(telemetry_host)"
+  for file in "$spool"/*.json(N.Om); do
+    # The level, the age in seconds and the row, on one line (the row is compact JSON, its text's
+    # newlines escaped); a file that can't be read goes
+    if ! { IFS=$'\x1f' read -r level age row <<<"$(jq -r --arg host "$host" --arg name "${file:t:r}" '
+        select((.text | type) == "string" and .text != "")
+        | (if .level == "urgent" or .level == "info" then .level else "action" end) as $level
+        | [$level, (now - ((.at // "") | sub("\\.[0-9]+"; "") | fromdateiso8601? // now) | floor | tostring),
+           ({id: ($host + ":" + $name), at: (.at // (now | todate)), host: $host, level: $level,
+             source: .source, ticket: .ticket, text: .text} | tojson)]
+        | join("\u001f")' "$file" 2>/dev/null)" && [[ -n "$row" ]] }; then
+      rm -f "$file"
+      continue
+    fi
+    text="$(jq -r '.text' <<<"$row")"
+    if telemetry_on; then
+      if supabase_upsert notices id "$row" ignore strict; then
+        rm -f "$file"
+        continue
+      fi
+      failed=true
+      if [[ "$level" == urgent ]] && (( age > 600 )); then
+        "$notify" --send urgent "$text" && rm -f "$file"
+      fi
+    elif "$notify" --passes "$level"; then
+      rc=0; "$notify" --send "$level" "$text" || rc=$?
+      # Kept for the next pass when the post failed, gone when there is no webhook to post to
+      (( rc == 1 )) || rm -f "$file"
+    else
+      rm -f "$file"
+    fi
+  done
+  if telemetry_on && ! $failed; then date +%s > "$home/notices-drained-at"; fi
+  rmdir "$lock" 2>/dev/null
+  return 0
 }
 
 # telemetry_session <id> <kind> [state] [detail] [strict]: an empty or missing state or detail is

@@ -1,9 +1,14 @@
 import { execFile } from 'node:child_process';
 import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs';
 import { type Server, createServer } from 'node:http';
@@ -16,6 +21,9 @@ import { requireTools } from '../../testing/require-tools';
 
 const TELEMETRY_SH = fileURLToPath(
   new URL('../../../agent-queue/telemetry.sh', import.meta.url)
+);
+const NOTIFY_SH = fileURLToPath(
+  new URL('../../../agent-queue/notify.sh', import.meta.url)
 );
 const execAsync = promisify(execFile);
 
@@ -717,10 +725,339 @@ describe('telemetry.sh', () => {
       });
     });
 
+    describe('the notify dial', () => {
+      const notify = '{"level":"action","muteUntil":null}';
+
+      it('patches it in a patch of its own, after the deploy state', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}' '${notify}'`
+        );
+        expect(hits).toHaveLength(7);
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[6]?.method).toBe('PATCH');
+        expect(hits[6]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[6]?.body ?? '')).toEqual({
+          notify: JSON.parse(notify)
+        });
+      });
+
+      it('patches null when it is empty or not JSON', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}' 'nope'`
+        );
+        expect(JSON.parse(hits[6]?.body ?? '')).toEqual({ notify: null });
+        hits.length = 0;
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}' ''`
+        );
+        expect(JSON.parse(hits[6]?.body ?? '')).toEqual({ notify: null });
+      });
+
+      it('sends no patch for it when absent', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}'`
+        );
+        expect(hits).toHaveLength(6);
+        expect(hits.every((h) => !h.body.includes('notify'))).toBe(true);
+      });
+    });
+
     it('sends nothing without the env vars', async () => {
       const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
       expect(out.stdout).toBe('rc=0');
       expect(hits).toEqual([]);
+    });
+  });
+
+  describe('notices_drain', () => {
+    let dir: string;
+    let queueHome: string;
+    let spool: string;
+    let slack: string;
+
+    const minutesAgo = (minutes: number) =>
+      new Date(Date.now() - minutes * 60_000)
+        .toISOString()
+        .replace(/\.\d+Z$/, 'Z');
+
+    // mtime orders the drain, the name does not
+    const spoolFile = (name: string, content: unknown, mtime = Date.now()) => {
+      const file = join(spool, name);
+      writeFileSync(
+        file,
+        typeof content === 'string' ? content : JSON.stringify(content)
+      );
+      utimesSync(file, mtime / 1000, mtime / 1000);
+    };
+    const notice = (text: string, extra: Record<string, unknown> = {}) => ({
+      text,
+      level: 'action',
+      source: 'run',
+      ticket: 'COD-1',
+      at: minutesAgo(1),
+      ...extra
+    });
+
+    const drain = (
+      env: Record<string, string> = {},
+      curl = `cat >> "${slack}"; echo >> "${slack}"`
+    ) =>
+      zsh(
+        {
+          HOME: dir,
+          AGENT_QUEUE_HOME: queueHome,
+          AGENT_QUEUE_CURL_CMD: curl,
+          ...env
+        },
+        `notices_drain "${queueHome}"`
+      );
+    const keyed = () => ({
+      ...configured(),
+      SLACK_WEBHOOK_URL: 'https://hooks.example/x'
+    });
+    const unkeyed = () => ({ SLACK_WEBHOOK_URL: 'https://hooks.example/x' });
+
+    const slackPosts = () =>
+      existsSync(slack)
+        ? readFileSync(slack, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((l) => (JSON.parse(l) as { text: string }).text)
+        : [];
+    const remaining = () => readdirSync(spool).sort();
+    const rows = () =>
+      hits.map((h) => JSON.parse(h.body) as Record<string, unknown>);
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'notices-drain-'));
+      queueHome = join(dir, 'queue');
+      spool = join(queueHome, 'notify-spool');
+      slack = join(dir, 'slack.log');
+      mkdirSync(spool, { recursive: true });
+      copyFileSync(NOTIFY_SH, join(queueHome, 'notify.sh'));
+      chmodSync(join(queueHome, 'notify.sh'), 0o755);
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    describe('with the key', () => {
+      it('upserts each file into notices, ignoring duplicates, and removes it', async () => {
+        spoolFile('1700000000-11.json', notice('first'), Date.now() - 2000);
+        spoolFile(
+          '1700000001-12.json',
+          notice('second', { level: 'info', source: 'review', ticket: null }),
+          Date.now() - 1000
+        );
+        const out = await drain(keyed());
+        expect(out.stdout).toBe('rc=0');
+        expect(hits).toHaveLength(2);
+        for (const hit of hits) {
+          expect(hit.method).toBe('POST');
+          expect(hit.url).toBe('/rest/v1/notices?on_conflict=id');
+          expect(hit.headers['prefer']).toBe(
+            'resolution=ignore-duplicates,return=minimal'
+          );
+        }
+        const [first, second] = rows();
+        const host = first?.['host'] as string;
+        expect(host).toMatch(/\S/);
+        expect(first).toEqual({
+          id: `${host}:1700000000-11`,
+          at: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:]+Z$/),
+          host,
+          level: 'action',
+          source: 'run',
+          ticket: 'COD-1',
+          text: 'first'
+        });
+        expect(second).toEqual({
+          id: `${host}:1700000001-12`,
+          at: expect.any(String),
+          host,
+          level: 'info',
+          source: 'review',
+          ticket: null,
+          text: 'second'
+        });
+        expect(remaining()).toEqual([]);
+        expect(slackPosts()).toEqual([]);
+        expect(existsSync(join(queueHome, 'notices-drain.lock'))).toBe(false);
+      });
+
+      it('writes notices-drained-at when no insert failed', async () => {
+        spoolFile('1-1.json', notice('a'));
+        const before = Math.floor(Date.now() / 1000);
+        await drain(keyed());
+        const stamp = Number(
+          readFileSync(join(queueHome, 'notices-drained-at'), 'utf8').trim()
+        );
+        expect(stamp).toBeGreaterThanOrEqual(before);
+        expect(stamp).toBeLessThanOrEqual(before + 60);
+      });
+
+      it('writes notices-drained-at for an empty spool', async () => {
+        await drain(keyed());
+        expect(existsSync(join(queueHome, 'notices-drained-at'))).toBe(true);
+      });
+
+      it('keeps a file whose insert failed and does not write notices-drained-at', async () => {
+        status = 500;
+        spoolFile('1-1.json', notice('a'));
+        const out = await drain(keyed());
+        expect(out.stdout).toContain('rc=0');
+        expect(remaining()).toEqual(['1-1.json']);
+        expect(existsSync(join(queueHome, 'notices-drained-at'))).toBe(false);
+        expect(slackPosts()).toEqual([]);
+      });
+
+      it('drops only the file that failed from the removals', async () => {
+        refuse = (b) => b.includes('"text":"bad"');
+        spoolFile('1-1.json', notice('good'), Date.now() - 2000);
+        spoolFile('2-2.json', notice('bad'), Date.now() - 1000);
+        await drain(keyed());
+        expect(remaining()).toEqual(['2-2.json']);
+        expect(existsSync(join(queueHome, 'notices-drained-at'))).toBe(false);
+      });
+
+      it('posts an urgent file over 10 minutes old straight to Slack when its insert failed', async () => {
+        status = 500;
+        spoolFile(
+          '1-1.json',
+          notice('down', { level: 'urgent', at: minutesAgo(11) })
+        );
+        await drain(keyed());
+        expect(slackPosts()).toEqual([':rotating_light: down']);
+        expect(remaining()).toEqual([]);
+      });
+
+      it('keeps a younger urgent file whose insert failed', async () => {
+        status = 500;
+        spoolFile(
+          '1-1.json',
+          notice('down', { level: 'urgent', at: minutesAgo(5) })
+        );
+        await drain(keyed());
+        expect(slackPosts()).toEqual([]);
+        expect(remaining()).toEqual(['1-1.json']);
+      });
+
+      it('keeps an old urgent file when the Slack post fails too', async () => {
+        status = 500;
+        spoolFile(
+          '1-1.json',
+          notice('down', { level: 'urgent', at: minutesAgo(11) })
+        );
+        await drain(keyed(), 'cat >/dev/null; false');
+        expect(remaining()).toEqual(['1-1.json']);
+      });
+
+      it('does not post an old action file whose insert failed', async () => {
+        status = 500;
+        spoolFile('1-1.json', notice('late', { at: minutesAgo(60) }));
+        await drain(keyed());
+        expect(slackPosts()).toEqual([]);
+        expect(remaining()).toEqual(['1-1.json']);
+      });
+
+      it('removes a file that is unreadable or has no text, without inserting', async () => {
+        spoolFile('1-1.json', 'not json {');
+        spoolFile('2-2.json', { level: 'info' });
+        spoolFile('3-3.json', { text: '' });
+        const out = await drain(keyed());
+        expect(out.stdout).toBe('rc=0');
+        expect(hits).toEqual([]);
+        expect(remaining()).toEqual([]);
+      });
+
+      it('takes the oldest file first', async () => {
+        const now = Date.now();
+        spoolFile('a.json', notice('newest'), now);
+        spoolFile('b.json', notice('oldest'), now - 3000);
+        spoolFile('c.json', notice('middle'), now - 2000);
+        await drain(keyed());
+        expect(rows().map((r) => r['text'])).toEqual([
+          'oldest',
+          'middle',
+          'newest'
+        ]);
+      });
+
+      it('reads an unknown level as action', async () => {
+        spoolFile('1-1.json', notice('a', { level: 'loud' }));
+        await drain(keyed());
+        expect(rows()[0]?.['level']).toBe('action');
+      });
+
+      it('does nothing without a notify.sh in the queue home', async () => {
+        rmSync(join(queueHome, 'notify.sh'));
+        spoolFile('1-1.json', notice('a'));
+        const out = await drain(keyed());
+        expect(out.stdout).toBe('rc=0');
+        expect(hits).toEqual([]);
+        expect(remaining()).toEqual(['1-1.json']);
+      });
+    });
+
+    describe('without the key', () => {
+      const dial = (level: string) =>
+        writeFileSync(join(queueHome, 'notify-level'), level);
+
+      it('inserts nothing, posts what the dial lets through and removes it', async () => {
+        dial('action');
+        spoolFile('1-1.json', notice('act'), Date.now() - 2000);
+        spoolFile(
+          '2-2.json',
+          notice('urg', { level: 'urgent' }),
+          Date.now() - 1000
+        );
+        await drain(unkeyed());
+        expect(hits).toEqual([]);
+        expect(slackPosts()).toEqual(['act', ':rotating_light: urg']);
+        expect(remaining()).toEqual([]);
+        expect(existsSync(join(queueHome, 'notices-drained-at'))).toBe(false);
+      });
+
+      it('removes a file the dial holds without posting it', async () => {
+        dial('urgent');
+        spoolFile('1-1.json', notice('act'));
+        spoolFile('2-2.json', notice('info', { level: 'info' }));
+        await drain(unkeyed());
+        expect(slackPosts()).toEqual([]);
+        expect(remaining()).toEqual([]);
+      });
+
+      it('keeps a file whose post failed', async () => {
+        dial('all');
+        spoolFile('1-1.json', notice('act'));
+        await drain(unkeyed(), 'cat >/dev/null; false');
+        expect(remaining()).toEqual(['1-1.json']);
+      });
+
+      it('removes a file the dial lets through when there is no webhook', async () => {
+        dial('all');
+        spoolFile('1-1.json', notice('act'));
+        await drain({});
+        expect(slackPosts()).toEqual([]);
+        expect(remaining()).toEqual([]);
+      });
+    });
+
+    describe('the lock', () => {
+      it('makes a second drain a no-op while the directory is there', async () => {
+        mkdirSync(join(queueHome, 'notices-drain.lock'));
+        spoolFile('1-1.json', notice('a'));
+        const out = await drain(keyed());
+        expect(out.stdout).toBe('rc=0');
+        expect(hits).toEqual([]);
+        expect(remaining()).toEqual(['1-1.json']);
+        expect(existsSync(join(queueHome, 'notices-drain.lock'))).toBe(true);
+        expect(existsSync(join(queueHome, 'notices-drained-at'))).toBe(false);
+      });
     });
   });
 
