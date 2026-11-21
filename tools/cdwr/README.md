@@ -516,6 +516,18 @@ the new value, compared by sha256. A key set in the NUC's `.env` wins over the v
 token stays. `--dry-run` lists every token it would revoke, by id, name and expiry. A live token the plan did not show is left alone and fails the run, so a rerun's plan lists it. A run that stops part way leaves a
 working token in the vault; run it again to finish, and it revokes the strays.
 
+`cdwr agent rotate infisical <platform|desk> --host agent-host` rotates the client secret of the
+platform or desk identity, `PLATFORM_INFISICAL_CLIENT_SECRET` or `DESK_INFISICAL_CLIENT_SECRET` in the
+same folder; the client id stays. The plan logs in with the current secret, which names the identity
+and the secret's own id (`--identity-id` when that secret no longer logs in), and lists the
+identity's secrets through the API with your own `infisical login`. The new secret is created there
+(described `cdwr: <KEY>`, with no expiry, as the current ones), or, with `--paste` or when the API refuses, pasted into a
+hidden prompt from the Infisical UI. It is proven with a login before it is written, and the run
+holds the host deploy lock and checks the container's value by sha256, as `rotate fly` does. Only
+then the old secret and any earlier run's `cdwr: <KEY>` leftover are revoked; other secrets on the
+identity are listed and left alone. Universal auth keeps several secrets live at once, so a run that
+stops part way leaves a working secret in the vault.
+
 The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so
 the claude runs reach Linear without holding the token. On a Mac nothing changes: the
 `headersHelper` stays.
