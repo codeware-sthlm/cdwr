@@ -383,11 +383,20 @@ export default defineCommand({
       );
     }
 
+    // Without the vault's key there is nothing to prove the container reads
+    // from the vault, so nothing changes until it is there
     const current = values[SUPABASE_KEY];
-    const oldHash = current ? keyHash(current) : undefined;
+    if (!current) {
+      throw new CliError(
+        `${SUPABASE_KEY} is not in agent-host ${VAULT.path}`,
+        EXIT.failed,
+        "Write the container's current key there and restart it first, so the run can check the container reads it from the vault"
+      );
+    }
+    const oldHash = keyHash(current);
     const local = ctx.env[SUPABASE_KEY];
     const spare = local ? [keyHash(local)] : [];
-    const old = oldHash ? keys.find((k) => k.hash === oldHash) : undefined;
+    const old = keys.find((k) => k.hash === oldHash);
     const { remove, others } = toDelete(keys, {
       keep: '',
       oldHash,
@@ -396,9 +405,8 @@ export default defineCommand({
     });
 
     const replaced = old && remove.some((k) => k.id === old.id);
-    const oldNote = !current
-      ? `${SUPABASE_KEY} is not in the vault yet; nothing old to delete`
-      : current.startsWith('eyJ') || (old && old.type !== 'secret')
+    const oldNote =
+      current.startsWith('eyJ') || (old && old.type !== 'secret')
         ? 'The vault holds a legacy JWT key, which this command does not delete'
         : !old
           ? `The vault's ${SUPABASE_KEY} matches no key of the project`
@@ -423,18 +431,16 @@ export default defineCommand({
         'Check that the container runs'
       );
     }
-    if (current) {
-      const elsewhere = await ctx.ui.task(
-        `Checking ${CONTAINER} reads ${SUPABASE_KEY} from the vault`,
-        () => containerProblem(host, SUPABASE_KEY, sha256Hex(current), 'key')
+    const elsewhere = await ctx.ui.task(
+      `Checking ${CONTAINER} reads ${SUPABASE_KEY} from the vault`,
+      () => containerProblem(host, SUPABASE_KEY, sha256Hex(current), 'key')
+    );
+    if (elsewhere) {
+      throw new CliError(
+        `Before anything changed: ${elsewhere}`,
+        EXIT.failed,
+        `The rotation would never reach the container. When an earlier run stopped before its restart, restart first: ssh ${host} docker restart ${CONTAINER}`
       );
-      if (elsewhere) {
-        throw new CliError(
-          `Before anything changed: ${elsewhere}`,
-          EXIT.failed,
-          `The rotation would never reach the container. When an earlier run stopped before its restart, restart first: ssh ${host} docker restart ${CONTAINER}`
-        );
-      }
     }
 
     const data: Planned = {
