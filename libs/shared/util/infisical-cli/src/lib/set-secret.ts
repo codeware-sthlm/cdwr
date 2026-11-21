@@ -17,7 +17,7 @@ export interface SecretTarget {
   projectId?: string;
 }
 
-const PROBE_KEY = 'ROTATION_WRITE_CHECK';
+const PROBE_KEY_PREFIX = 'ROTATION_WRITE_CHECK_';
 
 /**
  * Writes a shared secret, handing the CLI a file so the value never reaches
@@ -84,29 +84,39 @@ export const deleteSecret = (
   }
 };
 
-/** Proves Infisical takes a write at the path: sets a throwaway key, reads it back, removes it */
+/** Proves Infisical takes a write at the path: sets a unique throwaway key, reads it back, removes it */
 export const probeWrite = (
   { path, environment, projectId }: Omit<SecretTarget, 'key'>,
   run: InfisicalRunner = runInfisical
 ): void => {
-  const target = { path, environment, key: PROBE_KEY, projectId };
+  const key = `${PROBE_KEY_PREFIX}${randomBytes(8).toString('hex').toUpperCase()}`;
+  const target = { path, environment, key, projectId };
   const value = randomBytes(16).toString('hex');
+  let failure: unknown;
   try {
     setSecretFromFile({ ...target, value }, run);
     const found = readKeyLengths(path, environment, run, projectId).find(
-      (entry) => entry.key === PROBE_KEY
+      (entry) => entry.key === key
     );
     if (found?.length !== value.length) throw new Error('read back differs');
   } catch (error) {
+    failure = error;
+  }
+  try {
+    deleteSecret(target, run);
+  } catch (error) {
     if (error instanceof InfisicalMissingError) throw error;
+    // The write check's own failure stands
+    if (!failure) {
+      throw new Error(
+        `Infisical took the write at ${path} (${environment}), but the check key ${key} could not be removed; delete it by hand`
+      );
+    }
+  }
+  if (failure) {
+    if (failure instanceof InfisicalMissingError) throw failure;
     throw new Error(
       `Infisical will not accept writes at ${path} (${environment})`
     );
-  } finally {
-    try {
-      deleteSecret(target, run);
-    } catch {
-      // The write check's own result stands
-    }
   }
 };
