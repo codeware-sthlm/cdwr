@@ -120,7 +120,11 @@ const expiryText = (
   if (expiry.source === 'none') return 'none';
   if (expiry.source === 'unknown') return 'unknown';
   if (!Array.isArray(tokens)) return 'unknown (fly read failed)';
-  const found = tokenExpiryByName(tokens, expiry.tokenName, now);
+  const named = tokenExpiryByName(tokens, expiry.tokenName, now);
+  const found =
+    named.state === 'missing' && expiry.legacyName
+      ? tokenExpiryByName(tokens, expiry.legacyName, now)
+      : named;
   switch (found.state) {
     case 'found':
       return found.expiresAt.slice(0, 10);

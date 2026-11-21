@@ -344,6 +344,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/supabase-migrate').then((m) => m.default)
   },
   {
+    path: ['agent', 'rotate', 'fly'],
+    summary: 'New Fly tokens for the agent host, the old ones revoked',
+    danger: 'destructive',
+    load: () => import('./agent/rotate-fly').then((m) => m.default)
+  },
+  {
     path: ['agent', 'notify'],
     summary: 'Which notices the queue sends: all, or only what needs you',
     danger: 'mutate',
