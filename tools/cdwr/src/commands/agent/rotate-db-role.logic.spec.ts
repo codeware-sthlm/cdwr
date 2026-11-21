@@ -3,6 +3,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { CATALOG } from '../secrets/catalog';
 
 import {
+  CMS_ADMIN_SECRET,
   DB_ROLE_TARGETS,
   adminRightsSql,
   alterRoleSql,
@@ -72,6 +73,16 @@ describe('projectRefOf and sameServer', () => {
 
   it('pairs a direct admin url with a pooler target of the same project', () => {
     expect(sameServer(DIRECT, POOLER)).toEqual({ ok: true });
+  });
+
+  it("pairs the cms's IPv4 pooler admin url with a session pooler target", () => {
+    // The direct host is IPv6 only, so the default must stay the pooler url
+    expect(CMS_ADMIN_SECRET.key).toBe('DATABASE_URL');
+    const admin =
+      'postgresql://postgres.abcdefghijklmnop:admin-pw@aws-0-eu-central-1.pooler.supabase.com:6543/postgres';
+    const target = POOLER.replace(':6543/', ':5432/');
+    expect(roleOf(admin)).toBe('postgres');
+    expect(sameServer(admin, target)).toEqual({ ok: true });
   });
 
   it('refuses another project, or a ref on one side only', () => {
