@@ -5,6 +5,7 @@ import { CATALOG, type CatalogEntry } from '../secrets/catalog';
 
 import type { DbRoleKey } from './rotate-db-role.logic';
 import type { SecretKey } from './rotate-infisical.logic';
+import type { SupabaseKey } from './rotate-supabase.logic';
 
 /** The Fly tokens the agent host holds and the scope each is created with */
 export const FLY_ROTATIONS = {
@@ -126,7 +127,7 @@ export const sha256Hex = (value: string): string =>
 export const NOT_READY = 3;
 
 /** The agent-host keys whose value the container's vault file is checked for */
-export type VaultKey = FlyKey | SecretKey | DbRoleKey;
+export type VaultKey = FlyKey | SecretKey | DbRoleKey | SupabaseKey;
 
 /** The script that prints the sha256 of the key's value; exits NOT_READY without the file or the key's line */
 export const vaultLineScript = (
