@@ -13,10 +13,11 @@ export type SessionState =
 /** One cheap read: listing the root folders needs a session and returns no value */
 export const probeSession = (
   environment: string,
-  run: InfisicalRunner = runInfisical
+  run: InfisicalRunner = runInfisical,
+  projectId?: string
 ): SessionState => {
   try {
-    listFolders('/', environment, run);
+    listFolders('/', environment, run, projectId);
     return { state: 'ok' };
   } catch (error) {
     if (error instanceof InfisicalMissingError) {

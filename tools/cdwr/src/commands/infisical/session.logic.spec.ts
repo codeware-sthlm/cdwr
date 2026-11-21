@@ -10,6 +10,12 @@ describe('probeSession', () => {
     expect(run.mock.calls[0]?.[0]).toContain('--path=/');
   });
 
+  it('targets the project when given', () => {
+    const run = vi.fn().mockReturnValue('[]');
+    probeSession('production', run, 'proj-1');
+    expect(run.mock.calls[0]?.[0]).toContain('--projectId=proj-1');
+  });
+
   it('reports a missing CLI', () => {
     const run = vi.fn(() => {
       throw new InfisicalMissingError();
