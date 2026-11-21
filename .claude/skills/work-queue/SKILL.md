@@ -320,8 +320,8 @@ to **What to take next**.
    from `review-diff.sh` (step 5): `Merge: merging on its own: no hold path`, or
    `Merge: held: <path> matches <glob> (<reason>)`. When the report has a line
    `**Ask me before merging**`, write `Merge: held: Ask me before merging` whatever the script
-   printed, and when the apply list has a `secret-*` item, `Merge: held: the Apply list writes a
-secret`. Then what the Copilot round
+   printed, and when the apply list has a `secret-*` item that isn't struck through,
+   `Merge: held: the Apply list writes a secret`. Then what the Copilot round
    fixed and dismissed, what the Fly Deployment run did for the labelled PR (its jobs in
    `gh pr checks <n>`, where every deploy job skipped means no deployable app, and the
    preview urls from the workflow's PR comment in `gh pr view <n> --comments`), what the
