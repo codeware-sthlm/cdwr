@@ -14,8 +14,8 @@ import type { CoverageJsonContent } from './src/fixtures';
  *
  * Output is written to `.coverage/` as HTML (v8) + lcov.
  */
-module.exports = async function () {
-  const rawDir = join(__dirname, '.coverage', 'raw');
+export default async function () {
+  const rawDir = join(import.meta.dirname, '.coverage', 'raw');
 
   if (!existsSync(rawDir) || readdirSync(rawDir).length === 0) {
     console.log('[coverage] No raw coverage data found, skipping report.');
@@ -26,7 +26,7 @@ module.exports = async function () {
 
   const coverageReport = MCR({
     name: 'CMS E2E Coverage',
-    outputDir: join(__dirname, '.coverage'),
+    outputDir: join(import.meta.dirname, '.coverage'),
     reports: ['v8', 'lcov', 'console-summary'],
     entryFilter: (entry: { url: string }) => {
       // Browser coverage uses http:// URLs — keep only app source files
@@ -63,4 +63,4 @@ module.exports = async function () {
   }
 
   await coverageReport.generate();
-};
+}
