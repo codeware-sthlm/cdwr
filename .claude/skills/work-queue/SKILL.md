@@ -387,6 +387,9 @@ to **What to take next**.
    is an alias for `rg`: write `rg` with its own flags (`rg -i 'a|b'`, never `grep -iE`),
    and the same for any other tool that an alias would reinterpret.
 
+   A hand-off for the NUC is one line: `pnpm cdwr agent exec --host agent-host -- <command> --yes`.
+   Never a shell inside the container.
+
    **A production step the vocabulary covers goes in the apply list, never in the checklist.**
    After the hint, a line `Apply list:` followed by one `- [ ] <kind> <args>` per line, nothing
    else in between. After the merge the scheduler applies the items in order with its own

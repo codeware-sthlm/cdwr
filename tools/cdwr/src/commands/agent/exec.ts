@@ -7,7 +7,7 @@ import { lookup } from '../../cli/registry';
 import { runInteractive, shellQuote } from '../../services/shell';
 import { ENTRIES, GROUPS } from '../index';
 
-import { REMOTE_CONTAINER, remoteCdwr } from './agent.logic';
+import { GH_TOKEN_FAILED, REMOTE_CONTAINER, remoteCdwr } from './agent.logic';
 import { hostInput } from './remote';
 
 /** ssh exits 255 when it never reached the host, whatever the remote would have said */
@@ -16,10 +16,18 @@ const SSH_FAILED = 255;
 /**
  * ssh's arguments for `cdwr <args>` in the agent container. ssh joins its arguments
  * into one line for the remote shell, so each argument is quoted: it reaches `cdwr`
- * as given and never runs as a command of its own.
+ * as given and never runs as a command of its own. With `ghToken` the line goes
+ * through the image's wrapper that mints the GitHub app's token for that command.
  */
-export const execArgv = (host: string, args: string[]): string[] =>
-  remoteCdwr(host, args.map(shellQuote));
+export const execArgv = (
+  host: string,
+  args: string[],
+  ghToken = false
+): string[] => remoteCdwr(host, args.map(shellQuote), { ghToken });
+
+/** Whether the remote command runs gh, which then gets the app's token */
+export const needsGh = (command?: AnyCommand): boolean =>
+  command?.needs?.includes('gh') ?? false;
 
 const commandOf = (args: string[]) => `cdwr ${args.join(' ')}`;
 
@@ -72,7 +80,7 @@ const remoteCommand = async (
 export default defineCommand({
   summary: 'Run a cdwr command in the agent container, with its vault secrets',
   description:
-    "Runs `cdwr <args>` in the agent container on --host over ssh, through the entrypoint's secrets.sh, so the command gets the same vault keys as the scheduler loop; a plain `docker exec` gets none. Only cdwr runs, never another command. The output streams here and the remote's exit code is this command's. The remote has no terminal and never prompts: pass its inputs as flags, --yes included. Global flags before -- apply here (-d prints the ssh line and stops); after it they go to the remote command.",
+    "Runs `cdwr <args>` in the agent container on --host over ssh, through the entrypoint's secrets.sh, so the command gets the same vault keys as the scheduler loop; a plain `docker exec` gets none. A command that runs gh (it declares `needs: gh`, such as `agent worktree prune`) also gets GH_TOKEN, the GitHub app's installation token on cdwr, minted for that one process; a failed mint is the error. Only cdwr runs, never another command. The output streams here and the remote's exit code is this command's. The remote has no terminal and never prompts: pass its inputs as flags, --yes included. Global flags before -- apply here (-d prints the ssh line and stops); after it they go to the remote command.",
   danger: 'mutate',
   confirm: 'never',
   rest: true,
@@ -103,7 +111,9 @@ export default defineCommand({
         'Put --json after -- to have the remote command answer in JSON'
       );
     }
-    const shown = shownArgs(args, await remoteCommand(args));
+    const command = await remoteCommand(args);
+    const shown = shownArgs(args, command);
+    const ghToken = needsGh(command);
     if (!isMainThread) {
       throw new CliError(
         'The remote command needs this terminal',
@@ -115,17 +125,25 @@ export default defineCommand({
       steps: [
         {
           label: `Run ${commandOf(shown)} in ${REMOTE_CONTAINER} on ${host}`,
-          detail: `ssh ${execArgv(host, shown).join(' ')}`
+          detail: `ssh ${execArgv(host, shown, ghToken).join(' ')}`
         }
       ],
-      data: { host, shown, argv: execArgv(host, args) }
+      data: { host, shown, ghToken, argv: execArgv(host, args, ghToken) }
     };
   },
 
-  async apply(_ctx, { host, shown, argv }) {
+  async apply(_ctx, { host, shown, ghToken, argv }) {
     const command = commandOf(shown);
     const code = await runInteractive('ssh', argv);
     if (code === 0) return { summary: `${command} on ${host} finished` };
+    // Only the wrapper's exit counts: without it a 75 is the command's own
+    if (ghToken && code === GH_TOKEN_FAILED) {
+      throw new CliError(
+        `github app: no token for ${command} on ${host}`,
+        code,
+        'The reason is printed above. Check the AGENT_GITHUB_APP_* keys in the vault and /run/agent/app.env'
+      );
+    }
     if (code === SSH_FAILED) {
       throw new CliError(
         `Could not run ${command} over ssh on ${host}`,

@@ -62,7 +62,7 @@ export default defineCommand({
     'Infisical decides what the next deploy sets; the Fly secret decides what the running app does right now. Both are kept in step.',
   danger: 'mutate',
   confirm: 'always',
-  needs: ['fly', 'infisical'],
+  needs: ['fly', 'infisical', 'gh'],
   inputs: {
     action: input.enum(['open', 'close'] as const, {
       prompt: 'Open or close the site?',

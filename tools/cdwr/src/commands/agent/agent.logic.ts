@@ -680,8 +680,18 @@ export const REMOTE_CHECKOUT = '/work/codeware-agent';
 /** Fetches the vault secrets, exports them and runs the command it is given */
 export const REMOTE_SECRETS = '/opt/agent-host/secrets.sh';
 
-/** ssh's arguments for `cdwr <args>` in the agent container on `host`, run in its checkout through `secrets.sh` */
-export const remoteCdwr = (host: string, args: string[]): string[] => [
+/** The image's wrapper that mints the GitHub app's token for one command */
+export const REMOTE_GH_TOKEN = '/opt/agent-host/with-gh-token.sh';
+
+/** Its exit code when the token could not be minted, before the command started */
+export const GH_TOKEN_FAILED = 75;
+
+/** ssh's arguments for `cdwr <args>` in the agent container on `host`, run in its checkout through `secrets.sh`, and `with-gh-token.sh` with `ghToken` */
+export const remoteCdwr = (
+  host: string,
+  args: string[],
+  { ghToken = false }: { ghToken?: boolean } = {}
+): string[] => [
   host,
   'docker',
   'exec',
@@ -689,6 +699,7 @@ export const remoteCdwr = (host: string, args: string[]): string[] => [
   REMOTE_CHECKOUT,
   REMOTE_CONTAINER,
   REMOTE_SECRETS,
+  ...(ghToken ? [REMOTE_GH_TOKEN] : []),
   'node',
   'tools/cdwr/bin/cdwr.mjs',
   ...args

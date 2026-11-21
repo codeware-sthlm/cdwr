@@ -27,6 +27,13 @@ describe('agent-host image', () => {
     expect(ignore).toContain(`!/tools/cdwr/agent-queue/${file}`);
   });
 
+  it('ships the GitHub token wrapper beside secrets.sh', () => {
+    expect(dockerfile).toMatch(
+      /apps\/agent-host\/with-gh-token\.sh[\s\S]*?\/opt\/agent-host\//
+    );
+    expect(ignore).toContain('!/apps/agent-host/with-gh-token.sh');
+  });
+
   it('ships the Linear proxy and tells the queue scripts its port', () => {
     expect(dockerfile).toContain('apps/agent-host/linear-mcp-proxy.mjs');
     expect(dockerfile).toMatch(

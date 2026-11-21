@@ -761,6 +761,12 @@ that runs a `cdwr` command on the NUC this way, never as a raw `docker exec`:
 cdwr agent exec --host agent-host -- agent usage-record --days 30 --kind day --dry-run
 ```
 
+A command that declares `needs: gh` (`agent worktree prune`, `agent deploy`, `agent install`,
+`agent desk-install`, `fly deploy`, `tenant provision`) also gets `GH_TOKEN`. The `gh` in the
+container has no login, so `exec` runs it through `/opt/agent-host/with-gh-token.sh`, which mints the
+GitHub app's installation token (on cdwr only) and hands it to that one process. A failed mint is the
+error: `exec` exits 75 with `github app: no token for …`, and the command never starts.
+
 An attended `/work-queue` on the Mac stays visible to the NUC through its session file, which the
 Mac's session hook copies into the container at every change and at least once a minute. That way
 the NUC launches no implementing session while one is alive on the Mac. The hook runs from the

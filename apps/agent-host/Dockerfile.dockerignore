@@ -17,6 +17,7 @@
 !/apps/agent-host/secrets.sh
 !/apps/agent-host/entrypoint.sh
 !/apps/agent-host/git-credential-app.sh
+!/apps/agent-host/with-gh-token.sh
 !/apps/agent-host/linear-mcp-proxy.mjs
 !/apps/agent-host/session-launch.sh
 !/apps/agent-host/session-stop.sh

@@ -1682,6 +1682,21 @@ describe('remoteCdwr', () => {
   });
 });
 
+describe('remoteCdwr with ghToken', () => {
+  it('runs the wrapper right after secrets.sh', () => {
+    expect(
+      remoteCdwr('agent-host', ['agent', 'worktree', 'prune'], {
+        ghToken: true
+      }).slice(6, 10)
+    ).toEqual([
+      '/opt/agent-host/secrets.sh',
+      '/opt/agent-host/with-gh-token.sh',
+      'node',
+      'tools/cdwr/bin/cdwr.mjs'
+    ]);
+  });
+});
+
 describe('parseLoopPid', () => {
   it.each([
     ['123\n', 123],
