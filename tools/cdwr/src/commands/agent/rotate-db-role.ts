@@ -16,14 +16,20 @@ import {
   BACKUP_LOCK,
   CONTAINER,
   DEFAULT_WAIT_MINUTES,
+  PLATFORM_LOCK,
   assertHost,
   dropLockDir,
+  lockMarked,
+  lockOld,
+  markLockDir,
+  pathExists,
   takeLockDir
 } from './deploy.logic';
 import {
   containerProblem,
   lockHost,
   restartContainer,
+  ssh,
   succeeds,
   whileIdle
 } from './host';
@@ -56,8 +62,9 @@ const VAULT = {
 } as const;
 
 const PSQL_TIMEOUT_MS = 30_000;
-const LOGIN_TRIES = 5;
-const LOGIN_PAUSE_MS = 3_000;
+/** A pooler can take a while to take the new password */
+const LOGIN_TRIES = 12;
+const LOGIN_PAUSE_MS = 5_000;
 
 /** Removes the secrets from text bound for the terminal */
 const scrub = (text: string, secrets: string[]): string =>
@@ -130,37 +137,79 @@ const RERUN =
   "so the agent container's url fails until a run completes. Run this again: it sets a fresh password";
 
 /**
- * Holds the nightly backup's own lock directory around the work: run.sh starts
- * a backup even while the queue is paused, and only when it can create that
- * directory, so none starts on a dead url or dies in the restart. run.sh
- * clears one left behind after 20 minutes.
+ * The run.sh lock that keeps a step off the target's url between the alter and
+ * the restart: the platform step and the nightly backup run even while the
+ * queue is paused. `stale` is run.sh's own takeover age.
  */
-async function withBackupLock<T>(
+const QUEUE_LOCKS: Partial<
+  Record<DbRoleTarget, { path: string; stale: number; what: string }>
+> = {
+  platform: { path: PLATFORM_LOCK, stale: 5, what: 'The platform step' },
+  backup: { path: BACKUP_LOCK, stale: 20, what: 'The nightly backup' }
+};
+
+type Taken = 'taken' | 'busy';
+
+/** Takes the lock, or takes back one an earlier run of this command left, or one run.sh would take over too */
+async function takeQueueLock(
   host: string,
-  work: () => Promise<T>
-): Promise<T> {
-  if (!(await succeeds(takeLockDir(host, BACKUP_LOCK)))) {
-    throw new CliError(
-      'The nightly backup is running; nothing was changed',
-      EXIT.failed,
-      `Try again once it is done (a lock left behind clears after 20 minutes): ${BACKUP_LOCK}`
-    );
-  }
-  try {
-    return await work();
-  } finally {
-    await succeeds(dropLockDir(host, BACKUP_LOCK)).catch(() => false);
-  }
+  lock: { path: string; stale: number }
+): Promise<Taken> {
+  const take = async (): Promise<Taken> => {
+    if (!(await succeeds(takeLockDir(host, lock.path)))) return 'busy';
+    await ssh(markLockDir(host, lock.path));
+    return 'taken';
+  };
+  if ((await take()) === 'taken') return 'taken';
+  const ours = await succeeds(lockMarked(host, lock.path));
+  const old =
+    !ours &&
+    (await ssh(lockOld(host, lock.path, lock.stale))).stdout.trim() !== '';
+  if (!ours && !old) return 'busy';
+  await ssh(dropLockDir(host, lock.path));
+  return take();
 }
+
+/** Whether a step holds the lock now, so the run can stop before it pauses anything */
+async function lockBusy(
+  host: string,
+  lock: { path: string; stale: number }
+): Promise<boolean> {
+  if (!(await succeeds(pathExists(host, lock.path)))) return false;
+  if (await succeeds(lockMarked(host, lock.path))) return false;
+  return (await ssh(lockOld(host, lock.path, lock.stale))).stdout.trim() === '';
+}
+
+const LOCK_POLL_MS = 10_000;
+const LOCK_POLL_TRIES = 30;
 
 /** Everything from the alter to the restart, with the queue idle; a failure says what still works */
 async function alterWriteRestart(ctx: Context, data: Data) {
-  const { host, key, role, url, adminUrl } = data;
+  const { host, target, key, role, url, adminUrl } = data;
+  const lock = QUEUE_LOCKS[target];
+  if (lock) {
+    // Its runs are short: wait one out rather than give up
+    let taken: Taken = 'busy';
+    for (let i = 0; taken === 'busy' && i < LOCK_POLL_TRIES; i++) {
+      if (i > 0) await sleep(LOCK_POLL_MS);
+      taken = await takeQueueLock(host, lock);
+    }
+    if (taken === 'busy') {
+      throw new CliError(
+        `${lock.what} kept ${lock.path} for ${(LOCK_POLL_TRIES * LOCK_POLL_MS) / 60_000} minutes; nothing was changed`,
+        EXIT.failed,
+        'Try again later'
+      );
+    }
+  }
   const password = generatePassword();
   const newUrl = withPassword(url, password);
-  const secrets = [password, newUrl];
+  const secrets = [password, newUrl, url];
+  const held = lock
+    ? ` ${lock.path} stays held so no ${lock.what.toLowerCase()} runs on the dead url; run.sh clears it after ${lock.stale} minutes, and a rerun takes it back`
+    : '';
   const fail = (error: unknown, hint: string) =>
-    new CliError(scrub(messageOf(error), secrets), EXIT.failed, hint);
+    new CliError(scrub(messageOf(error), secrets), EXIT.failed, hint + held);
 
   try {
     await ctx.ui.task(`Setting a new password on "${role}"`, () =>
@@ -168,13 +217,11 @@ async function alterWriteRestart(ctx: Context, data: Data) {
     );
   } catch (error) {
     // A timeout or a dropped connection can follow a committed alter
-    throw fail(error, `The old password may already be dead, ${RERUN}`);
+    throw fail(error, `The old password may already be dead, ${RERUN}.`);
   }
 
+  // The vault comes first: once the role is altered only the new url works
   try {
-    await ctx.ui.task(`Logging in as "${role}" with the new url`, () =>
-      loginAs(newUrl, role, secrets)
-    );
     await ctx.ui.task(
       `Writing ${key} to agent-host ${VAULT.path}`,
       async () => {
@@ -186,7 +233,7 @@ async function alterWriteRestart(ctx: Context, data: Data) {
       }
     );
   } catch (error) {
-    throw fail(error, `The old password no longer works, ${RERUN}`);
+    throw fail(error, `The old password no longer works, ${RERUN}.`);
   }
 
   try {
@@ -194,9 +241,22 @@ async function alterWriteRestart(ctx: Context, data: Data) {
   } catch (error) {
     throw fail(
       error,
-      `The vault holds the new, working url; restart the container to finish: ssh ${host} docker restart ${CONTAINER}`
+      `The vault holds the new url; restart the container to finish: ssh ${host} docker restart ${CONTAINER}.`
     );
   }
+
+  try {
+    await ctx.ui.task(`Logging in as "${role}" with the new url`, () =>
+      loginAs(newUrl, role, secrets)
+    );
+  } catch (error) {
+    throw fail(
+      error,
+      `The vault and the container hold the new url, but the role did not take it within ${(LOGIN_TRIES * LOGIN_PAUSE_MS) / 1000} s. A pooler may still be catching up: check \`cdwr agent status\` in a few minutes, or ${RERUN}.`
+    );
+  }
+
+  if (lock) await succeeds(dropLockDir(host, lock.path)).catch(() => false);
   return sha256Hex(newUrl);
 }
 
@@ -353,6 +413,20 @@ export default defineCommand({
       );
     }
 
+    // The old url dies at the alter, so a container that reads it from
+    // elsewhere than the vault must be found before anything changes
+    const elsewhere = await ctx.ui.task(
+      `Checking ${CONTAINER} reads ${key} from the vault`,
+      () => containerProblem(host, key, sha256Hex(url), 'vault url')
+    );
+    if (elsewhere) {
+      throw new CliError(
+        `Before anything changed: ${elsewhere}`,
+        EXIT.failed,
+        `The rotation would leave the container on a dead url. When an earlier run stopped before its restart, restart first: ssh ${host} docker restart ${CONTAINER}`
+      );
+    }
+
     return {
       steps: [
         {
@@ -367,11 +441,18 @@ export default defineCommand({
           label: `Pause the queue on ${host} and wait for it to be idle`,
           detail: `up to ${wait} minutes`
         },
+        ...(QUEUE_LOCKS[target]
+          ? [
+              {
+                label: `Hold ${QUEUE_LOCKS[target].path} until the role logs in`,
+                detail: `${QUEUE_LOCKS[target].what.toLowerCase()} does not run on a dead url`
+              }
+            ]
+          : []),
         {
           label: `Set a new password on "${role}" as "${admin}"`,
           detail: `${server}; a SCRAM verifier on psql's stdin. The old url stops working here`
         },
-        { label: `Log in as "${role}" with the new url` },
         {
           label: `Write the new url as ${key}, read it back`,
           detail: 'only the password changes'
@@ -379,6 +460,10 @@ export default defineCommand({
         {
           label: `Restart ${CONTAINER} on ${host}`,
           detail: 'then resume the queue'
+        },
+        {
+          label: `Log in as "${role}" with the new url`,
+          detail: `retried for up to ${(LOGIN_TRIES * LOGIN_PAUSE_MS) / 1000} s while a pooler catches up`
         },
         {
           label: `Check the container's ${VAULT_FILE} holds the new url`,
@@ -407,8 +492,16 @@ export default defineCommand({
         `Checking agent-host ${VAULT.path} accepts writes`,
         async () => probeWrite(VAULT)
       );
+      const lock = QUEUE_LOCKS[target];
+      if (target === 'backup' && lock && (await lockBusy(host, lock))) {
+        throw new CliError(
+          `${lock.what} is running; nothing was changed`,
+          EXIT.failed,
+          'Try again once it is done'
+        );
+      }
       const { value: hash, resumed } = await whileIdle(ctx, host, wait, () =>
-        withBackupLock(host, () => alterWriteRestart(ctx, data))
+        alterWriteRestart(ctx, data)
       );
       const problem = await containerProblem(host, key, hash, 'url');
       if (problem || !resumed) {

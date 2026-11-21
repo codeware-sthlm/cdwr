@@ -29,6 +29,10 @@ export const RUN_LOCK = `${QUEUE_DIR}/lock`;
 export const IMPLEMENT_LOCK = `${QUEUE_DIR}/implement.lock`;
 /** Held by the nightly backup, without a pid; run.sh clears one older than 20 minutes */
 export const BACKUP_LOCK = `${QUEUE_DIR}/backup.lock`;
+/** Held by the platform step, without a pid; run.sh clears one older than 5 minutes */
+export const PLATFORM_LOCK = `${QUEUE_DIR}/platform.lock`;
+/** The file a rotation leaves in a lock it holds, so its own rerun can take the lock back */
+export const ROTATION_MARK = 'rotation';
 /** The repo's compose file, relative to the workspace root */
 export const COMPOSE_SOURCE = 'apps/agent-host/compose.yaml';
 export const IMAGE_WORKFLOW = 'agent-host-image.yml';
@@ -193,9 +197,25 @@ export const unpause = (host: string): Remote =>
 export const takeLockDir = (host: string, path: string): Remote =>
   ssh(host, 'docker', 'exec', CONTAINER, 'mkdir', path);
 
-/** Removes a lock directory this side took */
+/** Marks a lock directory as a rotation's */
+export const markLockDir = (host: string, path: string): Remote =>
+  ssh(host, 'docker', 'exec', CONTAINER, 'touch', `${path}/${ROTATION_MARK}`);
+
+/** Exits 0 when a rotation left its mark in the lock directory */
+export const lockMarked = (host: string, path: string): Remote =>
+  ssh(
+    host,
+    'docker',
+    'exec',
+    CONTAINER,
+    'test',
+    '-e',
+    `${path}/${ROTATION_MARK}`
+  );
+
+/** Removes a lock directory, its mark included */
 export const dropLockDir = (host: string, path: string): Remote =>
-  ssh(host, 'docker', 'exec', CONTAINER, 'rmdir', path);
+  ssh(host, 'docker', 'exec', CONTAINER, 'rm', '-rf', path);
 
 /** Exits 0 when the path exists in the container, 1 when it is absent */
 export const pathExists = (host: string, path: string): Remote =>
@@ -267,8 +287,8 @@ export const pidAlive = (host: string, pid: string): Remote => {
   return ssh(host, 'docker', 'exec', CONTAINER, 'test', '-d', `/proc/${pid}`);
 };
 
-/** Prints the lock directory when it is more than a minute old, nothing otherwise */
-export const lockOld = (host: string, lock: string): Remote =>
+/** Prints the lock directory when it is more than `minutes` old, nothing otherwise */
+export const lockOld = (host: string, lock: string, minutes = 1): Remote =>
   ssh(
     host,
     'docker',
@@ -279,7 +299,7 @@ export const lockOld = (host: string, lock: string): Remote =>
     '-maxdepth',
     '0',
     '-mmin',
-    '+1'
+    `+${minutes}`
   );
 
 export const isPid = (value: string): boolean => /^[0-9]+$/.test(value);
