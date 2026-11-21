@@ -542,6 +542,23 @@ in with the new url, rewrites only the password in the vault's url, reads it bac
 its `/run/agent/vault.env` by sha256. A run that stops after the alter leaves the container on a dead url; run it again,
 it sets a fresh password.
 
+`cdwr agent rotate supabase --host agent-host` gives the agent host its own secret key in the agent-queue Supabase
+project and rotates `AGENT_SUPABASE_SERVICE_KEY`. Each consumer holds its own key: the NUC a key named for the host
+and the minute (`agent_host_20261121_2240`) and described `cdwr: AGENT_SUPABASE_SERVICE_KEY <host>`, the Mac's `tools/cdwr/.env` the `default`
+secret key, and the edge functions the key the platform injects. Run it on the Mac: the key and its leftovers are
+created and deleted through the Management API with your own `supabase login` (`SUPABASE_ACCESS_TOKEN`, else the
+Keychain item `Supabase CLI`). Keys are matched by the hash the API lists, base64url sha256, never revealed; only the
+create returns a value. The new key is proven with a read, written to the vault and read back by hash, and the container
+restarts with the queue idle under the host deploy lock. The plan first checks the container reads the key from the
+vault, so a key pinned in the NUC's `.env` stops the run before anything changes. After the restart it checks the
+container's value by sha256 and waits for a `host_metrics` row under the container's hostname, newer on the server's
+clock than its newest once the restart is done. Only then the old key and any earlier run's
+leftover are deleted. A key named `default`, the one this checkout's `.env` holds, and the legacy JWT keys are never
+deleted, so the first run deletes nothing. Secret keys coexist, so a run that stops part way leaves a working key in the
+vault. The legacy JWT keys stay enabled: the edge functions still fall back to `SUPABASE_SERVICE_ROLE_KEY` when the
+platform injects no `SUPABASE_SECRET_KEYS`. A `sb_` key goes out in the `apikey` header alone; only a legacy `eyJ…` key is
+also sent as `Authorization: Bearer`.
+
 The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so
 the claude runs reach Linear without holding the token. On a Mac nothing changes: the
 `headersHelper` stays.
