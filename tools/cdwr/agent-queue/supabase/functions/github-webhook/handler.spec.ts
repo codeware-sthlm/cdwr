@@ -406,9 +406,9 @@ describe('createHandler', () => {
     );
     expect(init.headers).toMatchObject({
       apikey: 'service',
-      Authorization: 'Bearer service',
       Prefer: 'resolution=merge-duplicates,return=minimal'
     });
+    expect(init.headers).not.toHaveProperty('Authorization');
     expect(String(init.body)).not.toContain('Secret title');
     expect(JSON.parse(String(init.body))).toEqual({
       subject: 'pr/712',

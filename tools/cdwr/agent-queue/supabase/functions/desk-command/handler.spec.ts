@@ -567,8 +567,8 @@ describe('createHandler', () => {
     expect((read[1].headers as Record<string, string>)['apikey']).toBe(
       'service'
     );
-    expect((read[1].headers as Record<string, string>)['Authorization']).toBe(
-      'Bearer service'
+    expect(read[1].headers as Record<string, string>).not.toHaveProperty(
+      'Authorization'
     );
 
     const [insert] = callsTo(fetch, 'desk_commands');

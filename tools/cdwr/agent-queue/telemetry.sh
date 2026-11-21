@@ -27,6 +27,15 @@
 # The key travels on curl's stdin, never in its arguments, and is never printed. A body and the
 # queue view go through a file or a pipe, never one argument, so a large view can't reach the limit.
 
+# _supabase_key_config: curl's -K - config for the key. A new sb_secret_ or sb_publishable_ key is not a
+# JWT, so it goes in apikey alone; only a legacy JWT key (eyJ…) is also sent as a Bearer token.
+_supabase_key_config() {
+  printf 'header = "apikey: %s"\n' "$AGENT_SUPABASE_SERVICE_KEY"
+  if [[ "$AGENT_SUPABASE_SERVICE_KEY" == eyJ* ]]; then
+    printf 'header = "Authorization: Bearer %s"\n' "$AGENT_SUPABASE_SERVICE_KEY"
+  fi
+}
+
 _supabase_post() {
   local url=$1 prefer=$2 body=$3 strict=${4:-} msg tmp="" rc=0
   local -a data=(-d "$body")
@@ -34,8 +43,7 @@ _supabase_post() {
   if (( ${#body} > 65536 )); then
     tmp="$(mktemp)" && print -rn -- "$body" > "$tmp" && data=(--data-binary "@$tmp")
   fi
-  if ! msg="$(printf 'header = "apikey: %s"\nheader = "Authorization: Bearer %s"\n' \
-      "$AGENT_SUPABASE_SERVICE_KEY" "$AGENT_SUPABASE_SERVICE_KEY" |
+  if ! msg="$(_supabase_key_config |
     curl --max-time 10 -sS -f -K - -X POST \
       -H 'Content-Type: application/json' -H "Prefer: $prefer" \
       "${data[@]}" "$url" 2>&1 >/dev/null)"; then
@@ -52,8 +60,7 @@ _supabase_post() {
 
 _supabase_delete() {
   local url=$1 msg
-  if ! msg="$(printf 'header = "apikey: %s"\nheader = "Authorization: Bearer %s"\n' \
-      "$AGENT_SUPABASE_SERVICE_KEY" "$AGENT_SUPABASE_SERVICE_KEY" |
+  if ! msg="$(_supabase_key_config |
     curl --max-time 10 -sS -f -K - -X DELETE -H 'Prefer: return=minimal' "$url" 2>&1 >/dev/null)"; then
     msg="warn: supabase ${url##*/rest/v1/} failed: ${msg//$'\n'/ }"
     msg="${msg//$AGENT_SUPABASE_SERVICE_KEY/***}"
@@ -69,8 +76,7 @@ _supabase_rows() {
   local method=$1 url=$2 body=${3:-} strict=${4:-} out msg
   local -a data
   [[ -z "$body" ]] || data=(-H 'Content-Type: application/json' -H 'Prefer: return=representation' -d "$body")
-  if ! out="$(printf 'header = "apikey: %s"\nheader = "Authorization: Bearer %s"\n' \
-      "$AGENT_SUPABASE_SERVICE_KEY" "$AGENT_SUPABASE_SERVICE_KEY" |
+  if ! out="$(_supabase_key_config |
     curl --max-time 10 -sS -f -K - -X "$method" "${data[@]}" "$url" 2>&1)"; then
     msg="warn: supabase ${url##*/rest/v1/} failed: ${out//$'\n'/ }"
     msg="${msg//$AGENT_SUPABASE_SERVICE_KEY/***}"

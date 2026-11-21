@@ -124,9 +124,19 @@ describe('telemetry.sh', () => {
       body: '{"outcome":"idle"}'
     });
     expect(hits[0]?.headers['apikey']).toBe(KEY);
-    expect(hits[0]?.headers['authorization']).toBe(`Bearer ${KEY}`);
+    expect(hits[0]?.headers['authorization']).toBeUndefined();
     expect(hits[0]?.headers['content-type']).toBe('application/json');
     expect(hits[0]?.headers['prefer']).toBe('return=minimal');
+  });
+
+  it('sends a legacy JWT key as a Bearer token too', async () => {
+    const jwt = 'eyJhbGciOi.payload.sig';
+    await zsh(
+      { ...configured(), AGENT_SUPABASE_SERVICE_KEY: jwt },
+      `supabase_insert runs '{"outcome":"idle"}'`
+    );
+    expect(hits[0]?.headers['apikey']).toBe(jwt);
+    expect(hits[0]?.headers['authorization']).toBe(`Bearer ${jwt}`);
   });
 
   it.each([
@@ -210,7 +220,7 @@ describe('telemetry.sh', () => {
         url: '/rest/v1/runs?select=id&limit=2'
       });
       expect(hits[0]?.headers['apikey']).toBe(KEY);
-      expect(hits[0]?.headers['authorization']).toBe(`Bearer ${KEY}`);
+      expect(hits[0]?.headers['authorization']).toBeUndefined();
     });
 
     it('selects [] and warns when the call fails, without the key', async () => {

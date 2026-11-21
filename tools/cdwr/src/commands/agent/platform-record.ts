@@ -1,4 +1,5 @@
 import { defineCommand } from '../../cli/command';
+import { keyHeaders } from '../../services/supabase-rest';
 
 import {
   DATABASE_URL_ENV,
@@ -145,7 +146,7 @@ export default defineCommand({
   async apply(ctx, { rows, prune, url, key, peak }) {
     const deadline = AbortSignal.timeout(60_000);
     const base = url.replace(/\/$/, '');
-    const headers = { apikey: key, Authorization: `Bearer ${key}` };
+    const headers = keyHeaders(key);
 
     const upsert = await fetch(`${base}/rest/v1/${TABLE}?on_conflict=key`, {
       method: 'POST',

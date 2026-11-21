@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { defineCommand } from '../../cli/command';
 import { input } from '../../cli/inputs';
+import { keyHeaders } from '../../services/supabase-rest';
 
 import { hostId } from './host-id';
 import { findTranscripts, readReplies, transcriptHomes } from './usage.collect';
@@ -215,8 +216,7 @@ export default defineCommand({
           {
             method: 'POST',
             headers: {
-              apikey: key,
-              Authorization: `Bearer ${key}`,
+              ...keyHeaders(key),
               'Content-Type': 'application/json',
               Prefer: 'resolution=merge-duplicates,return=minimal'
             },
@@ -237,8 +237,7 @@ export default defineCommand({
         {
           method: 'DELETE',
           headers: {
-            apikey: key,
-            Authorization: `Bearer ${key}`,
+            ...keyHeaders(key),
             Prefer: 'return=minimal'
           },
           signal: signal()
@@ -258,7 +257,7 @@ export default defineCommand({
           `${base}/rest/v1/usage?select=day,ticket,model,role&host=eq.${encodeURIComponent(host)}&day=gte.${fromDay}&order=day,ticket,model,role&limit=${PAGE}&offset=${offset}`,
           {
             method: 'GET',
-            headers: { apikey: key, Authorization: `Bearer ${key}` },
+            headers: keyHeaders(key),
             signal: signal()
           }
         );
