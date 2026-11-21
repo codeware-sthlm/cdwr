@@ -223,7 +223,7 @@ export async function listOrgTokens(org = 'codeware'): Promise<FlyToken[]> {
   delete env['FLY_API_TOKEN'];
   delete env['FLY_ACCESS_TOKEN'];
   const { stdout } = await run(
-    'fly',
+    'flyctl',
     ['tokens', 'list', '-o', org, '-s', 'org'],
     {
       env
