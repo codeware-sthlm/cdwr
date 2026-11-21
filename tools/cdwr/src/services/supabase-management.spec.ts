@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
   SupabaseApiError,
   accessToken,
@@ -5,6 +9,7 @@ import {
   decodeKeychain,
   deleteApiKey,
   keyHash,
+  keychainAccounts,
   listApiKeys,
   projectRef
 } from './supabase-management';
@@ -56,14 +61,42 @@ describe('projectRef', () => {
 });
 
 describe('accessToken', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'supabase-home-'));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
   it('takes SUPABASE_ACCESS_TOKEN first', async () => {
     await expect(
-      accessToken({ SUPABASE_ACCESS_TOKEN: ' sbp_x ' }, 'linux')
+      accessToken({ SUPABASE_ACCESS_TOKEN: ' sbp_x ' }, 'linux', home)
     ).resolves.toBe('sbp_x');
   });
 
-  it('fails without one off a Mac', async () => {
-    await expect(accessToken({}, 'linux')).rejects.toThrow('supabase login');
+  it('reads the file supabase login writes without a keyring', async () => {
+    mkdirSync(join(home, '.supabase'));
+    writeFileSync(join(home, '.supabase/access-token'), 'sbp_file\n');
+    await expect(accessToken({}, 'linux', home)).resolves.toBe('sbp_file');
+  });
+
+  it('fails without one', async () => {
+    await expect(accessToken({}, 'linux', home)).rejects.toThrow(
+      'supabase login'
+    );
+  });
+});
+
+describe('keychainAccounts', () => {
+  it('tries the profile, then the account older CLIs used', () => {
+    expect(keychainAccounts({})).toEqual(['supabase', 'access-token']);
+    expect(keychainAccounts({ SUPABASE_PROFILE: 'work' })).toEqual([
+      'work',
+      'access-token'
+    ]);
   });
 });
 
