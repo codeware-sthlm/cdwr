@@ -26,8 +26,10 @@ import {
   restart,
   sessionState,
   unpause,
+  vaultHash,
   waitPlan
 } from './deploy.logic';
+import { NOT_READY, type VaultKey } from './rotate-fly.logic';
 
 export const ssh = (remote: Remote) =>
   run('ssh', remote.args, { input: remote.input });
@@ -214,4 +216,29 @@ export async function restartIdleLocked(
     }
   }
   return resumed;
+}
+
+export const POLL_MS = 3_000;
+export const POLL_MAX_MS = 90_000;
+
+export type ContainerHash =
+  { kind: 'hash'; hash: string } | { kind: 'not-ready' };
+
+/** The sha256 of the key as the running container holds it, polled while the vault file is not written yet */
+export async function containerHash(
+  host: string,
+  key: VaultKey
+): Promise<ContainerHash> {
+  for (let waited = 0; ; waited += POLL_MS) {
+    try {
+      const { stdout } = await ssh(vaultHash(host, key));
+      return { kind: 'hash', hash: stdout.trim() };
+    } catch (error) {
+      if (!(error instanceof CommandError && error.code === NOT_READY)) {
+        throw error;
+      }
+    }
+    if (waited >= POLL_MAX_MS) return { kind: 'not-ready' };
+    await sleep(POLL_MS);
+  }
 }
