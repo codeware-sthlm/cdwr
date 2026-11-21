@@ -6,7 +6,7 @@
 #   unpause         remove the paused file
 #   job             print job.json, nothing when there is none
 #   record          write deploy.json for the desk from the JSON object on stdin
-#   notify <text>   an action notice through notify.sh
+#   notify <text>   an urgent notice through notify.sh, from the source self-deploy
 # Every subcommand only reads or writes files in the queue home; the host gets no shell in here.
 # DEPLOY_GATE_PROC replaces /proc in specs.
 
@@ -70,7 +70,7 @@ case "${1:-}" in
   notify)
     shift
     (( $# )) || { print -ru2 -- "deploy-gate: notify takes a message"; exit 2; }
-    "$HERE/notify.sh" "$*"
+    "$HERE/notify.sh" --level urgent --source self-deploy "$*"
     ;;
   *)
     print -ru2 -- "usage: deploy-gate.sh state|pause|unpause|job|record|notify <text>"

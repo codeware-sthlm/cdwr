@@ -228,7 +228,7 @@ describe('deploy-gate.sh', () => {
   });
 
   describe('notify', () => {
-    it('calls notify.sh beside the script with the joined message', () => {
+    it('calls notify.sh beside the script, urgent from self-deploy, with the joined message', () => {
       const bin = join(root, 'bin');
       mkdirSync(bin);
       const gate = join(bin, 'deploy-gate.sh');
@@ -245,7 +245,7 @@ describe('deploy-gate.sh', () => {
       );
       expect(result.status).toBe(0);
       expect(readFileSync(join(root, 'notified'), 'utf8')).toBe(
-        '1|rolled back sha-1|'
+        '5|--level|urgent|--source|self-deploy|rolled back sha-1|'
       );
     });
 
