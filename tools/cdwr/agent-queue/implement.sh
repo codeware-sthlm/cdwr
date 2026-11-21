@@ -26,11 +26,12 @@ LOGS="$HOME_DIR/logs"
 mkdir -p "$LOGS"
 
 note() { print -r -- "$(date '+%F %T') implement: $*" >> "$LOGS/scheduler.log"; }
+# notify <urgent|action|info> <message>: through notify.sh beside the installed scripts, from the
+# checkout, so the notice names its project and branch; notify.sh spools it or applies the dial
 notify() {
   local hook="$HOME_DIR/notify.sh"
-  [[ -x "$hook" ]] || hook="$HOME/.claude/hooks/notify-slack.sh"
   [[ -x "$hook" ]] || return 0
-  jq -n --arg m "$1" --arg c "$REPO" '{message: $m, cwd: $c}' | "$hook" || true
+  ( cd "$REPO" 2>/dev/null; "$hook" --level "$1" --source implement "$2" ) || true
 }
 # The same rows run.sh writes, so the run history shows launches too
 record() {
@@ -77,7 +78,7 @@ if ! { app_env "$REPO/tools/cdwr/.env" && app_session; } 2> "$errf"; then
   reason="$(tr '\n' ' ' < "$errf" | sed 's/ *$//')"
   rm -f "$errf"
   note "fail: $reason; not starting"
-  notify "Agent queue: nothing launched for $TICKET. $reason."
+  notify action "Agent queue: nothing launched for $TICKET. $reason."
   record failed "$KEY · $reason"
   telemetry failed "$KEY · $reason"
   exit 1
@@ -88,7 +89,7 @@ rm -f "$errf"
 linear_mcp "$HOME_DIR"
 if ! linear_gate "$HOME_DIR"; then
   note "fail: no Linear tools ($linear_why); not starting"
-  $linear_new && notify "Agent queue: nothing launched for $TICKET. No Linear tools ($linear_why)."
+  $linear_new && notify urgent "Agent queue: nothing launched for $TICKET. No Linear tools ($linear_why)."
   record failed "$KEY · no Linear tools ($linear_why)"
   telemetry failed "$KEY · no Linear tools ($linear_why)"
   exit 1
@@ -270,7 +271,7 @@ elif [[ -n "$KEY" && "$last" == "review failed: $KEY"( · *|) ]]; then
   reason="${${last#review failed: $KEY}# · }"
   [[ -n "$reason" ]] || reason="no reason given"
   note "fail: review could not run on $KEY · $reason"
-  notify "Agent queue: the code review could not run on $TICKET ($reason), so no PR was opened. Log: $log"
+  notify action "Agent queue: the code review could not run on $TICKET ($reason), so no PR was opened. Log: $log"
   record failed "$KEY · review could not run: $reason$spent · log $log"
   telemetry failed "$KEY · review could not run: $reason$spent · log $log"
 elif (( rc != 0 )) && limit_hold "$result"; then
@@ -283,9 +284,7 @@ elif (( rc != 0 )) && limit_hold "$result"; then
       mv "$HOME_DIR/launch.json.tmp.$$" "$HOME_DIR/launch.json" 2>/dev/null || rm -f "$HOME_DIR/launch.json.tmp.$$" 2>/dev/null || true
   fi
   note "limited: $KEY · $LIMIT_TEXT"
-  if $LIMIT_NEW && [[ "$(tr -d '[:space:]' 2>/dev/null < "$HOME_DIR/notify-level" || true)" != action ]]; then
-    notify "Agent queue: session limit reached, launches held until $(limit_held || print 'the reset')"
-  fi
+  $LIMIT_NEW && notify info "Agent queue: session limit reached, launches held until $(limit_held || print 'the reset')"
   record limited "$KEY · $LIMIT_TEXT$spent · log $log"
   telemetry limited "$KEY · $LIMIT_TEXT$spent · log $log"
 elif (( rc == 0 )); then
@@ -294,12 +293,12 @@ elif (( rc == 0 )); then
   telemetry implemented "$KEY$spent · log $log"
 elif [[ "$(jq -r '.subtype // empty' "$result" 2>/dev/null)" == error_max_budget_usd ]]; then
   note "cap: stopped at the \$$BUDGET_USD budget (see $log)"
-  notify "Agent queue: an implementing session on $TICKET hit the \$$BUDGET_USD cap and stopped. Log: $log"
+  notify urgent "Agent queue: an implementing session on $TICKET hit the \$$BUDGET_USD cap and stopped. Log: $log"
   record cap "$KEY · stopped at the \$$BUDGET_USD budget, log $log"
   telemetry cap "$KEY · stopped at the \$$BUDGET_USD budget, log $log"
 else
   note "fail: claude exited $rc (see $log)"
-  notify "Agent queue: an implementing session on $TICKET failed (exit $rc). Log: $log"
+  notify urgent "Agent queue: an implementing session on $TICKET failed (exit $rc). Log: $log"
   record failed "$KEY · claude exited $rc, log $log$spent"
   telemetry failed "$KEY · claude exited $rc, log $log$spent"
 fi

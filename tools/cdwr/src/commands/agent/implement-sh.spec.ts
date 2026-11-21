@@ -1023,7 +1023,7 @@ describe('implement.sh', () => {
         mkdirSync(queueHome, { recursive: true });
         writeFileSync(
           join(queueHome, 'notify.sh'),
-          `#!/bin/sh\ncat >> "${sent}"\necho >> "${sent}"\n`
+          `#!/bin/sh\necho "$@" >> "${sent}"\n`
         );
         chmodSync(join(queueHome, 'notify.sh'), 0o755);
         fakeLimited();
@@ -1075,11 +1075,14 @@ describe('implement.sh', () => {
         expect(text).not.toContain('failed');
       });
 
-      it('sends no notice when notify-level is action', () => {
+      // notify.sh applies the dial; implement.sh only says the level
+      it('sends the notice as info from the source implement', () => {
         seed(1);
         writeFileSync(join(queueHome, 'notify-level'), 'action\n');
         start();
-        expect(existsSync(sent)).toBe(false);
+        expect(readFileSync(sent, 'utf8').trim()).toMatch(
+          /^--level info --source implement Agent queue: session limit reached/
+        );
         expect(rows('runs.jsonl').at(-1)?.['outcome']).toBe('limited');
       });
 
