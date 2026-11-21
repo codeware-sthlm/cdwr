@@ -5,7 +5,7 @@ import { DEPLOYED } from '../../services/environment';
 import { listOrgTokens } from '../../services/fly';
 import { probeSession } from '../infisical/session.logic';
 
-import { PROJECTS, PROJECT_NAMES } from './catalog';
+import { PROJECTS, PROJECT_NAMES, environmentsOf } from './catalog';
 import {
   type FlyTokens,
   type ReadKey,
@@ -65,29 +65,37 @@ export default defineCommand({
       };
     }
 
-    // Each project is its own Infisical session scope: probe every one
-    const probed = new Set<string>();
-    for (const pair of pairs) {
-      if (probed.has(pair.project)) continue;
-      probed.add(pair.project);
+    // Each project is its own Infisical session scope: one that refuses is a failed scope
+    const refused = new Map<string, string>();
+    for (const project of new Set(pairs.map((pair) => pair.project))) {
       const session = await ctx.ui.task(
-        `Checking the Infisical session (${pair.project})`,
+        `Checking the Infisical session (${project})`,
         async () =>
-          probeSession(pair.environment, undefined, PROJECTS[pair.project].id)
+          probeSession(
+            environmentsOf(project)[0] ?? 'production',
+            undefined,
+            PROJECTS[project].id
+          )
       );
-      if (session.state !== 'ok') {
+      if (session.state === 'not-installed') {
         throw new CliError(
-          session.state === 'failed'
-            ? `${pair.project}: ${session.message}`
-            : 'Infisical CLI is not installed',
+          'Infisical CLI is not installed',
           EXIT.failed,
           session.hint
         );
+      }
+      if (session.state === 'failed') {
+        refused.set(project, shortMessage(session.message));
       }
     }
 
     const read: ScopeRead[] = [];
     for (const pair of pairs) {
+      const error = refused.get(pair.project);
+      if (error !== undefined) {
+        read.push({ ...pair, error });
+        continue;
+      }
       try {
         const keys = await ctx.ui.task(
           `Reading ${pair.project} (${pair.environment})`,
@@ -120,7 +128,11 @@ export default defineCommand({
       ctx.ui.warn(`${project} · ${environment}: could not read: ${error}`);
     }
     if (read.length > 0 && succeeded.length === 0) {
-      throw new CliError('No scope could be read', EXIT.failed);
+      throw new CliError(
+        'No scope could be read',
+        EXIT.failed,
+        'If your session expired: `infisical login`'
+      );
     }
     const flyError = Array.isArray(tokens) ? undefined : tokens.error;
     if (flyError !== undefined) ctx.ui.warn(`Fly tokens: ${flyError}`);
