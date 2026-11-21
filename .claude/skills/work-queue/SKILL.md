@@ -320,7 +320,8 @@ to **What to take next**.
    from `review-diff.sh` (step 5): `Merge: merging on its own: no hold path`, or
    `Merge: held: <path> matches <glob> (<reason>)`. When the report has a line
    `**Ask me before merging**`, write `Merge: held: Ask me before merging` whatever the script
-   printed. Then what the Copilot round
+   printed, and when the apply list has a `secret-*` item, `Merge: held: the Apply list writes a
+secret`. Then what the Copilot round
    fixed and dismissed, what the Fly Deployment run did for the labelled PR (its jobs in
    `gh pr checks <n>`, where every deploy job skipped means no deployable app, and the
    preview urls from the workflow's PR comment in `gh pr view <n> --comments`), what the
@@ -335,6 +336,7 @@ to **What to take next**.
    ticket is `agent:review`, the PR-ready comment has the `Code review:` line and says it merges
    on its own, no human comment is newer than that comment (the watch reads the ticket's newest
    50), the ticket is not parked on a wait, the report has no `**Ask me before merging**` line,
+   the apply list has no `secret-*` item that isn't struck through,
    no review requested changes, and the PR's complete file list
    matches no glob in `hold-paths.txt`, read from the installed copy beside `watch.jq`, so a PR
    never changes the list for itself. A claimed merge refused for a lasting reason gets one

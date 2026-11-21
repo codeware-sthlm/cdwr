@@ -803,6 +803,9 @@ def merge_verdict($node; $holds):
      elif any(($node.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($c.createdAt | epoch))
        then "Håkan commented after the PR-ready comment"
      elif ($node | asks_before_merging) then "the report says Ask me before merging"
+     # Credentials stay Håkan's: a secret write applied after a self-merge would bypass him
+     elif any(($node | apply_items)[]; (.dropped | not) and ((.kind // "") | startswith("secret-")))
+       then "the Apply list writes a secret"
      elif .reviewDecision == "CHANGES_REQUESTED" then "a review requested changes"
      elif .files == null then "the PR's files were not read"
      elif .files.pageInfo.hasNextPage == true then "too many changed files to check them all"
