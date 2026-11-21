@@ -15,6 +15,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { requireTools } from '../../testing/require-tools';
+
 import { QUEUE_FILES, RUN_INTERVAL_SECONDS } from './agent.logic';
 
 // run.sh runs gh unattended as Håkan, so every gh call must be a read
@@ -282,9 +284,7 @@ describe('run.sh own events', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let home: string;
 
   const sleep = (ms: number) =>
@@ -356,7 +356,7 @@ describe('run.sh own events', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   describe('own_event', () => {
-    it.skipIf(!canRun)('appends one line with the host and the time', () => {
+    it('appends one line with the host and the time', () => {
       const r = sh([
         `own_event '{"event_id":"e1","kind":"merge","ticket":"COD-1","pr":5,"title":"t","target":"abc1234","result":"merged","reason":"why"}'`
       ]);
@@ -377,7 +377,7 @@ describe('run.sh own events', () => {
       expect(e?.['at']).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     });
 
-    it.skipIf(!canRun)('keeps a given time and nulls what is missing', () => {
+    it('keeps a given time and nulls what is missing', () => {
       sh([
         `own_event '{"event_id":"e2","kind":"deploy","result":"ok","at":"2026-01-02T03:04:05Z"}'`
       ]);
@@ -397,56 +397,50 @@ describe('run.sh own events', () => {
       ]);
     });
 
-    it.skipIf(!canRun)(
-      'withholds a token in the text and keeps the rest',
-      () => {
-        const ghp = `ghp_${'a'.repeat(24)}`;
-        const jwt = 'eyJhbGciOi.eyJzdWIiOiIx.c2lnbmF0dXJl';
-        const sk = 'sk-abcdefgh12345678';
-        sh([
-          `own_event '${JSON.stringify({
-            event_id: 'e4',
-            kind: 'merge',
-            result: 'merged',
-            title: `push with ${ghp} failed`,
-            target: `jwt ${jwt} end`,
-            reason: `bad key ${sk}, retry`
-          })}'`
-        ]);
-        expect(events()[0]).toMatchObject({
-          title: 'push with (withheld) failed',
-          target: 'jwt (withheld) end',
-          reason: 'bad key (withheld), retry'
-        });
-      }
-    );
+    it('withholds a token in the text and keeps the rest', () => {
+      const ghp = `ghp_${'a'.repeat(24)}`;
+      const jwt = 'eyJhbGciOi.eyJzdWIiOiIx.c2lnbmF0dXJl';
+      const sk = 'sk-abcdefgh12345678';
+      sh([
+        `own_event '${JSON.stringify({
+          event_id: 'e4',
+          kind: 'merge',
+          result: 'merged',
+          title: `push with ${ghp} failed`,
+          target: `jwt ${jwt} end`,
+          reason: `bad key ${sk}, retry`
+        })}'`
+      ]);
+      expect(events()[0]).toMatchObject({
+        title: 'push with (withheld) failed',
+        target: 'jwt (withheld) end',
+        reason: 'bad key (withheld), retry'
+      });
+    });
 
-    it.skipIf(!canRun)(
-      'withholds a long run with a digit and keeps a commit sha and a path',
-      () => {
-        const run = `Ab3${'x'.repeat(40)}`;
-        const sha = 'a'.repeat(39) + '1';
-        const path =
-          'tools/cdwr/agent-queue/supabase/migrations/20261120120000_own_actions.sql';
-        sh([
-          `own_event '${JSON.stringify({
-            event_id: 'e5',
-            kind: 'apply',
-            result: 'refused',
-            title: `token ${run} leaked`,
-            target: path,
-            reason: `merge commit ${sha}`
-          })}'`
-        ]);
-        expect(events()[0]).toMatchObject({
-          title: 'token (withheld) leaked',
+    it('withholds a long run with a digit and keeps a commit sha and a path', () => {
+      const run = `Ab3${'x'.repeat(40)}`;
+      const sha = 'a'.repeat(39) + '1';
+      const path =
+        'tools/cdwr/agent-queue/supabase/migrations/20261120120000_own_actions.sql';
+      sh([
+        `own_event '${JSON.stringify({
+          event_id: 'e5',
+          kind: 'apply',
+          result: 'refused',
+          title: `token ${run} leaked`,
           target: path,
           reason: `merge commit ${sha}`
-        });
-      }
-    );
+        })}'`
+      ]);
+      expect(events()[0]).toMatchObject({
+        title: 'token (withheld) leaked',
+        target: path,
+        reason: `merge commit ${sha}`
+      });
+    });
 
-    it.skipIf(!canRun)('is false when the event could not be kept', () => {
+    it('is false when the event could not be kept', () => {
       mkdirSync(join(home, 'own.jsonl'));
       const r = sh([
         `own_event '{"event_id":"e6","kind":"merge","result":"merged"}' || print -r -- not-kept`
@@ -454,7 +448,7 @@ describe('run.sh own events', () => {
       expect(r.stdout).toContain('not-kept');
     });
 
-    it.skipIf(!canRun)('does nothing with --check', () => {
+    it('does nothing with --check', () => {
       sh([`own_event '{"event_id":"e3","kind":"merge","result":"merged"}'`], {
         check: true
       });
@@ -467,7 +461,7 @@ describe('run.sh own events', () => {
       writeFileSync(join(home, 'deploy.json'), JSON.stringify(d));
     const tag = 'sha-abc';
 
-    it.skipIf(!canRun)('records a settled deploy once and stamps it', () => {
+    it('records a settled deploy once and stamps it', () => {
       deploy({
         tag,
         phase: 'rolled-back',
@@ -496,21 +490,18 @@ describe('run.sh own events', () => {
       expect(events()).toHaveLength(1);
     });
 
-    it.skipIf(!canRun)(
-      'records a second rollback to the same tag at another time',
-      () => {
-        deploy({ tag, phase: 'rolled-back', at: '2026-11-20T07:12:00Z' });
-        sh(['own_self_deploy']);
-        deploy({ tag, phase: 'rolled-back', at: '2026-11-20T09:30:00Z' });
-        sh(['own_self_deploy']);
-        expect(events().map((e) => e['event_id'])).toEqual([
-          `self-deploy:${tag}:rolled-back:2026-11-20T07:12:00Z`,
-          `self-deploy:${tag}:rolled-back:2026-11-20T09:30:00Z`
-        ]);
-      }
-    );
+    it('records a second rollback to the same tag at another time', () => {
+      deploy({ tag, phase: 'rolled-back', at: '2026-11-20T07:12:00Z' });
+      sh(['own_self_deploy']);
+      deploy({ tag, phase: 'rolled-back', at: '2026-11-20T09:30:00Z' });
+      sh(['own_self_deploy']);
+      expect(events().map((e) => e['event_id'])).toEqual([
+        `self-deploy:${tag}:rolled-back:2026-11-20T07:12:00Z`,
+        `self-deploy:${tag}:rolled-back:2026-11-20T09:30:00Z`
+      ]);
+    });
 
-    it.skipIf(!canRun).each(['ok', 'stuck'])('records phase %s', (phase) => {
+    it.each(['ok', 'stuck'])('records phase %s', (phase) => {
       deploy({ tag, phase });
       sh(['own_self_deploy']);
       expect(events()).toMatchObject([
@@ -522,14 +513,14 @@ describe('run.sh own events', () => {
       ]);
     });
 
-    it.skipIf(!canRun)('takes the time only when it looks like one', () => {
+    it('takes the time only when it looks like one', () => {
       deploy({ tag, phase: 'ok', at: 'yesterday' });
       sh(['own_self_deploy']);
       expect(events()[0]?.['at']).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(events()[0]?.['at']).not.toBe('yesterday');
     });
 
-    it.skipIf(!canRun).each(['checking', 'superseded'])(
+    it.each(['checking', 'superseded'])(
       'records nothing for phase %s',
       (phase) => {
         deploy({ tag, phase });
@@ -539,7 +530,7 @@ describe('run.sh own events', () => {
       }
     );
 
-    it.skipIf(!canRun)('records a new phase of the same tag again', () => {
+    it('records a new phase of the same tag again', () => {
       deploy({ tag, phase: 'stuck' });
       sh(['own_self_deploy']);
       deploy({ tag, phase: 'ok' });
@@ -550,17 +541,14 @@ describe('run.sh own events', () => {
       ]);
     });
 
-    it.skipIf(!canRun)(
-      'leaves the stamp alone when the event could not be kept',
-      () => {
-        deploy({ tag, phase: 'ok' });
-        mkdirSync(join(home, 'own.jsonl'));
-        sh(['own_self_deploy']);
-        expect(file('deploy-recorded')).toBeNull();
-      }
-    );
+    it('leaves the stamp alone when the event could not be kept', () => {
+      deploy({ tag, phase: 'ok' });
+      mkdirSync(join(home, 'own.jsonl'));
+      sh(['own_self_deploy']);
+      expect(file('deploy-recorded')).toBeNull();
+    });
 
-    it.skipIf(!canRun)('does nothing without a deploy.json', () => {
+    it('does nothing without a deploy.json', () => {
       sh(['own_self_deploy']);
       expect(file('own.jsonl')).toBeNull();
     });
@@ -575,72 +563,63 @@ describe('run.sh own events', () => {
       result: 'merged'
     });
 
-    it.skipIf(!canRun)(
-      'trims old rows and bad lines, dedupes, and upserts with ignore',
-      () => {
-        put([
-          row('old', ago(8)),
-          'not json',
-          row('b', ago(1)),
-          row('a', ago(2)),
-          row('b', ago(1))
-        ]);
-        sh(['own_send']);
-        const sent = upsert();
-        expect(sent).toMatchObject({
-          table: 'own_actions',
-          key: 'event_id',
-          mode: 'ignore'
-        });
-        expect(sent?.rows.map((r) => r['event_id']).sort()).toEqual(['a', 'b']);
-        expect(
-          events()
-            .map((e) => e['event_id'])
-            .sort()
-        ).toEqual(['a', 'b']);
-      }
-    );
+    it('trims old rows and bad lines, dedupes, and upserts with ignore', () => {
+      put([
+        row('old', ago(8)),
+        'not json',
+        row('b', ago(1)),
+        row('a', ago(2)),
+        row('b', ago(1))
+      ]);
+      sh(['own_send']);
+      const sent = upsert();
+      expect(sent).toMatchObject({
+        table: 'own_actions',
+        key: 'event_id',
+        mode: 'ignore'
+      });
+      expect(sent?.rows.map((r) => r['event_id']).sort()).toEqual(['a', 'b']);
+      expect(
+        events()
+          .map((e) => e['event_id'])
+          .sort()
+      ).toEqual(['a', 'b']);
+    });
 
-    it.skipIf(!canRun)(
-      'still trims with telemetry off, and sends nothing',
-      () => {
-        put([row('old', ago(8)), row('new', ago(1))]);
-        sh(['own_send'], { telemetry: false });
-        expect(quiet()).toBeNull();
-        expect(events().map((e) => e['event_id'])).toEqual(['new']);
-      }
-    );
+    it('still trims with telemetry off, and sends nothing', () => {
+      put([row('old', ago(8)), row('new', ago(1))]);
+      sh(['own_send'], { telemetry: false });
+      expect(quiet()).toBeNull();
+      expect(events().map((e) => e['event_id'])).toEqual(['new']);
+    });
 
-    it.skipIf(!canRun)('sends nothing when every row is old', () => {
+    it('sends nothing when every row is old', () => {
       put([row('old', ago(9))]);
       sh(['own_send']);
       expect(quiet()).toBeNull();
       expect(events()).toEqual([]);
     });
 
-    it.skipIf(!canRun)('sends nothing for an empty file', () => {
+    it('sends nothing for an empty file', () => {
       writeFileSync(join(home, 'own.jsonl'), '');
       sh(['own_send']);
       expect(quiet()).toBeNull();
     });
 
-    it.skipIf(!canRun)(
-      'drops rows the table would refuse: bad kind, no result, no host or id',
-      () => {
-        const good = row('good', ago(1));
-        put([
-          good,
-          { ...row('kind', ago(1)), kind: 'other' },
-          { ...row('empty', ago(1)), result: '' },
-          { ...row('noresult', ago(1)), result: undefined },
-          { ...row('nohost', ago(1)), host: undefined },
-          { ...row('noid', ago(1)), event_id: undefined }
-        ]);
-        sh(['own_send']);
-        expect(upsert()?.rows.map((r) => r['event_id'])).toEqual(['good']);
-        expect(events().map((e) => e['event_id'])).toEqual(['good']);
-      }
-    );
+    it('drops rows the table would refuse: bad kind, no result, no host or id', () => {
+      const good = row('good', ago(1));
+      put([
+        good,
+        { ...row('kind', ago(1)), kind: 'other' },
+        { ...row('empty', ago(1)), result: '' },
+        { ...row('noresult', ago(1)), result: undefined },
+        { ...row('nohost', ago(1)), host: undefined },
+        { ...row('noid', ago(1)), event_id: undefined }
+      ]);
+      sh(['own_send']);
+      expect(upsert()?.rows.map((r) => r['event_id'])).toEqual(['good']);
+      expect(events().map((e) => e['event_id'])).toEqual(['good']);
+    });
   });
 });
 
@@ -650,9 +629,7 @@ describe('run.sh review own list', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   const WATCH_DIR = fileURLToPath(
     new URL('../../../agent-queue', import.meta.url)
   );
@@ -720,7 +697,7 @@ describe('run.sh review own list', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   describe('own_read', () => {
-    it.skipIf(!canRun)('starts about 24 hours ago on the first review', () => {
+    it('starts about 24 hours ago on the first review', () => {
       const r = sh([`own_read "$HOME_DIR/own.json"`]);
       expect(r.status).toBe(0);
       const since = Date.parse(out().since);
@@ -732,55 +709,49 @@ describe('run.sh review own list', () => {
       );
     });
 
-    it.skipIf(!canRun)(
-      'starts at the previous own.until, with + encoded in the query',
-      () => {
-        put('rows-reviews', [
-          { own: { since: 'x', until: '2026-11-19T08:00:00.123456+00:00' } }
-        ]);
-        const r = sh([`own_read "$HOME_DIR/own.json"`]);
-        expect(r.status).toBe(0);
-        expect(out().since).toBe('2026-11-19T08:00:00.123456+00:00');
-        expect(selects()[1]).toBe(
-          'own_actions received_at=gt.2026-11-19T08:00:00.123456%2B00:00&order=received_at.asc&limit=1000'
-        );
-      }
-    );
+    it('starts at the previous own.until, with + encoded in the query', () => {
+      put('rows-reviews', [
+        { own: { since: 'x', until: '2026-11-19T08:00:00.123456+00:00' } }
+      ]);
+      const r = sh([`own_read "$HOME_DIR/own.json"`]);
+      expect(r.status).toBe(0);
+      expect(out().since).toBe('2026-11-19T08:00:00.123456+00:00');
+      expect(selects()[1]).toBe(
+        'own_actions received_at=gt.2026-11-19T08:00:00.123456%2B00:00&order=received_at.asc&limit=1000'
+      );
+    });
 
-    it.skipIf(!canRun)(
-      'ends at the newest received_at and sorts the items by at',
-      () => {
-        put('rows-reviews', [{ own: { until: '2026-11-19T08:00:00Z' } }]);
-        put('rows-own_actions', [
-          action('b', '2026-11-20T06:00:00Z', '2026-11-20T09:00:00Z'),
-          action('a', '2026-11-19T09:00:00Z', '2026-11-20T10:30:00Z'),
-          action('c', '2026-11-19T12:00:00Z', '2026-11-20T08:00:00Z')
-        ]);
-        sh([`own_read "$HOME_DIR/own.json"`]);
-        const own = out();
-        expect(own.until).toBe('2026-11-20T10:30:00Z');
-        expect(own.items.map((i) => i['at'])).toEqual([
-          '2026-11-19T09:00:00Z',
-          '2026-11-19T12:00:00Z',
-          '2026-11-20T06:00:00Z'
-        ]);
-        // Only what a review lists: no host, event id or received_at
-        expect(Object.keys(own.items[0] ?? {}).sort()).toEqual(
-          [
-            'at',
-            'kind',
-            'pr',
-            'reason',
-            'result',
-            'target',
-            'ticket',
-            'title'
-          ].sort()
-        );
-      }
-    );
+    it('ends at the newest received_at and sorts the items by at', () => {
+      put('rows-reviews', [{ own: { until: '2026-11-19T08:00:00Z' } }]);
+      put('rows-own_actions', [
+        action('b', '2026-11-20T06:00:00Z', '2026-11-20T09:00:00Z'),
+        action('a', '2026-11-19T09:00:00Z', '2026-11-20T10:30:00Z'),
+        action('c', '2026-11-19T12:00:00Z', '2026-11-20T08:00:00Z')
+      ]);
+      sh([`own_read "$HOME_DIR/own.json"`]);
+      const own = out();
+      expect(own.until).toBe('2026-11-20T10:30:00Z');
+      expect(own.items.map((i) => i['at'])).toEqual([
+        '2026-11-19T09:00:00Z',
+        '2026-11-19T12:00:00Z',
+        '2026-11-20T06:00:00Z'
+      ]);
+      // Only what a review lists: no host, event id or received_at
+      expect(Object.keys(own.items[0] ?? {}).sort()).toEqual(
+        [
+          'at',
+          'kind',
+          'pr',
+          'reason',
+          'result',
+          'target',
+          'ticket',
+          'title'
+        ].sort()
+      );
+    });
 
-    it.skipIf(!canRun)('ends at since when there are no rows', () => {
+    it('ends at since when there are no rows', () => {
       put('rows-reviews', [{ own: { until: '2026-11-19T08:00:00Z' } }]);
       sh([`own_read "$HOME_DIR/own.json"`]);
       expect(out()).toEqual({
@@ -790,7 +761,7 @@ describe('run.sh review own list', () => {
       });
     });
 
-    it.skipIf(!canRun).each(['reviews', 'own_actions'])(
+    it.each(['reviews', 'own_actions'])(
       'returns 1 and writes no file when the %s read failed',
       (table) => {
         writeFileSync(join(home, `fail-${table}`), '');
@@ -810,36 +781,30 @@ describe('run.sh review own list', () => {
       }
     });
 
-    it.skipIf(!canRun)(
-      'sends the jq message through notify, never notice',
-      () => {
-        sh([`review_notice '${row}'`], {
-          AGENT_DESK_URL: 'https://desk.example.com'
-        });
-        expect(file('notified')?.trim()).toBe(
-          'Nothing on its own since 19 Nov. See https://desk.example.com'
-        );
-        expect(file('noticed')).toBeNull();
-        expect(file('notes')).toContain('review: notice: Nothing on its own');
-      }
-    );
+    it('sends the jq message through notify, never notice', () => {
+      sh([`review_notice '${row}'`], {
+        AGENT_DESK_URL: 'https://desk.example.com'
+      });
+      expect(file('notified')?.trim()).toBe(
+        'Nothing on its own since 19 Nov. See https://desk.example.com'
+      );
+      expect(file('noticed')).toBeNull();
+      expect(file('notes')).toContain('review: notice: Nothing on its own');
+    });
 
-    it.skipIf(!canRun)('says "See the desk." without a desk url', () => {
+    it('says "See the desk." without a desk url', () => {
       sh([`review_notice '${row}'`]);
       expect(file('notified')?.trim()).toBe(
         'Nothing on its own since 19 Nov. See the desk.'
       );
     });
 
-    it.skipIf(!canRun)(
-      'notes a warning and sends nothing when jq fails',
-      () => {
-        const r = sh([`review_notice 'not json'; print -r -- "rc=$?"`]);
-        expect(r.stdout.trim()).toBe('rc=0');
-        expect(file('notified')).toBeNull();
-        expect(file('notes')).toContain('warn: review: no daily notice');
-      }
-    );
+    it('notes a warning and sends nothing when jq fails', () => {
+      const r = sh([`review_notice 'not json'; print -r -- "rc=$?"`]);
+      expect(r.stdout.trim()).toBe('rc=0');
+      expect(file('notified')).toBeNull();
+      expect(file('notes')).toContain('warn: review: no daily notice');
+    });
   });
 
   describe('review_run', () => {
@@ -1232,7 +1197,7 @@ describe('run.sh GitHub identity', () => {
   const APP_SH = fileURLToPath(
     new URL('../../../agent-queue/github-app.sh', import.meta.url)
   );
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   const hasOpenssl = spawnSync('openssl', ['version']).status === 0;
   const WAITS_SH = fileURLToPath(
     new URL('../../../agent-queue/waits.sh', import.meta.url)
@@ -1259,7 +1224,7 @@ describe('run.sh GitHub identity', () => {
     expect(SCRIPT).toContain('gh_read gh api graphql -f query="$PR_QUERY"');
   });
 
-  describe.skipIf(!hasZsh)('gh_read', () => {
+  describe('gh_read', () => {
     it('retries once as the signed-in user and notes the fallback once per run', () => {
       const dir = mkdtempSync(join(tmpdir(), 'run-sh-ghread-'));
       try {
@@ -1307,7 +1272,7 @@ describe('run.sh GitHub identity', () => {
     });
   });
 
-  describe.skipIf(!hasZsh || !hasOpenssl)('run', () => {
+  describe.skipIf(!hasOpenssl)('run', () => {
     let dir: string;
     let key: string;
     let server: Server;
@@ -1423,7 +1388,7 @@ describe('run.sh GitHub identity', () => {
 
 describe('run.sh to_main', () => {
   const fn = SCRIPT.match(/^to_main\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   let root: string;
 
   const git = (cwd: string, ...args: string[]) =>
@@ -1500,7 +1465,7 @@ describe('run.sh to_main', () => {
   const lockHash = () =>
     git(join(root, 'work'), 'hash-object', 'pnpm-lock.yaml');
 
-  it.skipIf(!hasZsh)('installs when the lockfile changed', () => {
+  it('installs when the lockfile changed', () => {
     setup(true);
     installedFrom('a\n');
     stub(0);
@@ -1512,7 +1477,7 @@ describe('run.sh to_main', () => {
     expect(marker()).toBe(lockHash());
   });
 
-  it.skipIf(!hasZsh)('does not install when node_modules matches', () => {
+  it('does not install when node_modules matches', () => {
     setup(false);
     installedFrom('a\n');
     stub(0);
@@ -1520,7 +1485,7 @@ describe('run.sh to_main', () => {
     expect(read('pnpm.calls')).toBe('');
   });
 
-  it.skipIf(!hasZsh)('installs when nothing says what node_modules has', () => {
+  it('installs when nothing says what node_modules has', () => {
     setup(false);
     stub(0);
     expect(run().status).toBe(0);
@@ -1529,7 +1494,7 @@ describe('run.sh to_main', () => {
     );
   });
 
-  it.skipIf(!hasZsh)('warns, carries on, and retries on the next run', () => {
+  it('warns, carries on, and retries on the next run', () => {
     setup(true);
     installedFrom('a\n');
     stub(1);
@@ -1541,7 +1506,7 @@ describe('run.sh to_main', () => {
     expect(read('pnpm.calls')).toBe(call + call);
   });
 
-  it.skipIf(!hasZsh)('with quiet, a failed install is only noted', () => {
+  it('with quiet, a failed install is only noted', () => {
     setup(true);
     installedFrom('a\n');
     stub(1);
@@ -1550,7 +1515,7 @@ describe('run.sh to_main', () => {
     expect(read('records')).toBe('');
   });
 
-  it.skipIf(!hasZsh)('with quiet, a dirty worktree is only noted', () => {
+  it('with quiet, a dirty worktree is only noted', () => {
     setup(true);
     stub(0);
     // origin/main changed the lockfile, so a local edit of it blocks the switch
@@ -1561,7 +1526,7 @@ describe('run.sh to_main', () => {
     expect(read('pnpm.calls')).toBe('');
   });
 
-  it.skipIf(!hasZsh)('moves the checkout from another cwd', () => {
+  it('moves the checkout from another cwd', () => {
     setup(true);
     installedFrom('a\n');
     stub(0);
@@ -1578,7 +1543,7 @@ describe('run.sh to_main', () => {
 
 describe('run.sh implement_live', () => {
   const fn = SCRIPT.match(/^implement_live\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   let root: string;
 
   const live = () =>
@@ -1600,34 +1565,31 @@ describe('run.sh implement_live', () => {
     expect(fn).toContain('implement_live()');
   });
 
-  it.skipIf(!hasZsh)('is false without a lock', () => {
+  it('is false without a lock', () => {
     expect(live()).toBe(false);
   });
 
-  it.skipIf(!hasZsh)('is true while the pid in the lock answers', () => {
+  it('is true while the pid in the lock answers', () => {
     lock(String(process.pid));
     expect(live()).toBe(true);
   });
 
-  it.skipIf(!hasZsh)('is false when the pid in the lock is gone', () => {
+  it('is false when the pid in the lock is gone', () => {
     lock(String(spawnSync('true').pid));
     expect(live()).toBe(false);
   });
 
-  it.skipIf(!hasZsh)('is true for a fresh lock without a pid', () => {
+  it('is true for a fresh lock without a pid', () => {
     lock();
     expect(live()).toBe(true);
   });
 
-  it.skipIf(!hasZsh)(
-    'is false for a lock without a pid over a minute old',
-    () => {
-      lock();
-      const old = new Date(Date.now() - 2 * 60 * 1000);
-      utimesSync(join(root, 'implement.lock'), old, old);
-      expect(live()).toBe(false);
-    }
-  );
+  it('is false for a lock without a pid over a minute old', () => {
+    lock();
+    const old = new Date(Date.now() - 2 * 60 * 1000);
+    utimesSync(join(root, 'implement.lock'), old, old);
+    expect(live()).toBe(false);
+  });
 });
 
 describe('run.sh queue lock', () => {
@@ -1636,7 +1598,7 @@ describe('run.sh queue lock', () => {
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
   const fns = ['run_lock_live', 'take_run_lock', 'drop_run_lock'].map(cut);
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   let root: string;
 
   const lockDir = () => join(root, 'lock');
@@ -1679,13 +1641,13 @@ describe('run.sh queue lock', () => {
     for (const f of fns) expect(f).not.toBe('');
   });
 
-  it.skipIf(!hasZsh)('takes a free lock and writes the owner pid', () => {
+  it('takes a free lock and writes the owner pid', () => {
     expect(sh('take_run_lock 4242')).toBe(0);
     expect(pidFile()).toBe('4242');
     expect(notes()).toBe('');
   });
 
-  it.skipIf(!hasZsh)('clears a lock whose pid is gone and takes it', () => {
+  it('clears a lock whose pid is gone and takes it', () => {
     const gone = dead();
     lock(gone);
     expect(sh('take_run_lock 4242')).toBe(0);
@@ -1693,32 +1655,26 @@ describe('run.sh queue lock', () => {
     expect(notes()).toContain(`warn: cleared lock; its run ${gone} is gone`);
   });
 
-  it.skipIf(!hasZsh)(
-    'leaves a stale lock alone while another run clears it',
-    () => {
-      lock(dead());
-      mkdirSync(join(root, 'lock.takeover'));
-      expect(sh('take_run_lock 4242')).not.toBe(0);
-      expect(pidFile()).not.toBe('4242');
-      expect(notes()).toBe('');
-    }
-  );
+  it('leaves a stale lock alone while another run clears it', () => {
+    lock(dead());
+    mkdirSync(join(root, 'lock.takeover'));
+    expect(sh('take_run_lock 4242')).not.toBe(0);
+    expect(pidFile()).not.toBe('4242');
+    expect(notes()).toBe('');
+  });
 
-  it.skipIf(!hasZsh)(
-    'clears a takeover left by a killed run after a minute',
-    () => {
-      lock(dead());
-      const takeover = join(root, 'lock.takeover');
-      mkdirSync(takeover);
-      const old = new Date(Date.now() - 2 * 60 * 1000);
-      utimesSync(takeover, old, old);
-      expect(sh('take_run_lock 4242')).toBe(0);
-      expect(pidFile()).toBe('4242');
-      expect(existsSync(takeover)).toBe(false);
-    }
-  );
+  it('clears a takeover left by a killed run after a minute', () => {
+    lock(dead());
+    const takeover = join(root, 'lock.takeover');
+    mkdirSync(takeover);
+    const old = new Date(Date.now() - 2 * 60 * 1000);
+    utimesSync(takeover, old, old);
+    expect(sh('take_run_lock 4242')).toBe(0);
+    expect(pidFile()).toBe('4242');
+    expect(existsSync(takeover)).toBe(false);
+  });
 
-  it.skipIf(!hasZsh)('keeps a lock whose pid answers', () => {
+  it('keeps a lock whose pid answers', () => {
     lock(String(process.pid));
     expect(sh('take_run_lock 4242')).not.toBe(0);
     expect(pidFile()).toBe(String(process.pid));
@@ -1726,13 +1682,13 @@ describe('run.sh queue lock', () => {
     expect(sh('run_lock_live')).toBe(0);
   });
 
-  it.skipIf(!hasZsh)('keeps a fresh lock without a pid', () => {
+  it('keeps a fresh lock without a pid', () => {
     lock();
     expect(sh('take_run_lock 4242')).not.toBe(0);
     expect(existsSync(join(lockDir(), 'pid'))).toBe(false);
   });
 
-  it.skipIf(!hasZsh)('clears a lock without a pid over a minute old', () => {
+  it('clears a lock without a pid over a minute old', () => {
     lock();
     age();
     expect(sh('take_run_lock 4242')).toBe(0);
@@ -1740,11 +1696,11 @@ describe('run.sh queue lock', () => {
     expect(notes()).toContain('warn: cleared lock; its run ? is gone');
   });
 
-  it.skipIf(!hasZsh)('is not live without a lock', () => {
+  it('is not live without a lock', () => {
     expect(sh('run_lock_live')).not.toBe(0);
   });
 
-  it.skipIf(!hasZsh)('drops only its own lock', () => {
+  it('drops only its own lock', () => {
     lock('4242');
     expect(sh('drop_run_lock 1111')).toBe(0);
     expect(existsSync(lockDir())).toBe(true);
@@ -1752,13 +1708,13 @@ describe('run.sh queue lock', () => {
     expect(existsSync(lockDir())).toBe(false);
   });
 
-  it.skipIf(!hasZsh)('leaves a lock without a pid when dropping', () => {
+  it('leaves a lock without a pid when dropping', () => {
     lock();
     expect(sh('drop_run_lock 4242')).toBe(0);
     expect(existsSync(lockDir())).toBe(true);
   });
 
-  it.skipIf(!hasZsh)('platform_move writes its own pid, not the parent', () => {
+  it('platform_move writes its own pid, not the parent', () => {
     const move = cut('platform_move');
     const r = spawnSync(
       'zsh',
@@ -1797,9 +1753,7 @@ describe('run.sh close_parents', () => {
     SCRIPT.indexOf("read -r -d '' PARENTS"),
     SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('close_parents() {')) + 3
   );
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let root: string;
 
   const PARENTS = {
@@ -1883,7 +1837,7 @@ describe('run.sh close_parents', () => {
     );
   });
 
-  it.skipIf(!canRun)('closes a ready parent once, then comments', () => {
+  it('closes a ready parent once, then comments', () => {
     const result = run({ data: { issueUpdate: { success: true } } });
     expect(result.stdout).toContain('rc=0');
     expect(read('calls').trim().split('\n')).toEqual([
@@ -1897,7 +1851,7 @@ describe('run.sh close_parents', () => {
     expect(read('closed-parents')).toBe('COD-100\n');
   });
 
-  it.skipIf(!canRun)('leaves a parent it closed before alone', () => {
+  it('leaves a parent it closed before alone', () => {
     writeFileSync(join(root, 'closed-parents'), 'COD-100\n');
     const result = run({ data: { issueUpdate: { success: true } } });
     expect(result.stdout).toContain('rc=0');
@@ -1905,18 +1859,15 @@ describe('run.sh close_parents', () => {
     expect(read('records')).toBe('');
   });
 
-  it.skipIf(!canRun)(
-    'only warns when the close fails, and posts no comment',
-    () => {
-      const result = run({ errors: [{ message: 'nope' }] });
-      expect(result.stdout).toContain('rc=0');
-      expect(read('calls')).not.toContain('comment');
-      expect(read('records')).toBe('warn COD-100 close: parent close failed\n');
-      expect(read('notes')).toContain('warn: close: COD-100 failed ("nope")');
-      expect(read('notices')).toBe('');
-      expect(read('closed-parents')).toBe('');
-    }
-  );
+  it('only warns when the close fails, and posts no comment', () => {
+    const result = run({ errors: [{ message: 'nope' }] });
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).not.toContain('comment');
+    expect(read('records')).toBe('warn COD-100 close: parent close failed\n');
+    expect(read('notes')).toContain('warn: close: COD-100 failed ("nope")');
+    expect(read('notices')).toBe('');
+    expect(read('closed-parents')).toBe('');
+  });
 });
 
 describe('run.sh label_parts', () => {
@@ -1926,9 +1877,7 @@ describe('run.sh label_parts', () => {
     SCRIPT.indexOf("read -r -d '' PARTS"),
     SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('label_parts() {')) + 3
   );
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let root: string;
 
   const part = (
@@ -2024,7 +1973,7 @@ describe('run.sh label_parts', () => {
     );
   });
 
-  it.skipIf(!canRun)('labels a ready part once, then comments', () => {
+  it('labels a ready part once, then comments', () => {
     const result = run({ data: { issueUpdate: { success: true } } });
     expect(result.stdout).toContain('rc=0');
     expect(read('calls').trim().split('\n')).toEqual([
@@ -2038,7 +1987,7 @@ describe('run.sh label_parts', () => {
     expect(read('labelled-parts')).toBe('COD-102\n');
   });
 
-  it.skipIf(!canRun)('leaves a part it labelled before alone', () => {
+  it('leaves a part it labelled before alone', () => {
     writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
     const result = run({ data: { issueUpdate: { success: true } } });
     expect(result.stdout).toContain('rc=0');
@@ -2046,7 +1995,7 @@ describe('run.sh label_parts', () => {
     expect(read('records')).toBe('');
   });
 
-  it.skipIf(!canRun)('leaves a part the queue labelled on another host', () => {
+  it('leaves a part the queue labelled on another host', () => {
     const result = run(
       { data: { issueUpdate: { success: true } } },
       undefined,
@@ -2063,7 +2012,7 @@ describe('run.sh label_parts', () => {
     expect(read('records')).toBe('');
   });
 
-  it.skipIf(!canRun)('leaves a part whose report asks Håkan first', () => {
+  it('leaves a part whose report asks Håkan first', () => {
     const result = run(
       { data: { issueUpdate: { success: true } } },
       '## Report\n\n**Ask me before implementing**\n'
@@ -2074,34 +2023,28 @@ describe('run.sh label_parts', () => {
     expect(read('labelled-parts')).toBe('');
   });
 
-  it.skipIf(!canRun)(
-    'only warns when the label fails, and posts no comment',
-    () => {
-      const result = run({ errors: [{ message: 'nope' }] });
-      expect(result.stdout).toContain('rc=0');
-      expect(read('calls')).not.toContain('comment');
-      expect(read('records')).toBe('warn COD-102 label: part label failed\n');
-      expect(read('notes')).toContain('warn: label: COD-102 failed ("nope")');
-      expect(read('notices')).toBe('');
-      expect(read('labelled-parts')).toBe('');
-    }
-  );
+  it('only warns when the label fails, and posts no comment', () => {
+    const result = run({ errors: [{ message: 'nope' }] });
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls')).not.toContain('comment');
+    expect(read('records')).toBe('warn COD-102 label: part label failed\n');
+    expect(read('notes')).toContain('warn: label: COD-102 failed ("nope")');
+    expect(read('notices')).toBe('');
+    expect(read('labelled-parts')).toBe('');
+  });
 
-  it.skipIf(!canRun)(
-    'posts the comment again for a part it labelled whose comment failed',
-    () => {
-      writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
-      const result = run({}, undefined, [], [{ name: 'agent:ready' }]);
-      expect(result.stdout).toContain('rc=0');
-      expect(read('calls').trim().split('\n')).toEqual([
-        `comment ${JSON.stringify({ id: 'uuid-102', body: '**Agent: labelled ready** every blocker is closed: COD-101 (Done).' })}`
-      ]);
-      expect(read('notes')).toContain('label: COD-102 comment posted on retry');
-      expect(read('records')).toBe('');
-    }
-  );
+  it('posts the comment again for a part it labelled whose comment failed', () => {
+    writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
+    const result = run({}, undefined, [], [{ name: 'agent:ready' }]);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('calls').trim().split('\n')).toEqual([
+      `comment ${JSON.stringify({ id: 'uuid-102', body: '**Agent: labelled ready** every blocker is closed: COD-101 (Done).' })}`
+    ]);
+    expect(read('notes')).toContain('label: COD-102 comment posted on retry');
+    expect(read('records')).toBe('');
+  });
 
-  it.skipIf(!canRun)('posts nothing more once the comment is there', () => {
+  it('posts nothing more once the comment is there', () => {
     writeFileSync(join(root, 'labelled-parts'), 'COD-102\n');
     const result = run(
       {},
@@ -2128,9 +2071,7 @@ describe('run.sh watch_prs', () => {
       SCRIPT.indexOf('\n}\n', SCRIPT.indexOf(`${name}() {`)) + 3
     );
   const source = [cutFn('hold_list_warn'), cutFn('watch_prs')].join('\n');
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let root: string;
 
   const ticket = {
@@ -2224,41 +2165,35 @@ describe('run.sh watch_prs', () => {
     expect(SCRIPT).toContain('headRefName');
   });
 
-  it.skipIf(!canRun)('watches a ticket whose PR is not Renovate’s', () => {
+  it('watches a ticket whose PR is not Renovate’s', () => {
     const result = run('feature/cod-5');
     expect(result.stdout).toContain('rc=0');
     expect(Object.keys(JSON.parse(read('watch.json')))).toEqual(['COD-5']);
   });
 
-  it.skipIf(!canRun)(
-    'skips a ticket whose attached PR is a renovate/ branch',
-    () => {
-      const result = run('renovate/zod-4.x');
-      expect(result.stdout).toContain('rc=0');
-      expect(JSON.parse(read('watch.json'))).toEqual({});
-      expect(read('notices')).toBe('');
-      expect(read('relabels')).toBe('');
-      expect(read('records')).toBe('');
-    }
-  );
+  it('skips a ticket whose attached PR is a renovate/ branch', () => {
+    const result = run('renovate/zod-4.x');
+    expect(result.stdout).toContain('rc=0');
+    expect(JSON.parse(read('watch.json'))).toEqual({});
+    expect(read('notices')).toBe('');
+    expect(read('relabels')).toBe('');
+    expect(read('records')).toBe('');
+  });
 
-  it.skipIf(!canRun)(
-    'drops a cached entry for a ticket whose attached PR is Renovate’s',
-    () => {
-      writeFileSync(
-        join(root, 'watch.json'),
-        JSON.stringify({ 'COD-5': { pr: 754, state: 'conflicting' } })
-      );
-      const result = run('renovate/zod-4.x');
-      expect(result.stdout).toContain('rc=0');
-      expect(JSON.parse(read('watch.json'))).toEqual({});
-    }
-  );
+  it('drops a cached entry for a ticket whose attached PR is Renovate’s', () => {
+    writeFileSync(
+      join(root, 'watch.json'),
+      JSON.stringify({ 'COD-5': { pr: 754, state: 'conflicting' } })
+    );
+    const result = run('renovate/zod-4.x');
+    expect(result.stdout).toContain('rc=0');
+    expect(JSON.parse(read('watch.json'))).toEqual({});
+  });
 
   const tickets = (...ids: number[]) =>
     ids.map((n) => ({ ...ticket, identifier: `COD-${n}` }));
 
-  it.skipIf(!canRun)('watches the tickets of every page, with no warn', () => {
+  it('watches the tickets of every page, with no warn', () => {
     const result = run('feature/cod-5', [tickets(5), tickets(6)]);
     expect(result.stdout).toContain('rc=0');
     expect(Object.keys(JSON.parse(read('watch.json'))).sort()).toEqual([
@@ -2270,7 +2205,7 @@ describe('run.sh watch_prs', () => {
     expect(existsSync(join(root, 'watch-pages.jsonl'))).toBe(false);
   });
 
-  it.skipIf(!canRun)('watches a ticket on two pages once', () => {
+  it('watches a ticket on two pages once', () => {
     const result = run('feature/cod-5', [tickets(5, 6), tickets(6)]);
     expect(result.stdout).toContain('rc=0');
     expect(Object.keys(JSON.parse(read('watch.json'))).sort()).toEqual([
@@ -2279,7 +2214,7 @@ describe('run.sh watch_prs', () => {
     ]);
   });
 
-  it.skipIf(!canRun)('warns once when more than 5 pages remain', () => {
+  it('warns once when more than 5 pages remain', () => {
     const result = run(
       'feature/cod-5',
       [1, 2, 3, 4, 5].map((n) => tickets(n)),
@@ -2297,7 +2232,7 @@ describe('run.sh watch_prs', () => {
     });
     const entry = () => JSON.parse(read('watch.json'))['COD-5'];
 
-    it.skipIf(!canRun)('asks once and stores the request', () => {
+    it('asks once and stores the request', () => {
       const result = run('feature/cod-5', [[parkedTicket()]]);
       expect(result.stdout).toContain('rc=0');
       expect(read('copilot')).toBe('754\n');
@@ -2307,7 +2242,7 @@ describe('run.sh watch_prs', () => {
       expect(read('notices')).toBe('');
     });
 
-    it.skipIf(!canRun)('stores a failure and notices it once', () => {
+    it('stores a failure and notices it once', () => {
       writeFileSync(join(root, 'copilot-fail'), '');
       const result = run('feature/cod-5', [[parkedTicket()]]);
       expect(result.stdout).toContain('rc=0');
@@ -2322,7 +2257,7 @@ describe('run.sh watch_prs', () => {
       );
     });
 
-    it.skipIf(!canRun)('does not ask again on the next tick', () => {
+    it('does not ask again on the next tick', () => {
       run('feature/cod-5', [[parkedTicket()]]);
       const first = entry().copilotAsked;
       const result = run('feature/cod-5', [[parkedTicket()]]);
@@ -2331,7 +2266,7 @@ describe('run.sh watch_prs', () => {
       expect(entry().copilotAsked).toEqual(first);
     });
 
-    it.skipIf(!canRun)('does not ask again after a failed try', () => {
+    it('does not ask again after a failed try', () => {
       writeFileSync(join(root, 'copilot-fail'), '');
       run('feature/cod-5', [[parkedTicket()]]);
       run('feature/cod-5', [[parkedTicket()]]);
@@ -2339,13 +2274,13 @@ describe('run.sh watch_prs', () => {
       expect(read('notices').split('\n').filter(Boolean)).toHaveLength(1);
     });
 
-    it.skipIf(!canRun)('does not ask for a ticket parked on CI', () => {
+    it('does not ask for a ticket parked on CI', () => {
       run('feature/cod-5', [[parkedTicket('CI')]]);
       expect(read('copilot')).toBe('');
       expect(entry()).not.toHaveProperty('copilotAsked');
     });
 
-    it.skipIf(!canRun)('does not ask for a ticket that is not parked', () => {
+    it('does not ask for a ticket that is not parked', () => {
       run('feature/cod-5');
       expect(read('copilot')).toBe('');
     });
@@ -2376,22 +2311,19 @@ describe('run.sh watch_prs', () => {
     });
     const entry = () => JSON.parse(read('watch.json'))['COD-5'];
 
-    it.skipIf(!canRun)(
-      'enqueues with the node id and head oid it read, and records it',
-      () => {
-        const result = run('feature/cod-5', [[readyTicket]], false, {
-          pr: greenPr()
-        });
-        expect(result.stdout).toContain('rc=0');
-        expect(read('act')).toBe('merge 754 PR_node abc123\n');
-        expect(read('records')).toBe('auto-merge COD-5 PR 754 enqueued\n');
-        expect(read('notices')).toBe('info COD-5: PR 754 merging on its own\n');
-        expect(entry().autoMerge).toMatchObject({ tries: 1, oid: 'abc123' });
-        expect(entry().autoMerge).not.toHaveProperty('failed');
-      }
-    );
+    it('enqueues with the node id and head oid it read, and records it', () => {
+      const result = run('feature/cod-5', [[readyTicket]], false, {
+        pr: greenPr()
+      });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('act')).toBe('merge 754 PR_node abc123\n');
+      expect(read('records')).toBe('auto-merge COD-5 PR 754 enqueued\n');
+      expect(read('notices')).toBe('info COD-5: PR 754 merging on its own\n');
+      expect(entry().autoMerge).toMatchObject({ tries: 1, oid: 'abc123' });
+      expect(entry().autoMerge).not.toHaveProperty('failed');
+    });
 
-    it.skipIf(!canRun)('does not enqueue a PR on a hold path', () => {
+    it('does not enqueue a PR on a hold path', () => {
       run('feature/cod-5', [[readyTicket]], false, {
         pr: greenPr('libs/shared/util/csp/src/index.ts')
       });
@@ -2399,7 +2331,7 @@ describe('run.sh watch_prs', () => {
       expect(entry()).not.toHaveProperty('autoMerge');
     });
 
-    it.skipIf(!canRun)('stores the failure and notices it', () => {
+    it('stores the failure and notices it', () => {
       writeFileSync(join(root, 'act-fail'), '');
       const result = run('feature/cod-5', [[readyTicket]], false, {
         pr: greenPr()
@@ -2418,14 +2350,14 @@ describe('run.sh watch_prs', () => {
       });
     });
 
-    it.skipIf(!canRun)('does not try the failed head again', () => {
+    it('does not try the failed head again', () => {
       writeFileSync(join(root, 'act-fail'), '');
       run('feature/cod-5', [[readyTicket]], false, { pr: greenPr() });
       run('feature/cod-5', [[readyTicket]], false, { pr: greenPr() });
       expect(read('act').split('\n').filter(Boolean)).toHaveLength(1);
     });
 
-    it.skipIf(!canRun)('enqueues nothing without a hold list', () => {
+    it('enqueues nothing without a hold list', () => {
       const result = run('feature/cod-5', [[readyTicket]], false, {
         pr: greenPr(),
         noHolds: true
@@ -2437,7 +2369,7 @@ describe('run.sh watch_prs', () => {
       expect(entry()).not.toHaveProperty('autoMerge');
     });
 
-    it.skipIf(!canRun)('stores the deploy the read prints', () => {
+    it('stores the deploy the read prints', () => {
       writeFileSync(
         join(root, 'deploy'),
         '{"state":"success","run":"https://github.com/r/1","at":"2026-01-03T00:00:00Z"}'
@@ -2451,17 +2383,14 @@ describe('run.sh watch_prs', () => {
     });
   });
 
-  it.skipIf(!canRun)(
-    'fails on a Linear error past the first page, leaving watch.json as it was',
-    () => {
-      const before = JSON.stringify({ 'COD-9': { pr: 1, state: 'open' } });
-      writeFileSync(join(root, 'watch.json'), before);
-      const result = run('feature/cod-5', [tickets(5), null]);
-      expect(result.stdout).toContain('Linear error "boom"');
-      expect(result.stdout).toContain('rc=1');
-      expect(read('watch.json')).toBe(before);
-    }
-  );
+  it('fails on a Linear error past the first page, leaving watch.json as it was', () => {
+    const before = JSON.stringify({ 'COD-9': { pr: 1, state: 'open' } });
+    writeFileSync(join(root, 'watch.json'), before);
+    const result = run('feature/cod-5', [tickets(5), null]);
+    expect(result.stdout).toContain('Linear error "boom"');
+    expect(result.stdout).toContain('rc=1');
+    expect(read('watch.json')).toBe(before);
+  });
 });
 
 describe('run.sh read_deploy', () => {
@@ -2472,9 +2401,7 @@ describe('run.sh read_deploy', () => {
       SCRIPT.indexOf('\n}\n', SCRIPT.indexOf(`${name}() {`)) + 3
     );
   const source = [cutFn('deploy_warn'), cutFn('read_deploy')].join('\n');
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let root: string;
   const read = (name: string) =>
     existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
@@ -2524,32 +2451,29 @@ describe('run.sh read_deploy', () => {
     );
   });
 
-  it.skipIf(!canRun)(
-    'reads success from a clean deploy of the newest run',
-    () => {
-      const r = run(merged, [
-        {
-          ...newest,
-          id: 98,
-          created_at: '2026-01-01T00:00:00Z',
-          conclusion: 'failure'
-        },
-        newest
-      ]);
-      const deploy = JSON.parse(r.stdout);
-      expect(deploy).toMatchObject({ state: 'success', run: newest.html_url });
-      expect(deploy.at).toMatch(/^\d{4}-\d\d-\d\dT/);
-      expect(read('calls').split('\n').filter(Boolean)).toEqual([
-        'repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=cafe123&event=push',
-        'repos/codeware-sthlm/cdwr/actions/runs/99/jobs?per_page=100',
-        'repos/codeware-sthlm/cdwr/check-runs/11/annotations',
-        'repos/codeware-sthlm/cdwr/check-runs/12/annotations'
-      ]);
-      expect(read('watch-notes.jsonl')).toBe('');
-    }
-  );
+  it('reads success from a clean deploy of the newest run', () => {
+    const r = run(merged, [
+      {
+        ...newest,
+        id: 98,
+        created_at: '2026-01-01T00:00:00Z',
+        conclusion: 'failure'
+      },
+      newest
+    ]);
+    const deploy = JSON.parse(r.stdout);
+    expect(deploy).toMatchObject({ state: 'success', run: newest.html_url });
+    expect(deploy.at).toMatch(/^\d{4}-\d\d-\d\dT/);
+    expect(read('calls').split('\n').filter(Boolean)).toEqual([
+      'repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=cafe123&event=push',
+      'repos/codeware-sthlm/cdwr/actions/runs/99/jobs?per_page=100',
+      'repos/codeware-sthlm/cdwr/check-runs/11/annotations',
+      'repos/codeware-sthlm/cdwr/check-runs/12/annotations'
+    ]);
+    expect(read('watch-notes.jsonl')).toBe('');
+  });
 
-  it.skipIf(!canRun)('reads skipped from the deploy guard’s warning', () => {
+  it('reads skipped from the deploy guard’s warning', () => {
     const r = run(
       merged,
       [newest],
@@ -2563,13 +2487,13 @@ describe('run.sh read_deploy', () => {
     expect(JSON.parse(r.stdout).state).toBe('skipped');
   });
 
-  it.skipIf(!canRun)('reads failure without reading the jobs', () => {
+  it('reads failure without reading the jobs', () => {
     const r = run(merged, [{ ...newest, conclusion: 'failure' }]);
     expect(JSON.parse(r.stdout).state).toBe('failure');
     expect(read('calls').split('\n').filter(Boolean)).toHaveLength(1);
   });
 
-  it.skipIf(!canRun)('reads pending while the run is going or missing', () => {
+  it('reads pending while the run is going or missing', () => {
     expect(
       JSON.parse(
         run(merged, [{ ...newest, status: 'in_progress', conclusion: null }])
@@ -2582,25 +2506,22 @@ describe('run.sh read_deploy', () => {
     });
   });
 
-  it.skipIf(!canRun)(
-    'prints nothing and warns once an hour when a read fails',
-    () => {
-      writeFileSync(join(root, 'gh-fail'), '');
-      const r = run(merged, [newest]);
-      expect(r.stdout).toBe('');
-      expect(read('records')).toBe(
-        'warn COD-5 watch: could not read the deploy\n'
-      );
-      // The next tick notes it again, but the warn row waits an hour
-      run(merged, [newest]);
-      expect(read('notes').split('\n').filter(Boolean)).toHaveLength(2);
-      expect(read('records')).toBe(
-        'warn COD-5 watch: could not read the deploy\n'
-      );
-    }
-  );
+  it('prints nothing and warns once an hour when a read fails', () => {
+    writeFileSync(join(root, 'gh-fail'), '');
+    const r = run(merged, [newest]);
+    expect(r.stdout).toBe('');
+    expect(read('records')).toBe(
+      'warn COD-5 watch: could not read the deploy\n'
+    );
+    // The next tick notes it again, but the warn row waits an hour
+    run(merged, [newest]);
+    expect(read('notes').split('\n').filter(Boolean)).toHaveLength(2);
+    expect(read('records')).toBe(
+      'warn COD-5 watch: could not read the deploy\n'
+    );
+  });
 
-  it.skipIf(!canRun).each([
+  it.each([
     ['not merged on its own', { ...merged, autoMerge: undefined }],
     ['not merged', { ...merged, state: 'open' }],
     ['no merge commit', { ...merged, mergeCommit: null }],
@@ -2617,7 +2538,7 @@ describe('run.sh copilot_request', () => {
     SCRIPT.indexOf('copilot_request() {'),
     SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('copilot_request() {')) + 3
   );
-  const canRun = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
 
   // app: whether the app's token is there; token: Håkan's token, or none; added: the identity
   // whose request GitHub turns into a Copilot request
@@ -2639,38 +2560,32 @@ describe('run.sh copilot_request', () => {
     return { stdout: r.stdout, calls };
   };
 
-  it.skipIf(!canRun)('asks as the app and stops there when it worked', () => {
+  it('asks as the app and stops there when it worked', () => {
     const r = request(true, 'tok', 'app');
     expect(r.stdout).toBe('rc=0 out=\n');
     expect(r.calls).toBe('gh app\nasked app\n');
   });
 
-  it.skipIf(!canRun)(
-    'falls back on the token when the app adds no Copilot',
-    () => {
-      const r = request(true, 'tok', 'tok');
-      expect(r.stdout).toBe('rc=0 out=\n');
-      expect(r.calls).toBe('gh app\nasked app\ngh tok\nasked tok\n');
-    }
-  );
+  it('falls back on the token when the app adds no Copilot', () => {
+    const r = request(true, 'tok', 'tok');
+    expect(r.stdout).toBe('rc=0 out=\n');
+    expect(r.calls).toBe('gh app\nasked app\ngh tok\nasked tok\n');
+  });
 
-  it.skipIf(!canRun)('falls back on the token when there is no app', () => {
+  it('falls back on the token when there is no app', () => {
     const r = request(false, 'tok', 'tok');
     expect(r.stdout).toBe('rc=0 out=\n');
     expect(r.calls).toBe('gh tok\nasked tok\n');
   });
 
-  it.skipIf(!canRun)(
-    'gives a one-line reason whole, not its first letter',
-    () => {
-      const r = request(true, '', 'tok');
-      expect(r.stdout).toBe(
-        'rc=1 out=GitHub did not add Copilot as a reviewer\n'
-      );
-    }
-  );
+  it('gives a one-line reason whole, not its first letter', () => {
+    const r = request(true, '', 'tok');
+    expect(r.stdout).toBe(
+      'rc=1 out=GitHub did not add Copilot as a reviewer\n'
+    );
+  });
 
-  it.skipIf(!canRun)('never asks as the signed-in user', () => {
+  it('never asks as the signed-in user', () => {
     const r = request(false, '', 'login');
     expect(r.stdout).toBe('rc=1 out=no GitHub app\n');
     expect(r.calls).toBe('');
@@ -2683,9 +2598,7 @@ describe('run.sh watch_renovate', () => {
     SCRIPT.indexOf("read -r -d '' RENOVATE_TICKETS"),
     SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('watch_renovate() {')) + 3
   );
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let root: string;
 
   const PRS = [
@@ -2762,31 +2675,26 @@ describe('run.sh watch_renovate', () => {
     expect(limit * 100 * 100).toBeLessThan(500_000);
   });
 
-  it.skipIf(!canRun)('passes the limit to gh pr list', () => {
+  it('passes the limit to gh pr list', () => {
     run(PRS);
     expect(read('gh')).toContain('--limit 30');
   });
 
-  it.skipIf(!canRun)(
-    'warns on a full page and still writes renovate.json',
-    () => {
-      const full = Array.from({ length: 30 }, (_, i) => ({
-        ...PRS[0],
-        number: 700 + i
-      }));
-      const result = run(full);
-      expect(result.stdout).toContain('rc=0');
-      expect(read('notes')).toContain(
-        'warn: renovate: 30 open Renovate PRs, the page limit; older ones are not read'
-      );
-      expect(read('records')).toContain(
-        'warn  renovate: PR page limit reached'
-      );
-      expect(Object.keys(JSON.parse(read('renovate.json')))).toHaveLength(30);
-    }
-  );
+  it('warns on a full page and still writes renovate.json', () => {
+    const full = Array.from({ length: 30 }, (_, i) => ({
+      ...PRS[0],
+      number: 700 + i
+    }));
+    const result = run(full);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('notes')).toContain(
+      'warn: renovate: 30 open Renovate PRs, the page limit; older ones are not read'
+    );
+    expect(read('records')).toContain('warn  renovate: PR page limit reached');
+    expect(Object.keys(JSON.parse(read('renovate.json')))).toHaveLength(30);
+  });
 
-  it.skipIf(!canRun)('does not warn below the page limit', () => {
+  it('does not warn below the page limit', () => {
     run(PRS);
     expect(read('notes')).not.toContain('page limit');
   });
@@ -2804,36 +2712,30 @@ describe('run.sh watch_renovate', () => {
     expect(close).toBeGreaterThan(ren);
   });
 
-  it.skipIf(!canRun)(
-    'writes renovate.json from the first run without a notice',
-    () => {
-      const result = run(PRS);
-      expect(result.stdout).toContain('rc=0');
-      expect(read('notices')).toBe('');
-      expect(JSON.parse(read('renovate.json'))['754'].state).toBe('failing');
-    }
-  );
+  it('writes renovate.json from the first run without a notice', () => {
+    const result = run(PRS);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('notices')).toBe('');
+    expect(JSON.parse(read('renovate.json'))['754'].state).toBe('failing');
+  });
 
-  it.skipIf(!canRun)(
-    'writes renovate.json from renovate_step and notices a broken PR',
-    () => {
-      writeFileSync(join(root, 'renovate.json'), '{}');
-      const result = run(PRS);
-      expect(result.stdout).toContain('rc=0');
-      expect(read('gh')).toContain('pr list');
-      const state = JSON.parse(read('renovate.json'));
-      expect(state['754']).toMatchObject({
-        pr: 754,
-        state: 'failing',
-        ticket: null
-      });
-      expect(read('notices')).toBe(
-        'info Renovate PR #754 has failing checks: chore(deps): update zod\n'
-      );
-    }
-  );
+  it('writes renovate.json from renovate_step and notices a broken PR', () => {
+    writeFileSync(join(root, 'renovate.json'), '{}');
+    const result = run(PRS);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('gh')).toContain('pr list');
+    const state = JSON.parse(read('renovate.json'));
+    expect(state['754']).toMatchObject({
+      pr: 754,
+      state: 'failing',
+      ticket: null
+    });
+    expect(read('notices')).toBe(
+      'info Renovate PR #754 has failing checks: chore(deps): update zod\n'
+    );
+  });
 
-  it.skipIf(!canRun)('sends no second notice while the state holds', () => {
+  it('sends no second notice while the state holds', () => {
     writeFileSync(join(root, 'renovate.json'), '{}');
     run(PRS);
     rmSync(join(root, 'notices'));
@@ -2843,18 +2745,15 @@ describe('run.sh watch_renovate', () => {
     expect(JSON.parse(read('renovate.json'))['754'].state).toBe('failing');
   });
 
-  it.skipIf(!canRun)(
-    'sends no notice when renovate.json cannot be written',
-    () => {
-      writeFileSync(join(root, 'renovate.json'), '{}');
-      mkdirSync(join(root, 'renovate.json.tmp'));
-      const result = run(PRS);
-      expect(result.stdout).toContain('could not write renovate.json');
-      expect(result.stdout).toContain('rc=1');
-      expect(read('notices')).toBe('');
-      expect(read('renovate.json')).toBe('{}');
-    }
-  );
+  it('sends no notice when renovate.json cannot be written', () => {
+    writeFileSync(join(root, 'renovate.json'), '{}');
+    mkdirSync(join(root, 'renovate.json.tmp'));
+    const result = run(PRS);
+    expect(result.stdout).toContain('could not write renovate.json');
+    expect(result.stdout).toContain('rc=1');
+    expect(read('notices')).toBe('');
+    expect(read('renovate.json')).toBe('{}');
+  });
 
   it('records the failure as a warn in the run', () => {
     expect(SCRIPT).toContain(
@@ -2862,73 +2761,61 @@ describe('run.sh watch_renovate', () => {
     );
   });
 
-  it.skipIf(!canRun)(
-    'leaves renovate.json as it was when the answer is no list',
-    () => {
-      writeFileSync(join(root, 'renovate.json'), '{}');
-      run(PRS);
-      const before = read('renovate.json');
-      const result = run({ not: 'an array' });
-      expect(result.stdout).toContain('not a list: {"not":"an array"}\n');
-      expect(result.stdout).toContain('rc=1');
-      expect(read('renovate.json')).toBe(before);
-    }
-  );
+  it('leaves renovate.json as it was when the answer is no list', () => {
+    writeFileSync(join(root, 'renovate.json'), '{}');
+    run(PRS);
+    const before = read('renovate.json');
+    const result = run({ not: 'an array' });
+    expect(result.stdout).toContain('not a list: {"not":"an array"}\n');
+    expect(result.stdout).toContain('rc=1');
+    expect(read('renovate.json')).toBe(before);
+  });
 
-  it.skipIf(!canRun)(
-    'names an empty or long answer on one line, cut to 80 characters',
-    () => {
-      expect(run('').stdout).toContain('not a list: (empty)\n');
-      const long = `<html>\r\n\t${'x'.repeat(100)}`;
-      expect(run(long).stdout).toContain(
-        `not a list: <html>   ${'x'.repeat(71)}\n`
-      );
-    }
-  );
+  it('names an empty or long answer on one line, cut to 80 characters', () => {
+    expect(run('').stdout).toContain('not a list: (empty)\n');
+    const long = `<html>\r\n\t${'x'.repeat(100)}`;
+    expect(run(long).stdout).toContain(
+      `not a list: <html>   ${'x'.repeat(71)}\n`
+    );
+  });
 
-  it.skipIf(!canRun)(
-    "names gh's first error line and leaves renovate.json as it was",
-    () => {
-      writeFileSync(join(root, 'renovate.json'), '{}');
-      const result = run(PRS, undefined, {
-        gh: `print -ru2 -- "  HTTP 403: Resource not accessible by integration"; print -ru2 -- "second line"; return 1`
-      });
-      expect(result.stdout).toContain(
-        'GitHub: HTTP 403: Resource not accessible by integration\nrc=1'
-      );
-      expect(read('renovate.json')).toBe('{}');
-    }
-  );
+  it("names gh's first error line and leaves renovate.json as it was", () => {
+    writeFileSync(join(root, 'renovate.json'), '{}');
+    const result = run(PRS, undefined, {
+      gh: `print -ru2 -- "  HTTP 403: Resource not accessible by integration"; print -ru2 -- "second line"; return 1`
+    });
+    expect(result.stdout).toContain(
+      'GitHub: HTTP 403: Resource not accessible by integration\nrc=1'
+    );
+    expect(read('renovate.json')).toBe('{}');
+  });
 
-  it.skipIf(!canRun)('says when gh failed without a word', () => {
+  it('says when gh failed without a word', () => {
     const result = run(PRS, undefined, { gh: 'return 1' });
     expect(result.stdout).toContain('GitHub: (no stderr)\nrc=1');
   });
 
-  it.skipIf(!canRun)(
-    "names both attempts' errors when the signed-in fallback fails too",
-    () => {
-      const result = run(PRS, undefined, {
-        token: true,
-        gh: `[[ -n "\${GH_TOKEN:-}" ]] && { print -ru2 -- "HTTP 403: app"; return 1; }; print -ru2 -- "To get started with GitHub CLI, please run: gh auth login"; return 4`
-      });
-      expect(result.stdout).toContain(
-        'GitHub: HTTP 403: app; as user: To get started with GitHub CLI, please run: gh auth login\nrc=1'
-      );
-      expect(read('notes')).toContain(
-        'warn: GitHub read fell back to the signed-in user'
-      );
-    }
-  );
+  it("names both attempts' errors when the signed-in fallback fails too", () => {
+    const result = run(PRS, undefined, {
+      token: true,
+      gh: `[[ -n "\${GH_TOKEN:-}" ]] && { print -ru2 -- "HTTP 403: app"; return 1; }; print -ru2 -- "To get started with GitHub CLI, please run: gh auth login"; return 4`
+    });
+    expect(result.stdout).toContain(
+      'GitHub: HTTP 403: app; as user: To get started with GitHub CLI, please run: gh auth login\nrc=1'
+    );
+    expect(read('notes')).toContain(
+      'warn: GitHub read fell back to the signed-in user'
+    );
+  });
 
-  it.skipIf(!canRun)('cuts each error line to 120 characters', () => {
+  it('cuts each error line to 120 characters', () => {
     const result = run(PRS, undefined, {
       gh: `print -ru2 -- "${'e'.repeat(150)}"; return 1`
     });
     expect(result.stdout).toContain(`GitHub: ${'e'.repeat(120)}\nrc=1`);
   });
 
-  it.skipIf(!canRun)('reads nothing more when the fallback succeeds', () => {
+  it('reads nothing more when the fallback succeeds', () => {
     const result = run(PRS, undefined, {
       token: true,
       gh: `[[ -n "\${GH_TOKEN:-}" ]] && { print -ru2 -- "HTTP 403: app"; return 1; }; cat "$ROOT/prs.json"`
@@ -2943,9 +2830,7 @@ describe('run.sh session files from another host', () => {
     SCRIPT.match(
       /^ {4}for f in "\$SESSIONS"\/\*\.json\(N\); do\n[\s\S]*?\n {4}done\n/m
     )?.[0] ?? '';
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let root: string;
 
   // A session file as the Mac mirrors it: its pid belongs to the other machine
@@ -2982,22 +2867,19 @@ describe('run.sh session files from another host', () => {
     expect(loop).toContain('remote=true');
   });
 
-  it.skipIf(!canRun)(
-    'keeps a fresh waiting file, with unknown liveness',
-    () => {
-      session('fresh', 60);
-      const result = sweep();
-      expect(existsSync(join(root, 'fresh.json'))).toBe(true);
-      const item = JSON.parse(result.stdout.trim());
-      expect(item).toMatchObject({
-        state: 'waiting',
-        pidAlive: null,
-        watcherAlive: null
-      });
-    }
-  );
+  it('keeps a fresh waiting file, with unknown liveness', () => {
+    session('fresh', 60);
+    const result = sweep();
+    expect(existsSync(join(root, 'fresh.json'))).toBe(true);
+    const item = JSON.parse(result.stdout.trim());
+    expect(item).toMatchObject({
+      state: 'waiting',
+      pidAlive: null,
+      watcherAlive: null
+    });
+  });
 
-  it.skipIf(!canRun)('deletes a file older than 24 h', () => {
+  it('deletes a file older than 24 h', () => {
     session('stale', 86400 + 3600);
     const result = sweep();
     expect(existsSync(join(root, 'stale.json'))).toBe(false);
@@ -3010,7 +2892,7 @@ describe('run.sh woken by the listener', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   let home: string;
 
   const live = (file: unknown) => {
@@ -3035,17 +2917,14 @@ describe('run.sh woken by the listener', () => {
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it.skipIf(!hasZsh)(
-    'reads the listener as live only on a fresh live beat',
-    () => {
-      expect(live({ state: 'live', lastBeat: ago(5_000) })).toBe(0);
-      expect(live({ state: 'live', lastBeat: ago(180_000) })).not.toBe(0);
-      expect(live({ state: 'down', lastBeat: ago(5_000) })).not.toBe(0);
-      expect(live('not json')).not.toBe(0);
-    }
-  );
+  it('reads the listener as live only on a fresh live beat', () => {
+    expect(live({ state: 'live', lastBeat: ago(5_000) })).toBe(0);
+    expect(live({ state: 'live', lastBeat: ago(180_000) })).not.toBe(0);
+    expect(live({ state: 'down', lastBeat: ago(5_000) })).not.toBe(0);
+    expect(live('not json')).not.toBe(0);
+  });
 
-  it.skipIf(!hasZsh)('reads no listener as not live', () => {
+  it('reads no listener as not live', () => {
     expect(live(undefined)).not.toBe(0);
   });
 
@@ -3055,36 +2934,33 @@ describe('run.sh woken by the listener', () => {
     );
   });
 
-  it.skipIf(!hasZsh)(
-    'names the commit the image was built from, when it has one',
-    () => {
-      const job = (sha?: string) =>
-        spawnSync(
-          'zsh',
+  it('names the commit the image was built from, when it has one', () => {
+    const job = (sha?: string) =>
+      spawnSync(
+        'zsh',
+        [
+          '-c',
           [
-            '-c',
-            [
-              `REPO="${home}"`,
-              'AGENT_QUEUE_HOST=container',
-              'RUN_INTERVAL_SECONDS=600',
-              // The agent image exports its own sha, so the unset case clears it
-              sha === undefined
-                ? 'unset AGENT_IMAGE_SHA'
-                : `AGENT_IMAGE_SHA='${sha}'`,
-              fn('job_line'),
-              'job_line'
-            ].join('\n')
-          ],
-          { encoding: 'utf8' }
-        ).stdout.trim();
+            `REPO="${home}"`,
+            'AGENT_QUEUE_HOST=container',
+            'RUN_INTERVAL_SECONDS=600',
+            // The agent image exports its own sha, so the unset case clears it
+            sha === undefined
+              ? 'unset AGENT_IMAGE_SHA'
+              : `AGENT_IMAGE_SHA='${sha}'`,
+            fn('job_line'),
+            'job_line'
+          ].join('\n')
+        ],
+        { encoding: 'utf8' }
+      ).stdout.trim();
 
-      expect(job('0123456789abcdef0123456789abcdef01234567')).toBe(
-        'Job: every 10 min · image sha-0123456 unknown'
-      );
-      expect(job()).toBe('Job: every 10 min · image unknown');
-      expect(job('not-a-sha')).toBe('Job: every 10 min · image unknown');
-    }
-  );
+    expect(job('0123456789abcdef0123456789abcdef01234567')).toBe(
+      'Job: every 10 min · image sha-0123456 unknown'
+    );
+    expect(job()).toBe('Job: every 10 min · image unknown');
+    expect(job('not-a-sha')).toBe('Job: every 10 min · image unknown');
+  });
 
   it('compares every queue file against main in the job line', () => {
     const loop = /for f in ([^;\n]+); do\n\s+theirs=/.exec(fn('job_line'))?.[1];
@@ -3118,7 +2994,7 @@ describe('run.sh job.json', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   const FILES = [
     'run.sh',
     'lib.sh',
@@ -3161,7 +3037,6 @@ describe('run.sh job.json', () => {
       writeFileSync(join(dir, f), `# ${f}\n`);
       writeFileSync(join(home, f), `# ${f}\n`);
     }
-    if (!hasZsh) return;
     git('init', '-q', '-b', 'main');
     git('add', '-A');
     git('commit', '-qm', 'main');
@@ -3216,7 +3091,7 @@ describe('run.sh job.json', () => {
       env: { ...process.env, ...env }
     }).stdout.trim();
 
-  describe.skipIf(!hasZsh)('spent_today', () => {
+  describe('spent_today', () => {
     const today = () => new Date().toLocaleDateString('sv-SE').slice(0, 10);
     const spent = (rows?: string) => {
       if (rows !== undefined)
@@ -3247,7 +3122,7 @@ describe('run.sh job.json', () => {
     });
   });
 
-  describe.skipIf(!hasZsh)('queue_job_line', () => {
+  describe('queue_job_line', () => {
     const line = (opts: {
       job?: string;
       spent?: string;
@@ -3294,7 +3169,7 @@ describe('run.sh job.json', () => {
     });
   });
 
-  describe.skipIf(!hasZsh)('implement_cap', () => {
+  describe('implement_cap', () => {
     const cap = (value?: string, file?: string) => {
       rmSync(join(home, 'implement-cap'), { force: true });
       if (file !== undefined) writeFileSync(join(home, 'implement-cap'), file);
@@ -3326,7 +3201,7 @@ describe('run.sh job.json', () => {
     });
   });
 
-  describe.skipIf(!hasZsh)('queue_limit', () => {
+  describe('queue_limit', () => {
     const LIB = readFileSync(
       fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url)),
       'utf8'
@@ -3353,7 +3228,7 @@ describe('run.sh job.json', () => {
     });
   });
 
-  it.skipIf(!hasZsh)('says nothing differs when the copies match', () => {
+  it('says nothing differs when the copies match', () => {
     const { line, json } = run();
     expect(line).toBe('Job: every 10 min · image sha-0123456');
     expect(json).toMatchObject({
@@ -3366,35 +3241,29 @@ describe('run.sh job.json', () => {
     expect(json.at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   });
 
-  it.skipIf(!hasZsh)(
-    'names implement.sh when its installed copy differs',
-    () => {
-      writeFileSync(join(home, 'implement.sh'), '# an older implement.sh\n');
-      const { line, json } = run();
-      expect(line).toBe(
-        'Job: every 10 min · image sha-0123456 out of date (implement.sh)'
-      );
-      expect(json.differs).toEqual(['implement.sh']);
-    }
-  );
+  it('names implement.sh when its installed copy differs', () => {
+    writeFileSync(join(home, 'implement.sh'), '# an older implement.sh\n');
+    const { line, json } = run();
+    expect(line).toBe(
+      'Job: every 10 min · image sha-0123456 out of date (implement.sh)'
+    );
+    expect(json.differs).toEqual(['implement.sh']);
+  });
 
-  it.skipIf(!hasZsh)(
-    'keeps the kind with null when main cannot be read',
-    () => {
-      git('update-ref', '-d', 'refs/remotes/origin/main');
-      const { line, json } = run();
-      expect(line).toBe('Job: every 10 min · image sha-0123456 unknown');
-      expect(json).toMatchObject({ kind: 'image sha-0123456', differs: null });
-    }
-  );
+  it('keeps the kind with null when main cannot be read', () => {
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+    const { line, json } = run();
+    expect(line).toBe('Job: every 10 min · image sha-0123456 unknown');
+    expect(json).toMatchObject({ kind: 'image sha-0123456', differs: null });
+  });
 
-  it.skipIf(!hasZsh)('writes nothing under --check', () => {
+  it('writes nothing under --check', () => {
     expect(run(true).json).toBeNull();
   });
 });
 
 describe('run.sh watch.jq errors', () => {
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   const fn = (name: string) =>
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
@@ -3409,37 +3278,34 @@ describe('run.sh watch.jq errors', () => {
     for (const line of failures) expect(line).toMatch(/watch_err|\$why/);
   });
 
-  it.skipIf(!hasZsh)(
-    "prints jq's first error line after a failure, nothing after a success",
-    () => {
-      const dir = mkdtempSync(join(tmpdir(), 'run-sh-watch-err-'));
-      try {
-        writeFileSync(join(dir, 'watch.jq'), `def long: ${'x'.repeat(200)};\n`);
-        const body = [
-          'set -euo pipefail',
-          `HOME_DIR="${dir}" LOGS="${dir}" WATCH_DIR="${dir}"`,
-          fn('watch'),
-          fn('watch_err'),
-          'out="$(watch -n \'include "watch"; long\')" || print -r -- "fail:$(watch_err)|"',
-          'out="$(watch -n 1)"; print -r -- "ok:$(watch_err)|"'
-        ].join('\n');
-        const result = spawnSync('zsh', ['-c', body], { encoding: 'utf8' });
-        const [fail, ok] = result.stdout.trim().split('\n');
-        expect(fail).toMatch(/^fail: \(jq: error.*\)\|$/);
-        // The body is cut to 120 characters
-        expect(fail?.length).toBe('fail: ()|'.length + 120);
-        expect(ok).toBe('ok:|');
-        // An unchecked call still leaves the error in the job's stderr
-        expect(result.stderr).toMatch(/^jq: error/);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+  it("prints jq's first error line after a failure, nothing after a success", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'run-sh-watch-err-'));
+    try {
+      writeFileSync(join(dir, 'watch.jq'), `def long: ${'x'.repeat(200)};\n`);
+      const body = [
+        'set -euo pipefail',
+        `HOME_DIR="${dir}" LOGS="${dir}" WATCH_DIR="${dir}"`,
+        fn('watch'),
+        fn('watch_err'),
+        'out="$(watch -n \'include "watch"; long\')" || print -r -- "fail:$(watch_err)|"',
+        'out="$(watch -n 1)"; print -r -- "ok:$(watch_err)|"'
+      ].join('\n');
+      const result = spawnSync('zsh', ['-c', body], { encoding: 'utf8' });
+      const [fail, ok] = result.stdout.trim().split('\n');
+      expect(fail).toMatch(/^fail: \(jq: error.*\)\|$/);
+      // The body is cut to 120 characters
+      expect(fail?.length).toBe('fail: ()|'.length + 120);
+      expect(ok).toBe('ok:|');
+      // An unchecked call still leaves the error in the job's stderr
+      expect(result.stderr).toMatch(/^jq: error/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
-  );
+  });
 });
 
 describe('run.sh audit', () => {
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   const fn = (name: string) =>
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
@@ -3457,7 +3323,7 @@ describe('run.sh audit', () => {
     expect(SCRIPT).toContain('audit_notices "$queue_view"');
   });
 
-  describe.skipIf(!hasZsh)('tree_wide', () => {
+  describe('tree_wide', () => {
     let home: string;
     beforeEach(() => {
       home = mkdtempSync(join(tmpdir(), 'tree-wide-'));
@@ -3547,7 +3413,7 @@ describe('run.sh audit', () => {
     );
   });
 
-  describe.skipIf(!hasZsh)('audit_notices', () => {
+  describe('audit_notices', () => {
     let home: string;
     beforeEach(() => {
       home = mkdtempSync(join(tmpdir(), 'audit-notices-'));
@@ -3686,9 +3552,7 @@ describe('run.sh apply_commands', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let home: string;
 
   type Row = {
@@ -3810,7 +3674,7 @@ describe('run.sh apply_commands', () => {
     expect(call).toBeLessThan(SCRIPT.indexOf('paused=false'));
   });
 
-  it.skipIf(!canRun)('reads this host pending commands in id order', () => {
+  it('reads this host pending commands in id order', () => {
     const r = apply([]);
     expect(r.selects).toEqual([
       'desk_commands host=eq.nuc&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor'
@@ -3818,7 +3682,7 @@ describe('run.sh apply_commands', () => {
     expect(r.patches).toEqual([]);
   });
 
-  it.skipIf(!canRun)('pauses then resumes: no pause file, both acked', () => {
+  it('pauses then resumes: no pause file, both acked', () => {
     const r = apply([
       { id: 1, kind: 'pause' },
       { id: 2, kind: 'resume' }
@@ -3853,7 +3717,7 @@ describe('run.sh apply_commands', () => {
     }
   });
 
-  it.skipIf(!canRun)('resumes then pauses: the pause file stays', () => {
+  it('resumes then pauses: the pause file stays', () => {
     const r = apply([
       { id: 1, kind: 'resume' },
       { id: 2, kind: 'pause' }
@@ -3865,46 +3729,40 @@ describe('run.sh apply_commands', () => {
     ]);
   });
 
-  it.skipIf(!canRun)('notes a pause when already paused', () => {
+  it('notes a pause when already paused', () => {
     const r = apply([{ id: 1, kind: 'pause' }], { paused: true });
     expect(statuses(r)).toEqual([['applied', 'already paused']]);
   });
 
-  it.skipIf(!canRun)('refuses a run while paused', () => {
+  it('refuses a run while paused', () => {
     const r = apply([{ id: 1, kind: 'run' }], { paused: true });
     expect(statuses(r)).toEqual([['refused', 'paused']]);
     expect(changes(r)).toEqual(['run refused from the desk (mac): paused']);
   });
 
-  it.skipIf(!canRun)('applies a run when not paused', () => {
+  it('applies a run when not paused', () => {
     const r = apply([{ id: 1, kind: 'run' }]);
     expect(statuses(r)).toEqual([['applied', 'this run']]);
     expect(changes(r)).toEqual(['run requested from the desk (mac)']);
   });
 
-  it.skipIf(!canRun)(
-    'requests a review with a file for the next idle tick',
-    () => {
-      const r = apply([{ id: 1, kind: 'review' }]);
-      expect(statuses(r)).toEqual([['applied', null]]);
-      expect(changes(r)).toEqual(['review requested from the desk (mac)']);
-      expect(file('review-requested')).toBe('');
-    }
-  );
+  it('requests a review with a file for the next idle tick', () => {
+    const r = apply([{ id: 1, kind: 'review' }]);
+    expect(statuses(r)).toEqual([['applied', null]]);
+    expect(changes(r)).toEqual(['review requested from the desk (mac)']);
+    expect(file('review-requested')).toBe('');
+  });
 
-  it.skipIf(!canRun)(
-    'accepts a review when the last one ran over an hour ago',
-    () => {
-      const ranAt = String(Math.floor(Date.now() / 1000) - 2 * 3600);
-      const r = apply([{ id: 1, kind: 'review' }], {
-        files: { 'review-ran-at': `${ranAt}\n` }
-      });
-      expect(statuses(r)).toEqual([['applied', null]]);
-      expect(file('review-requested')).toBe('');
-    }
-  );
+  it('accepts a review when the last one ran over an hour ago', () => {
+    const ranAt = String(Math.floor(Date.now() / 1000) - 2 * 3600);
+    const r = apply([{ id: 1, kind: 'review' }], {
+      files: { 'review-ran-at': `${ranAt}\n` }
+    });
+    expect(statuses(r)).toEqual([['applied', null]]);
+    expect(file('review-requested')).toBe('');
+  });
 
-  it.skipIf(!canRun)('refuses a review within an hour of the last', () => {
+  it('refuses a review within an hour of the last', () => {
     const ranAt = Math.floor(Date.now() / 1000) - 1800;
     const r = apply([{ id: 1, kind: 'review' }], {
       files: { 'review-ran-at': `${ranAt}\n` }
@@ -3918,14 +3776,14 @@ describe('run.sh apply_commands', () => {
     expect(file('review-requested')).toBeNull();
   });
 
-  it.skipIf(!canRun)('notes a review that is already requested', () => {
+  it('notes a review that is already requested', () => {
     const r = apply([{ id: 1, kind: 'review' }], {
       files: { 'review-requested': '' }
     });
     expect(statuses(r)).toEqual([['applied', 'already requested']]);
   });
 
-  it.skipIf(!canRun)('sets the limit from 1 to 20 and refuses the rest', () => {
+  it('sets the limit from 1 to 20 and refuses the rest', () => {
     const ok = apply([{ id: 1, kind: 'limit', value: 3 }]);
     expect(file('limit')).toBe('3');
     expect(changes(ok)).toEqual(['PR limit set to 3 from the desk (mac)']);
@@ -3939,67 +3797,56 @@ describe('run.sh apply_commands', () => {
     }
   });
 
-  it.skipIf(!canRun)(
-    'sets the implement cap up to 500 and refuses the rest',
-    () => {
-      const zero = apply([{ id: 1, kind: 'cap', value: 0 }]);
-      expect(file('implement-cap')).toBe('0');
-      expect(statuses(zero)).toEqual([['applied', null]]);
+  it('sets the implement cap up to 500 and refuses the rest', () => {
+    const zero = apply([{ id: 1, kind: 'cap', value: 0 }]);
+    expect(file('implement-cap')).toBe('0');
+    expect(statuses(zero)).toEqual([['applied', null]]);
 
-      const frac = apply([{ id: 1, kind: 'cap', value: 25.5 }]);
-      expect(file('implement-cap')).toBe('25.5');
-      expect(changes(frac)).toEqual([
-        'implement cap set to $25.5 from the desk (mac)'
-      ]);
+    const frac = apply([{ id: 1, kind: 'cap', value: 25.5 }]);
+    expect(file('implement-cap')).toBe('25.5');
+    expect(changes(frac)).toEqual([
+      'implement cap set to $25.5 from the desk (mac)'
+    ]);
 
-      const big = apply([{ id: 1, kind: 'cap', value: 501 }]);
-      expect(statuses(big)).toEqual([['refused', 'bad value']]);
-      expect(file('implement-cap')).toBe('25.5');
-    }
-  );
+    const big = apply([{ id: 1, kind: 'cap', value: 501 }]);
+    expect(statuses(big)).toEqual([['refused', 'bad value']]);
+    expect(file('implement-cap')).toBe('25.5');
+  });
 
-  it.skipIf(!canRun)(
-    'refuses a command 3 hours old and applies nothing',
-    () => {
-      const r = apply([{ id: 1, kind: 'pause', ageMs: 3 * 3600_000 }]);
-      expect(statuses(r)).toEqual([['refused', 'expired']]);
-      expect(file('paused')).toBeNull();
-      expect(changes(r)).toEqual([
-        'pause refused from the desk (mac): expired'
-      ]);
-    }
-  );
+  it('refuses a command 3 hours old and applies nothing', () => {
+    const r = apply([{ id: 1, kind: 'pause', ageMs: 3 * 3600_000 }]);
+    expect(statuses(r)).toEqual([['refused', 'expired']]);
+    expect(file('paused')).toBeNull();
+    expect(changes(r)).toEqual(['pause refused from the desk (mac): expired']);
+  });
 
-  it.skipIf(!canRun)('reads an unparsable time as expired', () => {
+  it('reads an unparsable time as expired', () => {
     const r = apply([{ id: 1, kind: 'pause', at: 'yesterday-ish' }]);
     expect(statuses(r)).toEqual([['refused', 'expired']]);
     expect(file('paused')).toBeNull();
   });
 
-  it.skipIf(!canRun)('refuses a run while another run holds the lock', () => {
+  it('refuses a run while another run holds the lock', () => {
     mkdirSync(join(home, 'lock'));
     const r = apply([{ id: 1, kind: 'run' }]);
     expect(statuses(r)).toEqual([['refused', 'a run is in progress']]);
   });
 
-  it.skipIf(!canRun)(
-    'applies nothing and writes no activity row when the ack was lost',
-    () => {
-      const r = apply(
-        [
-          { id: 1, kind: 'pause' },
-          { id: 2, kind: 'limit', value: 7 }
-        ],
-        { lost: [1] }
-      );
-      expect(file('paused')).toBeNull();
-      expect(r.upserts.map((u) => u.body['event_id'])).toEqual(['desk:2']);
-      expect(r.notes.join('\n')).toContain('desk command 1 (pause): not acked');
-      expect(file('limit')).toBe('7');
-    }
-  );
+  it('applies nothing and writes no activity row when the ack was lost', () => {
+    const r = apply(
+      [
+        { id: 1, kind: 'pause' },
+        { id: 2, kind: 'limit', value: 7 }
+      ],
+      { lost: [1] }
+    );
+    expect(file('paused')).toBeNull();
+    expect(r.upserts.map((u) => u.body['event_id'])).toEqual(['desk:2']);
+    expect(r.notes.join('\n')).toContain('desk command 1 (pause): not acked');
+    expect(file('limit')).toBe('7');
+  });
 
-  it.skipIf(!canRun)('only counts under --check', () => {
+  it('only counts under --check', () => {
     const r = apply(
       [
         { id: 1, kind: 'pause' },
@@ -4014,7 +3861,7 @@ describe('run.sh apply_commands', () => {
     expect(file('implement-cap')).toBeNull();
   });
 
-  it.skipIf(!canRun)('reads nothing without telemetry', () => {
+  it('reads nothing without telemetry', () => {
     const r = apply([{ id: 1, kind: 'pause' }], { telemetry: false });
     expect(r.selects).toEqual([]);
     expect(r.patches).toEqual([]);
@@ -4029,74 +3876,65 @@ describe('run.sh apply_commands', () => {
     ];
     const pr = { ticket: 'COD-7', pr: 42 };
 
-    it.skipIf(!canRun)(
-      'checks, acks, then writes, with the ticket on the activity row',
-      () => {
-        const r = apply(
-          [
-            { id: 1, kind: 'merge', args: pr },
-            { id: 2, kind: 'copilot', args: pr }
-          ],
-          { stubs: stubs('ok PR_node abc123', 'return 0') }
-        );
-        expect(statuses(r)).toEqual([
-          ['applied', null],
-          ['applied', null]
-        ]);
-        expect(r.notes.filter((n) => /^(check|act) /.test(n))).toEqual([
-          'check merge COD-7 42',
-          'act merge 42 PR_node abc123',
-          'check copilot COD-7 42',
-          'act copilot 42 PR_node abc123'
-        ]);
-        expect(changes(r)).toEqual([
-          'PR 42 added to the merge queue from the desk (mac)',
-          'Copilot review requested on PR 42 from the desk (mac)'
-        ]);
-        expect(r.upserts.map((u) => u.body['ticket'])).toEqual([
-          'COD-7',
-          'COD-7'
-        ]);
-      }
-    );
+    it('checks, acks, then writes, with the ticket on the activity row', () => {
+      const r = apply(
+        [
+          { id: 1, kind: 'merge', args: pr },
+          { id: 2, kind: 'copilot', args: pr }
+        ],
+        { stubs: stubs('ok PR_node abc123', 'return 0') }
+      );
+      expect(statuses(r)).toEqual([
+        ['applied', null],
+        ['applied', null]
+      ]);
+      expect(r.notes.filter((n) => /^(check|act) /.test(n))).toEqual([
+        'check merge COD-7 42',
+        'act merge 42 PR_node abc123',
+        'check copilot COD-7 42',
+        'act copilot 42 PR_node abc123'
+      ]);
+      expect(changes(r)).toEqual([
+        'PR 42 added to the merge queue from the desk (mac)',
+        'Copilot review requested on PR 42 from the desk (mac)'
+      ]);
+      expect(r.upserts.map((u) => u.body['ticket'])).toEqual([
+        'COD-7',
+        'COD-7'
+      ]);
+    });
 
-    it.skipIf(!canRun)(
-      'refuses with the check reason and writes nothing',
-      () => {
-        const r = apply([{ id: 1, kind: 'merge', args: pr }], {
-          stubs: stubs('checks pending', 'return 0')
-        });
-        expect(statuses(r)).toEqual([['refused', 'checks pending']]);
-        expect(r.notes.some((n) => n.startsWith('act '))).toBe(false);
-        expect(changes(r)).toEqual([
-          'merge refused from the desk (mac): checks pending'
-        ]);
-      }
-    );
+    it('refuses with the check reason and writes nothing', () => {
+      const r = apply([{ id: 1, kind: 'merge', args: pr }], {
+        stubs: stubs('checks pending', 'return 0')
+      });
+      expect(statuses(r)).toEqual([['refused', 'checks pending']]);
+      expect(r.notes.some((n) => n.startsWith('act '))).toBe(false);
+      expect(changes(r)).toEqual([
+        'merge refused from the desk (mac): checks pending'
+      ]);
+    });
 
-    it.skipIf(!canRun)(
-      'turns an acked row refused when the GitHub write fails',
-      () => {
-        const r = apply([{ id: 1, kind: 'copilot', args: pr }], {
-          stubs: stubs(
-            'ok PR_node abc123',
-            'print -r -- "GitHub did not add Copilot as a reviewer"; return 1'
-          )
-        });
-        expect(r.patches.map((p) => [p.query, p.body['status']])).toEqual([
-          ['id=eq.1&status=eq.pending', 'applied'],
-          ['id=eq.1', 'refused']
-        ]);
-        expect(r.patches[1]?.body['note']).toBe(
-          'GitHub did not add Copilot as a reviewer'
-        );
-        expect(changes(r)).toEqual([
-          'copilot refused from the desk (mac): GitHub did not add Copilot as a reviewer'
-        ]);
-      }
-    );
+    it('turns an acked row refused when the GitHub write fails', () => {
+      const r = apply([{ id: 1, kind: 'copilot', args: pr }], {
+        stubs: stubs(
+          'ok PR_node abc123',
+          'print -r -- "GitHub did not add Copilot as a reviewer"; return 1'
+        )
+      });
+      expect(r.patches.map((p) => [p.query, p.body['status']])).toEqual([
+        ['id=eq.1&status=eq.pending', 'applied'],
+        ['id=eq.1', 'refused']
+      ]);
+      expect(r.patches[1]?.body['note']).toBe(
+        'GitHub did not add Copilot as a reviewer'
+      );
+      expect(changes(r)).toEqual([
+        'copilot refused from the desk (mac): GitHub did not add Copilot as a reviewer'
+      ]);
+    });
 
-    it.skipIf(!canRun)('writes nothing when the ack was lost', () => {
+    it('writes nothing when the ack was lost', () => {
       const r = apply([{ id: 1, kind: 'merge', args: pr }], {
         lost: [1],
         stubs: stubs('ok PR_node abc123', 'return 0')
@@ -4105,14 +3943,11 @@ describe('run.sh apply_commands', () => {
       expect(r.upserts).toEqual([]);
     });
 
-    it.skipIf(!canRun)(
-      'keeps a limit value after the empty ticket and pr',
-      () => {
-        const r = apply([{ id: 1, kind: 'limit', value: 9 }]);
-        expect(file('limit')).toBe('9');
-        expect(r.upserts.map((u) => u.body['ticket'])).toEqual([null]);
-      }
-    );
+    it('keeps a limit value after the empty ticket and pr', () => {
+      const r = apply([{ id: 1, kind: 'limit', value: 9 }]);
+      expect(file('limit')).toBe('9');
+      expect(r.upserts.map((u) => u.body['ticket'])).toEqual([null]);
+    });
   });
 
   describe('restart and gate', () => {
@@ -4199,7 +4034,7 @@ describe('run.sh apply_commands', () => {
     const everything = (r: ReturnType<typeof apply>) =>
       JSON.stringify([r.patches, r.upserts, r.notes, r.says, r.stderr]);
 
-    it.skipIf(!canRun)('refuses without the write credentials', () => {
+    it('refuses without the write credentials', () => {
       const r = apply(
         [{ id: 1, kind: 'restart', args: restart }],
         setup(restartDry, undefined, 0, false)
@@ -4208,36 +4043,33 @@ describe('run.sh apply_commands', () => {
       expect(calls()).toEqual([]);
     });
 
-    it.skipIf(!canRun)(
-      'dry runs, acks, then restarts with the desk credentials alone',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'restart', args: restart }],
-          setup(restartDry)
-        );
-        expect(statuses(r)).toEqual([['applied', null]]);
-        expect(calls()).toEqual([
-          `${CALL} fly restart cdwr-cms-acme --dry-run --yes --json`,
-          `${CALL} fly restart cdwr-cms-acme --yes --json`
-        ]);
-        expect(file('node.order')).toBe('after-ack');
-        expect(changes(r)).toEqual([
-          'restarted cdwr-cms-acme from the desk (mac)'
-        ]);
-        for (const name of ['node.dry.env', 'node.env']) {
-          const env = file(name) ?? '';
-          expect(env).toMatch(/^FLY_API_TOKEN=fly-desk$/m);
-          expect(env).toMatch(/^FLY_ACCESS_TOKEN=fly-desk$/m);
-          expect(env).toMatch(/^INFISICAL_CLIENT_ID=inf-id$/m);
-          expect(env).toMatch(/^INFISICAL_CLIENT_SECRET=inf-secret$/m);
-          expect(env).toMatch(/^INFISICAL_PROJECT_ID=inf-proj$/m);
-          expect(env).toMatch(/^INFISICAL_SERVICE_TOKEN=$/m);
-          expect(env).not.toContain('DESK_');
-        }
+    it('dry runs, acks, then restarts with the desk credentials alone', () => {
+      const r = apply(
+        [{ id: 1, kind: 'restart', args: restart }],
+        setup(restartDry)
+      );
+      expect(statuses(r)).toEqual([['applied', null]]);
+      expect(calls()).toEqual([
+        `${CALL} fly restart cdwr-cms-acme --dry-run --yes --json`,
+        `${CALL} fly restart cdwr-cms-acme --yes --json`
+      ]);
+      expect(file('node.order')).toBe('after-ack');
+      expect(changes(r)).toEqual([
+        'restarted cdwr-cms-acme from the desk (mac)'
+      ]);
+      for (const name of ['node.dry.env', 'node.env']) {
+        const env = file(name) ?? '';
+        expect(env).toMatch(/^FLY_API_TOKEN=fly-desk$/m);
+        expect(env).toMatch(/^FLY_ACCESS_TOKEN=fly-desk$/m);
+        expect(env).toMatch(/^INFISICAL_CLIENT_ID=inf-id$/m);
+        expect(env).toMatch(/^INFISICAL_CLIENT_SECRET=inf-secret$/m);
+        expect(env).toMatch(/^INFISICAL_PROJECT_ID=inf-proj$/m);
+        expect(env).toMatch(/^INFISICAL_SERVICE_TOKEN=$/m);
+        expect(env).not.toContain('DESK_');
       }
-    );
+    });
 
-    it.skipIf(!canRun)('closes a site with a generated password', () => {
+    it('closes a site with a generated password', () => {
       const r = apply(
         [{ id: 1, kind: 'gate', args: close }],
         setup(gateDry('missing', false))
@@ -4250,7 +4082,7 @@ describe('run.sh apply_commands', () => {
       expect(changes(r)).toEqual(['site closed for acme from the desk (mac)']);
     });
 
-    it.skipIf(!canRun)('opens a site without generating anything', () => {
+    it('opens a site without generating anything', () => {
       const r = apply(
         [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
         setup(gateDry('set', true))
@@ -4262,23 +4094,20 @@ describe('run.sh apply_commands', () => {
       expect(changes(r)).toEqual(['site opened for acme from the desk (mac)']);
     });
 
-    it.skipIf(!canRun)(
-      'refuses on the verdict and never runs the real command',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'gate', args: close }],
-          setup(gateDry('set', true))
-        );
-        expect(statuses(r)).toEqual([['refused', 'already closed']]);
-        expect(calls()).toHaveLength(1);
-        expect(calls()[0]).toContain('--dry-run');
-        expect(changes(r)).toEqual([
-          'gate refused from the desk (mac): already closed'
-        ]);
-      }
-    );
+    it('refuses on the verdict and never runs the real command', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: close }],
+        setup(gateDry('set', true))
+      );
+      expect(statuses(r)).toEqual([['refused', 'already closed']]);
+      expect(calls()).toHaveLength(1);
+      expect(calls()[0]).toContain('--dry-run');
+      expect(changes(r)).toEqual([
+        'gate refused from the desk (mac): already closed'
+      ]);
+    });
 
-    it.skipIf(!canRun)('refuses a restart whose sha has moved on', () => {
+    it('refuses a restart whose sha has moved on', () => {
       const r = apply(
         [{ id: 1, kind: 'restart', args: { ...restart, sha: '1111111' } }],
         setup(restartDry)
@@ -4289,82 +4118,70 @@ describe('run.sh apply_commands', () => {
       expect(calls()).toHaveLength(1);
     });
 
-    it.skipIf(!canRun)(
-      'refuses args that would not make a command line',
-      () => {
-        const r = apply(
-          [
-            {
-              id: 1,
-              kind: 'restart',
-              args: { ...restart, app: 'cdwr-cms-acme; rm -rf /' }
-            }
-          ],
-          setup(restartDry)
-        );
-        expect(statuses(r)).toEqual([['refused', 'bad args']]);
-        expect(calls()).toEqual([]);
-      }
-    );
+    it('refuses args that would not make a command line', () => {
+      const r = apply(
+        [
+          {
+            id: 1,
+            kind: 'restart',
+            args: { ...restart, app: 'cdwr-cms-acme; rm -rf /' }
+          }
+        ],
+        setup(restartDry)
+      );
+      expect(statuses(r)).toEqual([['refused', 'bad args']]);
+      expect(calls()).toEqual([]);
+    });
 
-    it.skipIf(!canRun)(
-      'turns an acked row refused when the command fails',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'restart', args: restart }],
-          setup(restartDry, { ok: false, error: { message: 'fly is down' } }, 1)
-        );
-        expect(r.patches.map((p) => [p.query, p.body['status']])).toEqual([
-          ['id=eq.1&status=eq.pending', 'applied'],
-          ['id=eq.1', 'refused']
-        ]);
-        expect(r.patches[1]?.body['note']).toBe('fly is down');
-        expect(changes(r)).toEqual([
-          'restart refused from the desk (mac): fly is down'
-        ]);
-      }
-    );
+    it('turns an acked row refused when the command fails', () => {
+      const r = apply(
+        [{ id: 1, kind: 'restart', args: restart }],
+        setup(restartDry, { ok: false, error: { message: 'fly is down' } }, 1)
+      );
+      expect(r.patches.map((p) => [p.query, p.body['status']])).toEqual([
+        ['id=eq.1&status=eq.pending', 'applied'],
+        ['id=eq.1', 'refused']
+      ]);
+      expect(r.patches[1]?.body['note']).toBe('fly is down');
+      expect(changes(r)).toEqual([
+        'restart refused from the desk (mac): fly is down'
+      ]);
+    });
 
-    it.skipIf(!canRun)(
-      'keeps the generated password out of a failed close',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'gate', args: close }],
-          setup(
-            gateDry('missing', false),
-            {
-              ok: false,
-              error: {
-                message: `could not set SITE_GATE_PASSWORD=Abc${TOKEN} on cdwr-cms-acme`
-              },
-              password: TOKEN
+    it('keeps the generated password out of a failed close', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: close }],
+        setup(
+          gateDry('missing', false),
+          {
+            ok: false,
+            error: {
+              message: `could not set SITE_GATE_PASSWORD=Abc${TOKEN} on cdwr-cms-acme`
             },
-            1
-          )
-        );
-        expect(r.patches[1]?.body['status']).toBe('refused');
-        expect(String(r.patches[1]?.body['note']).trim()).toBe('could not set');
-        const all = everything(r);
-        expect(all).not.toContain(TOKEN);
-        expect(all).not.toContain('SITE_GATE_PASSWORD=');
-      }
-    );
+            password: TOKEN
+          },
+          1
+        )
+      );
+      expect(r.patches[1]?.body['status']).toBe('refused');
+      expect(String(r.patches[1]?.body['note']).trim()).toBe('could not set');
+      const all = everything(r);
+      expect(all).not.toContain(TOKEN);
+      expect(all).not.toContain('SITE_GATE_PASSWORD=');
+    });
 
-    it.skipIf(!canRun)(
-      'strips a bare token from a failed close message',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'gate', args: close }],
-          setup(
-            gateDry('missing', false),
-            { ok: false, error: { message: `failed with ${TOKEN} given` } },
-            1
-          )
-        );
-        expect(r.patches[1]?.body['status']).toBe('refused');
-        expect(everything(r)).not.toContain(TOKEN);
-      }
-    );
+    it('strips a bare token from a failed close message', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: close }],
+        setup(
+          gateDry('missing', false),
+          { ok: false, error: { message: `failed with ${TOKEN} given` } },
+          1
+        )
+      );
+      expect(r.patches[1]?.body['status']).toBe('refused');
+      expect(everything(r)).not.toContain(TOKEN);
+    });
 
     const partial = (reason?: string) => ({
       ok: false,
@@ -4377,28 +4194,25 @@ describe('run.sh apply_commands', () => {
       }
     });
 
-    it.skipIf(!canRun)(
-      'refuses a partial gate with the app it could not read',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
-          setup(
-            gateDry('set', true),
-            // 23 characters with a digit, past the password-shaped run length
-            partial(
-              'cdwr-headless-codeware2 not read on Fly: Error: unauthorized'
-            ),
-            1
-          )
-        );
-        expect(r.patches[1]?.body['status']).toBe('refused');
-        expect(r.patches[1]?.body['note']).toBe(
-          'cdwr-headless-codeware2 not read on Fly: Error: unauthorized'
-        );
-      }
-    );
+    it('refuses a partial gate with the app it could not read', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
+        setup(
+          gateDry('set', true),
+          // 23 characters with a digit, past the password-shaped run length
+          partial(
+            'cdwr-headless-codeware2 not read on Fly: Error: unauthorized'
+          ),
+          1
+        )
+      );
+      expect(r.patches[1]?.body['status']).toBe('refused');
+      expect(r.patches[1]?.body['note']).toBe(
+        'cdwr-headless-codeware2 not read on Fly: Error: unauthorized'
+      );
+    });
 
-    it.skipIf(!canRun)('replaces the password itself in the reason', () => {
+    it('replaces the password itself in the reason', () => {
       // A generated password can be all lowercase, so no shape gives it away
       const lower = 'qwertyuiopasdfghjklzxcvb';
       const r = apply(
@@ -4421,18 +4235,15 @@ describe('run.sh apply_commands', () => {
       expect(everything(r)).not.toContain(lower);
     });
 
-    it.skipIf(!canRun)(
-      'falls back to the generic text without a reason',
-      () => {
-        const r = apply(
-          [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
-          setup(gateDry('set', true), partial(), 1)
-        );
-        expect(r.patches[1]?.body['note']).toBe(
-          'only partly applied, see cdwr history on the host'
-        );
-      }
-    );
+    it('falls back to the generic text without a reason', () => {
+      const r = apply(
+        [{ id: 1, kind: 'gate', args: { tenant: 'acme', action: 'open' } }],
+        setup(gateDry('set', true), partial(), 1)
+      );
+      expect(r.patches[1]?.body['note']).toBe(
+        'only partly applied, see cdwr history on the host'
+      );
+    });
   });
 });
 
@@ -4443,9 +4254,7 @@ describe('run.sh apply list', () => {
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
   const AQ = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   const SHA = 'a'.repeat(40);
   const TAG = `sha-${'b'.repeat(40)}`;
   const MIGRATION =
@@ -4580,7 +4389,7 @@ describe('run.sh apply list', () => {
       return { rc: out.pop(), out };
     };
 
-    it.skipIf(!canRun).each([
+    it.each([
       ['restart', ['cdwr-cms'], ['fly', 'restart', 'cdwr-cms']],
       [
         'restart',
@@ -4611,7 +4420,7 @@ describe('run.sh apply list', () => {
       expect(r.out).toEqual(expected);
     });
 
-    it.skipIf(!canRun).each([
+    it.each([
       ['restart', ['cdwr-agent']],
       ['restart', ['cdwr-builder']],
       ['restart', ['cdwr-cms;rm']],
@@ -4694,14 +4503,14 @@ describe('run.sh apply list', () => {
     const nodeCalls = () => lines('node.calls');
     const restart = item('restart', ['cdwr-cms']);
 
-    it.skipIf(!canRun)('waits while the checkout lacks the merge', () => {
+    it('waits while the checkout lacks the merge', () => {
       write('git.head.rc', '1');
       write('dry.json', JSON.stringify(restartDry));
       expect(apply(restart)).toBe('wait');
       expect(nodeCalls()).toEqual([]);
     });
 
-    it.skipIf(!canRun).each([
+    it.each([
       ['null', JSON.stringify({ apply: { sha: null } })],
       ['short', JSON.stringify({ apply: { sha: 'abc1234' } })],
       ['missing', JSON.stringify({ apply: {} })]
@@ -4709,7 +4518,7 @@ describe('run.sh apply list', () => {
       expect(apply(restart, { entry: e })).toBe('refused no merge commit');
     });
 
-    it.skipIf(!canRun)('applies a restart after an ok dry run', () => {
+    it('applies a restart after an ok dry run', () => {
       write('dry.json', JSON.stringify(restartDry));
       write('real.json', JSON.stringify({ ok: true, result: { app: 'x' } }));
       expect(apply(restart)).toMatch(/^applied \d{4}-\d\d-\d\dT\d\d:\d\dZ$/);
@@ -4719,7 +4528,7 @@ describe('run.sh apply list', () => {
       ]);
     });
 
-    it.skipIf(!canRun)('says already when the scale is at its target', () => {
+    it('says already when the scale is at its target', () => {
       write(
         'dry.json',
         JSON.stringify({
@@ -4739,7 +4548,7 @@ describe('run.sh apply list', () => {
       expect(nodeCalls()[0]).toContain('--dry-run');
     });
 
-    it.skipIf(!canRun)('scales when the count differs', () => {
+    it('scales when the count differs', () => {
       write(
         'dry.json',
         JSON.stringify({
@@ -4759,7 +4568,7 @@ describe('run.sh apply list', () => {
       expect(nodeCalls()).toHaveLength(2);
     });
 
-    it.skipIf(!canRun)('refuses on the dry run verdict, no real call', () => {
+    it('refuses on the dry run verdict, no real call', () => {
       write(
         'dry.json',
         JSON.stringify({ ok: false, error: { message: 'no such app' } })
@@ -4768,12 +4577,12 @@ describe('run.sh apply list', () => {
       expect(nodeCalls()).toHaveLength(1);
     });
 
-    it.skipIf(!canRun)('refuses when the dry run prints nothing', () => {
+    it('refuses when the dry run prints nothing', () => {
       write('bin/node', '#!/bin/sh\nexit 1', 0o755);
       expect(apply(restart)).toBe('refused the dry run printed nothing');
     });
 
-    it.skipIf(!canRun)('refuses with the message of a failing call', () => {
+    it('refuses with the message of a failing call', () => {
       write('dry.json', JSON.stringify(restartDry));
       write(
         'real.json',
@@ -4783,14 +4592,14 @@ describe('run.sh apply list', () => {
       expect(apply(restart)).toBe('refused fly - is down');
     });
 
-    it.skipIf(!canRun)('refuses with cdwr failed without a message', () => {
+    it('refuses with cdwr failed without a message', () => {
       write('dry.json', JSON.stringify(restartDry));
       write('real.json', '{"ok":false}');
       write('node.rc', '1');
       expect(apply(restart)).toBe('refused cdwr failed');
     });
 
-    it.skipIf(!canRun)('refuses without the desk Fly token', () => {
+    it('refuses without the desk Fly token', () => {
       write('dry.json', JSON.stringify(restartDry));
       expect(apply(restart, { creds: false })).toBe(
         'refused no DESK_FLY_TOKEN on nuc'
@@ -4798,7 +4607,7 @@ describe('run.sh apply list', () => {
       expect(nodeCalls()).toEqual([]);
     });
 
-    it.skipIf(!canRun)('restarts with the Fly token alone', () => {
+    it('restarts with the Fly token alone', () => {
       write('dry.json', JSON.stringify(restartDry));
       write('real.json', '{"ok":true}');
       const r = run(
@@ -4809,32 +4618,27 @@ describe('run.sh apply list', () => {
       expect(r.stdout.trim()).toMatch(/^applied /);
     });
 
-    it.skipIf(!canRun)('refuses a migration without a database url', () => {
+    it('refuses a migration without a database url', () => {
       expect(apply(item('supabase-migration', [MIGRATION]))).toBe(
         'refused no DESK_SUPABASE_DB_URL on nuc'
       );
     });
 
-    it.skipIf(!canRun)(
-      'refuses a migration whose file changed after the merge',
-      () => {
-        write('git.diff.rc', '1');
-        const r = run(
-          ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
-          {
-            ENTRY: entry(),
-            ITEM: JSON.stringify(item('supabase-migration', [MIGRATION]))
-          },
-          ['typeset +x DESK_SUPABASE_DB_URL=postgres://x']
-        );
-        expect(r.stdout.trim()).toBe(
-          'refused the file changed after the merge'
-        );
-        expect(nodeCalls()).toEqual([]);
-      }
-    );
+    it('refuses a migration whose file changed after the merge', () => {
+      write('git.diff.rc', '1');
+      const r = run(
+        ['res="$(apply_item "$ENTRY" "$ITEM")"; print -r -- "$res"'],
+        {
+          ENTRY: entry(),
+          ITEM: JSON.stringify(item('supabase-migration', [MIGRATION]))
+        },
+        ['typeset +x DESK_SUPABASE_DB_URL=postgres://x']
+      );
+      expect(r.stdout.trim()).toBe('refused the file changed after the merge');
+      expect(nodeCalls()).toEqual([]);
+    });
 
-    it.skipIf(!canRun)('refuses supabase-function as not enabled', () => {
+    it('refuses supabase-function as not enabled', () => {
       expect(apply(item('supabase-function', ['desk-notify']))).toBe(
         'refused not enabled'
       );
@@ -4843,32 +4647,32 @@ describe('run.sh apply list', () => {
     describe('agent-deploy', () => {
       const deploy = item('agent-deploy', []);
 
-      it.skipIf(!canRun)('refuses without deploy.json', () => {
+      it('refuses without deploy.json', () => {
         expect(apply(deploy)).toBe('refused no self-deploy on this host');
       });
 
-      it.skipIf(!canRun)('applies once the tag contains the merge', () => {
+      it('applies once the tag contains the merge', () => {
         write('deploy.json', JSON.stringify({ phase: 'ok', tag: TAG }));
         expect(apply(deploy)).toBe(`applied deployed ${TAG}`);
       });
 
-      it.skipIf(!canRun)('waits while the tag lacks the merge', () => {
+      it('waits while the tag lacks the merge', () => {
         write('deploy.json', JSON.stringify({ phase: 'ok', tag: TAG }));
         write('git.tag.rc', '1');
         expect(apply(deploy)).toBe('wait');
       });
 
-      it.skipIf(!canRun)('waits for a tag that is not a sha', () => {
+      it('waits for a tag that is not a sha', () => {
         write('deploy.json', JSON.stringify({ phase: 'ok', tag: 'latest' }));
         expect(apply(deploy)).toBe('wait');
       });
 
-      it.skipIf(!canRun)('refuses a failed roll-out', () => {
+      it('refuses a failed roll-out', () => {
         write('deploy.json', JSON.stringify({ phase: 'stuck', tag: TAG }));
         expect(apply(deploy)).toBe(`refused self-deploy of ${TAG}: stuck`);
       });
 
-      it.skipIf(!canRun)('refuses after the wait limit', () => {
+      it('refuses after the wait limit', () => {
         write('deploy.json', JSON.stringify({ phase: 'ok', tag: TAG }));
         write('git.tag.rc', '1');
         const old = new Date(Date.now() - 4 * 3600_000).toISOString();
@@ -4881,25 +4685,25 @@ describe('run.sh apply list', () => {
     describe('after-deploy', () => {
       const scale = item('scale', ['cdwr-cms', '2'], { afterDeploy: true });
 
-      it.skipIf(!canRun)('waits on wait', () => {
+      it('waits on wait', () => {
         expect(apply(scale, { deployState: 'wait' })).toBe('wait');
         expect(nodeCalls()).toEqual([]);
       });
 
-      it.skipIf(!canRun)('refuses on failed', () => {
+      it('refuses on failed', () => {
         expect(apply(scale, { deployState: 'failed' })).toBe(
           'refused production deploy failed'
         );
       });
 
-      it.skipIf(!canRun)('refuses a deploy that never came', () => {
+      it('refuses a deploy that never came', () => {
         const old = new Date(Date.now() - 4 * 3600_000).toISOString();
         expect(apply(scale, { deployState: 'wait', entry: entry(old) })).toBe(
           'refused no production deploy within 3 hours'
         );
       });
 
-      it.skipIf(!canRun)('goes on once the deploy is ok', () => {
+      it('goes on once the deploy is ok', () => {
         write(
           'dry.json',
           JSON.stringify({
@@ -4978,42 +4782,34 @@ describe('run.sh apply list', () => {
     const a = item('restart', ['cdwr-cms']);
     const b = item('restart', ['cdwr-headless-moon']);
 
-    it.skipIf(!canRun)(
-      'marks a list with an invalid item and applies nothing',
-      () => {
-        const bad = item('restart', ['cdwr-cms;rm']);
-        const r = list([a, bad], {
-          [a.spec]: 'applied x',
-          [bad.spec]: 'applied x'
-        });
-        expect(r.out.apply.invalid).toBe(
-          'restart cdwr-cms;rm: not in the vocabulary'
-        );
-        expect(r.out.apply.done).toBe(true);
-        expect(r.out.apply.items.map((i) => i.status)).toEqual([
-          'pending',
-          'pending'
-        ]);
-        expect(r.ticks).toEqual([]);
-        expect(r.notices).toHaveLength(1);
-        expect(r.notices[0]).toMatch(
-          /^action\|COD-9: apply list not applied: /
-        );
-      }
-    );
+    it('marks a list with an invalid item and applies nothing', () => {
+      const bad = item('restart', ['cdwr-cms;rm']);
+      const r = list([a, bad], {
+        [a.spec]: 'applied x',
+        [bad.spec]: 'applied x'
+      });
+      expect(r.out.apply.invalid).toBe(
+        'restart cdwr-cms;rm: not in the vocabulary'
+      );
+      expect(r.out.apply.done).toBe(true);
+      expect(r.out.apply.items.map((i) => i.status)).toEqual([
+        'pending',
+        'pending'
+      ]);
+      expect(r.ticks).toEqual([]);
+      expect(r.notices).toHaveLength(1);
+      expect(r.notices[0]).toMatch(/^action\|COD-9: apply list not applied: /);
+    });
 
-    it.skipIf(!canRun)(
-      'marks a migration the PR did not add as invalid',
-      () => {
-        const m = item('supabase-migration', [MIGRATION]);
-        const r = list([m], { [m.spec]: 'applied x' });
-        expect(r.out.apply.invalid).toBe(`${m.spec}: PR 5 did not add it`);
-        expect(r.out.apply.done).toBe(true);
-        expect(r.ticks).toEqual([]);
-      }
-    );
+    it('marks a migration the PR did not add as invalid', () => {
+      const m = item('supabase-migration', [MIGRATION]);
+      const r = list([m], { [m.spec]: 'applied x' });
+      expect(r.out.apply.invalid).toBe(`${m.spec}: PR 5 did not add it`);
+      expect(r.out.apply.done).toBe(true);
+      expect(r.ticks).toEqual([]);
+    });
 
-    it.skipIf(!canRun)('stops at the first refusal', () => {
+    it('stops at the first refusal', () => {
       const r = list([a, b], {
         [a.spec]: 'refused nope',
         [b.spec]: 'applied x'
@@ -5034,7 +4830,7 @@ describe('run.sh apply list', () => {
     });
 
     describe('own events', () => {
-      it.skipIf(!canRun)('records an invalid list as one refused event', () => {
+      it('records an invalid list as one refused event', () => {
         const bad = item('restart', ['cdwr-cms;rm']);
         const r = list([a, bad], { [a.spec]: 'applied x' });
         expect(r.own).toEqual([
@@ -5050,7 +4846,7 @@ describe('run.sh apply list', () => {
         ]);
       });
 
-      it.skipIf(!canRun)('records an applied and a refused item', () => {
+      it('records an applied and a refused item', () => {
         const r = list([a, b], {
           [a.spec]: 'applied 2026-11-20T07:12Z',
           [b.spec]: 'refused nope'
@@ -5077,12 +4873,12 @@ describe('run.sh apply list', () => {
         ]);
       });
 
-      it.skipIf(!canRun)('records nothing for a waiting item', () => {
+      it('records nothing for a waiting item', () => {
         expect(list([a], { [a.spec]: 'wait' }).own).toEqual([]);
       });
     });
 
-    it.skipIf(!canRun)('is done with a summary when all applied', () => {
+    it('is done with a summary when all applied', () => {
       const r = list([a, b], {
         [a.spec]: 'applied 2026-11-20T07:12Z',
         [b.spec]: 'applied already 2'
@@ -5101,21 +4897,18 @@ describe('run.sh apply list', () => {
       ]);
     });
 
-    it.skipIf(!canRun)(
-      'leaves a waiting entry pending without a notice',
-      () => {
-        const r = list([a, b], { [a.spec]: 'wait', [b.spec]: 'applied x' });
-        expect(r.out.apply.items.map((i) => i.status)).toEqual([
-          'pending',
-          'pending'
-        ]);
-        expect(r.out.apply.done).toBe(false);
-        expect(r.ticks).toEqual([]);
-        expect(r.notices).toEqual([]);
-      }
-    );
+    it('leaves a waiting entry pending without a notice', () => {
+      const r = list([a, b], { [a.spec]: 'wait', [b.spec]: 'applied x' });
+      expect(r.out.apply.items.map((i) => i.status)).toEqual([
+        'pending',
+        'pending'
+      ]);
+      expect(r.out.apply.done).toBe(false);
+      expect(r.ticks).toEqual([]);
+      expect(r.notices).toEqual([]);
+    });
 
-    it.skipIf(!canRun)('runs nothing more when watch.json is not saved', () => {
+    it('runs nothing more when watch.json is not saved', () => {
       const r = list(
         [a, b],
         { [a.spec]: 'applied x', [b.spec]: 'applied y' },
@@ -5130,33 +4923,26 @@ describe('run.sh apply list', () => {
       expect(r.notices).toEqual([]);
     });
 
-    it.skipIf(!canRun)(
-      'keeps a tick Linear did not take for the next run, and tells once',
-      () => {
-        const first = list([a], { [a.spec]: 'applied x' }, { tickRc: 1 });
-        expect(first.out.apply.items[0]).toMatchObject({
-          status: 'applied',
-          ticked: false
-        });
-        expect(first.out.apply.told).toBe(true);
-        expect(first.notices).toHaveLength(1);
+    it('keeps a tick Linear did not take for the next run, and tells once', () => {
+      const first = list([a], { [a.spec]: 'applied x' }, { tickRc: 1 });
+      expect(first.out.apply.items[0]).toMatchObject({
+        status: 'applied',
+        ticked: false
+      });
+      expect(first.out.apply.told).toBe(true);
+      expect(first.notices).toHaveLength(1);
 
-        for (const name of ['tick.calls', 'item.calls', 'notices']) {
-          rmSync(join(home, name));
-        }
-        const again = list(
-          first.out.apply.items,
-          {},
-          { apply: first.out.apply }
-        );
-        expect(again.items).toEqual([]);
-        expect(again.ticks).toEqual(['c1 restart cdwr-cms x true']);
-        expect(again.out.apply.items[0]?.ticked).toBe(true);
-        expect(again.notices).toEqual([]);
+      for (const name of ['tick.calls', 'item.calls', 'notices']) {
+        rmSync(join(home, name));
       }
-    );
+      const again = list(first.out.apply.items, {}, { apply: first.out.apply });
+      expect(again.items).toEqual([]);
+      expect(again.ticks).toEqual(['c1 restart cdwr-cms x true']);
+      expect(again.out.apply.items[0]?.ticked).toBe(true);
+      expect(again.notices).toEqual([]);
+    });
 
-    it.skipIf(!canRun)('keeps what applied before a wait', () => {
+    it('keeps what applied before a wait', () => {
       const r = list([a, b], { [a.spec]: 'applied x', [b.spec]: 'wait' });
       expect(r.out.apply.items.map((i) => i.status)).toEqual([
         'applied',
@@ -5171,7 +4957,7 @@ describe('run.sh apply list', () => {
 
 // The scheduler's verdict on a desk command, from the PR it just read; desk_pr_check prints it
 describe('watch.jq desk_verdict', () => {
-  const canRun = spawnSync('jq', ['--version']).status === 0;
+  requireTools('jq');
   const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
   const verdict = (kind: string, pr: Record<string, unknown>) =>
     execFileSync(
@@ -5203,12 +4989,12 @@ describe('watch.jq desk_verdict', () => {
     ...over
   });
 
-  it.skipIf(!canRun)('lets a ready PR through with its node and head', () => {
+  it('lets a ready PR through with its node and head', () => {
     expect(verdict('merge', ready())).toBe('ok PR_node abc123');
     expect(verdict('copilot', ready())).toBe('ok PR_node abc123');
   });
 
-  it.skipIf(!canRun).each([
+  it.each([
     [{ state: 'MERGED' }, 'PR is merged'],
     [{ isDraft: true }, 'PR is a draft'],
     [{ mergeQueueEntry: { state: 'QUEUED' } }, 'already in the merge queue'],
@@ -5246,41 +5032,38 @@ describe('watch.jq desk_verdict', () => {
     expect(verdict('merge', ready(over))).toBe(why);
   });
 
-  it.skipIf(!canRun)(
-    'refuses a Copilot request once one is asked or done',
-    () => {
-      expect(
-        verdict(
-          'copilot',
-          ready({
-            reviewRequests: {
-              nodes: [
-                {
-                  requestedReviewer: { login: 'copilot-pull-request-reviewer' }
-                }
-              ]
-            }
-          })
-        )
-      ).toBe('Copilot review already requested');
-      expect(
-        verdict(
-          'copilot',
-          ready({
-            reviews: {
-              nodes: [{ author: { login: 'copilot-pull-request-reviewer' } }]
-            }
-          })
-        )
-      ).toBe('Copilot has reviewed it');
-    }
-  );
+  it('refuses a Copilot request once one is asked or done', () => {
+    expect(
+      verdict(
+        'copilot',
+        ready({
+          reviewRequests: {
+            nodes: [
+              {
+                requestedReviewer: { login: 'copilot-pull-request-reviewer' }
+              }
+            ]
+          }
+        })
+      )
+    ).toBe('Copilot review already requested');
+    expect(
+      verdict(
+        'copilot',
+        ready({
+          reviews: {
+            nodes: [{ author: { login: 'copilot-pull-request-reviewer' } }]
+          }
+        })
+      )
+    ).toBe('Copilot has reviewed it');
+  });
 });
 
 // The scheduler's verdict on a desk restart or gate command, from the dry run's envelope;
 // desk_platform_check prints it
 describe('watch.jq platform_verdict', () => {
-  const canRun = spawnSync('jq', ['--version']).status === 0;
+  requireTools('jq');
   const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
   const verdict = (
     kind: string,
@@ -5328,41 +5111,35 @@ describe('watch.jq platform_verdict', () => {
   });
 
   describe('restart', () => {
-    it.skipIf(!canRun)('lets a restart through when the sha holds', () => {
+    it('lets a restart through when the sha holds', () => {
       expect(verdict('restart', restartArgs(), envelope(restartState()))).toBe(
         'ok'
       );
     });
 
-    it.skipIf(!canRun)('refuses a sha that has moved on', () => {
+    it('refuses a sha that has moved on', () => {
       expect(
         verdict('restart', restartArgs('1111111'), envelope(restartState()))
       ).toBe('cdwr-cms-acme runs abc1234 now, not 1111111');
     });
 
-    it.skipIf(!canRun)(
-      'lets a restart through when the desk showed no sha',
-      () => {
-        expect(
-          verdict('restart', restartArgs(null), envelope(restartState()))
-        ).toBe('ok');
-      }
-    );
+    it('lets a restart through when the desk showed no sha', () => {
+      expect(
+        verdict('restart', restartArgs(null), envelope(restartState()))
+      ).toBe('ok');
+    });
 
-    it.skipIf(!canRun)(
-      'lets a restart through when a machine has no sha',
-      () => {
-        expect(
-          verdict(
-            'restart',
-            restartArgs(),
-            envelope(restartState({ machines: [machine(null)] }))
-          )
-        ).toBe('ok');
-      }
-    );
+    it('lets a restart through when a machine has no sha', () => {
+      expect(
+        verdict(
+          'restart',
+          restartArgs(),
+          envelope(restartState({ machines: [machine(null)] }))
+        )
+      ).toBe('ok');
+    });
 
-    it.skipIf(!canRun)('refuses an app without machines', () => {
+    it('refuses an app without machines', () => {
       expect(
         verdict(
           'restart',
@@ -5372,7 +5149,7 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('cdwr-cms-acme has no machines');
     });
 
-    it.skipIf(!canRun)('refuses a dry run that read another app', () => {
+    it('refuses a dry run that read another app', () => {
       expect(
         verdict(
           'restart',
@@ -5382,7 +5159,7 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('the dry run read cdwr-cms-other, not cdwr-cms-acme');
     });
 
-    it.skipIf(!canRun)('refuses a target that is not production', () => {
+    it('refuses a target that is not production', () => {
       expect(
         verdict(
           'restart',
@@ -5392,17 +5169,14 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('not a production target');
     });
 
-    it.skipIf(!canRun)(
-      'refuses a dry run that failed, with its message',
-      () => {
-        expect(
-          verdict('restart', restartArgs(), {
-            ok: false,
-            error: { message: 'Fly refused the token' }
-          })
-        ).toBe('the dry run failed: Fly refused the token');
-      }
-    );
+    it('refuses a dry run that failed, with its message', () => {
+      expect(
+        verdict('restart', restartArgs(), {
+          ok: false,
+          error: { message: 'Fly refused the token' }
+        })
+      ).toBe('the dry run failed: Fly refused the token');
+    });
   });
 
   describe('gate', () => {
@@ -5422,7 +5196,7 @@ describe('watch.jq platform_verdict', () => {
     ) => ({ tenant: 'acme', environment: 'production', apps, ...over });
     const args = (action: string) => ({ tenant: 'acme', action });
 
-    it.skipIf(!canRun)('lets a close through on an open site', () => {
+    it('lets a close through on an open site', () => {
       expect(
         verdict(
           'gate',
@@ -5432,19 +5206,19 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('ok');
     });
 
-    it.skipIf(!canRun)('refuses a close on a closed site', () => {
+    it('refuses a close on a closed site', () => {
       expect(
         verdict('gate', args('close'), envelope(gateState([app('set', true)])))
       ).toBe('already closed');
     });
 
-    it.skipIf(!canRun)('lets an open through on a closed site', () => {
+    it('lets an open through on a closed site', () => {
       expect(
         verdict('gate', args('open'), envelope(gateState([app('set', true)])))
       ).toBe('ok');
     });
 
-    it.skipIf(!canRun)('refuses an open on an open site', () => {
+    it('refuses an open on an open site', () => {
       expect(
         verdict(
           'gate',
@@ -5454,7 +5228,7 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('already open');
     });
 
-    it.skipIf(!canRun)('refuses a tenant with no deployed app', () => {
+    it('refuses a tenant with no deployed app', () => {
       expect(
         verdict(
           'gate',
@@ -5464,13 +5238,13 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('acme has no deployed app');
     });
 
-    it.skipIf(!canRun)('names Infisical when it lists no app', () => {
+    it('names Infisical when it lists no app', () => {
       expect(verdict('gate', args('open'), envelope(gateState([])))).toBe(
         'Infisical lists no app for acme'
       );
     });
 
-    it.skipIf(!canRun)('names Fly and its error when it refused', () => {
+    it('names Fly and its error when it refused', () => {
       expect(
         verdict(
           'gate',
@@ -5484,7 +5258,7 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('Fly refused cdwr-cms-acme: Error: unauthorized');
     });
 
-    it.skipIf(!canRun)('counts the other apps Fly refused', () => {
+    it('counts the other apps Fly refused', () => {
       expect(
         verdict(
           'gate',
@@ -5502,7 +5276,7 @@ describe('watch.jq platform_verdict', () => {
       ).toBe('Fly refused cdwr-cms-acme: Error: unauthorized (+1 more)');
     });
 
-    it.skipIf(!canRun)('cuts a long Fly refusal to 160 characters', () => {
+    it('cuts a long Fly refusal to 160 characters', () => {
       const out = verdict(
         'gate',
         args('open'),
@@ -5517,28 +5291,25 @@ describe('watch.jq platform_verdict', () => {
       expect(out.endsWith('…')).toBe(true);
     });
 
-    it.skipIf(!canRun)(
-      'lets a gate through when one app is live beside one Fly refused',
-      () => {
-        expect(
-          verdict(
-            'gate',
-            args('close'),
-            envelope(
-              gateState([
-                app('missing', false),
-                {
-                  ...app('unreachable', false, 'headless'),
-                  flyError: 'Error: unauthorized'
-                }
-              ])
-            )
+    it('lets a gate through when one app is live beside one Fly refused', () => {
+      expect(
+        verdict(
+          'gate',
+          args('close'),
+          envelope(
+            gateState([
+              app('missing', false),
+              {
+                ...app('unreachable', false, 'headless'),
+                flyError: 'Error: unauthorized'
+              }
+            ])
           )
-        ).toBe('ok');
-      }
-    );
+        )
+      ).toBe('ok');
+    });
 
-    it.skipIf(!canRun)('refuses a dry run that read another tenant', () => {
+    it('refuses a dry run that read another tenant', () => {
       expect(
         verdict(
           'gate',
@@ -5555,7 +5326,7 @@ describe('run.sh devlog session', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   let home: string;
 
   const day = (daysAgo: number) => {
@@ -5591,20 +5362,20 @@ describe('run.sh devlog session', () => {
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it.skipIf(!hasZsh)('is off when the interval is 0 or not a number', () => {
+  it('is off when the interval is 0 or not a number', () => {
     expect(gate({ days: '0', hour: '0' })).toBe('off');
     expect(gate({ days: 'weekly', hour: '0' })).toBe('off');
   });
 
-  it.skipIf(!hasZsh)('is done for the week after a run', () => {
+  it('is done for the week after a run', () => {
     expect(gate({ hour: '0' }, day(0))).toBe('done, next in 7 day(s)');
   });
 
-  it.skipIf(!hasZsh)('is due a week later, once past the hour', () => {
+  it('is due a week later, once past the hour', () => {
     expect(gate({ hour: '0' }, day(8))).toBe('due');
   });
 
-  it.skipIf(!hasZsh)('waits for the hour', () => {
+  it('waits for the hour', () => {
     expect(gate({ hour: '23' })).toMatch(/^(not before 23:00|due)$/);
   });
 
@@ -5668,9 +5439,7 @@ describe('run.sh review session', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const canRun =
-    spawnSync('zsh', ['-c', 'true']).status === 0 &&
-    spawnSync('jq', ['--version']).status === 0;
+  requireTools('zsh', 'jq');
   let home: string;
 
   const day = (daysAgo: number) => {
@@ -5712,48 +5481,42 @@ describe('run.sh review session', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   describe('the gate', () => {
-    it.skipIf(!canRun)('is off when the interval is 0 or not a number', () => {
+    it('is off when the interval is 0 or not a number', () => {
       expect(gate({ days: '0', hour: '0' })).toBe('off');
       expect(gate({ days: 'daily', hour: '0' })).toBe('off');
     });
 
-    it.skipIf(!canRun)('has run today after a run', () => {
+    it('has run today after a run', () => {
       expect(gate({ hour: '0' }, { 'review-ran-on': `${day(0)}\n` })).toBe(
         'ran today'
       );
     });
 
-    it.skipIf(!canRun)('waits out a longer interval', () => {
+    it('waits out a longer interval', () => {
       expect(
         gate({ days: '3', hour: '0' }, { 'review-ran-on': `${day(1)}\n` })
       ).toBe('done, next in 2 day(s)');
     });
 
-    it.skipIf(!canRun)('waits for the hour', () => {
+    it('waits for the hour', () => {
       expect(gate({ hour: '24' })).toBe('not before 24:00');
     });
 
-    it.skipIf(!canRun)(
-      'is due past the hour, with no stamp or an old one',
-      () => {
-        expect(gate({ hour: '0' })).toBe('due');
-        expect(gate({ hour: '0' }, { 'review-ran-on': `${day(2)}\n` })).toBe(
-          'due'
-        );
-      }
-    );
+    it('is due past the hour, with no stamp or an old one', () => {
+      expect(gate({ hour: '0' })).toBe('due');
+      expect(gate({ hour: '0' }, { 'review-ran-on': `${day(2)}\n` })).toBe(
+        'due'
+      );
+    });
 
-    it.skipIf(!canRun)(
-      'is requested by a file, whatever the hour, the days or a run today',
-      () => {
-        const files = {
-          'review-requested': '',
-          'review-ran-on': `${day(0)}\n`
-        };
-        expect(gate({ hour: '24' }, files)).toBe('requested');
-        expect(gate({ days: '0', hour: '24' }, files)).toBe('requested');
-      }
-    );
+    it('is requested by a file, whatever the hour, the days or a run today', () => {
+      const files = {
+        'review-requested': '',
+        'review-ran-on': `${day(0)}\n`
+      };
+      expect(gate({ hour: '24' }, files)).toBe('requested');
+      expect(gate({ days: '0', hour: '24' }, files)).toBe('requested');
+    });
   });
 
   describe('the claude call', () => {
@@ -5913,87 +5676,76 @@ describe('run.sh review session', () => {
         ? readFileSync(join(home, name), 'utf8').trim()
         : null;
 
-    it.skipIf(!canRun)(
-      'stores the row when the check passes, and stamps the run',
-      () => {
-        const r = review({ files: { 'review-requested': '' } });
-        expect(r.inserts).toEqual(['reviews|{"host":"nuc","brief":"b"}']);
-        expect(r.nodes).toHaveLength(1);
-        expect(r.nodes[0]).toMatch(
-          /review-check .*review-out\.json --host nuc --cost 1\.2 --model opus --json$/
-        );
-        expect(r.records.join('\n')).not.toContain('warn');
-        expect(file('review-requested')).toBeNull();
-        expect(file('review-ran-on')).toBe(day(0));
-        expect(file('review-ran-at')).toMatch(/^\d+$/);
-        expect(file('review-line')).toMatch(
-          / · ran \d\d:\d\d, 4 actions, \$1\.20$/
-        );
-        expect(file('review-view.json')).toBe('{"tree":[]}');
-        expect(r.selects[0]).toMatch(
-          /^review_dismissals at=gte\.\d{4}-\d\d-\d\d/
-        );
-      }
-    );
+    it('stores the row when the check passes, and stamps the run', () => {
+      const r = review({ files: { 'review-requested': '' } });
+      expect(r.inserts).toEqual(['reviews|{"host":"nuc","brief":"b"}']);
+      expect(r.nodes).toHaveLength(1);
+      expect(r.nodes[0]).toMatch(
+        /review-check .*review-out\.json --host nuc --cost 1\.2 --model opus --json$/
+      );
+      expect(r.records.join('\n')).not.toContain('warn');
+      expect(file('review-requested')).toBeNull();
+      expect(file('review-ran-on')).toBe(day(0));
+      expect(file('review-ran-at')).toMatch(/^\d+$/);
+      expect(file('review-line')).toMatch(
+        / · ran \d\d:\d\d, 4 actions, \$1\.20$/
+      );
+      expect(file('review-view.json')).toBe('{"tree":[]}');
+      expect(r.selects[0]).toMatch(
+        /^review_dismissals at=gte\.\d{4}-\d\d-\d\d/
+      );
+    });
 
-    it.skipIf(!canRun)(
-      'hands over 90 days of dismissals, each with the finding it names',
-      () => {
-        const r = review({});
-        const since = new Date(Date.now() - 90 * 86_400_000)
-          .toISOString()
-          .slice(0, 10);
-        expect(r.selects[0]).toContain(`at=gte.${since}`);
-        expect(r.selects[1]).toMatch(
-          /^reviews at=gte\.[\d-]+&select=findings$/
-        );
-        expect(r.selects[1]).toContain(`at=gte.${since}`);
-        expect(JSON.parse(file('review-dismissed.json') ?? '')).toEqual([
-          {
-            finding_id: 'a:COD-1:0123abcd',
-            at: '2026-11-01T08:00:00Z',
-            note: 'fine',
-            ticket: 'COD-1',
-            kind: 'a',
-            key: 'k',
-            fix: 'do it'
-          },
-          {
-            finding_id: 'b:COD-2:0123abcd',
-            at: '2026-11-02T08:00:00Z',
-            note: null
-          }
-        ]);
-        expect(file('review-dismissals.tmp')).toBeNull();
-      }
-    );
+    it('hands over 90 days of dismissals, each with the finding it names', () => {
+      const r = review({});
+      const since = new Date(Date.now() - 90 * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      expect(r.selects[0]).toContain(`at=gte.${since}`);
+      expect(r.selects[1]).toMatch(/^reviews at=gte\.[\d-]+&select=findings$/);
+      expect(r.selects[1]).toContain(`at=gte.${since}`);
+      expect(JSON.parse(file('review-dismissed.json') ?? '')).toEqual([
+        {
+          finding_id: 'a:COD-1:0123abcd',
+          at: '2026-11-01T08:00:00Z',
+          note: 'fine',
+          ticket: 'COD-1',
+          kind: 'a',
+          key: 'k',
+          fix: 'do it'
+        },
+        {
+          finding_id: 'b:COD-2:0123abcd',
+          at: '2026-11-02T08:00:00Z',
+          note: null
+        }
+      ]);
+      expect(file('review-dismissals.tmp')).toBeNull();
+    });
 
-    it.skipIf(!canRun)(
-      'warns and does not report success when the store fails',
-      () => {
-        const r = review({ store: 'fail' });
-        expect(r.inserts).toHaveLength(1);
-        expect(r.records).toEqual(['warn  review: not stored']);
-        expect(file('review-line')).toMatch(/ · failed: not stored$/);
-        expect(file('review-line')).not.toContain('actions');
-      }
-    );
+    it('warns and does not report success when the store fails', () => {
+      const r = review({ store: 'fail' });
+      expect(r.inserts).toHaveLength(1);
+      expect(r.records).toEqual(['warn  review: not stored']);
+      expect(file('review-line')).toMatch(/ · failed: not stored$/);
+      expect(file('review-line')).not.toContain('actions');
+    });
 
-    it.skipIf(!canRun)('stores nothing and warns when the check fails', () => {
+    it('stores nothing and warns when the check fails', () => {
       const r = review({ check: 'fail' });
       expect(r.inserts).toEqual([]);
       expect(r.records).toEqual(['warn  review: action 2 has no ticket']);
       expect(file('review-line')).toMatch(/ · failed: action 2 has no ticket$/);
     });
 
-    it.skipIf(!canRun)('stores nothing and warns on a failed: verdict', () => {
+    it('stores nothing and warns on a failed: verdict', () => {
       const r = review({ result: 'failed: no queue to read' });
       expect(r.inserts).toEqual([]);
       expect(r.nodes).toEqual([]);
       expect(r.records[0]).toMatch(/^warn {2}review: no queue to read/);
     });
 
-    it.skipIf(!canRun)('stores nothing and warns without a verdict', () => {
+    it('stores nothing and warns without a verdict', () => {
       const r = review({ result: 'all done' });
       expect(r.inserts).toEqual([]);
       expect(r.records).toEqual([
@@ -6002,53 +5754,47 @@ describe('run.sh review session', () => {
       expect(file('review-line')).toMatch(/ · no verdict$/);
     });
 
-    it.skipIf(!canRun)(
-      'records limited, not a failure, and holds the claude runs',
-      () => {
-        const r = review({ limited: true });
-        expect(r.records).toHaveLength(1);
-        expect(r.records[0]).toMatch(
-          /^limited {2}review: Session limit reached · resets 7:10am \(UTC\), log /
-        );
-        expect(r.records.join('\n')).not.toContain('failed');
-        expect(r.notices).toEqual([
-          expect.stringMatching(
-            /^info\|Agent queue: session limit reached, launches held until \d\d:\d\d UTC$/
-          )
-        ]);
-        expect(r.inserts).toEqual([]);
-        expect(r.nodes).toEqual([]);
-        const hold = JSON.parse(file('limited-until.json') ?? '') as {
-          until: number;
-        };
-        expect(hold.until).toBeGreaterThan(Date.now() / 1000);
-        expect(file('review-line')).toMatch(
-          / · session limit, runs after the reset$/
-        );
-      }
-    );
+    it('records limited, not a failure, and holds the claude runs', () => {
+      const r = review({ limited: true });
+      expect(r.records).toHaveLength(1);
+      expect(r.records[0]).toMatch(
+        /^limited {2}review: Session limit reached · resets 7:10am \(UTC\), log /
+      );
+      expect(r.records.join('\n')).not.toContain('failed');
+      expect(r.notices).toEqual([
+        expect.stringMatching(
+          /^info\|Agent queue: session limit reached, launches held until \d\d:\d\d UTC$/
+        )
+      ]);
+      expect(r.inserts).toEqual([]);
+      expect(r.nodes).toEqual([]);
+      const hold = JSON.parse(file('limited-until.json') ?? '') as {
+        until: number;
+      };
+      expect(hold.until).toBeGreaterThan(Date.now() / 1000);
+      expect(file('review-line')).toMatch(
+        / · session limit, runs after the reset$/
+      );
+    });
 
-    it.skipIf(!canRun)(
-      'puts the stamps back after a limit, and a desk request with them',
-      () => {
-        const asked = review({
-          limited: true,
-          files: { 'review-requested': '' }
-        });
-        expect(asked.stderr).toBe('');
-        expect(file('review-ran-on')).toBeNull();
-        expect(file('review-ran-at')).toBeNull();
-        expect(file('review-requested')).toBe('');
-      }
-    );
+    it('puts the stamps back after a limit, and a desk request with them', () => {
+      const asked = review({
+        limited: true,
+        files: { 'review-requested': '' }
+      });
+      expect(asked.stderr).toBe('');
+      expect(file('review-ran-on')).toBeNull();
+      expect(file('review-ran-at')).toBeNull();
+      expect(file('review-requested')).toBe('');
+    });
 
-    it.skipIf(!canRun)('leaves no request behind when none was made', () => {
+    it('leaves no request behind when none was made', () => {
       review({ limited: true });
       expect(file('review-ran-on')).toBeNull();
       expect(file('review-requested')).toBeNull();
     });
 
-    it.skipIf(!canRun)('tells of a hold once', () => {
+    it('tells of a hold once', () => {
       review({ limited: true });
       const again = review({ limited: true });
       // The notices file accumulates: the second run adds none
@@ -6118,7 +5864,7 @@ describe('run.sh platform step', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   const CREDS = {
     FLY_API_TOKEN: 'fly-secret',
     PLATFORM_DATABASE_URL: 'postgres://db-secret',
@@ -6245,33 +5991,28 @@ describe('run.sh platform step', () => {
     expect(at).toBeLessThan(SCRIPT.indexOf("trap 'st=$?; on_exit"));
   });
 
-  it.skipIf(!hasZsh)(
-    'is due unless a collection started under 5 minutes ago',
-    () => {
-      const due = (stamp?: string) => {
-        if (stamp !== undefined)
-          writeFileSync(join(root, 'platform-ran-at'), stamp);
-        return spawnSync(
-          'zsh',
-          [
-            '-c',
-            [`HOME_DIR="${root}"`, fn('platform_due'), 'platform_due'].join(
-              '\n'
-            )
-          ],
-          { encoding: 'utf8' }
-        ).status;
-      };
-      const ago = (s: number) => `${Math.floor(Date.now() / 1000) - s}\n`;
-      expect(due()).toBe(0);
-      expect(due(ago(60))).not.toBe(0);
-      expect(due(ago(299))).not.toBe(0);
-      expect(due(ago(400))).toBe(0);
-      expect(due('garbage\n')).toBe(0);
-    }
-  );
+  it('is due unless a collection started under 5 minutes ago', () => {
+    const due = (stamp?: string) => {
+      if (stamp !== undefined)
+        writeFileSync(join(root, 'platform-ran-at'), stamp);
+      return spawnSync(
+        'zsh',
+        [
+          '-c',
+          [`HOME_DIR="${root}"`, fn('platform_due'), 'platform_due'].join('\n')
+        ],
+        { encoding: 'utf8' }
+      ).status;
+    };
+    const ago = (s: number) => `${Math.floor(Date.now() / 1000) - s}\n`;
+    expect(due()).toBe(0);
+    expect(due(ago(60))).not.toBe(0);
+    expect(due(ago(299))).not.toBe(0);
+    expect(due(ago(400))).toBe(0);
+    expect(due('garbage\n')).toBe(0);
+  });
 
-  it.skipIf(!hasZsh)('stamps the start of each collection', async () => {
+  it('stamps the start of each collection', async () => {
     stubNode('exit 0');
     const before = Math.floor(Date.now() / 1000);
     await tick(CREDS);
@@ -6280,17 +6021,14 @@ describe('run.sh platform step', () => {
     expect(stamp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
   });
 
-  it.skipIf(!hasZsh)(
-    'leaves the stamp alone when another collection holds the lock',
-    async () => {
-      stubNode('exit 0');
-      mkdirSync(join(root, 'platform.lock'));
-      await tick(CREDS, false);
-      expect(read('platform-ran-at')).toBe('');
-    }
-  );
+  it('leaves the stamp alone when another collection holds the lock', async () => {
+    stubNode('exit 0');
+    mkdirSync(join(root, 'platform.lock'));
+    await tick(CREDS, false);
+    expect(read('platform-ran-at')).toBe('');
+  });
 
-  it.skipIf(!hasZsh)('runs the command while the queue is paused', async () => {
+  it('runs the command while the queue is paused', async () => {
     stubNode('exit 0');
     writeFileSync(join(root, 'paused'), '');
     await tick(CREDS);
@@ -6332,23 +6070,20 @@ describe('run.sh platform step', () => {
     };
     const collected = () => read('node.calls') !== '';
 
-    it.skipIf(!hasZsh)(
-      'moves the checkout before the command, without the queue lock held then or after',
-      async () => {
-        setup();
-        const before = git(work(), 'rev-parse', 'HEAD');
-        expect(before).not.toBe(originHead());
-        await tick(CREDS, true, true);
-        expect(read('node.head').trim()).toBe(originHead());
-        expect(read('node.lock').trim()).toBe('free');
-        expect(existsSync(join(root, 'lock'))).toBe(false);
-        expect(read('node.calls')).toBe(
-          'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
-        );
-      }
-    );
+    it('moves the checkout before the command, without the queue lock held then or after', async () => {
+      setup();
+      const before = git(work(), 'rev-parse', 'HEAD');
+      expect(before).not.toBe(originHead());
+      await tick(CREDS, true, true);
+      expect(read('node.head').trim()).toBe(originHead());
+      expect(read('node.lock').trim()).toBe('free');
+      expect(existsSync(join(root, 'lock'))).toBe(false);
+      expect(read('node.calls')).toBe(
+        'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
+      );
+    });
 
-    it.skipIf(!hasZsh)('leaves the checkout alone without move', async () => {
+    it('leaves the checkout alone without move', async () => {
       setup();
       const before = git(work(), 'rev-parse', 'HEAD');
       await tick(CREDS);
@@ -6356,49 +6091,40 @@ describe('run.sh platform step', () => {
       expect(git(work(), 'rev-parse', 'HEAD')).toBe(before);
     });
 
-    it.skipIf(!hasZsh)(
-      'skips the move while a run holds the queue lock, and leaves the lock',
-      async () => {
-        setup();
-        const before = git(work(), 'rev-parse', 'HEAD');
-        mkdirSync(join(root, 'lock'));
-        await tick(CREDS, true, true);
-        expect(collected()).toBe(true);
-        expect(read('node.head').trim()).toBe(before);
-        expect(read('notes')).toContain('a run holds the lock');
-        expect(existsSync(join(root, 'lock'))).toBe(true);
-      }
-    );
+    it('skips the move while a run holds the queue lock, and leaves the lock', async () => {
+      setup();
+      const before = git(work(), 'rev-parse', 'HEAD');
+      mkdirSync(join(root, 'lock'));
+      await tick(CREDS, true, true);
+      expect(collected()).toBe(true);
+      expect(read('node.head').trim()).toBe(before);
+      expect(read('notes')).toContain('a run holds the lock');
+      expect(existsSync(join(root, 'lock'))).toBe(true);
+    });
 
-    it.skipIf(!hasZsh)(
-      'skips the move while an implementing session runs',
-      async () => {
-        setup();
-        const before = git(work(), 'rev-parse', 'HEAD');
-        mkdirSync(join(root, 'implement.lock'));
-        writeFileSync(join(root, 'implement.lock', 'pid'), `${process.pid}\n`);
-        await tick(CREDS, true, true);
-        expect(collected()).toBe(true);
-        expect(read('node.head').trim()).toBe(before);
-        expect(read('notes')).toContain('an implementing session runs');
-        expect(existsSync(join(root, 'lock'))).toBe(false);
-      }
-    );
+    it('skips the move while an implementing session runs', async () => {
+      setup();
+      const before = git(work(), 'rev-parse', 'HEAD');
+      mkdirSync(join(root, 'implement.lock'));
+      writeFileSync(join(root, 'implement.lock', 'pid'), `${process.pid}\n`);
+      await tick(CREDS, true, true);
+      expect(collected()).toBe(true);
+      expect(read('node.head').trim()).toBe(before);
+      expect(read('notes')).toContain('an implementing session runs');
+      expect(existsSync(join(root, 'lock'))).toBe(false);
+    });
 
-    it.skipIf(!hasZsh)(
-      'skips the move after a launch that holds no implement.lock yet',
-      async () => {
-        setup();
-        const before = git(work(), 'rev-parse', 'HEAD');
-        writeFileSync(join(root, 'launch.json'), '{}\n');
-        await tick(CREDS, true, true);
-        expect(collected()).toBe(true);
-        expect(read('node.head').trim()).toBe(before);
-        expect(read('notes')).toContain('an implementing session runs');
-      }
-    );
+    it('skips the move after a launch that holds no implement.lock yet', async () => {
+      setup();
+      const before = git(work(), 'rev-parse', 'HEAD');
+      writeFileSync(join(root, 'launch.json'), '{}\n');
+      await tick(CREDS, true, true);
+      expect(collected()).toBe(true);
+      expect(read('node.head').trim()).toBe(before);
+      expect(read('notes')).toContain('an implementing session runs');
+    });
 
-    it.skipIf(!hasZsh)('moves once a launch is a minute old', async () => {
+    it('moves once a launch is a minute old', async () => {
       setup();
       writeFileSync(join(root, 'launch.json'), '{}\n');
       const old = new Date(Date.now() - 2 * 60 * 1000);
@@ -6428,22 +6154,19 @@ describe('run.sh platform step', () => {
       );
     });
 
-    it.skipIf(!hasZsh)(
-      'notes a dirty worktree, records nothing and still collects',
-      async () => {
-        setup(true);
-        const before = git(work(), 'rev-parse', 'HEAD');
-        writeFileSync(join(work(), 'pnpm-lock.yaml'), 'dirty\n');
-        await tick(CREDS, true, true);
-        expect(collected()).toBe(true);
-        expect(read('node.head').trim()).toBe(before);
-        expect(read('notes')).toContain('worktree not clean');
-        expect(read('records')).toBe('');
-        expect(existsSync(join(root, 'lock'))).toBe(false);
-      }
-    );
+    it('notes a dirty worktree, records nothing and still collects', async () => {
+      setup(true);
+      const before = git(work(), 'rev-parse', 'HEAD');
+      writeFileSync(join(work(), 'pnpm-lock.yaml'), 'dirty\n');
+      await tick(CREDS, true, true);
+      expect(collected()).toBe(true);
+      expect(read('node.head').trim()).toBe(before);
+      expect(read('notes')).toContain('worktree not clean');
+      expect(read('records')).toBe('');
+      expect(existsSync(join(root, 'lock'))).toBe(false);
+    });
 
-    it.skipIf(!hasZsh)('notes a failed fetch and still collects', async () => {
+    it('notes a failed fetch and still collects', async () => {
       setup();
       const before = git(work(), 'rev-parse', 'HEAD');
       git(work(), 'remote', 'set-url', 'origin', join(root, 'missing'));
@@ -6456,7 +6179,7 @@ describe('run.sh platform step', () => {
     });
   });
 
-  it.skipIf(!hasZsh)('skips silently without the credentials', async () => {
+  it('skips silently without the credentials', async () => {
     stubNode('exit 0');
     const { FLY_API_TOKEN: _fly, ...noFly } = CREDS;
     const { PLATFORM_DATABASE_URL: _db, ...noDb } = CREDS;
@@ -6469,73 +6192,67 @@ describe('run.sh platform step', () => {
     expect(existsSync(join(root, 'platform.lock'))).toBe(false);
   });
 
-  it.skipIf(!hasZsh)(
-    'passes the credentials to the command alone, never to other children',
-    async () => {
-      stubNode('exit 0');
-      writeFileSync(
-        join(root, 'env-file'),
-        'PLATFORM_INFISICAL_PROJECT_ID="from-file"\n'
-      );
-      const { PLATFORM_INFISICAL_PROJECT_ID: _p, ...exported } = CREDS;
-      await tick({
-        ...exported,
-        DESK_FLY_TOKEN: 'desk-secret',
-        AGENT_QUEUE_ENV_FILE: join(root, 'env-file')
-      });
-      const node = read('node.env');
-      // the desk's write credentials stay out of the platform read
-      expect(node).not.toMatch(/DESK_|desk-secret/);
-      for (const [key, value] of Object.entries(exported))
-        expect(node).toContain(`${key}=${value}`);
-      expect(node).toContain('PLATFORM_INFISICAL_PROJECT_ID=from-file');
-      expect(node).toContain('AGENT_SUPABASE_URL=https://supabase.test');
-      expect(node).toContain('AGENT_SUPABASE_SERVICE_KEY=svc');
-      expect(node).toContain(`AGENT_QUEUE_HOME=${root}`);
-      const sibling = read('sibling.env');
-      expect(sibling).not.toMatch(
-        /FLY_API_TOKEN|PLATFORM_|DESK_|fly-secret|db-secret|sentry-secret|umami-secret|desk-secret/
-      );
-    }
-  );
+  it('passes the credentials to the command alone, never to other children', async () => {
+    stubNode('exit 0');
+    writeFileSync(
+      join(root, 'env-file'),
+      'PLATFORM_INFISICAL_PROJECT_ID="from-file"\n'
+    );
+    const { PLATFORM_INFISICAL_PROJECT_ID: _p, ...exported } = CREDS;
+    await tick({
+      ...exported,
+      DESK_FLY_TOKEN: 'desk-secret',
+      AGENT_QUEUE_ENV_FILE: join(root, 'env-file')
+    });
+    const node = read('node.env');
+    // the desk's write credentials stay out of the platform read
+    expect(node).not.toMatch(/DESK_|desk-secret/);
+    for (const [key, value] of Object.entries(exported))
+      expect(node).toContain(`${key}=${value}`);
+    expect(node).toContain('PLATFORM_INFISICAL_PROJECT_ID=from-file');
+    expect(node).toContain('AGENT_SUPABASE_URL=https://supabase.test');
+    expect(node).toContain('AGENT_SUPABASE_SERVICE_KEY=svc');
+    expect(node).toContain(`AGENT_QUEUE_HOME=${root}`);
+    const sibling = read('sibling.env');
+    expect(sibling).not.toMatch(
+      /FLY_API_TOKEN|PLATFORM_|DESK_|fly-secret|db-secret|sentry-secret|umami-secret|desk-secret/
+    );
+  });
 
-  it.skipIf(!hasZsh)(
-    'reads the desk write credentials from the env file and leaves them unexported',
-    () => {
-      writeFileSync(
-        join(root, 'env-file'),
-        [
-          'DESK_FLY_TOKEN="from-file"',
-          'DESK_INFISICAL_CLIENT_ID=file-id',
-          'DESK_INFISICAL_CLIENT_SECRET=file-secret',
-          'OTHER_VAR=ignored'
-        ].join('\n') + '\n'
-      );
-      const script = [
-        `REPO="${root}"`,
-        'DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID)',
-        fn('unexported_env'),
-        'unexported_env $DESK_VARS',
-        'print -r -- "$DESK_FLY_TOKEN|$DESK_INFISICAL_CLIENT_ID|$DESK_INFISICAL_CLIENT_SECRET|${OTHER_VAR:-unset}|${DESK_INFISICAL_PROJECT_ID:-unset}" > "$ROOT/vars"',
-        'env > "$ROOT/sibling.env"'
-      ].join('\n');
-      const res = spawnSync('zsh', ['-c', script], {
-        env: {
-          ...process.env,
-          ROOT: root,
-          AGENT_QUEUE_ENV_FILE: join(root, 'env-file'),
-          // already exported: it wins over the file, and is unexported
-          DESK_INFISICAL_CLIENT_ID: 'from-env'
-        },
-        stdio: 'ignore'
-      });
-      expect(res.status).toBe(0);
-      expect(read('vars')).toBe('from-file|from-env|file-secret|unset|unset\n');
-      expect(read('sibling.env')).not.toMatch(
-        /DESK_|from-file|from-env|file-secret/
-      );
-    }
-  );
+  it('reads the desk write credentials from the env file and leaves them unexported', () => {
+    writeFileSync(
+      join(root, 'env-file'),
+      [
+        'DESK_FLY_TOKEN="from-file"',
+        'DESK_INFISICAL_CLIENT_ID=file-id',
+        'DESK_INFISICAL_CLIENT_SECRET=file-secret',
+        'OTHER_VAR=ignored'
+      ].join('\n') + '\n'
+    );
+    const script = [
+      `REPO="${root}"`,
+      'DESK_VARS=(DESK_FLY_TOKEN DESK_INFISICAL_CLIENT_ID DESK_INFISICAL_CLIENT_SECRET DESK_INFISICAL_PROJECT_ID)',
+      fn('unexported_env'),
+      'unexported_env $DESK_VARS',
+      'print -r -- "$DESK_FLY_TOKEN|$DESK_INFISICAL_CLIENT_ID|$DESK_INFISICAL_CLIENT_SECRET|${OTHER_VAR:-unset}|${DESK_INFISICAL_PROJECT_ID:-unset}" > "$ROOT/vars"',
+      'env > "$ROOT/sibling.env"'
+    ].join('\n');
+    const res = spawnSync('zsh', ['-c', script], {
+      env: {
+        ...process.env,
+        ROOT: root,
+        AGENT_QUEUE_ENV_FILE: join(root, 'env-file'),
+        // already exported: it wins over the file, and is unexported
+        DESK_INFISICAL_CLIENT_ID: 'from-env'
+      },
+      stdio: 'ignore'
+    });
+    expect(res.status).toBe(0);
+    expect(read('vars')).toBe('from-file|from-env|file-secret|unset|unset\n');
+    expect(read('sibling.env')).not.toMatch(
+      /DESK_|from-file|from-env|file-secret/
+    );
+  });
 
   it('keeps the Sentry and Umami reads optional', () => {
     expect(SCRIPT).toContain(
@@ -6548,28 +6265,25 @@ describe('run.sh platform step', () => {
     expect(SCRIPT).toContain('typeset -g +x "$v"');
   });
 
-  it.skipIf(!hasZsh)(
-    'warns about a failed run on the next tick, once an hour',
-    async () => {
-      stubNode('exit 3');
-      await tick(CREDS);
-      // The failure is only known to the next tick
-      expect(read('records')).toBe('');
-      await tick(CREDS);
-      expect(read('records')).toBe(
-        'warn  platform: cdwr agent platform-record failed (3)\n'
-      );
-      await tick(CREDS);
-      await tick(CREDS);
-      // Noted each time, a row for the first only
-      expect(read('notes').match(/warn: platform rows:/g)).toHaveLength(3);
-      expect(read('records').match(/platform:/g)).toHaveLength(1);
-      // The queue is never stopped: the stub ran every tick
-      expect(read('node.calls').split('\n').filter(Boolean)).toHaveLength(4);
-    }
-  );
+  it('warns about a failed run on the next tick, once an hour', async () => {
+    stubNode('exit 3');
+    await tick(CREDS);
+    // The failure is only known to the next tick
+    expect(read('records')).toBe('');
+    await tick(CREDS);
+    expect(read('records')).toBe(
+      'warn  platform: cdwr agent platform-record failed (3)\n'
+    );
+    await tick(CREDS);
+    await tick(CREDS);
+    // Noted each time, a row for the first only
+    expect(read('notes').match(/warn: platform rows:/g)).toHaveLength(3);
+    expect(read('records').match(/platform:/g)).toHaveLength(1);
+    // The queue is never stopped: the stub ran every tick
+    expect(read('node.calls').split('\n').filter(Boolean)).toHaveLength(4);
+  });
 
-  it.skipIf(!hasZsh)('stops a run at its deadline and warns', async () => {
+  it('stops a run at its deadline and warns', async () => {
     stubNode('exec sleep 30');
     await tick({ ...CREDS, AGENT_QUEUE_PLATFORM_DEADLINE: '1' });
     expect(read('platform-status')).toBe(
@@ -6581,20 +6295,17 @@ describe('run.sh platform step', () => {
     );
   });
 
-  it.skipIf(!hasZsh)(
-    'lets only one collect at a time, and clears a stale lock',
-    async () => {
-      stubNode('exit 0');
-      mkdirSync(join(root, 'platform.lock'));
-      await tick(CREDS, false);
-      await sleep(200);
-      expect(read('node.calls')).toBe('');
-      const old = new Date(Date.now() - 10 * 60 * 1000);
-      utimesSync(join(root, 'platform.lock'), old, old);
-      await tick(CREDS);
-      expect(read('node.calls')).not.toBe('');
-    }
-  );
+  it('lets only one collect at a time, and clears a stale lock', async () => {
+    stubNode('exit 0');
+    mkdirSync(join(root, 'platform.lock'));
+    await tick(CREDS, false);
+    await sleep(200);
+    expect(read('node.calls')).toBe('');
+    const old = new Date(Date.now() - 10 * 60 * 1000);
+    utimesSync(join(root, 'platform.lock'), old, old);
+    await tick(CREDS);
+    expect(read('node.calls')).not.toBe('');
+  });
 });
 
 describe('run.sh backup step', () => {
@@ -6602,7 +6313,7 @@ describe('run.sh backup step', () => {
     SCRIPT.match(
       new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
     )?.[0] ?? '';
-  const hasZsh = spawnSync('zsh', ['-c', 'true']).status === 0;
+  requireTools('zsh');
   const URL = 'postgres://backup-secret';
   const today = () => new Date().toLocaleDateString('sv');
   let root: string;
@@ -6667,7 +6378,7 @@ describe('run.sh backup step', () => {
     expect(SCRIPT).not.toMatch(/export [^\n]*PLATFORM_BACKUP/);
   });
 
-  it.skipIf(!hasZsh)('runs once a night, from 02:00', async () => {
+  it('runs once a night, from 02:00', async () => {
     stubNode('exit 0');
     const env = { PLATFORM_BACKUP_DATABASE_URL: URL };
     await tick({ ...env, AGENT_QUEUE_BACKUP_HOUR: '01' });
@@ -6688,7 +6399,7 @@ describe('run.sh backup step', () => {
     expect(calls()).toBe(2);
   });
 
-  it.skipIf(!hasZsh)('does nothing without the url', async () => {
+  it('does nothing without the url', async () => {
     stubNode('exit 0');
     await tick({ AGENT_QUEUE_BACKUP_HOUR: '05' });
     await sleep(200);
@@ -6697,62 +6408,53 @@ describe('run.sh backup step', () => {
     expect(read('backup-ran-on')).toBe('');
   });
 
-  it.skipIf(!hasZsh)(
-    'passes the url to the command alone, never to other children',
-    async () => {
-      stubNode('exit 0');
-      writeFileSync(
-        join(root, 'env-file'),
-        `PLATFORM_BACKUP_DATABASE_URL="${URL}"\n`
-      );
-      await tick({
-        AGENT_QUEUE_ENV_FILE: join(root, 'env-file'),
-        AGENT_QUEUE_BACKUP_HOUR: '05'
-      });
-      expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
-      expect(read('node.env')).toContain(`AGENT_QUEUE_HOME=${root}`);
-      expect(read('sibling.env')).not.toMatch(
-        /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
-      );
-    }
-  );
+  it('passes the url to the command alone, never to other children', async () => {
+    stubNode('exit 0');
+    writeFileSync(
+      join(root, 'env-file'),
+      `PLATFORM_BACKUP_DATABASE_URL="${URL}"\n`
+    );
+    await tick({
+      AGENT_QUEUE_ENV_FILE: join(root, 'env-file'),
+      AGENT_QUEUE_BACKUP_HOUR: '05'
+    });
+    expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
+    expect(read('node.env')).toContain(`AGENT_QUEUE_HOME=${root}`);
+    expect(read('sibling.env')).not.toMatch(
+      /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
+    );
+  });
 
-  it.skipIf(!hasZsh)(
-    'unexports an inherited url, so only the command gets it',
-    async () => {
-      stubNode('exit 0');
-      await tick({
-        PLATFORM_BACKUP_DATABASE_URL: URL,
-        AGENT_QUEUE_BACKUP_HOUR: '05'
-      });
-      expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
-      expect(read('sibling.env')).not.toMatch(
-        /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
-      );
-    }
-  );
+  it('unexports an inherited url, so only the command gets it', async () => {
+    stubNode('exit 0');
+    await tick({
+      PLATFORM_BACKUP_DATABASE_URL: URL,
+      AGENT_QUEUE_BACKUP_HOUR: '05'
+    });
+    expect(read('node.env')).toContain(`PLATFORM_BACKUP_DATABASE_URL=${URL}`);
+    expect(read('sibling.env')).not.toMatch(
+      /PLATFORM_BACKUP_DATABASE_URL|backup-secret/
+    );
+  });
 
-  it.skipIf(!hasZsh)(
-    'warns about a failed run once, and clears it',
-    async () => {
-      stubNode('exit 3');
-      const env = {
-        PLATFORM_BACKUP_DATABASE_URL: URL,
-        AGENT_QUEUE_BACKUP_HOUR: '05'
-      };
-      await tick(env);
-      expect(read('backup-failed')).toBe('cdwr agent backup failed (3)\n');
-      expect(read('records')).toBe('');
-      // the same day: no new run, the failure is warned and removed
-      await tick(env);
-      expect(read('records')).toBe(
-        'warn  backup: cdwr agent backup failed (3)\n'
-      );
-      expect(read('notes')).toContain(
-        'warn: backup: cdwr agent backup failed (3)'
-      );
-      expect(existsSync(join(root, 'backup-failed'))).toBe(false);
-      expect(calls()).toBe(1);
-    }
-  );
+  it('warns about a failed run once, and clears it', async () => {
+    stubNode('exit 3');
+    const env = {
+      PLATFORM_BACKUP_DATABASE_URL: URL,
+      AGENT_QUEUE_BACKUP_HOUR: '05'
+    };
+    await tick(env);
+    expect(read('backup-failed')).toBe('cdwr agent backup failed (3)\n');
+    expect(read('records')).toBe('');
+    // the same day: no new run, the failure is warned and removed
+    await tick(env);
+    expect(read('records')).toBe(
+      'warn  backup: cdwr agent backup failed (3)\n'
+    );
+    expect(read('notes')).toContain(
+      'warn: backup: cdwr agent backup failed (3)'
+    );
+    expect(existsSync(join(root, 'backup-failed'))).toBe(false);
+    expect(calls()).toBe(1);
+  });
 });
