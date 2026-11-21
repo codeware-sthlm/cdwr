@@ -27,6 +27,8 @@ export const PAUSED = `${QUEUE_DIR}/paused`;
 export const RUN_LOCK = `${QUEUE_DIR}/lock`;
 /** Held by an implementing session, which writes its pid inside */
 export const IMPLEMENT_LOCK = `${QUEUE_DIR}/implement.lock`;
+/** Held by the nightly backup, without a pid; run.sh clears one older than 20 minutes */
+export const BACKUP_LOCK = `${QUEUE_DIR}/backup.lock`;
 /** The repo's compose file, relative to the workspace root */
 export const COMPOSE_SOURCE = 'apps/agent-host/compose.yaml';
 export const IMAGE_WORKFLOW = 'agent-host-image.yml';

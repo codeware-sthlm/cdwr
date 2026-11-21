@@ -14,12 +14,7 @@ import { probeSession } from '../infisical/session.logic';
 import { PROJECTS } from '../secrets/catalog';
 
 import { CONTAINER, DEFAULT_WAIT_MINUTES, assertHost } from './deploy.logic';
-import {
-  POLL_MAX_MS,
-  containerHash,
-  lockHost,
-  restartIdleLocked
-} from './host';
+import { containerProblem, lockHost, restartIdleLocked } from './host';
 import { hostInput } from './remote';
 import {
   FLY_ROTATIONS,
@@ -168,28 +163,10 @@ async function rotate(
   const resumed = await restartIdleLocked(ctx, host, wait);
 
   const checked = await Promise.all(
-    rotated.map(async (r) => {
-      try {
-        const result = await containerHash(host, r.key);
-        if (result.kind === 'not-ready') {
-          return {
-            ...r,
-            problem: `the container never wrote ${VAULT_FILE} within ${POLL_MAX_MS / 1000} s; check \`cdwr agent logs\``
-          };
-        }
-        return result.hash === r.hash
-          ? { ...r, problem: undefined }
-          : {
-              ...r,
-              problem: `the container does not hold the new value. A key set in the NUC's compose .env wins over the vault (the start log says "secrets: kept from the environment"); remove it there`
-            };
-      } catch (error) {
-        return {
-          ...r,
-          problem: `the container's value could not be read: ${messageOf(error)}`
-        };
-      }
-    })
+    rotated.map(async (r) => ({
+      ...r,
+      problem: await containerProblem(host, r.key, r.hash)
+    }))
   );
 
   const revoked: string[] = [];

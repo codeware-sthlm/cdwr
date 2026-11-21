@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { FlyToken } from '../../services/fly';
 import { CATALOG, type CatalogEntry } from '../secrets/catalog';
 
+import type { DbRoleKey } from './rotate-db-role.logic';
 import type { SecretKey } from './rotate-infisical.logic';
 
 /** The Fly tokens the agent host holds and the scope each is created with */
@@ -125,7 +126,7 @@ export const sha256Hex = (value: string): string =>
 export const NOT_READY = 3;
 
 /** The agent-host keys whose value the container's vault file is checked for */
-export type VaultKey = FlyKey | SecretKey;
+export type VaultKey = FlyKey | SecretKey | DbRoleKey;
 
 /** The script that prints the sha256 of the key's value; exits NOT_READY without the file or the key's line */
 export const vaultLineScript = (

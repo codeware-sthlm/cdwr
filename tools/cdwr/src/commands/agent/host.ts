@@ -1,5 +1,5 @@
 import type { Context } from '../../cli/context';
-import { CliError, EXIT } from '../../cli/errors';
+import { CliError, EXIT, messageOf } from '../../cli/errors';
 import { CommandError, hold, run, sleep } from '../../services/shell';
 
 import {
@@ -29,7 +29,7 @@ import {
   vaultHash,
   waitPlan
 } from './deploy.logic';
-import { NOT_READY, type VaultKey } from './rotate-fly.logic';
+import { NOT_READY, VAULT_FILE, type VaultKey } from './rotate-fly.logic';
 
 export const ssh = (remote: Remote) =>
   run('ssh', remote.args, { input: remote.input });
@@ -162,16 +162,18 @@ export async function lockHost(
 }
 
 /**
- * Restarts the agent container so secrets.sh reads the vault again, with the
- * queue paused and idle, as a deploy restarts it. The caller holds the host
- * deploy lock. Only a pause made here is lifted again; false when that unpause failed, with
- * a warning that names the command to run.
+ * Runs the work with the queue paused and idle, as a deploy restarts the
+ * container. The caller holds the host deploy lock. Only a pause made here is
+ * lifted again; `resumed` is false when that unpause failed, with a warning
+ * that names the command to run.
  */
-export async function restartIdleLocked(
+export async function whileIdle<T>(
   ctx: Context,
   host: string,
-  wait: number
-): Promise<boolean> {
+  wait: number,
+  work: () => Promise<T>,
+  busy = 'nothing was changed'
+): Promise<{ value: T; resumed: boolean }> {
   let resumed = true;
   if (!(await running(host))) {
     throw new CliError(
@@ -181,6 +183,7 @@ export async function restartIdleLocked(
   }
   const created = !(await succeeds(pathExists(host, PAUSED)));
   if (created) await ssh(pause(host));
+  let value: T;
   try {
     const { intervalMs, checks } = waitPlan(wait);
     const idle = await ctx.ui.task(
@@ -190,18 +193,14 @@ export async function restartIdleLocked(
     );
     if (!idle) {
       throw new CliError(
-        `The queue was still busy after ${wait} minutes; the container was not restarted`,
+        `The queue was still busy after ${wait} minutes; ${busy}`,
         EXIT.failed,
         'Try again later, or raise --wait'
       );
     }
-    await ctx.ui.task(
-      'Restarting the container',
-      () => ssh(restart(host)),
-      () => 'Container restarted'
-    );
+    value = await work();
   } finally {
-    // The restart keeps the container's files, the pause flag included
+    // A restart keeps the container's files, the pause flag included
     if (created) {
       resumed = false;
       for (let attempt = 0; !resumed && attempt < 3; attempt++) {
@@ -215,11 +214,19 @@ export async function restartIdleLocked(
       }
     }
   }
-  return resumed;
+  return { value, resumed };
 }
 
-export const POLL_MS = 3_000;
-export const POLL_MAX_MS = 90_000;
+/** Restarts the agent container so secrets.sh reads the vault again, with the queue paused and idle */
+export const restartContainer = (ctx: Context, host: string) =>
+  ctx.ui.task(
+    'Restarting the container',
+    () => ssh(restart(host)),
+    () => 'Container restarted'
+  );
+
+const VAULT_POLL_MS = 3_000;
+export const VAULT_POLL_MAX_MS = 90_000;
 
 export type ContainerHash =
   { kind: 'hash'; hash: string } | { kind: 'not-ready' };
@@ -229,7 +236,7 @@ export async function containerHash(
   host: string,
   key: VaultKey
 ): Promise<ContainerHash> {
-  for (let waited = 0; ; waited += POLL_MS) {
+  for (let waited = 0; ; waited += VAULT_POLL_MS) {
     try {
       const { stdout } = await ssh(vaultHash(host, key));
       return { kind: 'hash', hash: stdout.trim() };
@@ -238,7 +245,43 @@ export async function containerHash(
         throw error;
       }
     }
-    if (waited >= POLL_MAX_MS) return { kind: 'not-ready' };
-    await sleep(POLL_MS);
+    if (waited >= VAULT_POLL_MAX_MS) return { kind: 'not-ready' };
+    await sleep(VAULT_POLL_MS);
   }
+}
+
+/** Why the restarted container does not hold the new value of the key, by its sha256; undefined when it does */
+export async function containerProblem(
+  host: string,
+  key: VaultKey,
+  hash: string,
+  what = 'value'
+): Promise<string | undefined> {
+  try {
+    const held = await containerHash(host, key);
+    if (held.kind === 'not-ready') {
+      return `the container never wrote ${VAULT_FILE} within ${VAULT_POLL_MAX_MS / 1000} s; check \`cdwr agent logs\``;
+    }
+    return held.hash === hash
+      ? undefined
+      : `the container does not hold the new ${what}. A key set in the NUC's compose .env wins over the vault (the start log says "secrets: kept from the environment"); remove it there`;
+  } catch (error) {
+    return `the container's value could not be read: ${messageOf(error)}`;
+  }
+}
+
+/** The restart alone under `whileIdle`; false when the queue may still be paused */
+export async function restartIdleLocked(
+  ctx: Context,
+  host: string,
+  wait: number
+): Promise<boolean> {
+  const { resumed } = await whileIdle(
+    ctx,
+    host,
+    wait,
+    () => restartContainer(ctx, host),
+    'the container was not restarted'
+  );
+  return resumed;
 }
