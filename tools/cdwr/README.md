@@ -507,6 +507,16 @@ uses its environment as given. Secrets are read once per start, so a rotated one
 `docker compose restart`. Claude runs on `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived token from
 `claude setup-token` on the Mac, which keeps billing on the subscription.
 
+`cdwr agent rotate fly --host agent-host` rotates the two Fly tokens in that folder, `FLY_API_TOKEN` (read-only org) and
+`DESK_FLY_TOKEN` (org deploy); `--key` takes one of them. It runs on the Mac with your own Fly and Infisical logins, never
+on the NUC. Before any token exists it probes a write to the folder. Each new token is named after its use and key, `agent-host platform read (FLY_API_TOKEN)`
+and `agent-host desk deploy (DESK_FLY_TOKEN)`, valid one
+year, and proven on a Fly read before it is written (through a file, never argv). The container then restarts under the
+deploy lock with the queue idle, and the old tokens are revoked only once the container's `/run/agent/vault.env` holds
+the new value, compared by sha256. A key set in the NUC's `.env` wins over the vault; the check then fails and the old
+token stays. `--dry-run` lists every token it would revoke, by id, name and expiry. A run that stops part way leaves a
+working token in the vault; run it again to finish, and it revokes the strays.
+
 The entrypoint also supervises the Linear proxy (`supervise_proxy`, restarted like the listener), so
 the claude runs reach Linear without holding the token. On a Mac nothing changes: the
 `headersHelper` stays.
