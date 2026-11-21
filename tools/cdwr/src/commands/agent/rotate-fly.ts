@@ -1,18 +1,369 @@
-import { defineCommand } from '../../cli/command';
-import { CliError, EXIT } from '../../cli/errors';
+import {
+  probeWrite,
+  readKeyLengths,
+  setSecretFromFile
+} from '@codeware/shared/util/infisical-cli';
 
+import { defineCommand } from '../../cli/command';
+import type { Context } from '../../cli/context';
+import { CliError, EXIT, UsageError, messageOf } from '../../cli/errors';
+import { input } from '../../cli/inputs';
+import { type FlyToken, listOrgTokens, ownFlyEnv } from '../../services/fly';
+import { CommandError, run, sleep } from '../../services/shell';
+import { probeSession } from '../infisical/session.logic';
+import { PROJECTS } from '../secrets/catalog';
+
+import {
+  CONTAINER,
+  DEFAULT_WAIT_MINUTES,
+  assertHost,
+  vaultHash
+} from './deploy.logic';
+import { restartIdle, ssh } from './host';
+import { hostInput } from './remote';
+import {
+  FLY_ROTATIONS,
+  type FlyKey,
+  NOT_READY,
+  VAULT_FILE,
+  createArgs,
+  namesOf,
+  newTokenId,
+  revokeSet,
+  sha256Hex
+} from './rotate-fly.logic';
+
+const FLY_KEYS = Object.keys(FLY_ROTATIONS).filter(
+  (key): key is FlyKey => key in FLY_ROTATIONS
+);
+const ORG = 'codeware';
+const VAULT = {
+  path: '/agent-queue',
+  environment: 'production',
+  projectId: PROJECTS['agent-host'].id
+} as const;
+
+const flyctl = (args: string[], env: NodeJS.ProcessEnv = ownFlyEnv()) =>
+  run('flyctl', args, { env });
+
+const revoke = async (ids: string[]): Promise<void> => {
+  if (ids.length) await flyctl(['tokens', 'revoke', ...ids]);
+};
+
+const describe = (token: FlyToken) =>
+  `${token.id} "${token.name}", expires ${token.expiresAt.slice(0, 10)}`;
+
+interface Rotated {
+  key: FlyKey;
+  id: string;
+  hash: string;
+}
+
+/** Creates the key's token and proves it on a Fly read; the value never leaves this function but in the vault */
+async function createAndWrite(ctx: Context, key: FlyKey): Promise<Rotated> {
+  const { name } = namesOf(key);
+  const before = await listOrgTokens(ORG);
+  let token: string;
+  try {
+    token = (await flyctl(createArgs(key, ORG))).stdout.trim();
+  } catch {
+    // The create's own output can hold the token
+    throw new CliError(
+      `flyctl could not create "${name}"`,
+      EXIT.failed,
+      'Check `flyctl auth whoami`; nothing was written or revoked'
+    );
+  }
+  const created = newTokenId(before, await listOrgTokens(ORG), name);
+  if (created.kind !== 'one') {
+    throw new CliError(
+      created.kind === 'none'
+        ? `No new token named "${name}" shows in the token list`
+        : `More than one new token named "${name}": ${created.ids.join(', ')}`,
+      EXIT.failed,
+      'Nothing was written or revoked; revoke the stray tokens with `flyctl tokens revoke <id>`'
+    );
+  }
+  const { id } = created;
+
+  try {
+    await ctx.ui.task(`Proving the new ${key} on a Fly read`, () =>
+      flyctl(['apps', 'list', '-o', ORG], {
+        ...ownFlyEnv(),
+        FLY_API_TOKEN: token
+      })
+    );
+  } catch {
+    await revoke([id]).catch(() => undefined);
+    throw new CliError(
+      `The new ${key} could not read Fly; it was revoked`,
+      EXIT.failed,
+      'The old token is untouched and still in the vault'
+    );
+  }
+
+  try {
+    await ctx.ui.task(
+      `Writing ${key} to agent-host ${VAULT.path}`,
+      async () => {
+        setSecretFromFile({ ...VAULT, key, value: token });
+        const stored = readKeyLengths(
+          VAULT.path,
+          VAULT.environment,
+          undefined,
+          VAULT.projectId
+        ).find((entry) => entry.key === key);
+        if (stored?.length !== token.length) {
+          throw new Error(`${key} did not read back at its length`);
+        }
+      }
+    );
+  } catch (error) {
+    // The write may have landed: revoking now could leave a dead token in the
+    // vault, while old and new both still work. A rerun revokes the stray.
+    throw new CliError(
+      `${key} could not be written to the vault: ${messageOf(error)}`,
+      EXIT.failed,
+      `The vault holds the old or the new token (${id}), and both still work. Run this again: it writes a fresh token and revokes the rest`
+    );
+  }
+  return { key, id, hash: sha256Hex(token) };
+}
+
+const POLL_MS = 3_000;
+const POLL_MAX_MS = 90_000;
+
+type ContainerHash = { kind: 'hash'; hash: string } | { kind: 'not-ready' };
+
+/** The sha256 of the key as the running container holds it, polled while the vault file is not written yet */
+async function containerHash(
+  host: string,
+  key: FlyKey
+): Promise<ContainerHash> {
+  for (let waited = 0; ; waited += POLL_MS) {
+    try {
+      const { stdout } = await ssh(vaultHash(host, key));
+      return { kind: 'hash', hash: stdout.trim() };
+    } catch (error) {
+      if (!(error instanceof CommandError && error.code === NOT_READY)) {
+        throw error;
+      }
+    }
+    if (waited >= POLL_MAX_MS) return { kind: 'not-ready' };
+    await sleep(POLL_MS);
+  }
+}
+
+/**
+ * Each new token is created and proven on a Fly read before it reaches the
+ * vault, and the old ones are revoked only once the restarted container holds
+ * the new value. A stop anywhere leaves a working token in the vault, and a
+ * rerun revokes every other token of the key's names.
+ */
 export default defineCommand({
   summary: 'New Fly tokens for the agent host, the old ones revoked',
-  description:
-    'Creates new Fly tokens for the agent host, restarts the agent container on them and revokes the old tokens.',
+  description: `Creates a new Fly token for each agent-host key (${FLY_KEYS.join(', ')}) named \`agent-host <use> (<KEY>)\`, valid one year, proves it on a Fly read, writes it to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container with the queue idle, checks that the container holds the new value (by hash), and only then revokes the key's other tokens. Runs on your own Fly and Infisical logins; no value is ever printed.`,
   danger: 'destructive',
-  inputs: {},
-
-  async plan() {
-    throw new CliError('Not implemented yet', EXIT.failed);
+  needs: ['fly'],
+  inputs: {
+    host: hostInput('The host whose agent container uses the tokens'),
+    key: input.enum(FLY_KEYS, {
+      prompt: 'Which token?',
+      description: 'Only this key; both when left out',
+      short: 'k',
+      optional: true,
+      flagOnly: true
+    }),
+    wait: input.number({
+      prompt: 'Minutes to wait for the queue to be idle?',
+      short: 'w',
+      description: 'Minutes to wait for a running job before giving up',
+      default: DEFAULT_WAIT_MINUTES
+    })
   },
 
-  async apply() {
-    return { summary: 'Not implemented yet' };
+  async plan(ctx, { host, key, wait }) {
+    if (!host) {
+      throw new UsageError(
+        'Missing --host',
+        'Name the host that runs the agent container, such as --host agent-host'
+      );
+    }
+    assertHost(host);
+    const session = await ctx.ui.task(
+      'Checking the Infisical session (agent-host)',
+      async () => probeSession(VAULT.environment, undefined, VAULT.projectId)
+    );
+    if (session.state !== 'ok') {
+      throw new CliError(
+        session.state === 'failed'
+          ? session.message
+          : 'Infisical CLI is not installed',
+        EXIT.failed,
+        session.hint
+      );
+    }
+
+    const keys = key ? [key] : FLY_KEYS;
+    const [tokens, stored] = await ctx.ui.task(
+      'Reading the Fly tokens and the vault',
+      async () =>
+        [
+          await listOrgTokens(ORG),
+          readKeyLengths(
+            VAULT.path,
+            VAULT.environment,
+            undefined,
+            VAULT.projectId
+          )
+        ] as const
+    );
+    const targets = keys.map((k) => ({
+      key: k,
+      inVault: stored.some((entry) => entry.key === k),
+      revoke: revokeSet(tokens, namesOf(k), '')
+    }));
+
+    return {
+      steps: [
+        {
+          label: `Probe a write to agent-host ${VAULT.path}`,
+          detail: 'a throwaway key, removed again'
+        },
+        ...targets.map(({ key: k }) => ({
+          label: `Create "${namesOf(k).name}" (${FLY_ROTATIONS[k].scope}, one year), prove it, write it as ${k}`
+        })),
+        {
+          label: `Restart ${CONTAINER} on ${host}`,
+          detail: `under the deploy lock, with the queue paused and idle (up to ${wait} minutes)`
+        },
+        {
+          label: `Check the container's ${VAULT_FILE} holds the new values`,
+          detail: 'sha256 compared, never the value'
+        },
+        ...targets.map(({ key: k, revoke: old }) => ({
+          label: `Revoke ${k}'s other tokens`,
+          detail:
+            old.kind === 'ambiguous'
+              ? `will NOT revoke: ${old.tokens.length} live tokens named "${namesOf(k).legacyName}": ${old.tokens.map(describe).join('; ')}`
+              : old.tokens.length
+                ? old.tokens.map(describe).join('; ')
+                : 'none found by name'
+        }))
+      ],
+      notes: targets
+        .filter((t) => !t.inVault)
+        .map((t) => `${t.key} is not in the vault yet; it will be added`),
+      target: { environment: 'production', name: host },
+      data: { host, wait, keys }
+    };
+  },
+
+  async apply(ctx, { host, wait, keys }) {
+    await ctx.ui.task(
+      `Checking agent-host ${VAULT.path} accepts writes`,
+      async () => probeWrite(VAULT)
+    );
+
+    const rotated: Rotated[] = [];
+    try {
+      for (const k of keys) rotated.push(await createAndWrite(ctx, k));
+    } catch (error) {
+      const own = error instanceof CliError ? error.hint : undefined;
+      const written = rotated.length
+        ? `Already written: ${rotated.map((r) => r.key).join(', ')}. Every token in the vault works; run this again to finish, and it revokes the strays`
+        : undefined;
+      throw new CliError(
+        messageOf(error),
+        error instanceof CliError ? error.exitCode : EXIT.failed,
+        [own, written].filter(Boolean).join('. ') ||
+          'Nothing was revoked; the old tokens still work'
+      );
+    }
+
+    const resumed = await restartIdle(ctx, host, wait);
+
+    const checked = await Promise.all(
+      rotated.map(async (r) => {
+        try {
+          const result = await containerHash(host, r.key);
+          if (result.kind === 'not-ready') {
+            return {
+              ...r,
+              problem: `the container never wrote ${VAULT_FILE} within ${POLL_MAX_MS / 1000} s; check \`cdwr agent logs\``
+            };
+          }
+          return result.hash === r.hash
+            ? { ...r, problem: undefined }
+            : {
+                ...r,
+                problem: `the container does not hold the new value. A key set in the NUC's compose .env wins over the vault (the start log says "secrets: kept from the environment"); remove it there`
+              };
+        } catch (error) {
+          return {
+            ...r,
+            problem: `the container's value could not be read: ${messageOf(error)}`
+          };
+        }
+      })
+    );
+
+    const revoked: string[] = [];
+    const pending: { key: FlyKey; ids: string[]; why: string }[] = [];
+    const tokens = await listOrgTokens(ORG);
+    for (const r of checked) {
+      const old = revokeSet(tokens, namesOf(r.key), r.id);
+      const ids = old.tokens.map((t) => t.id);
+      if (r.problem) {
+        pending.push({ key: r.key, ids, why: r.problem });
+      } else if (old.kind === 'ambiguous') {
+        pending.push({
+          key: r.key,
+          ids,
+          why: `${ids.length} live tokens carry the legacy name "${namesOf(r.key).legacyName}", so none was revoked; revoke the right ones by hand`
+        });
+      } else {
+        try {
+          await ctx.ui.task(`Revoking ${r.key}'s old tokens`, () =>
+            revoke(ids)
+          );
+          revoked.push(...ids);
+        } catch (error) {
+          pending.push({
+            key: r.key,
+            ids,
+            why: `the revoke failed: ${messageOf(error)}`
+          });
+        }
+      }
+    }
+
+    if (pending.length) {
+      const todo = pending.filter((p) => p.ids.length);
+      throw new CliError(
+        [
+          `Rotated ${rotated.map((r) => r.key).join(', ')} on ${host}; ${revoked.length} old token(s) revoked${revoked.length ? ` (${revoked.join(', ')})` : ''}`,
+          todo.length
+            ? `Still to revoke: ${todo.map((p) => `${p.key} ${p.ids.join(', ')}`).join('; ')}`
+            : 'Nothing is left to revoke'
+        ].join('. '),
+        EXIT.failed,
+        [
+          ...pending.map((p) => `${p.key}: ${p.why}`),
+          ...(resumed
+            ? []
+            : ['The queue may still be paused (see the warning)']),
+          "Fix that, then run this again with --key; it revokes the key's other tokens"
+        ].join('. ')
+      );
+    }
+    return {
+      summary: `Rotated ${rotated.map((r) => r.key).join(', ')} on ${host}; ${revoked.length} old token(s) revoked`,
+      json: {
+        host,
+        rotated: rotated.map(({ key: k, id }) => ({ key: k, id })),
+        revoked
+      }
+    };
   }
 });

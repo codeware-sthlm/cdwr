@@ -1,19 +1,32 @@
-import { CommandError, run, sleep } from '../../services/shell';
+import type { Context } from '../../cli/context';
+import { CliError, EXIT } from '../../cli/errors';
+import { CommandError, hold, run, sleep } from '../../services/shell';
 
 import {
+  CONTAINER,
   IMPLEMENT_LOCK,
+  LOCKED,
+  LOCK_BUSY,
+  PAUSED,
+  REMOTE_DIR,
+  REMOTE_LOCK,
   RUN_LOCK,
   type Remote,
   type SessionState,
+  deployLock,
   isPid,
   isRunning,
   lockFile,
   lockOld,
   parseRunning,
   pathExists,
+  pause,
   pidAlive,
   pidIsWait,
-  sessionState
+  restart,
+  sessionState,
+  unpause,
+  waitPlan
 } from './deploy.logic';
 
 export const ssh = (remote: Remote) =>
@@ -110,4 +123,100 @@ export async function awaitIdle(
     if (q.state !== 'working') return q;
   }
   return undefined;
+}
+
+/**
+ * Takes the host's deploy lock, so the self-deploy timer never swaps files,
+ * pauses or records while this deploy does. The timer holds it for a whole
+ * tick, up to its own 30-minute wait for the queue, so this waits as long as
+ * the queue wait. A lock that can't be taken at all stops the deploy too:
+ * going on without it is the race the lock is there for.
+ */
+export async function lockHost(
+  ctx: Context,
+  host: string,
+  wait: number
+): Promise<() => Promise<void>> {
+  try {
+    return await ctx.ui.task(
+      'Taking the host deploy lock',
+      () => hold('ssh', deployLock(host, wait * 60).args, LOCKED),
+      () => 'Holding the host deploy lock'
+    );
+  } catch (error) {
+    if (error instanceof CommandError && error.code === LOCK_BUSY) {
+      throw new CliError(
+        `The host's self-deploy held ${REMOTE_LOCK} for ${wait} minutes; nothing was changed`,
+        EXIT.failed,
+        'It is deploying a new build: try again later, or raise --wait'
+      );
+    }
+    throw new CliError(
+      `Could not take ${REMOTE_LOCK} on ${host}: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT.failed,
+      `The host needs flock (util-linux) and ${REMOTE_DIR} writable by the ssh user`
+    );
+  }
+}
+
+/**
+ * Restarts the agent container so secrets.sh reads the vault again: under the
+ * host deploy lock, with the queue paused and idle, as a deploy restarts it.
+ * Only a pause made here is lifted again; false when that unpause failed, with
+ * a warning that names the command to run.
+ */
+export async function restartIdle(
+  ctx: Context,
+  host: string,
+  wait: number
+): Promise<boolean> {
+  let resumed = true;
+  const release = await lockHost(ctx, host, wait);
+  try {
+    if (!(await running(host))) {
+      throw new CliError(
+        `The agent container is not running on ${host}`,
+        EXIT.failed
+      );
+    }
+    const created = !(await succeeds(pathExists(host, PAUSED)));
+    if (created) await ssh(pause(host));
+    try {
+      const { intervalMs, checks } = waitPlan(wait);
+      const idle = await ctx.ui.task(
+        'Waiting for the queue to be idle',
+        () => awaitIdle(host, checks, intervalMs),
+        (q) => (q ? 'The queue is idle' : 'The queue stayed busy')
+      );
+      if (!idle) {
+        throw new CliError(
+          `The queue was still busy after ${wait} minutes; the container was not restarted`,
+          EXIT.failed,
+          'Try again later, or raise --wait'
+        );
+      }
+      await ctx.ui.task(
+        'Restarting the container',
+        () => ssh(restart(host)),
+        () => 'Container restarted'
+      );
+    } finally {
+      // The restart keeps the container's files, the pause flag included
+      if (created) {
+        resumed = false;
+        for (let attempt = 0; !resumed && attempt < 3; attempt++) {
+          if (attempt > 0) await sleep(2000);
+          resumed = await succeeds(unpause(host)).catch(() => false);
+        }
+        if (!resumed) {
+          ctx.ui.warn(
+            `The queue may still be paused: run \`ssh ${host} docker exec ${CONTAINER} rm -f ${PAUSED}\``
+          );
+        }
+      }
+    }
+  } finally {
+    await release();
+  }
+  return resumed;
 }

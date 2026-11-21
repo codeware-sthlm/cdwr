@@ -1,6 +1,8 @@
 import { CliError } from '../../cli/errors';
 import { shellQuote } from '../../services/shell';
 
+import { type FlyKey, vaultLineScript } from './rotate-fly.logic';
+
 /** Where the compose project lives on the host */
 export const REMOTE_DIR = '/opt/cdwr-agent';
 export const REMOTE_COMPOSE = `${REMOTE_DIR}/compose.yaml`;
@@ -188,6 +190,18 @@ export const unpause = (host: string): Remote =>
 /** Exits 0 when the path exists in the container, 1 when it is absent */
 export const pathExists = (host: string, path: string): Remote =>
   ssh(host, 'docker', 'exec', CONTAINER, 'test', '-e', path);
+
+/** Prints the sha256 of the key's value in the container's vault file; exits NOT_READY until it is there */
+export const vaultHash = (host: string, key: FlyKey): Remote =>
+  ssh(
+    host,
+    'docker',
+    'exec',
+    CONTAINER,
+    'sh',
+    '-c',
+    shellQuote(vaultLineScript(key))
+  );
 
 /** Prints a file inside a lock directory (`pid`, `key`, `waiting`); exits 1 when it is absent */
 export const lockFile = (host: string, lock: string, name: string): Remote =>
