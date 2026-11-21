@@ -12,6 +12,7 @@ import {
   countedRows,
   fixCommand,
   forgetLabelled,
+  heldText,
   isSnoozed,
   labelState,
   mergeBlocker,
@@ -139,6 +140,43 @@ describe('gaps on the waiting rows', () => {
 
   it('copies no command from a fix without a code span', () => {
     expect(fixCommand('Keep one of agent:ready, agent:review')).toBeNull();
+  });
+});
+
+describe('a review row held by the merge', () => {
+  const rows = (held: string | null) => {
+    const state = filled();
+    state.data.runs = runs(
+      view({
+        table: {
+          before: [],
+          label: [],
+          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7, held }]
+        }
+      })
+    );
+    const m = model(state, NOW);
+    return waitRows(m, state.details, NOW).filter((r) => r.kind === 'review');
+  };
+
+  it('carries the verdict from the queue view', () => {
+    expect(rows('a hold')).toMatchObject([{ id: 'COD-3', held: 'a hold' }]);
+  });
+
+  it('has none without one', () => {
+    expect(rows(null)).toMatchObject([{ id: 'COD-3', held: null }]);
+  });
+});
+
+describe('heldText', () => {
+  it('names the ruleset when it is what blocks the merge', () => {
+    expect(heldText("the ruleset requires Håkan's review")).toBe(
+      "Needs your approval on GitHub: main's ruleset requires your review"
+    );
+  });
+
+  it('gives any other verdict as it is', () => {
+    expect(heldText('a hold')).toBe('Merge held: a hold');
   });
 });
 

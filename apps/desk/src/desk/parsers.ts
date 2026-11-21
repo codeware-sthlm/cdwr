@@ -616,7 +616,12 @@ const queueViewSchema = z
           ticket: z.string(),
           kind: opt(z.string()),
           pr,
-          items: opt(z.array(z.string()))
+          items: opt(z.array(z.string())),
+          held: z
+            .string()
+            .nullish()
+            .catch(null)
+            .transform((v) => v ?? null)
         })
       )
     })
