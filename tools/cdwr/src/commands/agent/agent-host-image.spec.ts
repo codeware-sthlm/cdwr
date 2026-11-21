@@ -214,7 +214,7 @@ describe('agent-host entrypoint', () => {
     expect(entrypoint.match(/telemetry_host_metrics/g)).toHaveLength(1);
     expect(entrypoint.match(/telemetry_env/g)).toHaveLength(4); // two comments + two calls
     expect(entrypoint).toMatch(
-      /\n\(\n {2}telemetry_env "\$\{AGENT_QUEUE_VAULT_FILE:-\}"\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}exposed="\$\(exposed_credentials\)" \|\| exposed=\n {4}\[\[ -n "\$exposed" \]\] && \{ exposed_notice "\$exposed" \|\| true \}\n {4}telemetry_host_metrics "\$exposed" \|\| true\n {4}relay_sessions \|\| true\n {4}relay_notices \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
+      /\n\(\n {2}telemetry_env "\$\{AGENT_QUEUE_VAULT_FILE:-\}"\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}exposed="\$\(exposed_credentials\)" \|\| exposed=\n {4}\[\[ -n "\$exposed" \]\] && \{ exposed_notice "\$exposed" \|\| true \}\n {4}telemetry_host_metrics "\$exposed" \|\| true\n {4}relay_sessions \|\| true\n {4}notices_drain "\$AGENT_QUEUE_HOME" \|\| true\n {4}relay_notices \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
     );
     // Never in the loop's own shell: it un-exports the key every run.sh needs
     expect(entrypoint).not.toMatch(/^telemetry_env/m);
@@ -496,13 +496,155 @@ describe('agent-host entrypoint', () => {
     expect(entrypoint).toContain(
       '[[ -n "$host" && "$host" != "$(hostname -s)" ]]'
     );
-    expect(entrypoint).toContain(
-      'for file in "$AGENT_QUEUE_HOME"/notify-spool/*.json(N); do'
-    );
-    // A notice is removed only once it posted, or when it is not a notice at all
-    expect(entrypoint).toMatch(
-      /--data @- "\$url" >\/dev\/null 2>&1; then\n\s+rm -f "\$file"/
-    );
+    // The spool is drained into `notices` before the pending rows are forwarded
+    expect(
+      entrypoint.indexOf('notices_drain "$AGENT_QUEUE_HOME" || true')
+    ).toBeLessThan(entrypoint.indexOf('relay_notices || true'));
+    expect(entrypoint).not.toContain('notify-spool/*.json(N)');
+  });
+
+  // The one forwarder: pending `notices` rows the dial lets through are posted, the rest held
+  describe('relay_notices', () => {
+    requireTools('zsh', 'jq');
+    const start = entrypoint.indexOf('relay_notices() {');
+    const fn = entrypoint.slice(start, entrypoint.indexOf('\n}\n', start) + 3);
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'relay-'));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    // A text "fail" does not post (1), "nohook" has no webhook (3); a row of level "info" is held
+    const relay = (rows: unknown[] | 'select-fails', telemetry = true) => {
+      writeFileSync(join(dir, 'rows.json'), JSON.stringify(rows));
+      writeFileSync(
+        join(dir, 'notify.sh'),
+        `#!/bin/sh
+case "$1" in
+  --passes) [ "$2" != info ] ;;
+  --send) echo "$2|$3" >> "${dir}/sent"
+    case "$3" in fail*) exit 1 ;; nohook*) exit 3 ;; esac ;;
+esac
+`,
+        { mode: 0o755 }
+      );
+      const script = `
+telemetry_on() { ${telemetry ? 'true' : 'false'}; }
+supabase_select_checked() {
+  print -r -- "$1|$2" >> "${dir}/selects"
+  ${rows === 'select-fails' ? 'return 1' : `cat "${dir}/rows.json"`}
+}
+supabase_patch() { print -r -- "$1|$2|$3" >> "${dir}/patches"; print -r -- '[]'; }
+AGENT_QUEUE_HOME="${dir}"
+${fn}
+relay_notices`;
+      const r = spawnSync('zsh', ['-c', script], {
+        encoding: 'utf8',
+        env: { PATH: process.env['PATH'] ?? '' }
+      });
+      const lines = (name: string) =>
+        existsSync(join(dir, name))
+          ? readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean)
+          : [];
+      return {
+        status: r.status,
+        selects: lines('selects'),
+        sent: lines('sent'),
+        patches: lines('patches')
+      };
+    };
+
+    it('posts a passing row with a newline in its text and marks it forwarded', () => {
+      const r = relay([{ id: 'a/b', level: 'urgent', text: 'one\ntwo' }]);
+      expect(r.status).toBe(0);
+      expect(r.selects).toEqual([
+        'notices|state=eq.pending&order=at.asc&limit=50&select=id,level,text'
+      ]);
+      expect(r.sent).toEqual(['urgent|one', 'two']);
+      expect(r.patches).toHaveLength(1);
+      expect(r.patches[0]).toMatch(
+        /^notices\|id=eq\.a%2Fb\|\{"state":"forwarded","forwarded_at":"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"\}$/
+      );
+    });
+
+    it('marks a row the dial holds back as held, without posting it', () => {
+      const r = relay([{ id: 'h1', level: 'info', text: 'quiet' }]);
+      expect(r.sent).toEqual([]);
+      expect(r.patches).toEqual(['notices|id=eq.h1|{"state":"held"}']);
+    });
+
+    it('leaves a failed post pending and goes on to the next row', () => {
+      const r = relay([
+        { id: 'f1', level: 'urgent', text: 'fail it' },
+        { id: 'f2', level: 'urgent', text: 'fine' }
+      ]);
+      expect(r.sent).toEqual(['urgent|fail it', 'urgent|fine']);
+      expect(r.patches).toHaveLength(1);
+      expect(r.patches[0]).toContain('notices|id=eq.f2|');
+    });
+
+    it('stops the pass without a webhook, leaving every row pending', () => {
+      const r = relay([
+        { id: 'n1', level: 'urgent', text: 'nohook' },
+        { id: 'n2', level: 'urgent', text: 'later' }
+      ]);
+      expect(r.status).toBe(0);
+      expect(r.sent).toEqual(['urgent|nohook']);
+      expect(r.patches).toEqual([]);
+    });
+
+    it('does nothing when the select fails', () => {
+      const r = relay('select-fails');
+      expect(r.status).toBe(0);
+      expect(r.sent).toEqual([]);
+      expect(r.patches).toEqual([]);
+    });
+
+    it('does nothing with telemetry off', () => {
+      const r = relay([{ id: 'x', level: 'urgent', text: 'hi' }], false);
+      expect(r.status).toBe(0);
+      expect(r.selects).toEqual([]);
+      expect(r.sent).toEqual([]);
+      expect(r.patches).toEqual([]);
+    });
+  });
+
+  // The exposed-credentials notice goes through the spool in the notices format
+  describe('exposed_notice', () => {
+    requireTools('zsh', 'jq');
+    const start = entrypoint.indexOf('exposed_notice() {');
+    const fn = entrypoint.slice(start, entrypoint.indexOf('\n}\n', start) + 3);
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'exposed-notice-'));
+      mkdirSync(join(dir, 'notify-spool'));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('spools an urgent notice from agent-host, with no ticket', () => {
+      const r = spawnSync(
+        'zsh',
+        [
+          '-c',
+          `AGENT_QUEUE_HOME="${dir}"\n${fn}\nexposed_notice '["FLY_API_TOKEN","GH_TOKEN"]'`
+        ],
+        { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '' } }
+      );
+      expect(r.status).toBe(0);
+      const files = readdirSync(join(dir, 'notify-spool'));
+      expect(files).toHaveLength(1);
+      expect(files[0]).toMatch(/^exposed-\d+\.json$/);
+      const notice = JSON.parse(
+        readFileSync(join(dir, 'notify-spool', files[0]), 'utf8')
+      ) as Record<string, unknown>;
+      expect(notice).toMatchObject({
+        text: 'Agent host: a credential is readable where claude runs: FLY_API_TOKEN, GH_TOKEN',
+        level: 'urgent',
+        source: 'agent-host',
+        ticket: null
+      });
+      expect(String(notice['at'])).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+    });
   });
 
   it('traps the wake before the listener can send one', () => {
