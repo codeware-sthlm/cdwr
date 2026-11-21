@@ -71,3 +71,21 @@ describe('discoverPaths with output that is not JSON', () => {
     expect((thrown as Error).cause).toBeUndefined();
   });
 });
+
+describe('discoverPaths with a project', () => {
+  it('passes projectId to every folder listing', () => {
+    const { run, calls } = fakeRunner(
+      { '/apps/cms': ['signature'], '/apps/cms/signature': [] },
+      {}
+    );
+    discoverPaths('/apps/cms', 'development', run, 'proj-1');
+    expect(calls).toHaveLength(2);
+    for (const call of calls) expect(call).toContain('--projectId=proj-1');
+  });
+
+  it('adds no projectId by default', () => {
+    const { run, calls } = fakeRunner({ '/a': [] }, {});
+    discoverPaths('/a', 'development', run);
+    expect(calls[0]?.some((arg) => arg.startsWith('--projectId'))).toBe(false);
+  });
+});
