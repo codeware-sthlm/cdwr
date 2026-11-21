@@ -230,8 +230,9 @@ source "$AGENT_QUEUE_HOME/checkin.sh"
 # runs inside it only, as it un-exports the key every run.sh the loop starts needs.
 source "$AGENT_QUEUE_HOME/telemetry.sh"
 # What the implement sessions can't send themselves, holding neither the key nor the webhook:
-# their session rows, from the files the hook writes, and the notices notify.sh spooled. Each
-# session file is sent when it changed since its stamp; a notice is removed once it is posted.
+# their session rows, from the files the hook writes, and the notices. The sampler moves the spool
+# (the sessions', run.sh's, its own) into `notices`, then forwards the pending rows the dial lets
+# through and marks each forwarded or held, so turning the dial up later replays nothing.
 relay_sessions() {
   local file stamp id host state detail
   for file in "$AGENT_QUEUE_HOME"/sessions/*.json(N); do
@@ -251,15 +252,24 @@ relay_sessions() {
   done
 }
 relay_notices() {
-  local file url text
-  url="${SLACK_WEBHOOK_URL:-${CLAUDE_SLACK_WEBHOOK:-}}"
-  [[ -z "$url" && -r "$HOME/.claude/slack-webhook" ]] && url="$(tr -d '[:space:]' < "$HOME/.claude/slack-webhook")"
-  [[ -n "$url" ]] || return 0
-  for file in "$AGENT_QUEUE_HOME"/notify-spool/*.json(N); do
-    text="$(jq -r '.text // empty' "$file" 2>/dev/null)" || { rm -f "$file"; continue; }
-    if [[ -z "$text" ]] || jq -nc --arg text "$text" '{text: $text}' |
-        curl -sS -m 5 -X POST -H 'Content-Type: application/json' --data @- "$url" >/dev/null 2>&1; then
-      rm -f "$file"
+  local rows row id level text rc
+  telemetry_on || return 0
+  rows="$(supabase_select_checked notices 'state=eq.pending&order=at.asc&limit=50&select=id,level,text')" || return 0
+  for row in "${(@f)$(jq -c '.[]' <<<"$rows" 2>/dev/null)}"; do
+    [[ -n "$row" ]] || continue
+    id="$(jq -r '.id' <<<"$row")"
+    level="$(jq -r '.level' <<<"$row")"
+    if "$AGENT_QUEUE_HOME/notify.sh" --passes "$level" </dev/null; then
+      text="$(jq -r '.text' <<<"$row")"
+      rc=0
+      "$AGENT_QUEUE_HOME/notify.sh" --send "$level" "$text" </dev/null || rc=$?
+      # No webhook: nothing can be posted this pass, the rows stay pending
+      (( rc == 3 )) && return 0
+      (( rc == 0 )) || continue
+      supabase_patch notices "id=eq.$(jq -rn --arg id "$id" '$id | @uri')" \
+        "$(jq -nc --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state: "forwarded", forwarded_at: $at}')" >/dev/null || true
+    else
+      supabase_patch notices "id=eq.$(jq -rn --arg id "$id" '$id | @uri')" '{"state":"held"}' >/dev/null || true
     fi
   done
 }
@@ -296,7 +306,8 @@ exposed_credentials() {
   done
   jq -nc '$ARGS.positional' --args "${found[@]}"
 }
-# One notice each time the set changes to a non-empty one, through the spool relay_notices posts
+# One notice each time the set changes to a non-empty one, through the spool the sampler moves into
+# `notices`
 exposed_notice() {
   local last="$AGENT_QUEUE_HOME/exposed-last"
   [[ "$1" == "$(cat "$last" 2>/dev/null)" ]] && return 0
@@ -304,7 +315,8 @@ exposed_notice() {
   [[ "$1" == '[]' ]] && return 0
   # Written here and renamed into the spool, which the session can write: a rename never follows a
   # link the session left under that name
-  jq -nc --arg t "Agent host: a credential is readable where claude runs: $(jq -r 'join(", ")' <<<"$1")" '{text: $t}' \
+  jq -nc --arg t "Agent host: a credential is readable where claude runs: $(jq -r 'join(", ")' <<<"$1")" \
+    --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{text: $t, level: "urgent", source: "agent-host", ticket: null, at: $at}' \
     > "$AGENT_QUEUE_HOME/exposed-notice.json" &&
     mv -f "$AGENT_QUEUE_HOME/exposed-notice.json" "$AGENT_QUEUE_HOME/notify-spool/exposed-$(date +%s).json"
 }
@@ -318,6 +330,7 @@ LOOP_EXPORTS=(${(k)parameters[(R)*export*]})
     [[ -n "$exposed" ]] && { exposed_notice "$exposed" || true }
     telemetry_host_metrics "$exposed" || true
     relay_sessions || true
+    notices_drain "$AGENT_QUEUE_HOME" || true
     relay_notices || true
     sleep "${HOST_METRICS_INTERVAL_SECONDS:-$RUN_INTERVAL_SECONDS}"
   done
