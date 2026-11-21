@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import { z } from 'zod';
 
@@ -13,8 +16,13 @@ import { run } from './shell';
 const API = 'https://api.supabase.com';
 const TIMEOUT_MS = 15_000;
 const TOKEN_ENV = 'SUPABASE_ACCESS_TOKEN';
-/** The Keychain item `supabase login` writes on a Mac */
+/** The Keychain item `supabase login` writes on a Mac, one account per CLI profile */
 const KEYCHAIN_SERVICE = 'Supabase CLI';
+const PROFILE_ENV = 'SUPABASE_PROFILE';
+const DEFAULT_PROFILE = 'supabase';
+const LEGACY_ACCOUNT = 'access-token';
+/** Where `supabase login` writes the token when no keyring is available */
+const TOKEN_FILE = '.supabase/access-token';
 /** go-keyring stores a value under this prefix, base64 encoded */
 const KEYRING_PREFIX = 'go-keyring-base64:';
 
@@ -72,25 +80,49 @@ export function decodeKeychain(raw: string): string {
     .trim();
 }
 
-/** Your Management API token: SUPABASE_ACCESS_TOKEN, else the Keychain item of `supabase login` */
+/**
+ * The Keychain accounts `supabase login` may have stored the token under: the
+ * CLI profile (SUPABASE_PROFILE, `supabase` by default), then the account
+ * older CLIs used
+ */
+export const keychainAccounts = (env: NodeJS.ProcessEnv): string[] => [
+  env[PROFILE_ENV]?.trim() || DEFAULT_PROFILE,
+  LEGACY_ACCOUNT
+];
+
+/**
+ * Your Management API token: SUPABASE_ACCESS_TOKEN, else what `supabase login`
+ * stored, in the Keychain under the profile's account or in
+ * ~/.supabase/access-token when no keyring was available
+ */
 export async function accessToken(
   env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir()
 ): Promise<string> {
   const given = env[TOKEN_ENV]?.trim();
   if (given) return given;
   if (platform === 'darwin') {
-    const stored = await run('security', [
-      'find-generic-password',
-      '-s',
-      KEYCHAIN_SERVICE,
-      '-w'
-    ]).then(
-      ({ stdout }) => decodeKeychain(stdout),
-      () => ''
-    );
-    if (stored) return stored;
+    for (const account of keychainAccounts(env)) {
+      const stored = await run('security', [
+        'find-generic-password',
+        '-s',
+        KEYCHAIN_SERVICE,
+        '-a',
+        account,
+        '-w'
+      ]).then(
+        ({ stdout }) => decodeKeychain(stdout),
+        () => ''
+      );
+      if (stored) return stored;
+    }
   }
+  const file = await readFile(join(home, TOKEN_FILE), 'utf8').then(
+    (text) => text.trim(),
+    () => ''
+  );
+  if (file) return file;
   throw new Error(
     `No Supabase access token: run \`supabase login\`, or set ${TOKEN_ENV}`
   );

@@ -547,7 +547,8 @@ project and rotates `AGENT_SUPABASE_SERVICE_KEY`. Each consumer holds its own ke
 and the minute (`agent_host_20261121_2240`) and described `cdwr: AGENT_SUPABASE_SERVICE_KEY <host>`, the Mac's `tools/cdwr/.env` the `default`
 secret key, and the edge functions the key the platform injects. Run it on the Mac: the key and its leftovers are
 created and deleted through the Management API with your own `supabase login` (`SUPABASE_ACCESS_TOKEN`, else the
-Keychain item `Supabase CLI`). Keys are matched by the hash the API lists, base64url sha256, never revealed; only the
+Keychain item `Supabase CLI` under the profile's account, else `~/.supabase/access-token`). The vault must already hold
+the key the container runs on. Keys are matched by the hash the API lists, base64url sha256, never revealed; only the
 create returns a value. The new key is proven with a read, written to the vault and read back by hash, and the container
 restarts with the queue idle under the host deploy lock. The plan first checks the container reads the key from the
 vault, so a key pinned in the NUC's `.env` stops the run before anything changes. After the restart it checks the
