@@ -121,21 +121,40 @@ describe('deleteSecret', () => {
 
 describe('probeWrite', () => {
   const probe = { path: '/apps/cms', environment: 'prod', projectId: 'p' };
+  const PROBE_KEY = /^ROTATION_WRITE_CHECK_[0-9A-F]{16}$/;
+  const setKey = (args: string[]) => args[2].split('=@')[0];
 
-  it('sets, reads back and deletes', () => {
+  it('sets, reads back and deletes the same unique key', () => {
     const order: string[] = [];
+    const keys: string[] = [];
     let value = '';
     probeWrite(probe, (args) => {
       order.push(args[0] === 'secrets' ? args[1] : args[0]);
-      if (args[1] === 'set') value = readFileSync(fileOf(args), 'utf8');
-      if (args[0] === 'export') {
-        return JSON.stringify([
-          { key: 'ROTATION_WRITE_CHECK', value, type: 'shared' }
-        ]);
+      if (args[1] === 'set') {
+        keys.push(setKey(args));
+        value = readFileSync(fileOf(args), 'utf8');
       }
+      if (args[0] === 'export') {
+        return JSON.stringify([{ key: keys[0], value, type: 'shared' }]);
+      }
+      if (args[1] === 'delete') keys.push(args[2]);
       return '';
     });
     expect(order).toEqual(['set', 'export', 'delete']);
+    expect(keys[0]).toMatch(PROBE_KEY);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('uses a different key on each call', () => {
+    const keys: string[] = [];
+    const run = (args: string[]) => {
+      if (args[1] === 'delete') keys.push(args[2]);
+      return args[0] === 'export' ? '[]' : '';
+    };
+    for (let i = 0; i < 2; i++) {
+      expect(() => probeWrite(probe, run)).toThrow();
+    }
+    expect(keys[0]).not.toBe(keys[1]);
   });
 
   it('still deletes and reports when the read-back differs', () => {
@@ -147,6 +166,26 @@ describe('probeWrite', () => {
       })
     ).toThrow('Infisical will not accept writes at /apps/cms (prod)');
     expect(order).toEqual(['set', 'export', 'delete']);
+  });
+
+  it('fails naming the key when the cleanup fails after a good write', () => {
+    let value = '';
+    let key = '';
+    expect(() =>
+      probeWrite(probe, (args) => {
+        if (args[1] === 'set') {
+          key = setKey(args);
+          value = readFileSync(fileOf(args), 'utf8');
+        }
+        if (args[0] === 'export') {
+          return JSON.stringify([{ key, value, type: 'shared' }]);
+        }
+        if (args[1] === 'delete') throw new Error('cleanup');
+        return '';
+      })
+    ).toThrow(
+      /Infisical took the write at \/apps\/cms \(prod\), but the check key ROTATION_WRITE_CHECK_[0-9A-F]{16} could not be removed; delete it by hand/
+    );
   });
 
   it('keeps the original error when the cleanup fails too', () => {
