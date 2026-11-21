@@ -169,6 +169,46 @@ describe('buildRows', () => {
     expect(row?.expiry).toBe('unknown (ambiguous)');
   });
 
+  describe('with a legacy token name', () => {
+    const renamed: CatalogEntry[] = [
+      {
+        project: 'codeware',
+        path: '/apps/cms',
+        key: 'FLY_TOKEN',
+        kind: 'token',
+        purpose: 'Deploys',
+        rotation: { command: ['fly', 'rotate'] },
+        expiry: {
+          source: 'fly',
+          tokenName: 'cdwr: FLY_TOKEN',
+          legacyName: 'cms-deploy'
+        }
+      }
+    ];
+
+    it('falls back to the legacy name when the new one is missing', () => {
+      const [row] = buildRows(flyRead, [token('1', 'cms-deploy')], renamed);
+      expect(row?.expiry).toBe('2027-03-04');
+    });
+
+    it('says the new name is missing when neither exists', () => {
+      const [row] = buildRows(flyRead, [], renamed);
+      expect(row?.expiry).toBe('unknown (no token named "cdwr: FLY_TOKEN")');
+    });
+
+    it('prefers the new name while a legacy token is also live', () => {
+      const [row] = buildRows(
+        flyRead,
+        [
+          token('1', 'cms-deploy'),
+          token('2', 'cdwr: FLY_TOKEN', { expiresAt: '2028-05-06T10:00:00Z' })
+        ],
+        renamed
+      );
+      expect(row?.expiry).toBe('2028-05-06');
+    });
+  });
+
   it('says so when the Fly read failed', () => {
     const [row] = buildRows(flyRead, { error: 'not logged in' }, catalog);
     expect(row?.expiry).toBe('unknown (fly read failed)');

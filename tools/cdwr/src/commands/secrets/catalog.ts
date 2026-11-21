@@ -44,7 +44,7 @@ export type Rotation =
 
 /** Where the expiry is read from; never stored here */
 export type ExpirySource =
-  | { source: 'fly'; tokenName: string }
+  | { source: 'fly'; tokenName: string; legacyName?: string }
   | { source: 'none' }
   | { source: 'unknown' };
 
@@ -844,11 +844,12 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'DESK_FLY_TOKEN',
     kind: 'token',
     purpose: 'Fly org deploy token the desk restarts apps with',
-    rotation: {
-      manual:
-        'fly tokens create, write to agent-host /agent-queue, restart the agent container, revoke the old (cdwr agent rotate fly, COD-876)'
-    },
-    expiry: { source: 'fly', tokenName: 'Desk org token' }
+    rotation: { command: ['agent', 'rotate', 'fly'] },
+    expiry: {
+      source: 'fly',
+      tokenName: 'agent-host desk deploy (DESK_FLY_TOKEN)',
+      legacyName: 'Desk org token'
+    }
   },
   {
     project: 'agent-host',
@@ -894,11 +895,12 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'FLY_API_TOKEN',
     kind: 'token',
     purpose: 'Read-only Fly org token for platform reads',
-    rotation: {
-      manual:
-        'fly tokens create, write to agent-host /agent-queue, restart the agent container, revoke the old (cdwr agent rotate fly, COD-876)'
-    },
-    expiry: { source: 'fly', tokenName: 'Readonly org token' }
+    rotation: { command: ['agent', 'rotate', 'fly'] },
+    expiry: {
+      source: 'fly',
+      tokenName: 'agent-host platform read (FLY_API_TOKEN)',
+      legacyName: 'Readonly org token'
+    }
   },
   {
     project: 'agent-host',
