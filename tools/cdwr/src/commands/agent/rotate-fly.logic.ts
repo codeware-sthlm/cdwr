@@ -98,6 +98,24 @@ export function revokeSet(
   return { kind: 'ok', tokens: [...named, ...legacy] };
 }
 
+/**
+ * What to revoke now: the planned tokens that are still live, never the one
+ * to keep. A live token the plan did not show is left alone and returned.
+ */
+export function toRevoke(
+  planned: string[],
+  live: FlyToken[],
+  keep: string
+): { revoke: string[]; unplanned: FlyToken[] } {
+  const candidates = live.filter((token) => token.id !== keep);
+  return {
+    revoke: candidates
+      .filter((token) => planned.includes(token.id))
+      .map((token) => token.id),
+    unplanned: candidates.filter((token) => !planned.includes(token.id))
+  };
+}
+
 export const sha256Hex = (value: string): string =>
   createHash('sha256').update(value).digest('hex');
 

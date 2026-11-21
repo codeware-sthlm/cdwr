@@ -160,63 +160,58 @@ export async function lockHost(
 }
 
 /**
- * Restarts the agent container so secrets.sh reads the vault again: under the
- * host deploy lock, with the queue paused and idle, as a deploy restarts it.
- * Only a pause made here is lifted again; false when that unpause failed, with
+ * Restarts the agent container so secrets.sh reads the vault again, with the
+ * queue paused and idle, as a deploy restarts it. The caller holds the host
+ * deploy lock. Only a pause made here is lifted again; false when that unpause failed, with
  * a warning that names the command to run.
  */
-export async function restartIdle(
+export async function restartIdleLocked(
   ctx: Context,
   host: string,
   wait: number
 ): Promise<boolean> {
   let resumed = true;
-  const release = await lockHost(ctx, host, wait);
+  if (!(await running(host))) {
+    throw new CliError(
+      `The agent container is not running on ${host}`,
+      EXIT.failed
+    );
+  }
+  const created = !(await succeeds(pathExists(host, PAUSED)));
+  if (created) await ssh(pause(host));
   try {
-    if (!(await running(host))) {
+    const { intervalMs, checks } = waitPlan(wait);
+    const idle = await ctx.ui.task(
+      'Waiting for the queue to be idle',
+      () => awaitIdle(host, checks, intervalMs),
+      (q) => (q ? 'The queue is idle' : 'The queue stayed busy')
+    );
+    if (!idle) {
       throw new CliError(
-        `The agent container is not running on ${host}`,
-        EXIT.failed
+        `The queue was still busy after ${wait} minutes; the container was not restarted`,
+        EXIT.failed,
+        'Try again later, or raise --wait'
       );
     }
-    const created = !(await succeeds(pathExists(host, PAUSED)));
-    if (created) await ssh(pause(host));
-    try {
-      const { intervalMs, checks } = waitPlan(wait);
-      const idle = await ctx.ui.task(
-        'Waiting for the queue to be idle',
-        () => awaitIdle(host, checks, intervalMs),
-        (q) => (q ? 'The queue is idle' : 'The queue stayed busy')
-      );
-      if (!idle) {
-        throw new CliError(
-          `The queue was still busy after ${wait} minutes; the container was not restarted`,
-          EXIT.failed,
-          'Try again later, or raise --wait'
+    await ctx.ui.task(
+      'Restarting the container',
+      () => ssh(restart(host)),
+      () => 'Container restarted'
+    );
+  } finally {
+    // The restart keeps the container's files, the pause flag included
+    if (created) {
+      resumed = false;
+      for (let attempt = 0; !resumed && attempt < 3; attempt++) {
+        if (attempt > 0) await sleep(2000);
+        resumed = await succeeds(unpause(host)).catch(() => false);
+      }
+      if (!resumed) {
+        ctx.ui.warn(
+          `The queue may still be paused: run \`ssh ${host} docker exec ${CONTAINER} rm -f ${PAUSED}\``
         );
       }
-      await ctx.ui.task(
-        'Restarting the container',
-        () => ssh(restart(host)),
-        () => 'Container restarted'
-      );
-    } finally {
-      // The restart keeps the container's files, the pause flag included
-      if (created) {
-        resumed = false;
-        for (let attempt = 0; !resumed && attempt < 3; attempt++) {
-          if (attempt > 0) await sleep(2000);
-          resumed = await succeeds(unpause(host)).catch(() => false);
-        }
-        if (!resumed) {
-          ctx.ui.warn(
-            `The queue may still be paused: run \`ssh ${host} docker exec ${CONTAINER} rm -f ${PAUSED}\``
-          );
-        }
-      }
     }
-  } finally {
-    await release();
   }
   return resumed;
 }

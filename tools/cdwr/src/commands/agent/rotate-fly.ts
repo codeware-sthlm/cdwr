@@ -19,7 +19,7 @@ import {
   assertHost,
   vaultHash
 } from './deploy.logic';
-import { restartIdle, ssh } from './host';
+import { lockHost, restartIdleLocked, ssh } from './host';
 import { hostInput } from './remote';
 import {
   FLY_ROTATIONS,
@@ -30,7 +30,8 @@ import {
   namesOf,
   newTokenId,
   revokeSet,
-  sha256Hex
+  sha256Hex,
+  toRevoke
 } from './rotate-fly.logic';
 
 const FLY_KEYS = Object.keys(FLY_ROTATIONS).filter(
@@ -154,15 +155,142 @@ async function containerHash(
   }
 }
 
+interface Planned {
+  key: FlyKey;
+  ids: string[];
+  ambiguous: boolean;
+}
+
+/** Everything the run does under the host deploy lock */
+async function rotate(
+  ctx: Context,
+  host: string,
+  wait: number,
+  keys: FlyKey[],
+  planned: Planned[]
+) {
+  await ctx.ui.task(
+    `Checking agent-host ${VAULT.path} accepts writes`,
+    async () => probeWrite(VAULT)
+  );
+
+  const rotated: Rotated[] = [];
+  try {
+    for (const k of keys) rotated.push(await createAndWrite(ctx, k));
+  } catch (error) {
+    const own = error instanceof CliError ? error.hint : undefined;
+    const written = rotated.length
+      ? `Already written: ${rotated.map((r) => r.key).join(', ')}. Every token in the vault works; run this again to finish, and it revokes the strays`
+      : undefined;
+    throw new CliError(
+      messageOf(error),
+      error instanceof CliError ? error.exitCode : EXIT.failed,
+      [own, written].filter(Boolean).join('. ') ||
+        'Nothing was revoked; the old tokens still work'
+    );
+  }
+
+  const resumed = await restartIdleLocked(ctx, host, wait);
+
+  const checked = await Promise.all(
+    rotated.map(async (r) => {
+      try {
+        const result = await containerHash(host, r.key);
+        if (result.kind === 'not-ready') {
+          return {
+            ...r,
+            problem: `the container never wrote ${VAULT_FILE} within ${POLL_MAX_MS / 1000} s; check \`cdwr agent logs\``
+          };
+        }
+        return result.hash === r.hash
+          ? { ...r, problem: undefined }
+          : {
+              ...r,
+              problem: `the container does not hold the new value. A key set in the NUC's compose .env wins over the vault (the start log says "secrets: kept from the environment"); remove it there`
+            };
+      } catch (error) {
+        return {
+          ...r,
+          problem: `the container's value could not be read: ${messageOf(error)}`
+        };
+      }
+    })
+  );
+
+  const revoked: string[] = [];
+  const pending: { key: FlyKey; ids: string[]; why: string }[] = [];
+  const unplanned: FlyToken[] = [];
+  for (const r of checked) {
+    const plan = planned.find((p) => p.key === r.key);
+    const old = revokeSet(await listOrgTokens(ORG), namesOf(r.key), r.id);
+    const { revoke: ids, unplanned: extra } = toRevoke(
+      plan?.ids ?? [],
+      old.tokens,
+      r.id
+    );
+    unplanned.push(...extra);
+    if (r.problem) {
+      pending.push({ key: r.key, ids, why: r.problem });
+    } else if (plan?.ambiguous || old.kind === 'ambiguous') {
+      pending.push({
+        key: r.key,
+        ids: [],
+        why: `several live tokens carry the legacy name "${namesOf(r.key).legacyName}", so none was revoked; revoke the right ones by hand`
+      });
+    } else {
+      try {
+        await ctx.ui.task(`Revoking ${r.key}'s old tokens`, () => revoke(ids));
+        revoked.push(...ids);
+      } catch (error) {
+        pending.push({
+          key: r.key,
+          ids,
+          why: `the revoke failed: ${messageOf(error)}`
+        });
+      }
+    }
+  }
+
+  if (pending.length || unplanned.length) {
+    const todo = pending.filter((p) => p.ids.length);
+    throw new CliError(
+      [
+        `Rotated ${rotated.map((r) => r.key).join(', ')} on ${host}; ${revoked.length} old token(s) revoked${revoked.length ? ` (${revoked.join(', ')})` : ''}`,
+        todo.length
+          ? `Still to revoke: ${todo.map((p) => `${p.key} ${p.ids.join(', ')}`).join('; ')}`
+          : 'Nothing is left to revoke'
+      ].join('. '),
+      EXIT.failed,
+      [
+        ...pending.map((p) => `${p.key}: ${p.why}`),
+        ...unplanned.map(
+          (t) => `not in the plan, left alone: ${t.id} "${t.name}"`
+        ),
+        ...(resumed ? [] : ['The queue may still be paused (see the warning)']),
+        'Fix that, then run this again; its plan shows what is left to revoke'
+      ].join('. ')
+    );
+  }
+  return {
+    summary: `Rotated ${rotated.map((r) => r.key).join(', ')} on ${host}; ${revoked.length} old token(s) revoked`,
+    json: {
+      host,
+      rotated: rotated.map(({ key: k, id }) => ({ key: k, id })),
+      revoked
+    }
+  };
+}
+
 /**
- * Each new token is created and proven on a Fly read before it reaches the
- * vault, and the old ones are revoked only once the restarted container holds
- * the new value. A stop anywhere leaves a working token in the vault, and a
- * rerun revokes every other token of the key's names.
+ * The whole run holds the host deploy lock. Each new token is created and
+ * proven on a Fly read before it reaches the vault, and the old ones the plan
+ * showed are revoked only once the restarted container holds the new value. A
+ * stop anywhere leaves a working token in the vault, and a rerun revokes what
+ * its own plan shows.
  */
 export default defineCommand({
   summary: 'New Fly tokens for the agent host, the old ones revoked',
-  description: `Creates a new Fly token for each agent-host key (${FLY_KEYS.join(', ')}) named \`agent-host <use> (<KEY>)\`, valid one year, proves it on a Fly read, writes it to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container with the queue idle, checks that the container holds the new value (by hash), and only then revokes the key's other tokens. Runs on your own Fly and Infisical logins; no value is ever printed.`,
+  description: `Creates a new Fly token for each agent-host key (${FLY_KEYS.join(', ')}) named \`agent-host <use> (<KEY>)\`, valid one year, proves it on a Fly read, writes it to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container with the queue idle, all under the host deploy lock held for the whole run, checks that the container holds the new value (by hash), and only then revokes the key's other tokens. Runs on your own Fly and Infisical logins; no value is ever printed.`,
   danger: 'destructive',
   needs: ['fly'],
   inputs: {
@@ -227,6 +355,10 @@ export default defineCommand({
     return {
       steps: [
         {
+          label: 'Take the host deploy lock for the whole run',
+          detail: `waits up to ${wait} minutes`
+        },
+        {
           label: `Probe a write to agent-host ${VAULT.path}`,
           detail: 'a throwaway key, removed again'
         },
@@ -235,7 +367,7 @@ export default defineCommand({
         })),
         {
           label: `Restart ${CONTAINER} on ${host}`,
-          detail: `under the deploy lock, with the queue paused and idle (up to ${wait} minutes)`
+          detail: `with the queue paused and idle (up to ${wait} minutes)`
         },
         {
           label: `Check the container's ${VAULT_FILE} holds the new values`,
@@ -255,115 +387,25 @@ export default defineCommand({
         .filter((t) => !t.inVault)
         .map((t) => `${t.key} is not in the vault yet; it will be added`),
       target: { environment: 'production', name: host },
-      data: { host, wait, keys }
+      data: {
+        host,
+        wait,
+        keys,
+        planned: targets.map(({ key: k, revoke: old }) => ({
+          key: k,
+          ids: old.kind === 'ok' ? old.tokens.map((t) => t.id) : [],
+          ambiguous: old.kind === 'ambiguous'
+        }))
+      }
     };
   },
 
-  async apply(ctx, { host, wait, keys }) {
-    await ctx.ui.task(
-      `Checking agent-host ${VAULT.path} accepts writes`,
-      async () => probeWrite(VAULT)
-    );
-
-    const rotated: Rotated[] = [];
+  async apply(ctx, { host, wait, keys, planned }) {
+    const release = await lockHost(ctx, host, wait);
     try {
-      for (const k of keys) rotated.push(await createAndWrite(ctx, k));
-    } catch (error) {
-      const own = error instanceof CliError ? error.hint : undefined;
-      const written = rotated.length
-        ? `Already written: ${rotated.map((r) => r.key).join(', ')}. Every token in the vault works; run this again to finish, and it revokes the strays`
-        : undefined;
-      throw new CliError(
-        messageOf(error),
-        error instanceof CliError ? error.exitCode : EXIT.failed,
-        [own, written].filter(Boolean).join('. ') ||
-          'Nothing was revoked; the old tokens still work'
-      );
+      return await rotate(ctx, host, wait, keys, planned);
+    } finally {
+      await release();
     }
-
-    const resumed = await restartIdle(ctx, host, wait);
-
-    const checked = await Promise.all(
-      rotated.map(async (r) => {
-        try {
-          const result = await containerHash(host, r.key);
-          if (result.kind === 'not-ready') {
-            return {
-              ...r,
-              problem: `the container never wrote ${VAULT_FILE} within ${POLL_MAX_MS / 1000} s; check \`cdwr agent logs\``
-            };
-          }
-          return result.hash === r.hash
-            ? { ...r, problem: undefined }
-            : {
-                ...r,
-                problem: `the container does not hold the new value. A key set in the NUC's compose .env wins over the vault (the start log says "secrets: kept from the environment"); remove it there`
-              };
-        } catch (error) {
-          return {
-            ...r,
-            problem: `the container's value could not be read: ${messageOf(error)}`
-          };
-        }
-      })
-    );
-
-    const revoked: string[] = [];
-    const pending: { key: FlyKey; ids: string[]; why: string }[] = [];
-    const tokens = await listOrgTokens(ORG);
-    for (const r of checked) {
-      const old = revokeSet(tokens, namesOf(r.key), r.id);
-      const ids = old.tokens.map((t) => t.id);
-      if (r.problem) {
-        pending.push({ key: r.key, ids, why: r.problem });
-      } else if (old.kind === 'ambiguous') {
-        pending.push({
-          key: r.key,
-          ids,
-          why: `${ids.length} live tokens carry the legacy name "${namesOf(r.key).legacyName}", so none was revoked; revoke the right ones by hand`
-        });
-      } else {
-        try {
-          await ctx.ui.task(`Revoking ${r.key}'s old tokens`, () =>
-            revoke(ids)
-          );
-          revoked.push(...ids);
-        } catch (error) {
-          pending.push({
-            key: r.key,
-            ids,
-            why: `the revoke failed: ${messageOf(error)}`
-          });
-        }
-      }
-    }
-
-    if (pending.length) {
-      const todo = pending.filter((p) => p.ids.length);
-      throw new CliError(
-        [
-          `Rotated ${rotated.map((r) => r.key).join(', ')} on ${host}; ${revoked.length} old token(s) revoked${revoked.length ? ` (${revoked.join(', ')})` : ''}`,
-          todo.length
-            ? `Still to revoke: ${todo.map((p) => `${p.key} ${p.ids.join(', ')}`).join('; ')}`
-            : 'Nothing is left to revoke'
-        ].join('. '),
-        EXIT.failed,
-        [
-          ...pending.map((p) => `${p.key}: ${p.why}`),
-          ...(resumed
-            ? []
-            : ['The queue may still be paused (see the warning)']),
-          "Fix that, then run this again with --key; it revokes the key's other tokens"
-        ].join('. ')
-      );
-    }
-    return {
-      summary: `Rotated ${rotated.map((r) => r.key).join(', ')} on ${host}; ${revoked.length} old token(s) revoked`,
-      json: {
-        host,
-        rotated: rotated.map(({ key: k, id }) => ({ key: k, id })),
-        revoked
-      }
-    };
   }
 });
