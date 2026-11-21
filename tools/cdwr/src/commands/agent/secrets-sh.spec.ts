@@ -279,6 +279,28 @@ describe('secrets.sh', () => {
       });
     });
 
+    it('holds a queue setting that reads like a credential, and keeps one that names a file', () => {
+      const result = run(
+        loop,
+        JSON.stringify([
+          { key: 'AGENT_QUEUE_FOO_TOKEN', value: 'foo-secret' },
+          { key: 'AGENT_QUEUE_BUDGET_USD', value: '5' }
+        ])
+      );
+      expect(result.status).toBe(0);
+      expect(secretFile('vault.env').text).toBe(
+        'AGENT_QUEUE_FOO_TOKEN=foo-secret\n'
+      );
+    });
+
+    it('moves a credential the environment sets out of it too', () => {
+      const result = run({ ...loop, FLY_API_TOKEN: 'env-fly' }, LOOP_VAULT);
+      expect(result.status).toBe(0);
+      expect(seenBy(result.stdout).fly).toBeNull();
+      expect(secretFile('vault.env').text).toContain('FLY_API_TOKEN=env-fly\n');
+      expect(secretFile('vault.env').text).not.toContain('fly-secret');
+    });
+
     it('logs the names and never a value', () => {
       const result = run(loop, LOOP_VAULT);
       const log = result.stdout + result.stderr;

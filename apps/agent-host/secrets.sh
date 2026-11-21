@@ -25,15 +25,18 @@ run_dir="${AGENT_HOST_RUN_DIR:-/run/agent}"
 vault_file="${AGENT_QUEUE_VAULT_FILE:-$run_dir/vault.env}"
 
 # What the loop may hold in its environment: what claude, git, the listener and the loop read from
-# it, and the queue's non-secret settings. The Linear keys are AGENT_QUEUE_* too, and never get
-# here: write_keys takes them first.
+# it, and the queue's non-secret settings. A setting whose name reads like a credential is not one
+# of those, whatever its prefix; a variable that names a file is. The Linear keys never get here:
+# write_keys takes them first.
 loop_env() {
   case "$1" in
     CLAUDE_CODE_OAUTH_TOKEN | AGENT_GITHUB_APP_ID | AGENT_GITHUB_APP_INSTALLATION_ID) return 0 ;;
     AGENT_SUPABASE_URL | AGENT_SUPABASE_ANON_KEY | SLACK_WEBHOOK_URL | SENTRY_DSN) return 0 ;;
+    *_FILE | *_PATH) [[ "$1" == (AGENT_QUEUE|RUN|HOST_METRICS)_* ]] ;;
+    *TOKEN* | *SECRET* | *KEY* | *PASSWORD*) return 1 ;;
     AGENT_QUEUE_* | RUN_* | HOST_METRICS_*) return 0 ;;
+    *) return 1 ;;
   esac
-  return 1
 }
 
 typeset -a key_names
@@ -134,9 +137,19 @@ while IFS= read -r pair; do
     print -ru2 -- "secrets: skipping a key that is not an env name"
     continue
   fi
-  # Anything set on purpose (the compose .env) wins over the vault
+  # Anything set on purpose (the compose .env) wins over the vault; for the loop, a value that is
+  # not its to hold goes to vault.env all the same
   if [[ -n "${(P)key:-}" ]]; then
     kept+=("$key")
+    if $is_loop && ! (( ${key_names[(Ie)$key]} )) && ! loop_env "$key"; then
+      if [[ "${(P)key}" == *$'\n'* ]]; then
+        print -ru2 -- "secrets: skipping $key, its value is not one line"
+      else
+        vault_lines+=("$key=${(P)key}")
+        held+=("$key")
+      fi
+      unset "$key"
+    fi
     continue
   fi
   value="$(jq -r .value <<<"$pair")"

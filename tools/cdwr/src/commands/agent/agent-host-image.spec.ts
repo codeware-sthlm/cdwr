@@ -199,7 +199,7 @@ describe('agent-host entrypoint', () => {
     // The desk's NUC heartbeat: three missed samples read as silent
     expect(dockerfile).toContain('HOST_METRICS_INTERVAL_SECONDS=60');
     expect(entrypoint.match(/telemetry_host_metrics/g)).toHaveLength(1);
-    expect(entrypoint.match(/telemetry_env/g)).toHaveLength(3); // comment + two calls
+    expect(entrypoint.match(/telemetry_env/g)).toHaveLength(4); // two comments + two calls
     expect(entrypoint).toMatch(
       /\n\(\n {2}telemetry_env "\$\{AGENT_QUEUE_VAULT_FILE:-\}"\n {2}telemetry_env "\$ENV_FILE"\n {2}while true; do\n {4}exposed="\$\(exposed_credentials\)" \|\| exposed=\n {4}\[\[ -n "\$exposed" \]\] && \{ exposed_notice "\$exposed" \|\| true \}\n {4}telemetry_host_metrics "\$exposed" \|\| true\n {4}relay_sessions \|\| true\n {4}relay_notices \|\| true\n {4}sleep "\$\{HOST_METRICS_INTERVAL_SECONDS:-\$RUN_INTERVAL_SECONDS\}"\n {2}done\n\) &!\n/
     );
@@ -269,10 +269,17 @@ describe('agent-host entrypoint', () => {
     });
     afterEach(() => rmSync(dir, { recursive: true, force: true }));
     const exposed = (env: Record<string, string>): string[] => {
-      const r = spawnSync('zsh', ['-c', `${fn}\nexposed_credentials`], {
-        encoding: 'utf8',
-        env: { PATH: process.env['PATH'] ?? '', ...env }
-      });
+      const r = spawnSync(
+        'zsh',
+        [
+          '-c',
+          `${fn}\nLOOP_EXPORTS=(\${(k)parameters[(R)*export*]})\nexposed_credentials`
+        ],
+        {
+          encoding: 'utf8',
+          env: { PATH: process.env['PATH'] ?? '', ...env }
+        }
+      );
       expect(r.status).toBe(0);
       return (JSON.parse(r.stdout) as string[]).filter(
         (name) => !name.startsWith('claude as agent')

@@ -280,7 +280,7 @@ CREDENTIAL_NAMES=(AGENT_SUPABASE_SERVICE_KEY AGENT_GITHUB_APP_KEY AGENT_QUEUE_LI
 exposed_credentials() {
   local name pid
   local -a names held found
-  names=(${(k)parameters[(R)*export*]})
+  names=($LOOP_EXPORTS)
   [[ -r "/proc/$$/environ" ]] && names+=("${(@f)$(tr '\0' '\n' < "/proc/$$/environ" | cut -d= -f1)}")
   held=($CREDENTIAL_NAMES)
   [[ -r "${AGENT_QUEUE_VAULT_FILE:-}" ]] && held+=("${(@f)$(cut -d= -f1 < "$AGENT_QUEUE_VAULT_FILE")}")
@@ -308,6 +308,8 @@ exposed_notice() {
     > "$AGENT_QUEUE_HOME/exposed-notice.json" &&
     mv -f "$AGENT_QUEUE_HOME/exposed-notice.json" "$AGENT_QUEUE_HOME/notify-spool/exposed-$(date +%s).json"
 }
+# The loop's exported names, taken before the sampler's telemetry_env un-exports the service key
+LOOP_EXPORTS=(${(k)parameters[(R)*export*]})
 (
   telemetry_env "${AGENT_QUEUE_VAULT_FILE:-}"
   telemetry_env "$ENV_FILE"
