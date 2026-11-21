@@ -11,7 +11,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const listFolders = (
   path: string,
   environment: string,
-  run: InfisicalRunner = runInfisical
+  run: InfisicalRunner = runInfisical,
+  projectId?: string
 ): string[] => {
   const listing = parseJsonOutput(
     run([
@@ -22,7 +23,8 @@ export const listFolders = (
       `--env=${environment}`,
       '-o',
       'json',
-      '--silent'
+      '--silent',
+      ...(projectId ? [`--projectId=${projectId}`] : [])
     ]),
     `folders of ${path}`
   );
@@ -45,10 +47,16 @@ export const listFolders = (
 export const discoverPaths = (
   path: string,
   environment: string,
-  run: InfisicalRunner = runInfisical
+  run: InfisicalRunner = runInfisical,
+  projectId?: string
 ): string[] => [
   path,
-  ...listFolders(path, environment, run).flatMap((name) =>
-    discoverPaths(`${path.replace(/\/$/, '')}/${name}`, environment, run)
+  ...listFolders(path, environment, run, projectId).flatMap((name) =>
+    discoverPaths(
+      `${path.replace(/\/$/, '')}/${name}`,
+      environment,
+      run,
+      projectId
+    )
   )
 ];

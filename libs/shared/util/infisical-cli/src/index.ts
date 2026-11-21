@@ -6,4 +6,5 @@ export * from './lib/infisical-runner';
 export * from './lib/layer-vault';
 export * from './lib/offline-cache';
 export * from './lib/parse-dotenv';
+export * from './lib/read-key-lengths';
 export * from './lib/secrets-mode';
