@@ -338,16 +338,17 @@ the app too. `connector`, an explicit opt-out, is the claude.ai connector of the
 which writes as its owner. Before each claude run the scripts check that the server answers (an MCP
 `initialize` for `key`, sent unsigned to the proxy in the container, where a miss reads `the Linear proxy on 127.0.0.1:8790 answered nothing` or `answered <code>`, and `status` shows `linear: ok (key via proxy)`; `claude mcp list` for the connector); without it nothing starts, the run is recorded as `no Linear tools`, one notice
 goes out, and `status` shows a `linear tools` warning. Notices go
-through `agent-queue/notify.sh "<message>"`, which posts to the webhook in `SLACK_WEBHOOK_URL` (or
-`CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`) and does nothing without one. It also reads
-`{message, cwd}` JSON on stdin, as a hook; a session under `dontAsk` passes the message as an argument,
-since any `$` in a command gets it denied. `--worktree` picks another
-checkout and is remembered. The `/work-queue` skill reads `~/.cdwr/agent-queue/notify-level`
-(missing means `all`), while the scheduler's own notices (a planned ticket, a failed or capped
-run) always go out.
+through `agent-queue/notify.sh [--level urgent|action|info] [--source <name>] "<message>"`, which
+spools them for the `notices` table or posts to the webhook in `SLACK_WEBHOOK_URL` (or
+`CLAUDE_SLACK_WEBHOOK`, or `~/.claude/slack-webhook`), as `agent-queue/README.md` (**Notices**)
+describes. It also reads `{message, cwd}` JSON on stdin, as a hook; a session under `dontAsk` passes
+the message as an argument, since any `$` in a command gets it denied. `--worktree` picks another
+checkout and is remembered. `cdwr agent notify` sets the dial in `~/.cdwr/agent-queue/notify-level`:
+`urgent` (missing means that), `action` or `all`, and `--mute-until <time|off>` lets only urgent
+notices through until then.
 
 The queue also writes telemetry to its own Supabase project, `agent-queue` (tables `runs`, `usage`,
-`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds`, `tenant_state` (one row per tenant plus `_shared`, from `cdwr agent platform-record`), `desk_commands` and `snoozes`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
+`usage_hours`, `plan_usage`, `activity`, `sessions`, `queue_state`, `host_metrics`, `issue_events`, `github_events`, `builds`, `tenant_state` (one row per tenant plus `_shared`, from `cdwr agent platform-record`), `desk_commands`, `snoozes` and `notices`, schema in `agent-queue/supabase/migrations`, applied by hand). The scripts and
 `cdwr agent usage-record` send rows with the service key from `AGENT_SUPABASE_URL` and
 `AGENT_SUPABASE_SERVICE_KEY`, read from the environment or the checkout's `tools/cdwr/.env`; both are
 optional, and without them nothing is sent. A failed call is a warn line, never a failed run. The

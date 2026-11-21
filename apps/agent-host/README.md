@@ -32,8 +32,10 @@ entrypoint's.
 
 What a session lacks, the queue's user does for it: the proxy answers the attended query
 (`POST /attended`) so `wait.sh` can pick without Linear credentials, and the entrypoint's sampler
-relays the session rows from the sessions dir and posts the notices `notify.sh` spooled, both
-within a minute.
+relays the session rows from the sessions dir and moves the notices `notify.sh` spooled into the
+`notices` table, both within a minute. The same sampler is the one forwarder: it posts the pending
+`notices` rows, the Mac's too, that this host's dial lets through and marks the rest held
+(`tools/cdwr/agent-queue/README.md`, **Notices**).
 
 Every claude run reads and writes the session's project memory. The entrypoint stages `agent`'s in
 the queue home (`memory-from-agent/`, which the session reads and cannot write), and the launcher
