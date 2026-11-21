@@ -1,8 +1,5 @@
-import {
-  type InfisicalRunner,
-  parseJsonOutput,
-  runInfisical
-} from './infisical-runner';
+import { exportShared } from './export-shared';
+import { type InfisicalRunner, runInfisical } from './infisical-runner';
 
 export interface KeyLength {
   key: string;
@@ -22,48 +19,9 @@ export const readKeyLengths = (
   run: InfisicalRunner = runInfisical,
   projectId?: string
 ): KeyLength[] => {
-  let output: string;
-  try {
-    output = run([
-      'export',
-      `--env=${environment}`,
-      `--path=${path}`,
-      '--format=json',
-      '--silent',
-      '--include-imports=false',
-      ...(projectId ? [`--projectId=${projectId}`] : [])
-    ]);
-  } catch {
-    throw new Error(`infisical export failed for ${path} (${environment})`);
-  }
-
-  const exported = parseJsonOutput(
-    output,
-    `export of ${path} (${environment})`
-  );
-  if (!Array.isArray(exported)) return [];
-
-  const lengths = new Map<string, number | null>();
-  for (const entry of exported) {
-    if (
-      typeof entry !== 'object' ||
-      entry === null ||
-      !('type' in entry) ||
-      !('key' in entry) ||
-      typeof entry.key !== 'string'
-    ) {
-      continue;
-    }
-    if (
-      entry.type === 'shared' &&
-      'value' in entry &&
-      typeof entry.value === 'string'
-    ) {
-      lengths.set(entry.key, entry.value.length);
-    } else if (entry.type === 'personal' && !lengths.has(entry.key)) {
-      // A user login can get its own override in place of the shared value
-      lengths.set(entry.key, null);
-    }
-  }
-  return [...lengths].map(([key, length]) => ({ key, length }));
+  return exportShared(
+    { path, environment, projectId },
+    `infisical export failed for ${path} (${environment})`,
+    run
+  ).map(({ key, value }) => ({ key, length: value?.length ?? null }));
 };
