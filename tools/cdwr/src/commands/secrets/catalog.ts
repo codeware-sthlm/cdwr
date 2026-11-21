@@ -468,7 +468,7 @@ export const CATALOG: readonly CatalogEntry[] = [
       manual:
         'fly tokens create org, write it to Infisical, revoke the old token'
     },
-    expiry: { source: 'unknown' }
+    expiry: { source: 'fly', tokenName: 'Org cms token' }
   },
   {
     project: 'codeware',
