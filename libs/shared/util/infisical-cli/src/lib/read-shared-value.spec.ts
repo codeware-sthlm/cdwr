@@ -1,3 +1,4 @@
+import { InfisicalMissingError } from './infisical-runner';
 import { readSharedValue } from './read-shared-value';
 
 const SENTINEL = 'SENTINEL-SECRET-VALUE';
@@ -51,5 +52,12 @@ describe('readSharedValue', () => {
     expect(() => readSharedValue(target, run)).toThrow(
       /^infisical export failed reading A at \/agent-queue \(prod\)$/
     );
+  });
+
+  it('rethrows a missing CLI as it is', () => {
+    const run = () => {
+      throw new InfisicalMissingError();
+    };
+    expect(() => readSharedValue(target, run)).toThrow(InfisicalMissingError);
   });
 });
