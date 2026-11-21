@@ -56,6 +56,7 @@ import {
   parseLinear,
   parseLoopPid,
   parseNotifyLevel,
+  parseNotifyMuteUntil,
   parseQueueView,
   parseReview,
   parseSuggest,
@@ -373,6 +374,7 @@ describe('queuePaths', () => {
       watchState: '/h/.cdwr/agent-queue/watch.json',
       paused: '/h/.cdwr/agent-queue/paused',
       notifyLevel: '/h/.cdwr/agent-queue/notify-level',
+      notifyMuteUntil: '/h/.cdwr/agent-queue/notify-mute-until',
       mirror: '/h/.cdwr/agent-queue/mirror',
       lock: '/h/.cdwr/agent-queue/lock',
       implementLock: '/h/.cdwr/agent-queue/implement.lock',
@@ -392,13 +394,30 @@ describe('queuePaths', () => {
 
 describe('parseNotifyLevel', () => {
   it.each([
-    [undefined, 'all'],
-    ['', 'all'],
+    [undefined, 'urgent'],
+    ['', 'urgent'],
+    ['urgent', 'urgent'],
     ['action\n', 'action'],
     ['all', 'all'],
-    ['junk', 'all']
+    ['junk', 'urgent']
   ] as const)('reads %j as %s', (text, level) => {
     expect(parseNotifyLevel(text)).toBe(level);
+  });
+});
+
+describe('parseNotifyMuteUntil', () => {
+  const now = new Date('2026-11-21T12:00:00Z');
+
+  it.each([
+    [undefined, undefined],
+    ['', undefined],
+    ['junk', undefined],
+    ['2026-11-21T11:59:59Z', undefined],
+    ['2026-11-21T12:00:00Z', undefined],
+    ['2026-11-21T12:00:01Z\n', '2026-11-21T12:00:01Z'],
+    ['2026-11-22T08:00:00+01:00', '2026-11-22T08:00:00+01:00']
+  ])('reads %j as %j', (text, until) => {
+    expect(parseNotifyMuteUntil(text, now)).toBe(until);
   });
 });
 

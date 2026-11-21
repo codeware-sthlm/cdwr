@@ -225,10 +225,78 @@ describe.each(cases)(
   }
 );
 
-describe('agent notify --host without a level', () => {
-  it('asks the remote for its current level', async () => {
+describe('agent notify --host', () => {
+  it('passes the level and the mute through to the remote', async () => {
     run.mockReset();
-    run.mockResolvedValue(nothing('agent notify', 'Notify level: all'));
+    run.mockResolvedValue(dryRun('agent notify'));
+    const command = (await import('./notify')).default;
+    const printed: string[] = [];
+    await runCommand({
+      name: 'agent notify',
+      command,
+      argv: [
+        'all',
+        '--mute-until',
+        '2999-01-01T00:00:00Z',
+        '--host',
+        HOST,
+        '--dry-run',
+        '--json'
+      ],
+      root: '/nowhere',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([]),
+      history: () => undefined,
+      stdout: (text) => printed.push(text)
+    });
+    expect(run.mock.calls[0]?.[1]).toEqual(
+      remoteCdwr(HOST, [
+        'agent',
+        'notify',
+        'all',
+        '--mute-until',
+        '2999-01-01T00:00:00.000Z',
+        '--dry-run',
+        '--json'
+      ])
+    );
+  });
+
+  it('passes off through to the remote', async () => {
+    run.mockReset();
+    run.mockResolvedValue(dryRun('agent notify'));
+    const command = (await import('./notify')).default;
+    await runCommand({
+      name: 'agent notify',
+      command,
+      argv: ['--mute-until', 'off', '--host', HOST, '--dry-run', '--json'],
+      root: '/nowhere',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([]),
+      history: () => undefined,
+      stdout: () => undefined
+    });
+    expect(run.mock.calls[0]?.[1]).toEqual(
+      remoteCdwr(HOST, [
+        'agent',
+        'notify',
+        '--mute-until',
+        'off',
+        '--dry-run',
+        '--json'
+      ])
+    );
+  });
+
+  it('asks the remote for its current dial without arguments', async () => {
+    run.mockReset();
+    run.mockResolvedValue(
+      nothing('agent notify', 'Notify level: urgent · not muted')
+    );
     const ui = fakeUi([]);
     const printed: string[] = [];
     const command = (await import('./notify')).default;
@@ -249,7 +317,7 @@ describe('agent notify --host without a level', () => {
       remoteCdwr(HOST, ['agent', 'notify', '--dry-run', '--json'])
     );
     expect(JSON.parse(printed[0] ?? '')).toMatchObject({
-      nothing: `${HOST}: Notify level: all`
+      nothing: `${HOST}: Notify level: urgent · not muted`
     });
   });
 });

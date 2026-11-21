@@ -50,6 +50,7 @@ import {
   parseDevlog,
   parseLinear,
   parseNotifyLevel,
+  parseNotifyMuteUntil,
   parseQueueView,
   parseReview,
   parseSuggest,
@@ -157,8 +158,8 @@ export default defineCommand({
       row(
         true,
         'notify',
-        report.notifyLevel === 'action'
-          ? 'action (only what needs you)'
+        report.notifyMuteUntil
+          ? `${report.notifyLevel}, muted until ${report.notifyMuteUntil}`
           : report.notifyLevel
       ),
       report.linearAuth === 'app'
@@ -405,6 +406,10 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         job,
         paused: existsSync(queue.paused),
         notifyLevel: parseNotifyLevel(readText(queue.notifyLevel)),
+        notifyMuteUntil: parseNotifyMuteUntil(
+          readText(queue.notifyMuteUntil),
+          new Date()
+        ),
         host,
         linearAuth: auth.auth,
         linearAuthSource: auth.source,

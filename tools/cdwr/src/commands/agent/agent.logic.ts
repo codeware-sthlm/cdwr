@@ -295,6 +295,8 @@ export interface QueuePaths {
   watchState: string;
   paused: string;
   notifyLevel: string;
+  /** An ISO time; until then only urgent notices go to Slack */
+  notifyMuteUntil: string;
   mirror: string;
   lock: string;
   implementLock: string;
@@ -327,6 +329,7 @@ export const queuePaths = (
     watchState: join(home, 'watch.json'),
     paused: join(home, 'paused'),
     notifyLevel: join(home, 'notify-level'),
+    notifyMuteUntil: join(home, 'notify-mute-until'),
     mirror: join(home, 'mirror'),
     lock: join(home, 'lock'),
     implementLock: join(home, 'implement.lock'),
@@ -350,12 +353,24 @@ export const parseLoopPid = (text: string | undefined): number | undefined => {
   return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
 };
 
-export const NOTIFY_LEVELS = ['all', 'action'] as const;
+/** urgent: Håkan must attend; action: something waits on him; all: progress too */
+export const NOTIFY_LEVELS = ['urgent', 'action', 'all'] as const;
 export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 
-/** A missing or unreadable level file means all */
+/** A missing or unreadable level file means urgent */
 export const parseNotifyLevel = (text: string | undefined): NotifyLevel =>
-  NOTIFY_LEVELS.find((level) => level === text?.trim()) ?? 'all';
+  NOTIFY_LEVELS.find((level) => level === text?.trim()) ?? 'urgent';
+
+/** The mute's end as the file holds it, when it parses and is after `now`; else undefined */
+export const parseNotifyMuteUntil = (
+  text: string | undefined,
+  now: Date
+): string | undefined => {
+  const value = text?.trim();
+  if (!value) return undefined;
+  const at = Date.parse(value);
+  return Number.isNaN(at) || at <= now.getTime() ? undefined : value;
+};
 
 /** A check holds the lock for seconds; older than this with no job running, nothing does */
 export const STALE_LOCK_MS = 10 * 60_000;

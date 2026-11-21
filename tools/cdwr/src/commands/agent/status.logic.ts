@@ -39,6 +39,8 @@ const reportShape = z.object({
   scheduler: z.enum(['here', 'elsewhere']).optional(),
   paused: z.boolean(),
   notifyLevel: z.enum(NOTIFY_LEVELS),
+  /** Optional so a status from an older container still parses; set only while the mute is in force */
+  notifyMuteUntil: z.string().optional(),
   host: z.enum(['launchd', 'container']),
   linearAuth: z.enum(['app', 'key', 'none']),
   linearAuthSource: z.enum([
