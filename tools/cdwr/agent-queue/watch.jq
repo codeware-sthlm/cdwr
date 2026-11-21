@@ -325,7 +325,8 @@ def step:
                 ci: ($now.ci // null), copilot: ($now.copilot // "none"), threads: ($now.threads // 0),
                 mergeStateStatus: ($now.mergeStateStatus // null), oid: ($now.oid // null),
                 mergedAt: ($now.mergedAt // $prev.mergedAt // null),
-                mergeCommit: ($now.mergeCommit // $prev.mergeCommit // null), at: $in.at }
+                mergeCommit: ($now.mergeCommit // $prev.mergeCommit // null), at: $in.at,
+                mergeWhy: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.verdict else null end) }
               + (if $prev.relabelled == true then { relabelled: true } else {} end)
               + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end)
               + (if $snap then
@@ -823,6 +824,7 @@ def merge_verdict($node; $holds):
   | ([ (.files.nodes // [])[] | .path | select(type == "string") ]) as $files
   | (($c != null) and ($c | body_line("merge: merging on its own"))) as $claimed
   | (if ($d | startswith("ok ") | not) then $d
+     elif .reviewDecision == "REVIEW_REQUIRED" then "the ruleset requires Håkan's review"
      elif ($node | agent_label) != "agent:review" then "the ticket is not agent:review"
      elif $c == null then "no PR-ready comment"
      elif ($c | body_line("code review:") | not) then "the PR-ready comment has no Code review line"
@@ -1212,7 +1214,7 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
         before: $before,
         label: ([ $all[] | select(to_label) ] | sort_by(queue_order)
                 | map({ ticket: .identifier, parent: .parent.identifier, blockers: (blockers | map(.identifier)) })),
-        after: (($lu.open | map({ ticket: ., kind: "pr", pr: ($watch[.].pr // null) }))
+        after: (($lu.open | map({ ticket: ., kind: "pr", pr: ($watch[.].pr // null), held: ($watch[.].mergeWhy // null) }))
                 + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
       }
     };

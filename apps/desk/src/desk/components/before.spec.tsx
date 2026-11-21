@@ -133,6 +133,38 @@ const planReady = (s: DeskState): DeskState => {
   return s;
 };
 
+describe('BeforeSheet held merge', () => {
+  const wcNotes = (el: Element): string[] =>
+    Array.from(el.querySelectorAll('.wc-note')).map((n) => n.textContent ?? '');
+  const withHeld = (held: string): DeskState => {
+    const s = filled();
+    s.data.runs = runs(
+      view({
+        table: {
+          before: [],
+          label: [],
+          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7, held }]
+        }
+      })
+    );
+    return s;
+  };
+
+  it('says the ruleset blocks a review row waiting on your approval', () => {
+    const c = sheet(withHeld("the ruleset requires Håkan's review"));
+    expect(wcNotes(cardOf(c, 'COD-3'))).toContain(
+      "Needs your approval on GitHub: main's ruleset requires your review"
+    );
+  });
+
+  it('shows any other verdict as a held merge', () => {
+    const c = sheet(withHeld('the hold list is empty'));
+    expect(wcNotes(cardOf(c, 'COD-3'))).toContain(
+      'Merge held: the hold list is empty'
+    );
+  });
+});
+
 describe('BeforeSheet cards', () => {
   it('gives each thing that waits on you a card with its action', () => {
     const c = sheet(planReady(filled()));
