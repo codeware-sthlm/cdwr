@@ -9,22 +9,21 @@ import type { Context } from '../../cli/context';
 import { CliError, EXIT, UsageError, messageOf } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import { type FlyToken, listOrgTokens, ownFlyEnv } from '../../services/fly';
-import { CommandError, run, sleep } from '../../services/shell';
+import { run } from '../../services/shell';
 import { probeSession } from '../infisical/session.logic';
 import { PROJECTS } from '../secrets/catalog';
 
+import { CONTAINER, DEFAULT_WAIT_MINUTES, assertHost } from './deploy.logic';
 import {
-  CONTAINER,
-  DEFAULT_WAIT_MINUTES,
-  assertHost,
-  vaultHash
-} from './deploy.logic';
-import { lockHost, restartIdleLocked, ssh } from './host';
+  POLL_MAX_MS,
+  containerHash,
+  lockHost,
+  restartIdleLocked
+} from './host';
 import { hostInput } from './remote';
 import {
   FLY_ROTATIONS,
   type FlyKey,
-  NOT_READY,
   VAULT_FILE,
   createArgs,
   namesOf,
@@ -129,30 +128,6 @@ async function createAndWrite(ctx: Context, key: FlyKey): Promise<Rotated> {
     );
   }
   return { key, id, hash: sha256Hex(token) };
-}
-
-const POLL_MS = 3_000;
-const POLL_MAX_MS = 90_000;
-
-type ContainerHash = { kind: 'hash'; hash: string } | { kind: 'not-ready' };
-
-/** The sha256 of the key as the running container holds it, polled while the vault file is not written yet */
-async function containerHash(
-  host: string,
-  key: FlyKey
-): Promise<ContainerHash> {
-  for (let waited = 0; ; waited += POLL_MS) {
-    try {
-      const { stdout } = await ssh(vaultHash(host, key));
-      return { kind: 'hash', hash: stdout.trim() };
-    } catch (error) {
-      if (!(error instanceof CommandError && error.code === NOT_READY)) {
-        throw error;
-      }
-    }
-    if (waited >= POLL_MAX_MS) return { kind: 'not-ready' };
-    await sleep(POLL_MS);
-  }
 }
 
 interface Planned {

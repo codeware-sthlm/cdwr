@@ -350,6 +350,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/rotate-fly').then((m) => m.default)
   },
   {
+    path: ['agent', 'rotate', 'infisical'],
+    summary: 'New client secrets for the platform and desk identities',
+    danger: 'destructive',
+    load: () => import('./agent/rotate-infisical').then((m) => m.default)
+  },
+  {
     path: ['agent', 'notify'],
     summary: 'Which notices the queue sends: all, or only what needs you',
     danger: 'mutate',

@@ -864,10 +864,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'DESK_INFISICAL_CLIENT_SECRET',
     kind: 'identity',
     purpose: 'Client secret of the Infisical identity the desk writes with',
-    rotation: {
-      manual:
-        'Create a new client secret on the identity in Infisical, write to agent-host /agent-queue, restart the agent container, delete the old (cdwr agent rotate infisical, COD-878)'
-    },
+    rotation: { command: ['agent', 'rotate', 'infisical'] },
     expiry: { source: 'unknown' }
   },
   {
@@ -939,10 +936,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'PLATFORM_INFISICAL_CLIENT_SECRET',
     kind: 'identity',
     purpose: 'Client secret of the read-only Infisical identity',
-    rotation: {
-      manual:
-        'Create a new client secret on the identity in Infisical, write to agent-host /agent-queue, restart the agent container, delete the old (cdwr agent rotate infisical, COD-878)'
-    },
+    rotation: { command: ['agent', 'rotate', 'infisical'] },
     expiry: { source: 'unknown' }
   },
   {
