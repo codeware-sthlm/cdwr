@@ -103,6 +103,12 @@ describe('projectRefOf and sameServer', () => {
       ok: false,
       why: 'the admin url reaches db.internal:5432, the target db.internal:5433'
     });
+    expect(
+      sameServer('postgres://a:p@DB.internal/x', 'postgres://b:q@other/y')
+    ).toEqual({
+      ok: false,
+      why: 'the admin url reaches db.internal:5432, the target other:5432'
+    });
   });
 });
 
