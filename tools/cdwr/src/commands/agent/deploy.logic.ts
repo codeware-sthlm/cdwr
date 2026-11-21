@@ -264,6 +264,10 @@ export const pull = (host: string): Remote => ssh(host, ...compose('pull'));
 
 export const up = (host: string): Remote => ssh(host, ...compose('up', '-d'));
 
+/** Restarts the agent service in place, so it rereads its environment */
+export const restart = (host: string): Remote =>
+  ssh(host, ...compose('restart', 'agent'));
+
 /** Prints `<image id>=<state>`; no space, which the remote shell would split */
 export const report = (host: string): Remote =>
   ssh(
