@@ -8,3 +8,4 @@ export * from './lib/offline-cache';
 export * from './lib/parse-dotenv';
 export * from './lib/read-key-lengths';
 export * from './lib/secrets-mode';
+export * from './lib/set-secret';

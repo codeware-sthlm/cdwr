@@ -26,6 +26,7 @@ import {
   readImageEnv,
   recordDeploy,
   report,
+  restart,
   sessionState,
   tagFromSha,
   ticketOfKey,
@@ -210,6 +211,14 @@ describe('remote commands', () => {
   it('pulls and starts with the image env file', () => {
     expect(pull('nuc').args.slice(3)).toEqual([...composeArgs, 'pull']);
     expect(up('nuc').args.slice(3)).toEqual([...composeArgs, 'up', '-d']);
+  });
+
+  it('restarts the agent service', () => {
+    expect(restart('nuc').args.slice(3)).toEqual([
+      ...composeArgs,
+      'restart',
+      'agent'
+    ]);
   });
 
   it('reports the image and state without a space in the format', () => {
