@@ -880,10 +880,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'DESK_SUPABASE_DB_URL',
     kind: 'database-url',
     purpose: 'Database role the desk applies migrations with',
-    rotation: {
-      manual:
-        'Reset the role password, write to agent-host /agent-queue, restart the agent container (cdwr agent rotate db-role, COD-877)'
-    },
+    rotation: { command: ['agent', 'rotate', 'db-role'] },
     expiry: { source: 'none' }
   },
   {
@@ -905,10 +902,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'PLATFORM_BACKUP_DATABASE_URL',
     kind: 'database-url',
     purpose: 'Database URL the nightly cms backup reads from',
-    rotation: {
-      manual:
-        'Reset the role password, write to agent-host /agent-queue, restart the agent container (cdwr agent rotate db-role, COD-877)'
-    },
+    rotation: { command: ['agent', 'rotate', 'db-role'] },
     expiry: { source: 'none' }
   },
   {
@@ -917,10 +911,7 @@ export const CATALOG: readonly CatalogEntry[] = [
     key: 'PLATFORM_DATABASE_URL',
     kind: 'database-url',
     purpose: 'Read-only platform database URL for platform records',
-    rotation: {
-      manual:
-        'Reset the role password, write to agent-host /agent-queue, restart the agent container (cdwr agent rotate db-role, COD-877)'
-    },
+    rotation: { command: ['agent', 'rotate', 'db-role'] },
     expiry: { source: 'none' }
   },
   {
