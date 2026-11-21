@@ -37,7 +37,10 @@ export const readKeyLengths = (
     throw new Error(`infisical export failed for ${path} (${environment})`);
   }
 
-  const exported = parseJsonOutput(output, `export of ${path}`);
+  const exported = parseJsonOutput(
+    output,
+    `export of ${path} (${environment})`
+  );
   if (!Array.isArray(exported)) return [];
 
   const lengths = new Map<string, number | null>();
