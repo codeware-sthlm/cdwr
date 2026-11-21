@@ -406,14 +406,41 @@ def platform_verdict($kind; $args):
 
 # The scheduler's verdict on one Apply list item, from the `cdwr --dry-run --json` envelope it just
 # ran for it (run.sh): `ok`, else why not. $item is { kind, args }. The first three checks are
-# platform_verdict's. scale answers `already <n>` when the app runs that many machines: a success
+# platform_verdict's; the secret kinds read their own environment and folder. scale answers `already <n>` when the app runs that many machines: a success
 # run.sh ticks without applying. supabase-migration's `already applied` is a refusal.
 def apply_verdict($item):
   (.plan.json // null) as $j
   | ($item.args // []) as $a
   | if .ok != true then "the dry run failed: \((.error.message // "no reason") | tostring | .[0:120])"
+    # A secret command with nothing to change ends with `nothing` and no plan: that is its tick
+    elif $j == null and ($item.kind | startswith("secret-")) and ((.nothing // "") | strings | startswith("already "))
+      then .nothing
     elif $j == null then "the dry run carried no state"
-    elif $j.environment != "production" then "not a production target"
+    elif ($item.kind | startswith("secret-") | not) and $j.environment != "production" then "not a production target"
+    elif $item.kind | startswith("secret-") then
+      if $j.environment != $a[0] then "the dry run read \($j.environment), not \($a[0])"
+      elif $j.folder != $a[1] then "the dry run read \($j.folder), not \($a[1])"
+      elif $item.kind == "secret-copy" then
+        if $j.from != $a[2] then "the dry run read \($j.from), not \($a[2])"
+        elif $j.to != $a[3] then "the dry run read \($j.to), not \($a[3])"
+        elif $j.state == "absent" then "ok"
+        elif $j.state == "same" then "already copied"
+        elif $j.state == "different" then "\($a[3]) at \($a[1]) already holds another value"
+        else "the dry run carried no state" end
+      elif $item.kind == "secret-rewrite" then
+        if $j.key != $a[2] then "the dry run read \($j.key), not \($a[2])"
+        elif $j.shape.passwordKept != true then "the rewrite would change the password"
+        elif $j.state == "same" then "already rewritten"
+        elif $j.state == "absent" then "\($a[2]) is absent at \($a[1])"
+        elif $j.state == "different" then "ok"
+        else "the dry run carried no state" end
+      elif $item.kind == "secret-set" then
+        if $j.key != $a[2] then "the dry run read \($j.key), not \($a[2])"
+        elif $j.value != $a[3] then "the dry run read another value"
+        elif $j.state == "same" then "already set"
+        elif $j.state == "absent" or $j.state == "different" then "ok"
+        else "the dry run carried no state" end
+      else "unknown kind" end
     elif $item.kind == "restart" then
       if $j.app != $a[0] then "the dry run read \($j.app), not \($a[0])"
       elif (($j.machines // []) | length) == 0 then "\($a[0]) has no machines"
