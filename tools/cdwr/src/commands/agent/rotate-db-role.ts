@@ -17,7 +17,8 @@ import {
   CONTAINER,
   DEFAULT_WAIT_MINUTES,
   assertHost,
-  pathExists
+  dropLockDir,
+  takeLockDir
 } from './deploy.logic';
 import {
   containerProblem,
@@ -80,11 +81,15 @@ async function psql(
       'psql',
       ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1'],
       {
-        // sslmode=require unless the url names one
-        env: childEnv(process.env, {
-          ...psqlEnv(url),
-          PGCONNECT_TIMEOUT: '10'
-        }),
+        // Only the url connects: no inherited PG* (port, service, password)
+        // may point psql elsewhere than the plan checked. sslmode=require
+        // unless the url names one
+        env: childEnv(
+          Object.fromEntries(
+            Object.entries(process.env).filter(([k]) => !k.startsWith('PG'))
+          ),
+          { ...psqlEnv(url), PGCONNECT_TIMEOUT: '10' }
+        ),
         input: sql,
         timeout: PSQL_TIMEOUT_MS
       }
@@ -124,16 +129,33 @@ interface Data {
 const RERUN =
   "so the agent container's url fails until a run completes. Run this again: it sets a fresh password";
 
-/** Everything from the alter to the restart, with the queue idle; a failure says what still works */
-async function alterWriteRestart(ctx: Context, data: Data) {
-  const { host, key, role, url, adminUrl } = data;
-  if (await succeeds(pathExists(host, BACKUP_LOCK))) {
+/**
+ * Holds the nightly backup's own lock directory around the work: run.sh starts
+ * a backup even while the queue is paused, and only when it can create that
+ * directory, so none starts on a dead url or dies in the restart. run.sh
+ * clears one left behind after 20 minutes.
+ */
+async function withBackupLock<T>(
+  host: string,
+  work: () => Promise<T>
+): Promise<T> {
+  if (!(await succeeds(takeLockDir(host, BACKUP_LOCK)))) {
     throw new CliError(
       'The nightly backup is running; nothing was changed',
       EXIT.failed,
       `Try again once it is done (a lock left behind clears after 20 minutes): ${BACKUP_LOCK}`
     );
   }
+  try {
+    return await work();
+  } finally {
+    await succeeds(dropLockDir(host, BACKUP_LOCK)).catch(() => false);
+  }
+}
+
+/** Everything from the alter to the restart, with the queue idle; a failure says what still works */
+async function alterWriteRestart(ctx: Context, data: Data) {
+  const { host, key, role, url, adminUrl } = data;
   const password = generatePassword();
   const newUrl = withPassword(url, password);
   const secrets = [password, newUrl];
@@ -386,7 +408,7 @@ export default defineCommand({
         async () => probeWrite(VAULT)
       );
       const { value: hash, resumed } = await whileIdle(ctx, host, wait, () =>
-        alterWriteRestart(ctx, data)
+        withBackupLock(host, () => alterWriteRestart(ctx, data))
       );
       const problem = await containerProblem(host, key, hash, 'url');
       if (problem || !resumed) {

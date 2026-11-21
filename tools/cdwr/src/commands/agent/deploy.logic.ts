@@ -189,6 +189,14 @@ export const pause = (host: string): Remote =>
 export const unpause = (host: string): Remote =>
   ssh(host, 'docker', 'exec', CONTAINER, 'rm', '-f', PAUSED);
 
+/** Creates a lock directory in the container; exits 1 when it is already there */
+export const takeLockDir = (host: string, path: string): Remote =>
+  ssh(host, 'docker', 'exec', CONTAINER, 'mkdir', path);
+
+/** Removes a lock directory this side took */
+export const dropLockDir = (host: string, path: string): Remote =>
+  ssh(host, 'docker', 'exec', CONTAINER, 'rmdir', path);
+
 /** Exits 0 when the path exists in the container, 1 when it is absent */
 export const pathExists = (host: string, path: string): Remote =>
   ssh(host, 'docker', 'exec', CONTAINER, 'test', '-e', path);
