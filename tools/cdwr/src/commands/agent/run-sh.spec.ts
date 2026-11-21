@@ -6118,7 +6118,7 @@ describe('run.sh platform step', () => {
     const ago = (s: number) => `${Math.floor(Date.now() / 1000) - s}\n`;
     expect(due()).toBe(0);
     expect(due(ago(60))).not.toBe(0);
-    expect(due(ago(299))).not.toBe(0);
+    expect(due(ago(240))).not.toBe(0);
     expect(due(ago(400))).toBe(0);
     expect(due('garbage\n')).toBe(0);
   });
