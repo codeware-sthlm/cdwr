@@ -113,7 +113,7 @@ async function newSecret(
           })
       );
       value = created.value;
-      createdId = created.secret.id;
+      createdId = created.id;
     } catch (error) {
       if (!(error instanceof InfisicalApiError) || !ctx.ui.interactive) {
         throw new CliError(
@@ -220,7 +220,7 @@ async function rotate(ctx: Context, plan: Planned) {
     );
   }
 
-  // The old secret and leftovers the plan showed; anything new is only listed
+  // The old secret and leftovers the plan showed; a refused list or anything unplanned fails the run
   const live = await readSecrets(plan.identityId);
   if (live.kind === 'refused') {
     return done(

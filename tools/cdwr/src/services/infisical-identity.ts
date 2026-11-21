@@ -29,9 +29,10 @@ export type ClientSecret = z.infer<typeof clientSecretSchema>;
 
 const loginSchema = z.object({ accessToken: z.string() });
 const listSchema = z.object({ clientSecretData: z.array(clientSecretSchema) });
+/** The create answer is read for the value and the new id only */
 const createSchema = z.object({
   clientSecret: z.string(),
-  clientSecretData: clientSecretSchema
+  clientSecretData: z.object({ id: z.string() })
 });
 
 export class InfisicalApiError extends Error {
@@ -131,7 +132,7 @@ export const createClientSecret = async (
   token: string,
   identityId: string,
   { description, ttl }: { description: string; ttl: number }
-): Promise<{ value: string; secret: ClientSecret }> => {
+): Promise<{ value: string; id: string }> => {
   const created = await call(
     'client-secret create',
     createSchema,
@@ -142,7 +143,7 @@ export const createClientSecret = async (
       body: { description, ttl, numUsesLimit: 0 }
     }
   );
-  return { value: created.clientSecret, secret: created.clientSecretData };
+  return { value: created.clientSecret, id: created.clientSecretData.id };
 };
 
 export const revokeClientSecret = async (
