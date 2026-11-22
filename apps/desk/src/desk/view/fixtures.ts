@@ -151,6 +151,7 @@ export const runs = (qv: QueueView | null): RunsPayload => ({
   viewIssues: [],
   at: new Date('2026-10-29T11:55:00').toISOString(),
   host: 'nuc',
+  notify: undefined,
   others: [],
   watches: [],
   deploys: [],

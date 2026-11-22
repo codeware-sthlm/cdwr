@@ -1,7 +1,8 @@
 import { hhmm, hhmmss, plural } from '../format';
 import { ofKind } from '../live';
 import { type Model, treeGapped, treeRoots } from '../model';
-import type { Connection, View } from '../state';
+import type { Connection, SheetId, View } from '../state';
+import { muteEndText } from '../view/controls';
 import { health } from '../view/header';
 
 import { Icon } from './icon';
@@ -38,6 +39,10 @@ const SHORT = 'short hidden max-[600px]:inline';
 
 export const PILL =
   'relative inline-flex min-h-[var(--tap)] items-center gap-2 rounded-[var(--r-pill)] bg-[color:var(--surface)] px-4 py-0 font-[family-name:var(--font-ui)] text-[12px] leading-[normal] font-normal max-[600px]:w-[var(--tap)] max-[600px]:justify-center max-[600px]:border-0 max-[600px]:bg-transparent max-[600px]:p-0';
+
+/** The Slack button keeps its text on a phone, where the other pills shrink to an icon */
+const SLACK =
+  'inline-flex min-h-[var(--tap)] items-center rounded-[var(--r-pill)] bg-[color:var(--surface)] px-4 py-0 font-[family-name:var(--font-ui)] text-[12px] leading-[normal] font-normal';
 
 type TreePillProps = {
   m: Model;
@@ -88,8 +93,12 @@ type Props = {
   /** The view on show, for the Agent health pill's `aria-current` */
   view?: View;
   onView: (view: 'health') => void;
+  /** Opens a sheet; the Slack button opens Notices */
+  onSheet?: (id: SheetId) => void;
   /** Whether the Agent health pill shows; the connection indicator always does */
   pill?: boolean;
+  /** For a mute that has passed, which reads as none */
+  now?: Date;
 };
 
 export const Status = ({
@@ -97,7 +106,9 @@ export const Status = ({
   connection,
   view = 'agent',
   onView,
-  pill: showPill = true
+  onSheet,
+  pill: showPill = true,
+  now = new Date()
 }: Props) => {
   const p = health(m);
   const loading = !m.runs;
@@ -151,6 +162,19 @@ export const Status = ({
       ) : null}
     </button>
   ) : null;
+  const dial = m.runs?.notify;
+  const muted = muteEndText(dial, now);
+  const slack =
+    showPill && dial ? (
+      <button
+        type="button"
+        className={`slack ${SLACK}`}
+        data-sheet="notices"
+        onClick={() => onSheet?.('notices')}
+      >
+        {muted ? `Slack: urgent only until ${muted}` : `Slack: ${dial.level}`}
+      </button>
+    ) : null;
   const at = m.pulse?.at ?? connection.upSince;
   const down = ofKind(m.problems, 'connection')[0];
   if (down) {
@@ -161,6 +185,7 @@ export const Status = ({
     return (
       <>
         {pill}
+        {slack}
         <span
           className={`conn offline ${CONN}`}
           title="Live updates are down. The desk polls instead, so numbers may lag."
@@ -181,6 +206,7 @@ export const Status = ({
   return (
     <>
       {pill}
+      {slack}
       {connection.live ? (
         <span
           className={`conn on ${CONN}`}

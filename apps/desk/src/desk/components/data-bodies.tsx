@@ -4,7 +4,7 @@ import {
   ROLES,
   SHIP_DAYS
 } from '../constants';
-import { ageText, dayLabel, mtok, plural, tidy, usd } from '../format';
+import { ageText, dayLabel, dayTime, mtok, plural, tidy, usd } from '../format';
 import { type Model, activityMissing, agentState, shipped } from '../model';
 import {
   type TicketCost,
@@ -15,11 +15,13 @@ import {
   tokenTotals,
   unattributedTotal
 } from '../spend';
-import type { DeskState, Filter } from '../state';
+import type { DeskState, Filter, NoticeFilter } from '../state';
+import type { NoticeLevel } from '../types';
 import { isTicketId } from '../view/ids';
 
 import { IdeaCard } from './before';
 import { ShippedChart, SpendChart } from './charts';
+import { ChoiceGroup } from './controls';
 import { Chip, Empty, Item, PvMore, Table } from './items';
 import { EMPTY, GROUP, ID_LINK_FLUSH, RULE } from './items-ui';
 import { IdLink, Inline } from './links';
@@ -566,6 +568,94 @@ export const AllBody = ({
         Manual drag order in a Linear view isn&apos;t exposed through the
         connector.
       </p>
+    </>
+  );
+};
+
+// ---------- Slack notices ----------
+
+const NOTICE_FILTERS: readonly (readonly [NoticeFilter, string])[] = [
+  ['all', 'All'],
+  ['urgent', 'Urgent'],
+  ['action', 'Action'],
+  ['info', 'Info']
+];
+
+const NOTICE_STATE: Record<string, string> = {
+  forwarded: 'sent',
+  held: 'held',
+  pending: 'pending'
+};
+
+const noticeLevel = (level: string): NoticeLevel | null =>
+  level === 'urgent' || level === 'action' || level === 'info' ? level : null;
+
+export const NoticesBody = ({
+  state,
+  now,
+  onFilter
+}: {
+  state: DeskState;
+  now: Date;
+  onFilter: (filter: NoticeFilter) => void;
+}) => {
+  const { notices } = state.data;
+  const { noticeFilter } = state.ui;
+  if (!notices) return <Empty>The notices haven&apos;t loaded yet.</Empty>;
+  const shown = notices.filter(
+    (n) => noticeFilter === 'all' || noticeLevel(n.level) === noticeFilter
+  );
+  return (
+    <>
+      <ChoiceGroup
+        label="Filter"
+        choices={NOTICE_FILTERS.map(([f, label]) => ({
+          key: f,
+          label,
+          pressed: noticeFilter === f
+        }))}
+        disabled={false}
+        onPick={onFilter}
+      />
+      {shown.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[0.8rem]">
+            <thead>
+              <tr>
+                <th className={ACT_TH}>When</th>
+                <th className={ACT_TH}>Level</th>
+                <th className={ACT_TH}>Source</th>
+                <th className={ACT_TH}>Ticket</th>
+                <th className={ACT_TH}>Notice</th>
+                <th className={ACT_TH}>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((n) => (
+                <tr key={n.id}>
+                  <td className={ACT_TD}>
+                    <time
+                      className="font-[family-name:var(--font-mono)] text-[0.76rem] leading-[normal] text-[color:var(--muted)] tabular-nums"
+                      dateTime={n.at}
+                    >
+                      {dayTime(Date.parse(n.at), now.getTime())}
+                    </time>
+                  </td>
+                  <td className={ACT_TD}>{n.level}</td>
+                  <td className={ACT_TD}>{n.source ?? '—'}</td>
+                  <td className={ACT_TD}>
+                    <IdLink id={n.ticket ?? ''} />
+                  </td>
+                  <td className={ACT_TD_LAST}>{n.text}</td>
+                  <td className={ACT_TD}>{NOTICE_STATE[n.state] ?? n.state}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <Empty>No notices match this filter.</Empty>
+      )}
     </>
   );
 };

@@ -172,7 +172,14 @@ describe('controlStates', () => {
     controlStates(
       rows,
       'nuc',
-      { at: queueAt, paused: true, limit: 5, cap: 40, ...reported },
+      {
+        at: queueAt,
+        paused: true,
+        limit: 5,
+        cap: 40,
+        notify: undefined,
+        ...reported
+      },
       now
     );
 
@@ -215,6 +222,62 @@ describe('controlStates', () => {
       row(3, 'cap', 'applied', { applied_at: AT, args: { value: 40 } })
     ];
     expect(states(cap, LATER).cap.state).toBe('idle');
+  });
+
+  describe('notify', () => {
+    const MUTE = '2026-11-02T22:00:00Z';
+    const asked = (muteUntil: string | null) => [
+      row(1, 'notify', 'applied', {
+        applied_at: AT,
+        args: { level: 'action', muteUntil }
+      })
+    ];
+
+    it('waits for the host to report the level and the mute asked for', () => {
+      expect(states(asked(null), LATER).notify.state).toBe('pending');
+      expect(
+        states(asked(null), LATER, NOW, {
+          notify: { level: 'urgent' }
+        }).notify.state
+      ).toBe('pending');
+      expect(
+        states(asked(null), LATER, NOW, {
+          notify: { level: 'action' }
+        }).notify.state
+      ).toBe('idle');
+      expect(
+        states(asked(MUTE), LATER, NOW, {
+          notify: { level: 'action' }
+        }).notify.state
+      ).toBe('pending');
+      expect(
+        states(asked(MUTE), LATER, NOW, {
+          notify: { level: 'action', muteUntil: '2026-11-02T22:00:00.000Z' }
+        }).notify.state
+      ).toBe('idle');
+    });
+
+    it('reads a reported mute that has passed as none', () => {
+      expect(
+        states(asked(null), LATER, NOW, {
+          notify: { level: 'action', muteUntil: '2026-11-02T20:01:00Z' }
+        }).notify.state
+      ).toBe('idle');
+    });
+
+    it('stays pending until the row is published after it was applied', () => {
+      expect(
+        states(asked(null), EARLIER, NOW, {
+          notify: { level: 'action' }
+        }).notify.state
+      ).toBe('pending');
+    });
+
+    it('keeps its own state apart from the other controls', () => {
+      const all = states([row(1, 'notify', 'pending')]);
+      expect(all.notify).toEqual({ state: 'pending', kind: 'notify' });
+      expect(all.run.state).toBe('idle');
+    });
   });
 
   it('shows a refusal with its note for a while', () => {

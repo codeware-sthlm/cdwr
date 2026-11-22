@@ -17,7 +17,8 @@ const actions: SheetActions = {
   onDismiss: vi.fn(),
   onSnoozedOpen: vi.fn(),
   onActFilter: vi.fn(),
-  onFilter: vi.fn()
+  onFilter: vi.fn(),
+  onNoticeFilter: vi.fn()
 };
 
 /** The body for a ticket of the state */

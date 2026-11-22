@@ -68,6 +68,78 @@ describe('createSupabase subscribe', () => {
     ]);
   });
 
+  it('listens to notices on a channel of its own', () => {
+    const onNotices = vi.fn();
+    open().subscribe(
+      () => undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onNotices
+    );
+    const notices = made.find((c) => c.name === 'desk-notices');
+    expect(notices).toBeDefined();
+    vi.useFakeTimers();
+    notices?.join('SUBSCRIBED');
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
+    expect(onNotices).toHaveBeenCalledTimes(1);
+  });
+
+  const withTenantsAndNotices = (
+    onTenants: () => void,
+    onNotices: () => void
+  ) =>
+    open().subscribe(
+      () => undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onTenants,
+      onNotices
+    );
+
+  it('keeps a pending notices refresh when a tenant event lands', () => {
+    const onTenants = vi.fn();
+    const onNotices = vi.fn();
+    withTenantsAndNotices(onTenants, onNotices);
+    vi.useFakeTimers();
+    made.find((c) => c.name === 'desk-notices')?.join('SUBSCRIBED');
+    made.find((c) => c.name === 'desk-tenants')?.join('SUBSCRIBED');
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
+    expect(onNotices).toHaveBeenCalledTimes(1);
+    expect(onTenants).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a pending notices refresh on stop', () => {
+    const onNotices = vi.fn();
+    const stop = withTenantsAndNotices(vi.fn(), onNotices);
+    vi.useFakeTimers();
+    made.find((c) => c.name === 'desk-notices')?.join('SUBSCRIBED');
+    void stop();
+    vi.advanceTimersByTime(1000);
+    vi.useRealTimers();
+    expect(onNotices).not.toHaveBeenCalled();
+  });
+
   it('resolves its stop once every channel is removed', async () => {
     const stop = open().subscribe(() => undefined);
     let done = false;

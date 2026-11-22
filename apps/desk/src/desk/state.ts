@@ -8,6 +8,7 @@ import type {
   GithubEventRow,
   HostMetricRow,
   IssueEventRow,
+  NoticeRow,
   PlanUsageRow,
   RunsPayload,
   SessionRow,
@@ -26,7 +27,14 @@ import type {
 } from './commands';
 import { STATES } from './constants';
 import type { ApplyItem } from './parsers';
-import type { Idea, PlanProgress, ReviewRecord } from './types';
+import type {
+  Idea,
+  NoticeLevel,
+  NotifyLevel,
+  PlanProgress,
+  ReviewRecord
+} from './types';
+import type { MuteChoice } from './view/controls';
 
 /** What the page keeps of a ticket's description and relations */
 export type Detail = PlanProgress & {
@@ -38,6 +46,9 @@ export type Detail = PlanProgress & {
 };
 
 export type Filter = 'all' | 'todo' | 'agent';
+
+/** The Notices sheet's filter: every notice, or one level */
+export type NoticeFilter = 'all' | NoticeLevel;
 
 export const isFilter = (value: unknown): value is Filter =>
   value === 'all' || value === 'todo' || value === 'agent';
@@ -91,7 +102,8 @@ export const SHEET_IDS = [
   'effort',
   'all',
   'ideas',
-  'ticket'
+  'ticket',
+  'notices'
 ] as const;
 
 export type SheetId = (typeof SHEET_IDS)[number];
@@ -160,6 +172,8 @@ export type DeskData = {
   dismissals: DismissalRow[] | null;
   /** The platform state of every tenant and the commit main deploys; null before it loads */
   tenants: TenantsPayload | null;
+  /** The newest notices, newest first; null before they load */
+  notices: NoticeRow[] | null;
   /** The Realtime channel as the adapter reports it */
   connection: Connection;
   /** When the open tickets were last stored, in ms */
@@ -190,6 +204,8 @@ export type DeskUi = {
   treeOpen: Record<string, boolean>;
   /** The Activity sheet's ticket filter, `all` or a ticket id */
   actFilter: string;
+  /** The Notices sheet's filter */
+  noticeFilter: NoticeFilter;
   openSheet: SheetId | null;
   /** The ticket the Ticket sheet shows; kept while the sheet animates out */
   ticket: string | null;
@@ -204,7 +220,10 @@ export type ControlsUi = {
   /** Where commands go; null without a control token, which hides the controls */
   target: CommandTarget | null;
   /** Stepper values not yet applied */
-  drafts: Partial<Record<'limit' | 'cap', number>>;
+  drafts: Partial<Record<'limit' | 'cap', number>> & {
+    /** The notify choices not yet applied; a missing part keeps the host's */
+    notify?: { level?: NotifyLevel; mute?: MuteChoice };
+  };
   /** Controls whose request is in flight */
   sending: Set<Control>;
   /** A failure that stored no row (network, token), shown until the control is used again */
@@ -287,6 +306,7 @@ export const createState = (): DeskState => ({
     reviews: null,
     dismissals: null,
     tenants: null,
+    notices: null,
     connection: {
       live: false,
       retries: 0,
@@ -308,6 +328,7 @@ export const createState = (): DeskState => ({
     tree: NO_TREE_FILTER,
     treeOpen: {},
     actFilter: 'all',
+    noticeFilter: 'all',
     openSheet: null,
     ticket: null,
     view: 'agent',

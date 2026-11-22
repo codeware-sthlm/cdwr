@@ -113,3 +113,37 @@ export const Stepper = ({
     </>
   );
 };
+
+type ChoiceGroupProps<K extends string> = {
+  label: string;
+  choices: readonly { key: K; label: string; pressed: boolean }[];
+  disabled: boolean;
+  onPick: (key: K) => void;
+};
+
+/** A row of toggle buttons where one choice is pressed */
+export const ChoiceGroup = <K extends string>({
+  label,
+  choices,
+  disabled,
+  onPick
+}: ChoiceGroupProps<K>) => (
+  <span
+    className="inline-flex flex-wrap gap-1.5"
+    role="group"
+    aria-label={label}
+  >
+    {choices.map((choice) => (
+      <button
+        key={choice.key}
+        type="button"
+        className={`pf-mini ${MINI} aria-[pressed=false]:border-[color:var(--line)] aria-[pressed=false]:bg-transparent aria-[pressed=false]:text-[color:var(--muted)]`}
+        aria-pressed={choice.pressed}
+        disabled={disabled}
+        onClick={() => onPick(choice.key)}
+      >
+        {choice.label}
+      </button>
+    ))}
+  </span>
+);

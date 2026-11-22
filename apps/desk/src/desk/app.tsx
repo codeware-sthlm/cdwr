@@ -177,7 +177,9 @@ export const App = () => {
                 connection={state.data.connection}
                 view={state.ui.view}
                 onView={(view) => showView(view)}
+                onSheet={(id) => showSheet(id)}
                 pill={onAgent}
+                now={now}
               />
             </span>
             <span id="fresh" className="min-w-0 truncate">

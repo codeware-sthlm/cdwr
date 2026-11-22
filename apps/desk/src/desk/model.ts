@@ -80,6 +80,8 @@ import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
   Job,
+  NotifyDial,
+  NotifyLevel,
   PrRef,
   QueueAfter,
   QueueBefore,
@@ -95,6 +97,7 @@ import type {
   Suggested,
   WatchEntry
 } from './types';
+import { type MuteChoice, liveMute } from './view/controls';
 
 // The model: everything the renderers read, computed from the state. Nothing here touches the DOM.
 
@@ -142,6 +145,15 @@ export type ControlsModel = {
   states: Record<Control, ControlView>;
   limit: { current: number | null; draft: number | null };
   cap: { current: number | null; draft: number | null };
+  /** The host's dial and the choices on show: the draft where set, else what the host reports */
+  notify: {
+    current: NotifyDial | undefined;
+    level: NotifyLevel | null;
+    /** The mute choice on show; null while the host's own mute stands and none is picked */
+    mute: MuteChoice | null;
+    /** The draft differs from what the host reports */
+    changed: boolean;
+  };
   paused: boolean;
   /** The session the queue view names, which an abandon is sent for; null without one */
   session: string | null;
@@ -1040,7 +1052,8 @@ const controlsOf = (
     at: runs.at,
     paused: runs.job?.paused ?? false,
     limit,
-    cap
+    cap,
+    notify: runs.notify
   };
   // In flight first, then a failure that stored no row, then the newest row or reply
   const view = (control: Control, own: ControlState): ControlView => {
@@ -1054,15 +1067,33 @@ const controlsOf = (
     run: view('run', own.run),
     limit: view('limit', own.limit),
     cap: view('cap', own.cap),
-    abandon: view('abandon', own.abandon)
+    abandon: view('abandon', own.abandon),
+    notify: view('notify', own.notify)
   };
   const session = runs.qv?.session.id ?? null;
+  // A mute that has passed reads as none
+  const liveDial: NotifyDial | undefined = runs.notify && {
+    level: runs.notify.level,
+    ...(liveMute(runs.notify.muteUntil, now) !== null
+      ? { muteUntil: runs.notify.muteUntil }
+      : {})
+  };
   return {
     host: runs.host,
     session,
     states,
     limit: { current: limit, draft: ui.drafts.limit ?? limit },
     cap: { current: cap, draft: ui.drafts.cap ?? cap },
+    notify: {
+      current: liveDial,
+      level: ui.drafts.notify?.level ?? runs.notify?.level ?? null,
+      mute: ui.drafts.notify?.mute ?? (liveDial?.muteUntil ? null : 'none'),
+      changed:
+        (ui.drafts.notify?.level ?? runs.notify?.level) !==
+          runs.notify?.level ||
+        (ui.drafts.notify?.mute !== undefined &&
+          (ui.drafts.notify.mute !== 'none' || !!liveDial?.muteUntil))
+    },
     paused: reported.paused,
     // A confirmation holds only for the session it was asked about
     confirming:

@@ -11,6 +11,8 @@ import type {
   Idea,
   Job,
   JobHost,
+  NotifyDial,
+  NotifyLevel,
   PlanProgress,
   QueueTreeNode,
   QueueView,
@@ -702,6 +704,29 @@ export const parseDeploy = (json: unknown): DeployState | undefined => {
     reason: text(e.reason),
     failed: text(e.failed)
   };
+};
+
+export const NOTIFY_LEVELS: readonly NotifyLevel[] = [
+  'urgent',
+  'action',
+  'all'
+];
+
+const UTC_STAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
+
+/** A host's notification dial (the `queue_state` row's `notify`); an unknown level reads as undefined, a mute that is not a UTC time as none */
+export const parseNotify = (json: unknown): NotifyDial | undefined => {
+  if (typeof json !== 'object' || json === null || Array.isArray(json))
+    return undefined;
+  const e: Record<string, unknown> = { ...json };
+  const level = NOTIFY_LEVELS.find((l) => l === e.level);
+  if (!level) return undefined;
+  const mute = text(e.muteUntil);
+  return mute !== null &&
+    UTC_STAMP.test(mute) &&
+    !Number.isNaN(Date.parse(mute))
+    ? { level, muteUntil: mute }
+    : { level };
 };
 
 /** The value at an issue's path; zod 4 issues no longer carry what was received */

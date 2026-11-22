@@ -34,7 +34,8 @@ const actions: SheetActions = {
   onDismiss: vi.fn(),
   onSnoozedOpen: vi.fn(),
   onActFilter: vi.fn(),
-  onFilter: vi.fn()
+  onFilter: vi.fn(),
+  onNoticeFilter: vi.fn()
 };
 
 /** A sheet's body rendered from the state; `m` stands in for the model when a test shapes it */
@@ -619,6 +620,89 @@ describe('data sheets', () => {
       ) as Element
     );
     expect(actions.onFilter).toHaveBeenCalledWith('all');
+  });
+
+  describe('the notices sheet', () => {
+    const notice = (
+      id: string,
+      level: string,
+      state: string,
+      minutes: number,
+      ticket: string | null = null
+    ) => ({
+      id,
+      at: new Date(NOW.getTime() - minutes * 6e4).toISOString(),
+      host: 'nuc',
+      level,
+      source: 'run',
+      ticket,
+      text: `text ${id}`,
+      state,
+      forwarded_at: null,
+      received_at: NOW.toISOString()
+    });
+    const withNotices = (filter: DeskState['ui']['noticeFilter'] = 'all') => {
+      const state = filled();
+      state.ui.noticeFilter = filter;
+      state.data.notices = [
+        notice('b', 'urgent', 'forwarded', 5, 'COD-7'),
+        notice('c', 'action', 'pending', 10),
+        notice('a', 'info', 'held', 30)
+      ];
+      return state;
+    };
+    const rows = (c: HTMLElement) =>
+      [...c.querySelectorAll('tbody tr')].map((r) => text(r));
+
+    it('lists the newest first with the state as sent, held or pending', () => {
+      const c = body('notices', withNotices());
+      const list = rows(c);
+      expect(list).toHaveLength(3);
+      expect(list[0]).toContain('text b');
+      expect(list[0]).toContain('sent');
+      expect(list[1]).toContain('text c');
+      expect(list[1]).toContain('pending');
+      expect(list[2]).toContain('held');
+      expect(
+        c.querySelector(
+          'td a.id[href="https://linear.app/codeware/issue/COD-7"]'
+        )
+      ).not.toBeNull();
+    });
+
+    it('keeps only the picked level', () => {
+      const list = rows(body('notices', withNotices('action')));
+      expect(list).toHaveLength(1);
+      expect(list[0]).toContain('text c');
+    });
+
+    it('marks the pressed filter and tells the page about a press', () => {
+      const c = body('notices', withNotices('urgent'));
+      const pressed = Object.fromEntries(
+        [
+          ...c.querySelectorAll('[role="group"][aria-label="Filter"] button')
+        ].map((b) => [text(b), b.getAttribute('aria-pressed')])
+      );
+      expect(pressed).toEqual({
+        All: 'false',
+        Urgent: 'true',
+        Action: 'false',
+        Info: 'false'
+      });
+      fireEvent.click(
+        [
+          ...c.querySelectorAll('[role="group"][aria-label="Filter"] button')
+        ].find((b) => text(b) === 'Info') as Element
+      );
+      expect(actions.onNoticeFilter).toHaveBeenCalledWith('info');
+    });
+
+    it('says so when none match or none have loaded', () => {
+      const none = filled();
+      none.data.notices = [];
+      expect(text(body('notices', none))).toContain('No notices match');
+      expect(text(body('notices', filled()))).toContain("haven't loaded");
+    });
   });
 
   it('put the cost per ticket and the spend per day on the effort sheet', () => {
