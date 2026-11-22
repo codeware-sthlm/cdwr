@@ -8,6 +8,14 @@ on:
     branches: [main]
     paths:
       - "apps/desk/**"
+      # The libs the desk reaches (apps/desk/src/build-context.spec.ts keeps this list complete)
+      - "libs/shared/ui/shadcn/**"
+      - "libs/shared/util/agent-review/**"
+      - "libs/shared/util/platform-problems/**"
+      - "libs/shared/util/ui/**"
+      - "tsconfig.base.json"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
       - ".github/workflows/desk-image.yml"
       - "package.json"
       - "pnpm-lock.yaml"
