@@ -227,3 +227,11 @@ nx reset-db cms
 # Seed database
 nx seed cms
 ```
+
+### Migrations
+
+The release command migrates before any machine is replaced. The old release keeps serving on the new schema meanwhile, and for good if the deploy fails.
+
+Expand first: add columns and tables, and make new code read both shapes. Contract in a later release, once no running release reads what you drop.
+
+A migration whose `up()` drops, renames or sets NOT NULL needs a `// contract: <why the release before no longer reads it>` line. `migrations-contract.spec.ts` enforces it.
