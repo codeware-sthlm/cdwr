@@ -872,6 +872,7 @@ export interface User {
     umamiUserId?: string | null;
     createdAt?: string | null;
   };
+  trustEpoch?: number | null;
   totpRequired?: boolean | null;
   totpSecret?: string | null;
   hasTotp?: boolean | null;
@@ -3867,6 +3868,7 @@ export interface UsersSelect<T extends boolean = true> {
         umamiUserId?: T;
         createdAt?: T;
       };
+  trustEpoch?: T;
   totpRequired?: T;
   totpSecret?: T;
   hasTotp?: T;

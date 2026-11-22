@@ -225,7 +225,20 @@ const users: CollectionConfig<'users'> = {
         }
       ]
     },
-    statsAccountField()
+    statsAccountField(),
+    // Bumped to end every trusted device at once; never exposed through the API
+    {
+      name: 'trustEpoch',
+      type: 'number',
+      defaultValue: 0,
+      hidden: true,
+      access: {
+        read: () => false,
+        create: () => false,
+        update: () => false
+      },
+      admin: { hidden: true }
+    }
   ]
 };
 
