@@ -193,9 +193,14 @@ describe('Status', () => {
       expect(button?.textContent).not.toBe(`Slack: urgent only until ${time}`);
     });
 
-    it('is absent without a dial, and where the pill is', () => {
+    it('is absent without a dial', () => {
       expect(slack(undefined).button).toBeNull();
-      expect(slack({ level: 'all' }, vi.fn(), false).button).toBeNull();
+    });
+
+    it('stays on a view without the Agent health pill', () => {
+      expect(slack({ level: 'all' }, vi.fn(), false).button?.textContent).toBe(
+        'Slack: all'
+      );
     });
   });
 

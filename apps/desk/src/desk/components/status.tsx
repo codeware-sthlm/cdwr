@@ -164,17 +164,16 @@ export const Status = ({
   ) : null;
   const dial = m.runs?.notify;
   const muted = muteEndText(dial, now);
-  const slack =
-    showPill && dial ? (
-      <button
-        type="button"
-        className={`slack ${SLACK}`}
-        data-sheet="notices"
-        onClick={() => onSheet?.('notices')}
-      >
-        {muted ? `Slack: urgent only until ${muted}` : `Slack: ${dial.level}`}
-      </button>
-    ) : null;
+  const slack = dial ? (
+    <button
+      type="button"
+      className={`slack ${SLACK}`}
+      data-sheet="notices"
+      onClick={() => onSheet?.('notices')}
+    >
+      {muted ? `Slack: urgent only until ${muted}` : `Slack: ${dial.level}`}
+    </button>
+  ) : null;
   const at = m.pulse?.at ?? connection.upSince;
   const down = ofKind(m.problems, 'connection')[0];
   if (down) {
