@@ -1,5 +1,8 @@
 import type { Page } from '@codeware/shared/util/payload-types';
-import type { BlocksData } from '@codeware/shared/util/payload-utils';
+import {
+  type BlocksData,
+  listingCategoryIds
+} from '@codeware/shared/util/payload-utils';
 import type { BasePayload } from 'payload';
 
 import { mapToRuntime } from '../map-to-runtime';
@@ -8,7 +11,6 @@ import type { PayloadRuntime } from '../payload-runtime.types';
 import { getPage } from './get-page';
 import { getPosts } from './get-posts';
 import { getTours } from './get-tours';
-import { listingCategoryIds } from './listing-category-ids';
 import type { QuerySingleOptions } from './types';
 
 export type PageData = {

@@ -1,4 +1,3 @@
-import { getId } from '@codeware/app-cms/util/misc';
 import type { Category } from '@codeware/shared/util/payload-types';
 
 /**
@@ -13,4 +12,8 @@ import type { Category } from '@codeware/shared/util/payload-types';
 export const listingCategoryIds = (
   categories: Array<number | Category> | null | undefined
 ): Array<number> =>
-  (categories ?? []).map((category) => getId(category)).filter(Boolean);
+  (categories ?? [])
+    .map((category) =>
+      category && typeof category === 'object' ? category.id : category
+    )
+    .filter(Boolean);

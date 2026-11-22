@@ -1,5 +1,8 @@
 import type { Page } from '@codeware/shared/util/payload-types';
-import type { BlocksData } from '@codeware/shared/util/payload-utils';
+import {
+  type BlocksData,
+  listingCategoryIds
+} from '@codeware/shared/util/payload-utils';
 
 import { findPosts } from './find-posts';
 import { findTours } from './find-tours';
@@ -62,11 +65,7 @@ export const getBlocksData = async (
 ): Promise<BlocksData> => {
   const [posts, tours] = await Promise.all([
     resolveListingBlocks(layout, 'posts', ({ limit, categories }) => {
-      const categoryIds = (categories ?? [])
-        .map((category) =>
-          typeof category === 'object' ? category.id : category
-        )
-        .filter(Boolean);
+      const categoryIds = listingCategoryIds(categories);
 
       return findPosts({
         ...options,
