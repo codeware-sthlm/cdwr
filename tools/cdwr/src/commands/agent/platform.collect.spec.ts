@@ -78,7 +78,7 @@ describe('readSentry', () => {
     expect(Object.keys(read.value.tops).sort()).toEqual([SHARED_KEY, 'acme']);
     // The new issues follow the same rows, first seen first, 25 at most, error or fatal on production
     const base =
-      'is:unresolved age:-24h environment:production level:[error,fatal]';
+      'is:unresolved firstSeen:-24h environment:production level:[error,fatal]';
     expect(fresh.map((f) => f['query']).sort()).toEqual([
       `${base} !has:tenant`,
       `${base} tenant:acme`
