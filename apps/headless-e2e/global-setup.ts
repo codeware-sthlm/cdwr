@@ -13,11 +13,11 @@ const INTERVAL_MS = 2_000;
 const EMAIL = 'system@local.dev';
 const PASSWORD = 'dev';
 /** Where the cookie that gets every other spec through the gate is kept */
-const GATE_COOKIE_FILE = resolve(__dirname, '.auth/site-gate.json');
+const GATE_COOKIE_FILE = resolve(import.meta.dirname, '.auth/site-gate.json');
 
-const sitePassword = parseEnv(readFileSync(resolve(__dirname, '.env.e2e')))[
-  'SITE_GATE_PASSWORD'
-];
+const sitePassword = parseEnv(
+  readFileSync(resolve(import.meta.dirname, '.env.e2e'))
+)['SITE_GATE_PASSWORD'];
 
 /** Retry `attempt` until it returns true, or give up with `failure` */
 async function waitFor(
@@ -57,7 +57,7 @@ async function waitFor(
  * Headless is then walked through its site gate, once, and its cookie kept for
  * every context; /api/health behind the gate proves the built server is up.
  */
-module.exports = async function globalSetup() {
+export default async function globalSetup() {
   if (!sitePassword) {
     throw new Error('[setup] SITE_GATE_PASSWORD is missing from .env.e2e.');
   }
@@ -134,4 +134,4 @@ module.exports = async function globalSetup() {
   } finally {
     await ctx.dispose();
   }
-};
+}

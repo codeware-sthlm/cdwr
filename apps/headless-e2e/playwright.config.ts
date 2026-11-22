@@ -15,8 +15,8 @@ const { SITE_GATE_PASSWORD, ...cmsEnv } = parseEnv(
 );
 
 export default defineConfig({
-  ...nxE2EPreset(__dirname, { testDir: './src' }),
-  globalSetup: require.resolve('./global-setup.cts'),
+  ...nxE2EPreset(import.meta.dirname, { testDir: './src' }),
+  globalSetup: resolve(import.meta.dirname, 'global-setup.ts'),
   fullyParallel: false,
   workers: 1,
   // The cms runs `next dev`, which compiles each route on first visit, and
