@@ -42,9 +42,11 @@ export const resetHealthState = () => {
  *
  * One deadline covers Payload's start and the query, so a hung pool
  * answers 503 instead of hanging the check. The first failure after a
- * success goes to Sentry with the step and the pool's counts.
+ * success goes to Sentry with the step, the pool's counts and who asked:
+ * the caller's user agent, whether it came through Fly's proxy, and how
+ * long the process had run.
  */
-export async function GET() {
+export async function GET(request: Request) {
   let step: Step = 'init';
   let pool: { totalCount?: number; idleCount?: number; waitingCount?: number } =
     {};
@@ -80,12 +82,18 @@ export async function GET() {
         fingerprint: ['cms-health-check-failed'],
         tags: {
           health_step: step,
-          health_timeout: error instanceof DeadlineError
+          health_timeout: error instanceof DeadlineError,
+          health_caller:
+            request.headers.get('user-agent')?.slice(0, 64) ?? 'none',
+          // Fly's proxy stamps every request it forwards; its own checks
+          // reach the machine directly
+          health_proxied: request.headers.has('fly-request-id')
         },
         extra: {
           poolTotal: pool.totalCount,
           poolIdle: pool.idleCount,
-          poolWaiting: pool.waitingCount
+          poolWaiting: pool.waitingCount,
+          uptimeSeconds: Math.round(process.uptime())
         }
       });
     }
