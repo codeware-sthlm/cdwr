@@ -25,6 +25,7 @@ process.env.TZ = 'UTC';
 
 const state = (over: Partial<QueueStateRow> = {}): QueueStateRow => ({
   host: 'mac',
+  notify: null,
   at: '2026-10-28T10:00:00.000Z',
   last_run: '2026-10-28 09:50 · planned COD-1',
   attended: 'idle: waits',
