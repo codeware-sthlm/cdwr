@@ -406,7 +406,7 @@ The desk steers the queue through a third Edge Function, `desk-command`. Anon ma
 desk posts `{host, kind, args}` with a per-device bearer token, and the function checks the token's
 SHA-256 against `DESK_CONTROL_TOKENS`, a JSON object of `{device: hex sha256}`; the device name is
 the actor, so one device is revoked on its own. Kinds are `pause`, `resume`, `run`, `limit`
-(`{value}` 1–20), `cap` (`{value}` 0–500 dollars), `copilot` and `merge` (`{ticket, pr}`), `restart` (`{tenant, app, sha}`) and `gate` (`{tenant, action}`), which it stores `pending` in `desk_commands`
+(`{value}` 1–20), `cap` (`{value}` 0–500 dollars), `copilot` and `merge` (`{ticket, pr}`), `restart` (`{tenant, app, sha}`) `gate` (`{tenant, action}`) and `notify` (`{level, muteUntil}`: `urgent`, `action` or `all`, and a future UTC time or null), which it stores `pending` in `desk_commands`
 for the scheduler on that host to apply, and `abandon`, which it applies itself through `desk_abandon`, a database function that ends the
 session row the host's last snapshot calls alive or waiting; that is the desk's record only, since the
 host reads its own session files. The function stores the command in the same transaction. A host whose `queue_state` row is missing or more than 2 hours old,
@@ -431,7 +431,7 @@ a `resume` lifts the pause in the same tick. In the container the listener wakes
 (an update is the scheduler's own ack, so it doesn't wake); the Mac picks them up on its next tick.
 They are applied in `id` order, so the last one wins. A command older than 2 hours is refused `expired`
 and never replayed. `pause` and `resume` set or remove `paused`, `run` is this tick (refused while
-paused or while another run holds the lock), and `limit` and `cap` write the files `limit` and `implement-cap` in the queue home. Those
+paused or while another run holds the lock), `notify` writes the dial's `notify-level` and `notify-mute-until` (removed for a null mute) as `cdwr agent notify` does, and `limit` and `cap` write the files `limit` and `implement-cap` in the queue home. Those
 override the PR limit of 5 (`run.sh`, and `wait.sh` from its own machine's file) and
 `AGENT_QUEUE_IMPLEMENT_CAP_USD` (a cap of 0 launches nothing); `cdwr agent status` shows both and
 where they came from. Each command is acked `applied` or `refused` with a note, on
