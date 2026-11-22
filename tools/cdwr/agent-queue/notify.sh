@@ -7,7 +7,8 @@
 #                                    3 no webhook. The drain and the relay post through it
 #   notify.sh --dial                 prints the dial as {level, muteUntil}, muteUntil null unless in force
 #   notify.sh --strict …             as the first form, but exits 1 when the spool write or the post
-#                                    fails, or 3 without a webhook; a notice the dial holds is still 0
+#                                    fails, or 3 without a webhook; a notice the dial holds is still 0.
+#                                    AGENT_QUEUE_NOTIFY_STRICT=1 does the same
 # The message goes out as `*<project>* \`<branch>\`: <message>`, from the current directory or the JSON
 # cwd. A session under dontAsk uses the arguments: any `$` in a command, quoted or not, gets it
 # denied, and the JSON form needs one. Without --level a notice is action, the JSON form too; without
@@ -91,6 +92,7 @@ case "${1:-}" in
 esac
 
 level=action source=session ticket= strict=false
+[[ "${AGENT_QUEUE_NOTIFY_STRICT:-}" == 1 ]] && strict=true
 while (( $# )); do
   case "$1" in
     --strict) strict=true; shift ;;
