@@ -6,6 +6,8 @@
 #   notify.sh --send <level> <text>  posts the text as it is, prefixed on urgent; 0 posted, 1 failed,
 #                                    3 no webhook. The drain and the relay post through it
 #   notify.sh --dial                 prints the dial as {level, muteUntil}, muteUntil null unless in force
+#   notify.sh --strict …             as the first form, but exits 1 when the spool write or the post
+#                                    fails, or 3 without a webhook; a notice the dial holds is still 0
 # The message goes out as `*<project>* \`<branch>\`: <message>`, from the current directory or the JSON
 # cwd. A session under dontAsk uses the arguments: any `$` in a command, quoted or not, gets it
 # denied, and the JSON form needs one. Without --level a notice is action, the JSON form too; without
@@ -88,9 +90,10 @@ case "${1:-}" in
     ;;
 esac
 
-level=action source=session ticket=
+level=action source=session ticket= strict=false
 while (( $# )); do
   case "$1" in
+    --strict) strict=true; shift ;;
     --level) level="${2:-}"; shift 2 || shift ;;
     --source) source="${2:-}"; shift 2 || shift ;;
     --ticket) ticket="${2:-}"; shift 2 || shift ;;
@@ -129,8 +132,12 @@ if [[ -n "$spool" ]]; then
         > "$spool/.$name.tmp" &&
       mv -f "$spool/.$name.tmp" "$spool/$name"
   } 2>/dev/null
+  rc=$?
+  $strict && (( rc )) && exit 1
   exit 0
 fi
 
-notify_passes "$level" && send "$level" "$text"
+rc=0
+notify_passes "$level" && { send "$level" "$text" || rc=$?; }
+$strict && exit $rc
 exit 0

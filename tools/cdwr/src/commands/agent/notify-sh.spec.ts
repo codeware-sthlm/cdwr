@@ -326,6 +326,49 @@ describe('notify.sh', () => {
     });
   });
 
+  describe('--strict', () => {
+    it('exits 1 when the spool cannot be written', () => {
+      const spool = join(dir, 'not-a-dir');
+      writeFileSync(spool, '');
+      const loose = exec(['--level', 'urgent', 'down'], {
+        AGENT_QUEUE_NOTIFY_SPOOL: spool
+      });
+      const strict = exec(['--strict', '--level', 'urgent', 'down'], {
+        AGENT_QUEUE_NOTIFY_SPOOL: spool
+      });
+      expect(loose.status).toBe(0);
+      expect(strict.status).toBe(1);
+    });
+
+    it('exits 0 once the spool holds the notice', () => {
+      const spool = join(dir, 'spool');
+      const r = exec(['--strict', '--level', 'urgent', 'down'], {
+        AGENT_QUEUE_NOTIFY_SPOOL: spool
+      });
+      expect(r.status).toBe(0);
+      expect(spooled(spool)).toHaveLength(1);
+    });
+
+    it('exits 1 when the post fails and 3 without a webhook', () => {
+      const failed = exec(['--strict', '--level', 'urgent', 'down'], {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/x',
+        AGENT_QUEUE_CURL_CMD: 'false'
+      });
+      const none = exec(['--strict', '--level', 'urgent', 'down']);
+      expect(failed.status).toBe(1);
+      expect(none.status).toBe(3);
+    });
+
+    it('exits 0 for a notice the dial holds', () => {
+      setHome({ 'notify-level': 'urgent' });
+      const r = exec(['--strict', '--level', 'info', 'fyi'], {
+        SLACK_WEBHOOK_URL: 'https://hooks.example/x'
+      });
+      expect(r.status).toBe(0);
+      expect(existsSync(body)).toBe(false);
+    });
+  });
+
   describe('--passes', () => {
     const passes = (level: string) => exec(['--passes', level]).status;
 
