@@ -99,7 +99,7 @@ export type RunsPayload = {
   /** The host that wrote the picked row */
   host: string;
   /** The picked host's notification dial; undefined when it reports none */
-  notify: NotifyDial | undefined;
+  notify?: NotifyDial;
   /** The other hosts that wrote a row within QUEUE_WRITER_MIN */
   others: { host: string; at: string; paused: boolean }[];
   /** The watch.json of every host that wrote a row within QUEUE_WRITER_MIN, as stored; the model parses it */
