@@ -1,7 +1,9 @@
 import {
+  buildRan,
   createHandler,
   sign,
   toBuild,
+  toNotice,
   toRow,
   verifySignature
 } from './handler';
@@ -40,12 +42,39 @@ const runEvent = (run: Record<string, unknown> = {}) => ({
   }
 });
 
+const deployEvent = (run: Record<string, unknown> = {}) =>
+  runEvent({
+    id: 9001,
+    run_attempt: 1,
+    path: '.github/workflows/fly-deployment.yml',
+    html_url: 'https://github.com/codeware-sthlm/cdwr/actions/runs/9001',
+    updated_at: '2026-10-29T15:59:00Z',
+    pull_requests: [],
+    ...run
+  });
+
 const setup = (
-  options: { secret?: string; status?: number; fail?: boolean } = {}
+  options: {
+    secret?: string;
+    status?: number;
+    fail?: boolean;
+    // The answer to the jobs read; a number is a failing status
+    jobs?: Array<{ name: string; conclusion: string }> | number;
+    failOn?: string;
+  } = {}
 ) => {
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(
-    async () => {
+    async (url) => {
+      if (url.startsWith('https://api.github.com/')) {
+        if (typeof options.jobs === 'number')
+          return new Response(null, { status: options.jobs });
+        return Response.json({
+          jobs: options.jobs ?? [{ name: 'build', conclusion: 'success' }]
+        });
+      }
       if (options.fail) throw new Error('offline');
+      if (options.failOn && url.includes(options.failOn))
+        return new Response(null, { status: 500 });
       return new Response(null, { status: options.status ?? 201 });
     }
   );
@@ -362,6 +391,115 @@ describe('toBuild', () => {
   });
 });
 
+describe('toNotice', () => {
+  const notice = (run: Record<string, unknown>, event = 'workflow_run') =>
+    toNotice(event, deployEvent(run), AT);
+
+  it('makes a failed push on main urgent', () => {
+    expect(notice({ conclusion: 'failure' })).toEqual({
+      row: {
+        id: 'github:fly-deployment:9001:1',
+        at: '2026-10-29T15:59:00.000Z',
+        host: 'github',
+        level: 'urgent',
+        source: 'github-webhook',
+        ticket: null,
+        text: 'Production deploy failed: https://github.com/codeware-sthlm/cdwr/actions/runs/9001'
+      },
+      jobsOf: null
+    });
+  });
+
+  it('makes a failed pull request run an action with its PR number', () => {
+    const result = notice({
+      conclusion: 'timed_out',
+      event: 'pull_request',
+      head_branch: 'feat/x',
+      pull_requests: [{ number: 812 }]
+    });
+    expect(result?.row.level).toBe('action');
+    expect(result?.row.text).toBe(
+      'Preview deploy failed · PR 812: https://github.com/codeware-sthlm/cdwr/actions/runs/9001'
+    );
+  });
+
+  it('makes a failed dispatch on main urgent, as a production deploy', () => {
+    const result = notice({
+      conclusion: 'failure',
+      event: 'workflow_dispatch'
+    });
+    expect(result?.row.level).toBe('urgent');
+    expect(result?.row.text).toMatch(/^Production deploy failed: /);
+  });
+
+  it('makes a successful dispatch on main info, as production', () => {
+    const result = notice({
+      conclusion: 'success',
+      event: 'workflow_dispatch'
+    });
+    expect(result?.row.level).toBe('info');
+    expect(result?.row.text).toMatch(/^Production deploy succeeded: /);
+  });
+
+  it('makes a failed dispatch on another branch an action', () => {
+    const result = notice({
+      conclusion: 'failure',
+      event: 'workflow_dispatch',
+      head_branch: 'feat/x'
+    });
+    expect(result?.row.level).toBe('action');
+    expect(result?.row.text).toMatch(/^Manual deploy failed: /);
+  });
+
+  it('makes a success info and asks for the jobs', () => {
+    const result = notice({
+      conclusion: 'success',
+      event: 'pull_request',
+      pull_requests: [{ number: 812 }]
+    });
+    expect(result?.jobsOf).toBe(9001);
+    expect(result?.row.level).toBe('info');
+    expect(result?.row.text).toMatch(/^Preview deploy succeeded · PR 812: /);
+  });
+
+  it('gives a re-run its own id', () => {
+    expect(notice({ conclusion: 'failure', run_attempt: 2 })?.row.id).toBe(
+      'github:fly-deployment:9001:2'
+    );
+  });
+
+  it.each(['cancelled', 'skipped', 'neutral', 'action_required', 'stale'])(
+    'ignores %s',
+    (conclusion) => {
+      expect(notice({ conclusion })).toBeNull();
+    }
+  );
+
+  it('ignores other workflows, other events and runs not completed', () => {
+    expect(
+      notice({ conclusion: 'failure', path: '.github/workflows/desk.yml' })
+    ).toBeNull();
+    expect(notice({ conclusion: 'failure' }, 'pull_request')).toBeNull();
+    expect(
+      toNotice(
+        'workflow_run',
+        { ...deployEvent({ conclusion: 'failure' }), action: 'requested' },
+        AT
+      )
+    ).toBeNull();
+    expect(notice({ conclusion: null })).toBeNull();
+  });
+});
+
+describe('buildRan', () => {
+  it('needs a build job that succeeded', () => {
+    expect(buildRan([{ name: 'build', conclusion: 'success' }])).toBe(true);
+    expect(buildRan([{ name: 'build', conclusion: 'skipped' }])).toBe(false);
+    expect(buildRan([{ name: 'deploy', conclusion: 'success' }])).toBe(false);
+    expect(buildRan(undefined)).toBe(false);
+  });
+});
+
 describe('createHandler', () => {
   it('upserts a build on workflow, and nothing else of the run', async () => {
     const { handle, fetch } = setup();
@@ -482,5 +620,107 @@ describe('createHandler', () => {
   it('answers 405 to anything but POST', async () => {
     const { handle } = setup();
     expect((await handle(await post('', { method: 'GET' }))).status).toBe(405);
+  });
+
+  describe('deploy notices', () => {
+    const deploy = async (
+      run: Record<string, unknown>,
+      options: Parameters<typeof setup>[0] = {}
+    ) => {
+      const harness = setup(options);
+      const res = await harness.handle(
+        await post(deployEvent(run), { event: 'workflow_run' })
+      );
+      const writes = harness.fetch.mock.calls.filter(([url]) =>
+        url.includes('/rest/v1/')
+      );
+      return { ...harness, res, writes };
+    };
+
+    it('writes a failure to notices without reading the jobs', async () => {
+      const { res, writes, fetch } = await deploy({ conclusion: 'failure' });
+      expect(res.status).toBe(200);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = writes[0];
+      expect(url).toBe('https://x.supabase.co/rest/v1/notices?on_conflict=id');
+      expect(init.method).toBe('POST');
+      expect(new Headers(init.headers).get('Prefer')).toBe(
+        'resolution=ignore-duplicates,return=minimal'
+      );
+      expect(JSON.parse(String(init.body))).toMatchObject({
+        id: 'github:fly-deployment:9001:1',
+        host: 'github',
+        source: 'github-webhook',
+        level: 'urgent'
+      });
+      expect(String(init.body)).not.toContain('Secret title');
+    });
+
+    it('sends the same id again on a redelivery', async () => {
+      const first = await deploy({ conclusion: 'failure' });
+      const second = await deploy({ conclusion: 'failure' });
+      expect(String(second.writes[0][1].body)).toBe(
+        String(first.writes[0][1].body)
+      );
+    });
+
+    it('writes a success whose build ran, after the jobs read, with the build row', async () => {
+      const { res, fetch, writes } = await deploy({ conclusion: 'success' });
+      expect(res.status).toBe(200);
+      expect(fetch.mock.calls[0][0]).toBe(
+        'https://api.github.com/repos/codeware-sthlm/cdwr/actions/runs/9001/jobs?per_page=100'
+      );
+      expect(writes.map(([url]) => url)).toEqual([
+        'https://x.supabase.co/rest/v1/builds?on_conflict=workflow',
+        'https://x.supabase.co/rest/v1/notices?on_conflict=id'
+      ]);
+      expect(JSON.parse(String(writes[1][1].body)).level).toBe('info');
+    });
+
+    it('records no notice for a success whose build skipped', async () => {
+      const { writes } = await deploy(
+        { conclusion: 'success' },
+        { jobs: [{ name: 'build', conclusion: 'skipped' }] }
+      );
+      expect(writes.map(([url]) => url)).toEqual([
+        'https://x.supabase.co/rest/v1/builds?on_conflict=workflow'
+      ]);
+    });
+
+    it('records no notice and logs a skip when the jobs read fails', async () => {
+      const { res, writes, log } = await deploy(
+        { conclusion: 'success', head_branch: 'feat/x', event: 'pull_request' },
+        { jobs: 403 }
+      );
+      expect(res.status).toBe(200);
+      expect(await res.text()).toBe('Ignored');
+      expect(writes).toHaveLength(0);
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'notice skipped' })
+      );
+    });
+
+    it('answers 500 when the notice write fails', async () => {
+      const { res } = await deploy(
+        { conclusion: 'failure' },
+        { failOn: '/notices' }
+      );
+      expect(res.status).toBe(500);
+    });
+
+    it('still tries the notice when the build write fails, and answers 500', async () => {
+      const { res, writes } = await deploy(
+        { conclusion: 'success' },
+        { failOn: '/builds' }
+      );
+      expect(res.status).toBe(500);
+      expect(writes).toHaveLength(2);
+    });
+
+    it('answers 200 without writing for a cancelled run', async () => {
+      const { res, fetch } = await deploy({ conclusion: 'cancelled' });
+      expect(await res.text()).toBe('Ignored');
+      expect(fetch).not.toHaveBeenCalled();
+    });
   });
 });
