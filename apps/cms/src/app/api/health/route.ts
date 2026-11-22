@@ -22,11 +22,15 @@ const headers = {
 };
 
 /**
- * A miss this soon after the process started is a boot: Fly's checker reaches
- * a machine while Payload is still starting, so it answers 503 but stays out
- * of Sentry. A failure that lasts past it is reported
+ * A miss before the process has ever answered 200, and within this many
+ * seconds of its start, is a boot: Fly's checker reaches a machine while
+ * Payload is still starting, so it answers 503 but stays out of Sentry. A
+ * failure that lasts past it is reported
  */
 export const BOOT_QUIET_S = 120;
+
+/** Whether this process has answered 200 once; after that no miss is a boot */
+let booted = false;
 
 /**
  * Whether this run of failures is already reported. Fly checks every 20 s, so
@@ -37,6 +41,7 @@ let failing = false;
 /** Lets a spec start from a healthy process */
 export const resetHealthState = () => {
   failing = false;
+  booted = false;
 };
 
 /**
@@ -83,25 +88,28 @@ export async function GET(request: Request) {
   try {
     await Promise.race([check(), deadline]);
     failing = false;
+    booted = true;
     return new Response('Pong!', { status: 200, headers });
   } catch (error) {
-    if (!failing && process.uptime() >= BOOT_QUIET_S) {
+    const uptime = process.uptime();
+    if (!failing && (booted || uptime >= BOOT_QUIET_S)) {
       Sentry.captureException(error, {
         fingerprint: ['cms-health-check-failed'],
         tags: {
           health_step: step,
           health_timeout: error instanceof DeadlineError,
           health_caller:
-            request.headers.get('user-agent')?.slice(0, 64) ?? 'none',
-          // Fly's proxy stamps every request it forwards; its own checks
-          // reach the machine directly
+            request.headers.get('user-agent')?.slice(0, 64) || 'none',
+          // Fly's proxy stamps every request it forwards. Without it the call
+          // reached the machine directly: Fly's checker, or anything on its
+          // private network; the caller tag tells them apart
           health_proxied: request.headers.has('fly-request-id')
         },
         extra: {
           poolTotal: pool.totalCount,
           poolIdle: pool.idleCount,
           poolWaiting: pool.waitingCount,
-          uptimeSeconds: Math.round(process.uptime())
+          uptimeSeconds: Math.round(uptime)
         }
       });
       failing = true;

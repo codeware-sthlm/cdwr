@@ -36,6 +36,10 @@ beforeEach(() => {
   pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 describe('GET /api/health', () => {
   it('answers 200 when the query answers', async () => {
     const res = await GET(request());
@@ -152,6 +156,33 @@ describe('GET /api/health', () => {
 
     expect((await GET(request())).status).toBe(503);
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('reports a failure after the first 200, even within the boot window', async () => {
+    jest.mocked(process.uptime).mockReturnValue(BOOT_QUIET_S - 60);
+    expect((await GET(request())).status).toBe(200);
+
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+    await GET(request());
+
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it('cuts the caller to 64 characters, and reads an empty one as none', async () => {
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+    await GET(request({ 'user-agent': 'x'.repeat(100) }));
+    pool.query.mockResolvedValue({ rows: [] });
+    await GET(request());
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+    await GET(request({ 'user-agent': '' }));
+
+    const callers = jest
+      .mocked(Sentry.captureException)
+      .mock.calls.map(
+        ([, hint]) =>
+          (hint as { tags: Record<string, unknown> }).tags['health_caller']
+      );
+    expect(callers).toEqual(['x'.repeat(64), 'none']);
   });
 
   it('reports a failure that lasts past the boot', async () => {
