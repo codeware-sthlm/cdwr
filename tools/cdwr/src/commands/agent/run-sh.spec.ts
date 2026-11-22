@@ -5312,7 +5312,7 @@ describe('run.sh apply list', () => {
           'gh() { return 0; }',
           `note() { print -r -- "$*" >> "${home}/notes"; }`,
           'record() { :; }',
-          `notice() { print -r -- "$1|$2" >> "${home}/notices"; }`
+          `notice() { print -r -- "$1|$3" >> "${home}/notices"; }`
         ]
       );
       const out = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as {
