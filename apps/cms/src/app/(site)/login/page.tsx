@@ -1,15 +1,16 @@
-import { isSecondFactorPending } from '@codeware/app-cms/util/access';
 import { t } from '@codeware/shared/util/i18n';
 import { resolveReturnPath } from '@codeware/shared/util/site-gate';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { payloadRuntime } from '../../../security/payload-runtime';
 import {
   MEMBER_LOGIN_CODE_STEP,
   MEMBER_LOGIN_SUBMIT_PATH,
   type MemberLoginError,
-  TOTP_VERIFY_PATH
+  TOTP_VERIFY_PATH,
+  loginPageStep
 } from '../../../utils/member-login';
 
 import { MemberCodeForm } from './MemberCodeForm.client';
@@ -60,14 +61,20 @@ export default async function MemberLoginPage({ searchParams }: Props) {
           : null;
 
   // The code step only for a session that actually owes one; anyone else,
-  // including a visitor who typed the address, gets the password form
-  const askForCode =
-    (Array.isArray(step) ? step[0] : step) === MEMBER_LOGIN_CODE_STEP &&
-    isSecondFactorPending(
-      (await payload.auth({ headers: await headers() })).user
-    );
+  // including a visitor who typed the address, gets the password form. A
+  // session that owes nothing, such as a trusted device, is sent on.
+  const stepName = Array.isArray(step) ? step[0] : step;
+  const next = loginPageStep(
+    stepName,
+    stepName === MEMBER_LOGIN_CODE_STEP
+      ? (await payload.auth({ headers: await headers() })).user
+      : null
+  );
+  if (next === 'continue') {
+    redirect(returnTo);
+  }
 
-  if (askForCode) {
+  if (next === 'code') {
     return (
       <main className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-16">
         <div className="flex flex-col gap-2">

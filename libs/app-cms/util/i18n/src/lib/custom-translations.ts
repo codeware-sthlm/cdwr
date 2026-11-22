@@ -469,6 +469,8 @@ const customTranslationsSchema = z.object({
   totpTrustForget: z.object({
     button: z.string(),
     description: z.string(),
+    confirmMessage: z.string(),
+    confirm: z.string(),
     done: z.string(),
     error: z.string()
   }),
@@ -1111,7 +1113,10 @@ You can assign multiple tags to a file.`,
     totpTrustForget: {
       button: 'Forget all trusted devices',
       description:
-        'Every device that skips the code asks for it again at the next login.',
+        'Every trusted device asks for the code again, this one included.',
+      confirmMessage:
+        'Forget all trusted devices? Each one asks for the code at the next request.',
+      confirm: 'Forget',
       done: 'All trusted devices are forgotten.',
       error: 'Could not forget the trusted devices.'
     },
@@ -1784,7 +1789,10 @@ Du kan tilldela flera etiketter till en fil.`,
     totpTrustForget: {
       button: 'Glöm alla betrodda enheter',
       description:
-        'Alla enheter som hoppar över koden frågar efter den igen vid nästa inloggning.',
+        'Alla betrodda enheter frågar efter koden igen, även den här.',
+      confirmMessage:
+        'Glömma alla betrodda enheter? Var och en frågar efter koden vid nästa begäran.',
+      confirm: 'Glöm',
       done: 'Alla betrodda enheter är glömda.',
       error: 'Det gick inte att glömma de betrodda enheterna.'
     },

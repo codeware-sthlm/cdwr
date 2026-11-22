@@ -31,7 +31,7 @@ overrides:
   '@verdaccio/hooks>handlebars': '>=4.7.10 <5'
 
 patchedDependencies:
-  payload-totp@3.0.7: 56cd19db37dc6c97dace04907afb46014bea88088946a7ec79ef792cdac65ac6
+  payload-totp@3.0.7: 7789f541fdb7d22687d8ab63371b6c83341c6122b4346378b1dded0c46afa1fa
 
 importers:
 
@@ -264,7 +264,7 @@ importers:
         version: 3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3)
       payload-totp:
         specifier: 3.0.7
-        version: 3.0.7(patch_hash=56cd19db37dc6c97dace04907afb46014bea88088946a7ec79ef792cdac65ac6)(472188b775528aee67de18c265bb6eb6)
+        version: 3.0.7(patch_hash=7789f541fdb7d22687d8ab63371b6c83341c6122b4346378b1dded0c46afa1fa)(472188b775528aee67de18c265bb6eb6)
       prettier:
         specifier: ~3.10.0
         version: 3.10.1
@@ -29383,7 +29383,7 @@ snapshots:
 
   pathval@2.0.1: {}
 
-  payload-totp@3.0.7(patch_hash=56cd19db37dc6c97dace04907afb46014bea88088946a7ec79ef792cdac65ac6)(472188b775528aee67de18c265bb6eb6):
+  payload-totp@3.0.7(patch_hash=7789f541fdb7d22687d8ab63371b6c83341c6122b4346378b1dded0c46afa1fa)(472188b775528aee67de18c265bb6eb6):
     dependencies:
       '@payloadcms/next': 3.90.2(@types/react@19.3.0)(graphql@16.14.2)(monaco-editor@0.57.0)(next@16.4.3(@babel/core@7.29.13(supports-color@5.5.0))(@opentelemetry/api@1.9.1)(@playwright/test@1.65.0)(@types/node@22.20.5)(babel-plugin-macros@3.1.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.105.1))(payload@3.90.2(graphql@16.14.2)(supports-color@5.5.0)(typescript@6.0.3))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@5.5.0)(typescript@6.0.3)
       '@payloadcms/translations': 3.90.2

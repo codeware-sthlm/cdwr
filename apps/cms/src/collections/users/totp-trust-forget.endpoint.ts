@@ -1,15 +1,12 @@
 import { forgetTotpTrust } from '@codeware/app-cms/data-access';
-import { canResetTotp } from '@codeware/app-cms/util/access';
-import { getUserTenantIDs, hasRole, isUser } from '@codeware/app-cms/util/misc';
-import { StatusCodes, getReasonPhrase } from 'http-status-codes';
+import { StatusCodes } from 'http-status-codes';
 import type { Endpoint, PayloadRequest } from 'payload';
 
-const fail = (status: StatusCodes) =>
-  Response.json({ error: getReasonPhrase(status) }, { status });
+import { authorizeTotpAdminAction, fail } from './authorize-totp-admin-action';
 
 /**
- * Ends every trusted device of a user, so the next sign-in on each asks for
- * the code again.
+ * Ends every trusted device of a user, this browser included: each asks for
+ * the code again at its next request.
  *
  * Anyone may do it for their own account; for another user it takes
  * `canResetTotp`, the rule that decides who may reset whom. The write
@@ -21,42 +18,16 @@ export const userTotpTrustForgetEndpoint: Endpoint = {
   path: '/:id/totp-trust-forget',
   method: 'post',
   handler: async (req: PayloadRequest): Promise<Response> => {
-    const { payload, user } = req;
-    const requester = user ?? null;
-
-    if (!isUser(requester)) {
-      return fail(StatusCodes.FORBIDDEN);
-    }
-
-    const id = Number(req.routeParams?.['id']);
-    if (!Number.isInteger(id)) {
-      return fail(StatusCodes.NOT_FOUND);
-    }
+    const { payload } = req;
 
     try {
-      if (id !== requester.id) {
-        // Only someone who may reset anybody gets to learn whether the user exists
-        if (
-          !hasRole(requester, 'system-user') &&
-          !getUserTenantIDs(requester, 'admin').length
-        ) {
-          return fail(StatusCodes.FORBIDDEN);
-        }
-        const target = await payload.findByID({
-          collection: 'users',
-          id,
-          depth: 0,
-          select: { email: true, role: true, tenants: true },
-          overrideAccess: true,
-          disableErrors: true
-        });
-        if (!target) {
-          return fail(StatusCodes.NOT_FOUND);
-        }
-        if (!canResetTotp(requester, target)) {
-          return fail(StatusCodes.FORBIDDEN);
-        }
+      const authorized = await authorizeTotpAdminAction(req, {
+        allowSelf: true
+      });
+      if (authorized instanceof Response) {
+        return authorized;
       }
+      const { requester, id } = authorized;
 
       await forgetTotpTrust(payload, { id });
       payload.logger.info(
@@ -66,7 +37,7 @@ export const userTotpTrustForgetEndpoint: Endpoint = {
     } catch (error) {
       payload.logger.error(
         { err: error },
-        `[totpTrustForget] Forgetting the devices of user ${id} failed unexpectedly`
+        `[totpTrustForget] Forgetting the devices of user ${req.routeParams?.['id']} failed unexpectedly`
       );
       return fail(StatusCodes.INTERNAL_SERVER_ERROR);
     }

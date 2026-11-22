@@ -1,3 +1,6 @@
+import { isSecondFactorPending } from '@codeware/app-cms/util/access';
+import { isUser } from '@codeware/app-cms/util/misc';
+import type { UserAny } from '@codeware/shared/util/payload-types';
 import type { SanitizedConfig } from 'payload';
 
 /** Where a visitor signs in to reach members-only content */
@@ -8,6 +11,23 @@ export const MEMBER_LOGIN_SUBMIT_PATH = '/api/member-login';
 
 /** The step that asks an enrolled member for their authenticator code */
 export const MEMBER_LOGIN_CODE_STEP = 'code';
+
+/**
+ * What the login page shows for `step` and the visitor's session.
+ *
+ * `code` only for a session that owes a code. A signed-in visitor who owes
+ * none, such as one on a trusted device, `continue`s to where they were going;
+ * anyone else gets the `password` form.
+ */
+export const loginPageStep = (
+  step: string | undefined,
+  user: UserAny | null
+): 'password' | 'code' | 'continue' => {
+  if (step !== MEMBER_LOGIN_CODE_STEP || !isUser(user)) {
+    return 'password';
+  }
+  return isSecondFactorPending(user) ? 'code' : 'continue';
+};
 
 /** `payload-totp`'s endpoint, which sets the cookie that verifies the session */
 export const TOTP_VERIFY_PATH = '/api/verify-totp';
