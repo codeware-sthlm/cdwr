@@ -2245,7 +2245,7 @@ GQL
 
 resp="$(linear "$QUERY")" ||
   { say "skip: Linear did not answer"; record skip "" "Linear did not answer"; exit 0; }
-if jq -e '.errors' >/dev/null <<<"$resp"; then
+if [[ -z "$resp" ]] || jq -e '.errors' >/dev/null <<<"$resp"; then
   say "skip: Linear error $(jq -c '.errors[0].message' <<<"$resp")"
   record skip "" "Linear error $(jq -c '.errors[0].message' <<<"$resp")"; exit 0
 fi
@@ -2392,7 +2392,7 @@ suggest_run() {
       "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels "$L"__save_issue \
       "$S"__find_organizations "$S"__find_projects "$S"__search_issues "$S"__get_sentry_resource \
       "Bash(git log --since=30.days --name-only --format=)" "Bash(git log --since=30.days --grep=fix --name-only --format=)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" "Bash(node tools/cdwr/bin/cdwr.mjs agent usage*)" \
-      ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_suggestion_taste.md)" "Edit(/$MEMORY_DIR/feedback_suggestion_taste.md)"}
+      ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_suggestion_taste.md)"} ${MEMORY_DIR:+"Edit(/$MEMORY_DIR/feedback_suggestion_taste.md)"}
   ) > "$result" 2> "$log" || rc=$?
 
   run_outcome "a suggest run" suggest "$SUGGEST_BUDGET_USD" "$log" "$result" "$rc"
@@ -2530,6 +2530,7 @@ review_notice() {
 # file and prints the reviews row; nothing is stored for a file it refuses.
 review_run() {
   local log result rc=0 spent="" outcome line cost row out_json issue n since own_file
+  local -a own_args=()
   local out="$HOME_DIR/review-out/review-out.json" model=opus requested=false
   run_kind=review
   [[ -e "$HOME_DIR/review-requested" ]] && requested=true
@@ -2586,7 +2587,7 @@ review_run() {
       "$L"__list_issues "$L"__get_issue "$L"__list_comments "$L"__list_issue_labels \
       "Bash(git log --since=60.days --oneline)" "Bash(gh pr list *)" "Bash(gh pr view *)" "Bash(tools/cdwr/agent-queue/gh-review.sh threads *)" \
       "Write(/$out)" "Edit(/$out)" \
-      ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_review_taste.md)" "Edit(/$MEMORY_DIR/feedback_review_taste.md)"}
+      ${MEMORY_DIR:+"Write(/$MEMORY_DIR/feedback_review_taste.md)"} ${MEMORY_DIR:+"Edit(/$MEMORY_DIR/feedback_review_taste.md)"}
   ) > "$result" 2> "$log" || rc=$?
 
   run_outcome "a review run" review "$REVIEW_BUDGET_USD" "$log" "$result" "$rc"
@@ -2620,10 +2621,12 @@ review_run() {
     own_file="$HOME_DIR/review-own.json"
     rm -f "$own_file"
     own_read "$own_file" || { own_file=""; note "warn: review: own_actions not read"; }
+    # An array: zsh passes an unquoted conditional expansion as one word, so --own would never parse
+    [[ -n "$own_file" ]] && own_args=(--own "$own_file")
     # With --json the check prints {"ok":true,"result":<row>}, or {"ok":false,"error":{"message":"failed: …"}}
     out_json="$(node "$REPO/tools/cdwr/bin/cdwr.mjs" agent review-check "$got" --host "$(telemetry_host)" --cost "$cost" --model "$model" \
-      ${own_file:+--own "$own_file"} --json 2>> "$log" </dev/null || true)"
-    if row="$(jq -ce 'select(.ok == true) | .result | objects' <<<"$out_json" 2>/dev/null)"; then
+      "${own_args[@]}" --json 2>> "$log" </dev/null || true)"
+    if [[ -n "$out_json" ]] && row="$(jq -ce 'select(.ok == true) | .result | objects' <<<"$out_json" 2>/dev/null)"; then
       if ! supabase_insert_checked reviews "$row"; then
         note "warn: review: not stored (see $log)"
         record warn "" "review: not stored"
@@ -2727,7 +2730,7 @@ query {
   }) { nodes { identifier description labels(first: 20) { nodes { name } } } }
 }
 GQL
-if after="$(linear "$PLANNED")" && ! jq -e '.errors' >/dev/null <<<"$after"; then
+if after="$(linear "$PLANNED")" && [[ -n "$after" ]] && ! jq -e '.errors' >/dev/null <<<"$after"; then
   planned=0
   for row in $(jq -r --arg ready "$ready" '
       ($ready | split("\n")) as $offered

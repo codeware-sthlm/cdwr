@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   utimesSync,
   writeFileSync
@@ -823,7 +824,10 @@ describe('run.sh review own list', () => {
 
     it('reads the own list before the check, and passes --own only when it read one', () => {
       before('own_read "$own_file"', 'agent review-check');
-      expect(body).toContain('${own_file:+--own "$own_file"}');
+      expect(body).toContain('own_args=(--own "$own_file")');
+      expect(body).toContain('"${own_args[@]}"');
+      expect(body).not.toContain('${own_file:+');
+      expect(body).toContain('[[ -n "$out_json" ]] && row="$(jq -ce');
       expect(body).toContain(
         'own_file=""; note "warn: review: own_actions not read"'
       );
@@ -7083,5 +7087,61 @@ describe('run.sh backup step', () => {
     );
     expect(existsSync(join(root, 'backup-failed'))).toBe(false);
     expect(calls()).toBe(1);
+  });
+});
+
+describe('queue scripts under zsh', () => {
+  const dirs = ['../../../agent-queue/', '../../../../../apps/agent-host/'];
+  const scripts = dirs.flatMap((dir) => {
+    const path = fileURLToPath(new URL(dir, import.meta.url));
+    return readdirSync(path)
+      .filter((name) => name.endsWith('.sh'))
+      .map((name) => join(path, name));
+  });
+
+  // zsh passes an unquoted ${name:+a b} as one word, never two; split it into one expansion per word
+  const unquotedMultiWord = (line: string) =>
+    !line.trimStart().startsWith('#') &&
+    [...line.matchAll(/\$\{\w+:\+([^}]*)\}/g)].some(
+      (m) =>
+        /\s/.test(m[1]) &&
+        (line.slice(0, m.index).match(/(?<!\\)"/g) ?? []).length % 2 === 0
+    );
+
+  it('has no unquoted ${name:+…} of more than one word', () => {
+    const hits = scripts.flatMap((file) =>
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .flatMap((line, i) =>
+          unquotedMultiWord(line) ? [`${file}:${i + 1}`] : []
+        )
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it('tells an unquoted multi-word expansion from a quoted or single-word one', () => {
+    expect(unquotedMultiWord('cmd ${f:+--own "$f"} x')).toBe(true);
+    expect(unquotedMultiWord('cmd ${M:+"Write(a)" "Edit(a)"}')).toBe(true);
+    expect(unquotedMultiWord('cmd ${M:+"Write(a)"} ${M:+"Edit(a)"}')).toBe(
+      false
+    );
+    expect(unquotedMultiWord('note "a${why:+ ($why)}"')).toBe(false);
+    expect(unquotedMultiWord('# ${f:+--own "$f"}')).toBe(false);
+  });
+
+  describe('array option pattern', () => {
+    requireTools('zsh');
+
+    it('splits into two words', () => {
+      const r = spawnSync(
+        'zsh',
+        [
+          '-c',
+          'f=/x; a=(); [[ -n "$f" ]] && a=(--own "$f"); printf "%s\\n" "${a[@]}"'
+        ],
+        { encoding: 'utf8' }
+      );
+      expect(r.stdout.trim().split('\n')).toEqual(['--own', '/x']);
+    });
   });
 });
