@@ -6,6 +6,8 @@ import {
   parseApplyList,
   parseAttended,
   parseDeploy,
+  parseDevlogLast,
+  parseDevlogNext,
   parseHandoffs,
   parseIdea,
   parseJob,
@@ -1301,5 +1303,82 @@ describe('parseWatch', () => {
     ['undefined', undefined]
   ])('is empty for %s', (_name, input) => {
     expect(parseWatch(input).size).toBe(0);
+  });
+});
+
+describe('parseDevlogNext', () => {
+  it.each([
+    [
+      'done',
+      {
+        state: 'done',
+        next: '2026-11-27',
+        hour: 6,
+        text: 'done, next in 5 day(s)'
+      }
+    ],
+    ['due', { state: 'due', next: '2026-11-22', hour: 0, text: 'due' }],
+    [
+      'early',
+      { state: 'early', next: '2026-11-22', hour: 23, text: 'not before 23:00' }
+    ],
+    ['off', { state: 'off', next: null, hour: 6, text: 'off' }],
+    [
+      'an hour the gate never reaches',
+      { state: 'early', next: '2026-11-22', hour: 24, text: 'not before 24:00' }
+    ]
+  ])('reads %s', (_name, value) => {
+    expect(parseDevlogNext(value)).toEqual(value);
+  });
+
+  it.each([
+    ['null', null],
+    ['a string', 'due'],
+    ['an array', []],
+    [
+      'an unknown state',
+      { state: 'soon', next: '2026-11-22', hour: 6, text: 'x' }
+    ],
+    ['a malformed date', { state: 'due', next: '22/11', hour: 6, text: 'x' }],
+    ['a missing date', { state: 'due', hour: 6, text: 'x' }],
+    [
+      'a done without a date',
+      { state: 'done', next: null, hour: 6, text: 'x' }
+    ],
+    ['a due without a date', { state: 'due', next: null, hour: 6, text: 'x' }],
+    [
+      'a negative hour',
+      { state: 'due', next: '2026-11-22', hour: -1, text: 'x' }
+    ],
+    [
+      'a fractional hour',
+      { state: 'due', next: '2026-11-22', hour: 6.5, text: 'x' }
+    ],
+    [
+      'a string hour',
+      { state: 'due', next: '2026-11-22', hour: '6', text: 'x' }
+    ],
+    ['a missing text', { state: 'due', next: '2026-11-22', hour: 6 }]
+  ])('gives null for %s', (_name, value) => {
+    expect(parseDevlogNext(value)).toBeNull();
+  });
+});
+
+describe('parseDevlogLast', () => {
+  it('reads the date and the outcome', () => {
+    expect(parseDevlogLast('2026-11-13 · nothing this week')).toEqual({
+      date: '2026-11-13',
+      text: 'nothing this week'
+    });
+  });
+
+  it.each([
+    ['empty', ''],
+    ['null', null],
+    ['no separator', '2026-11-13 nothing'],
+    ['a malformed date', '13/11 · nothing'],
+    ['no outcome', '2026-11-13 · ']
+  ])('gives null for %s', (_name, line) => {
+    expect(parseDevlogLast(line)).toBeNull();
   });
 });
