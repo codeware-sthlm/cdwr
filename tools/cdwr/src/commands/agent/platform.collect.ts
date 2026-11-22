@@ -18,6 +18,7 @@ import { deployments, tenancyConfig } from '../../services/tenancy';
 import { websiteDays, websiteStats } from '../../services/umami';
 import { APPS } from '../infisical/analysis.logic';
 
+import { type PlatformAlerts, PlatformAlertsSchema } from './platform.alerts';
 import {
   type BackupRead,
   type DbPeak,
@@ -32,6 +33,7 @@ import {
   type ReleasesRead,
   SHARED_KEY,
   STATS_TIMEZONE,
+  type SentryFresh,
   type SentryRead,
   type SentryTop,
   type SwitchRecord,
@@ -211,6 +213,18 @@ const IssuesSchema = z.array(
   })
 );
 
+const FreshSchema = z.array(
+  z.object({
+    shortId: z.string(),
+    level: z.string(),
+    title: z.string(),
+    firstSeen: z.string()
+  })
+);
+
+/** The most new issues kept per row */
+const FRESH_LIMIT = '25';
+
 /** One Sentry read; a refusal is named by its status, never by its body or the token */
 async function sentryGet<T>(
   token: string,
@@ -232,7 +246,7 @@ async function sentryGet<T>(
   return parsed.data;
 }
 
-/** Errors per tenant tag (untagged events on the shared key) over 24 hours and 7 days, the open (unresolved) ones of the 24 hours, and the top unresolved issue of every tenant with open errors */
+/** Errors per tenant tag (untagged events on the shared key) over 24 hours and 7 days, the open (unresolved) ones of the 24 hours, and the top and the newest (first seen on production in the last 24 hours) unresolved issues of every tenant with open errors */
 export async function readSentry(
   env: NodeJS.ProcessEnv
 ): Promise<Reading<SentryRead>> {
@@ -269,22 +283,23 @@ export async function readSentry(
     const dayCounts = counts(day);
     const openCounts = counts(open);
 
+    const issuesPath = `/organizations/${encodeURIComponent(org)}/issues/`;
+    const tenantQuery = (slug: string, base: string) =>
+      `${base} ${slug === SHARED_KEY ? '!has:tenant' : `tenant:${slug}`}`;
+    const withOpenEvents = Object.entries(openCounts).filter(
+      ([, count]) => count > 0
+    );
+
     const tops: SentryRead['tops'] = Object.fromEntries(
       await Promise.all(
-        Object.entries(openCounts)
-          .filter(([, count]) => count > 0)
-          .map(async ([slug]): Promise<[string, Reading<SentryTop | null>]> => {
+        withOpenEvents.map(
+          async ([slug]): Promise<[string, Reading<SentryTop | null>]> => {
             try {
               const [issue] = await sentryGet(
                 token,
-                `/organizations/${encodeURIComponent(org)}/issues/`,
+                issuesPath,
                 [
-                  [
-                    'query',
-                    slug === SHARED_KEY
-                      ? 'is:unresolved !has:tenant'
-                      : `is:unresolved tenant:${slug}`
-                  ],
+                  ['query', tenantQuery(slug, 'is:unresolved')],
                   ['statsPeriod', '24h'],
                   ['sort', 'freq'],
                   ['limit', '1']
@@ -307,7 +322,37 @@ export async function readSentry(
             } catch (error) {
               return [slug, failed(error)];
             }
-          })
+          }
+        )
+      )
+    );
+    const fresh: SentryRead['fresh'] = Object.fromEntries(
+      await Promise.all(
+        withOpenEvents.map(
+          async ([slug]): Promise<[string, Reading<SentryFresh[]>]> => {
+            try {
+              const issues = await sentryGet(
+                token,
+                issuesPath,
+                [
+                  [
+                    'query',
+                    tenantQuery(
+                      slug,
+                      'is:unresolved age:-24h environment:production level:[error,fatal]'
+                    )
+                  ],
+                  ['sort', 'new'],
+                  ['limit', FRESH_LIMIT]
+                ],
+                FreshSchema
+              );
+              return [slug, ok(issues)];
+            } catch (error) {
+              return [slug, failed(error)];
+            }
+          }
+        )
       )
     );
     return ok({
@@ -315,7 +360,8 @@ export async function readSentry(
       day: dayCounts,
       week: counts(week),
       open: openCounts,
-      tops
+      tops,
+      fresh
     });
   } catch (error) {
     return failed(error);
@@ -657,6 +703,81 @@ export function writeDbPeak(env: NodeJS.ProcessEnv, peak: DbPeak): void {
   const file = join(home, DB_PEAK_FILE);
   writeFileSync(`${file}.partial`, `${JSON.stringify(peak)}\n`);
   renameSync(`${file}.partial`, file);
+}
+
+// --- the urgent problems already told ---
+
+const ALERTS_FILE = 'platform-alerts.json';
+
+/**
+ * The problem keys the last tick told about, under AGENT_QUEUE_HOME. Null when the home is
+ * unset, or the file is missing or unreadable: the tick then seeds it, silently.
+ */
+export function readPlatformAlerts(
+  env: NodeJS.ProcessEnv
+): PlatformAlerts | null {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return null;
+  try {
+    const parsed = PlatformAlertsSchema.safeParse(
+      JSON.parse(readFileSync(join(home, ALERTS_FILE), 'utf8'))
+    );
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps the keys told for the next tick; a no-op without a queue home */
+export function writePlatformAlerts(
+  env: NodeJS.ProcessEnv,
+  alerts: PlatformAlerts
+): void {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return;
+  const file = join(home, ALERTS_FILE);
+  writeFileSync(`${file}.partial`, `${JSON.stringify(alerts)}\n`);
+  renameSync(`${file}.partial`, file);
+}
+
+const NOTIFY_TIMEOUT_MS = 30_000;
+
+/** What notify.sh reads: nothing of the collector's credentials */
+const NOTIFY_ENV = [
+  'PATH',
+  'HOME',
+  'AGENT_QUEUE_HOME',
+  'AGENT_QUEUE_NOTIFY_SPOOL',
+  'AGENT_QUEUE_CURL_CMD',
+  'SLACK_WEBHOOK_URL',
+  'CLAUDE_SLACK_WEBHOOK'
+] as const;
+
+/** The environment notify.sh runs with, picked from `env` */
+export const notifyEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv =>
+  Object.fromEntries(
+    NOTIFY_ENV.flatMap((name) =>
+      env[name] === undefined ? [] : [[name, env[name]]]
+    )
+  );
+
+/** One urgent notice through the queue home's notify.sh (no shell); false when it did not exit 0 */
+export async function sendNotice(
+  env: NodeJS.ProcessEnv,
+  text: string
+): Promise<boolean> {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return false;
+  try {
+    await run(
+      join(home, 'notify.sh'),
+      ['--level', 'urgent', '--source', 'platform', text],
+      { env: notifyEnv(env), timeout: NOTIFY_TIMEOUT_MS }
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The deploy switches of production, through the Infisical tenancy lib; never a secret value */
