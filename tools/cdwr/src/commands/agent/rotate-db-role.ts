@@ -9,6 +9,7 @@ import type { Context } from '../../cli/context';
 import { CliError, EXIT, UsageError, messageOf } from '../../cli/errors';
 import { input } from '../../cli/inputs';
 import { childEnv, run, sleep } from '../../services/shell';
+import { accessToken, runQuery } from '../../services/supabase-management';
 import { probeSession } from '../infisical/session.logic';
 import { PROJECTS } from '../secrets/catalog';
 
@@ -35,18 +36,24 @@ import {
 } from './host';
 import { hostInput } from './remote';
 import {
+  type AdminRights,
   CMS_ADMIN,
   CMS_ADMIN_SECRET,
   CMS_TARGETS,
   DB_ROLE_TARGETS,
   type DbRoleKey,
   type DbRoleTarget,
+  SUPABASE_ADMIN,
+  SUPABASE_ADMIN_ROLE,
+  type ServerMatch,
   TARGET_NAMES,
+  adminRightsOfRows,
   adminRightsSql,
   alterRoleSql,
   generatePassword,
   hostOf,
   parseAdminRights,
+  projectRefOf,
   roleOf,
   sameServer,
   scramVerifier,
@@ -123,6 +130,62 @@ async function loginAs(url: string, role: string, secrets: string[]) {
   }
 }
 
+/** Where the admin statements run: psql on an admin url, or the Management API on a project */
+type AdminSpec = { kind: 'psql'; url: string } | { kind: 'api'; ref: string };
+
+/** The admin connection, read and alter only */
+interface Admin {
+  /** The role the statements run as */
+  name: string;
+  rights(role: string): Promise<AdminRights>;
+  alter(role: string, verifier: string, secrets: string[]): Promise<void>;
+}
+
+/**
+ * The API path runs as `postgres` with your own `supabase login`. Its error
+ * carries the API's message only; it is scrubbed too, in case Postgres quotes
+ * the statement.
+ */
+async function adminOf(ctx: Context, spec: AdminSpec): Promise<Admin> {
+  if (spec.kind === 'psql') {
+    const name = roleOf(spec.url, 'the admin url');
+    return {
+      name,
+      rights: async (role) =>
+        parseAdminRights(await psql(spec.url, adminRightsSql(role))),
+      alter: async (role, verifier, secrets) => {
+        await psql(spec.url, alterRoleSql(role, verifier), [
+          verifier,
+          ...secrets
+        ]);
+      }
+    };
+  }
+  const token = await accessToken(ctx.env);
+  const query = async (sql: string, secrets: string[] = []) => {
+    try {
+      return await runQuery(token, spec.ref, sql);
+    } catch (error) {
+      // Postgres may quote only part of the statement ("at or near …"),
+      // which no whole-secret scrub catches
+      throw new Error(
+        scrub(messageOf(error), [token, ...secrets]).replace(
+          /SCRAM-SHA-256\$[^\s'"]*/g,
+          '••••'
+        )
+      );
+    }
+  };
+  return {
+    name: SUPABASE_ADMIN_ROLE,
+    rights: async (role) =>
+      adminRightsOfRows(await query(adminRightsSql(role))),
+    alter: async (role, verifier, secrets) => {
+      await query(alterRoleSql(role, verifier), [verifier, ...secrets]);
+    }
+  };
+}
+
 interface Data {
   host: string;
   wait: number;
@@ -130,7 +193,8 @@ interface Data {
   key: DbRoleKey;
   role: string;
   url: string;
-  adminUrl: string;
+  /** Resolved once in the plan, so the apply reads no token after the queue is paused */
+  admin: Admin;
 }
 
 const RERUN =
@@ -185,7 +249,7 @@ const LOCK_POLL_TRIES = 30;
 
 /** Everything from the alter to the restart, with the queue idle; a failure says what still works */
 async function alterWriteRestart(ctx: Context, data: Data) {
-  const { host, target, key, role, url, adminUrl } = data;
+  const { host, target, key, role, url, admin } = data;
   const lock = QUEUE_LOCKS[target];
   if (lock) {
     // Its runs are short: wait one out rather than give up
@@ -213,7 +277,7 @@ async function alterWriteRestart(ctx: Context, data: Data) {
 
   try {
     await ctx.ui.task(`Setting a new password on "${role}"`, () =>
-      psql(adminUrl, alterRoleSql(role, scramVerifier(password)), secrets)
+      admin.alter(role, scramVerifier(password), secrets)
     );
   } catch (error) {
     // A timeout or a dropped connection can follow a committed alter
@@ -260,27 +324,43 @@ async function alterWriteRestart(ctx: Context, data: Data) {
   return sha256Hex(newUrl);
 }
 
-/** The admin url: given, or the cms's own for a cms role */
-function adminUrlOf(target: DbRoleTarget, given: string): string {
-  if (given !== CMS_ADMIN) return given;
+/** The admin: the Management API on the target's project, the cms's own url for a cms role, or the url given */
+function adminSpecOf(
+  target: DbRoleTarget,
+  given: string,
+  url: string,
+  key: DbRoleKey
+): AdminSpec {
+  if (given === SUPABASE_ADMIN) {
+    const ref = projectRefOf(url, key);
+    if (!ref) {
+      throw new CliError(
+        `${key} is not a Supabase url, so the Management API cannot reach its database`,
+        EXIT.failed,
+        'Pass an admin url with --admin-url'
+      );
+    }
+    return { kind: 'api', ref };
+  }
+  if (given !== CMS_ADMIN) return { kind: 'psql', url: given };
   if (!CMS_TARGETS.includes(target)) {
     throw new UsageError(
-      `The ${target} role has no default admin url`,
-      'Pass the owner url of the agent-queue Supabase database with --interactive, or as --admin-url'
+      `The ${target} role has no cms admin url`,
+      'Leave --admin-url out to go through the Supabase Management API, or pass the owner url of the agent-queue Supabase database'
     );
   }
-  const url = readSharedValue({
+  const cmsUrl = readSharedValue({
     ...CMS_ADMIN_SECRET,
     projectId: PROJECTS.codeware.id
   });
-  if (!url) {
+  if (!cmsUrl) {
     throw new CliError(
       `${CMS_ADMIN_SECRET.key} is not in codeware ${CMS_ADMIN_SECRET.path} (${CMS_ADMIN_SECRET.environment})`,
       EXIT.failed,
       'Pass an admin url with --admin-url'
     );
   }
-  return url;
+  return { kind: 'psql', url: cmsUrl };
 }
 
 /**
@@ -288,13 +368,14 @@ function adminUrlOf(target: DbRoleTarget, given: string): string {
  * moment the role is altered. The whole run holds the host deploy lock and
  * keeps the queue paused and idle from before the alter until the new url
  * logs in. The
- * password reaches the server only as a SCRAM verifier, on psql's stdin. A run
+ * password reaches the server only as a SCRAM verifier, on psql's stdin or in
+ * the Management API's request body. A run
  * that stops part way is fixed by running it again: the admin can always set
  * a new password, so there is no stage to resume.
  */
 export default defineCommand({
   summary: 'A new password for an agent-host database role',
-  description: `Sets a generated password on the role behind an agent-host database url (${TARGET_NAMES.map((t) => `${t}: ${DB_ROLE_TARGETS[t].key}`).join(', ')}) over an admin connection, writes the new url to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container and logs in with the new url, with the queue idle and all under the host deploy lock, and checks that the container holds the new url (by hash). The admin url of the platform and backup roles defaults to the cms's ${CMS_ADMIN_SECRET.key}; the desk role needs the agent-queue Supabase owner url. No url or password is ever printed.`,
+  description: `Sets a generated password on the role behind an agent-host database url (${TARGET_NAMES.map((t) => `${t}: ${DB_ROLE_TARGETS[t].key}`).join(', ')}) over an admin connection, writes the new url to agent-host Infisical ${VAULT.path} through your own \`infisical login\`, restarts the agent container and logs in with the new url, with the queue idle and all under the host deploy lock, and checks that the container holds the new url (by hash). The admin url of the platform and backup roles defaults to the cms's ${CMS_ADMIN_SECRET.key}; the desk role goes through the Supabase Management API as "${SUPABASE_ADMIN_ROLE}" with your own \`supabase login\`, unless --admin-url names a url. No url or password is ever printed.`,
   danger: 'destructive',
   needs: ['psql'],
   inputs: {
@@ -313,12 +394,12 @@ export default defineCommand({
     adminUrl: input.secret({
       prompt:
         'Admin url of the database (the owner, or a role that may alter the target)?',
-      description: `A postgres:// url that may alter the role; \`${CMS_ADMIN}\` (the default for platform and backup) is the cms's ${CMS_ADMIN_SECRET.key}. Give a Supabase pooler url: the direct host is IPv6 only. Prefer the prompt: a flag lands in shell history`,
+      description: `A postgres:// url that may alter the role, run through psql; \`${CMS_ADMIN}\` (the default for platform and backup) is the cms's ${CMS_ADMIN_SECRET.key}, and \`${SUPABASE_ADMIN}\` (the default for desk) is the Supabase Management API as "${SUPABASE_ADMIN_ROLE}" with your own \`supabase login\`. Give a Supabase pooler url: the direct host is IPv6 only. Every target has a default, so it is never asked for; pass it as --admin-url "$(pbpaste)" to keep the url out of shell history`,
       short: 'a',
       default: (resolved) =>
         CMS_TARGETS.includes(resolved['target'] as DbRoleTarget)
           ? CMS_ADMIN
-          : undefined
+          : SUPABASE_ADMIN
     }),
     wait: input.number({
       prompt: 'Minutes to wait for the queue to be idle?',
@@ -370,16 +451,22 @@ export default defineCommand({
       throw new CliError(messageOf(error), EXIT.failed);
     }
 
-    const adminUrl = await ctx.ui.task('Reading the admin url', async () =>
-      adminUrlOf(target, given)
+    const spec = await ctx.ui.task(
+      given === SUPABASE_ADMIN
+        ? 'Reading the Supabase project'
+        : 'Reading the admin url',
+      async () => adminSpecOf(target, given, url, key)
     );
-    let admin: string;
+    let adminConnection: Admin;
+    let match: ServerMatch = { ok: true };
     try {
-      admin = roleOf(adminUrl, 'the admin url');
+      adminConnection = await adminOf(ctx, spec);
+      // The API's project comes from the target url itself, so only a url can
+      // point at another server
+      if (spec.kind === 'psql') match = sameServer(spec.url, url);
     } catch (error) {
       throw new CliError(messageOf(error), EXIT.failed);
     }
-    const match = sameServer(adminUrl, url);
     if (!match.ok) {
       throw new CliError(
         `The admin url is for another database server: ${match.why}`,
@@ -387,16 +474,23 @@ export default defineCommand({
         'Pass the admin url of the server the role lives on'
       );
     }
+    const admin = adminConnection.name;
+    const via =
+      spec.kind === 'api'
+        ? `the Management API on Supabase project ${spec.ref}`
+        : server;
 
     const rights = await ctx.ui.task(
       `Reading what "${admin}" may do to "${role}"`,
-      async () => parseAdminRights(await psql(adminUrl, adminRightsSql(role)))
+      () => adminConnection.rights(role)
     );
     if (!rights.exists) {
       throw new CliError(
-        `There is no role "${role}" on ${server}`,
+        `There is no role "${role}" on ${via}`,
         EXIT.failed,
-        `${key} logs in as a role the admin url's server does not have`
+        spec.kind === 'api'
+          ? `${key} logs in as a role its Supabase project does not have`
+          : `${key} logs in as a role the admin url's server does not have`
       );
     }
     if (role === admin) {
@@ -434,7 +528,7 @@ export default defineCommand({
       throw new CliError(
         `"${admin}" may not set the password of "${role}"`,
         EXIT.failed,
-        'It needs superuser, or CREATEROLE with the ADMIN option on the role; pass another --admin-url'
+        'It needs superuser, or CREATEROLE with the ADMIN option on the role; pass an --admin-url that has it'
       );
     }
 
@@ -476,7 +570,7 @@ export default defineCommand({
           : []),
         {
           label: `Set a new password on "${role}" as "${admin}"`,
-          detail: `${server}; a SCRAM verifier on psql's stdin. The old url stops working here`
+          detail: `${via}; a SCRAM verifier, ${spec.kind === 'api' ? 'in the request body' : "on psql's stdin"}. The old url stops working here`
         },
         {
           label: `Write the new url as ${key}, read it back`,
@@ -504,8 +598,24 @@ export default defineCommand({
         'A run that stops after the password is set leaves the container on a dead url; run it again to finish'
       ],
       target: { environment: 'production', name: target },
-      json: { host, target, key, role, admin, server },
-      data: { host, wait, target, key, role, url, adminUrl } satisfies Data
+      json: {
+        host,
+        target,
+        key,
+        role,
+        admin,
+        server,
+        via: spec.kind
+      },
+      data: {
+        host,
+        wait,
+        target,
+        key,
+        role,
+        url,
+        admin: adminConnection
+      } satisfies Data
     };
   },
 

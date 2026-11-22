@@ -205,7 +205,8 @@ export const createSecretKey = async (
 
 /**
  * Runs SQL on the project's database as `postgres`, one row object per row.
- * An error carries the API's message only, never the statement.
+ * An error carries the API's message only, never the request body; Postgres
+ * may still quote part of the statement in that message.
  */
 export const runQuery = async (
   token: string,
