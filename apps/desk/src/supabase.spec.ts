@@ -31,6 +31,7 @@ const state = (over: Partial<QueueStateRow> = {}): QueueStateRow => ({
   attended: 'idle: waits',
   suggested: '2026-10-28 · nothing today',
   devlog: null,
+  devlog_next: null,
   job: 'Job: every 10 min · install current',
   watch: null,
   view: {

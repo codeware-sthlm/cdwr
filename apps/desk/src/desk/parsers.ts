@@ -195,7 +195,7 @@ export function parseDevlogNext(value: unknown): DevlogNext | null {
   if (typeof hour !== 'number' || !Number.isInteger(hour) || hour < 0)
     return null;
   if (typeof text !== 'string') return null;
-  return { state, next, hour, text };
+  return { state, next: isDate ? next : null, hour, text };
 }
 
 // The `devlog` column, "YYYY-MM-DD · <outcome>"; null when empty or not that shape
