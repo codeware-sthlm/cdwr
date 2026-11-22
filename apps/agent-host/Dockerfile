@@ -9,6 +9,7 @@ ARG TARGETARCH
 ARG GH_VERSION=2.102.0
 ARG INFISICAL_VERSION=0.44.2
 ARG FLYCTL_VERSION=0.5.4
+ARG JQ_VERSION=1.7.1
 ARG PG_CLIENT_MAJOR=17
 
 # build-essential and python3 build node-pty when a ticket worktree installs
@@ -18,7 +19,6 @@ RUN apt-get update -qq \
     ca-certificates \
     curl \
     git \
-    jq \
     openssl \
     procps \
     python3 \
@@ -53,6 +53,17 @@ RUN case "${TARGETARCH}" in amd64) fly_arch=x86_64 ;; *) fly_arch=arm64 ;; esac 
   && curl -fsSL "https://github.com/superfly/flyctl/releases/download/v${FLYCTL_VERSION}/flyctl_${FLYCTL_VERSION}_Linux_${fly_arch}.tar.gz" \
     | tar -xz -C /usr/local/bin flyctl \
   && ln -s flyctl /usr/local/bin/fly
+
+# bookworm's jq 1.6 exits 0 on empty input under -e; the queue scripts' `jq -e` guards need it to fail
+# The checksums are the release's sha256sum.txt for JQ_VERSION; a bump updates both
+RUN case "${TARGETARCH}" in \
+    amd64) jq_sha=5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5 ;; \
+    *) jq_sha=4dd2d8a0661df0b22f1bb9a1f9830f06b6f3b8f7d91211a1ef5d7c4f06a8b4a5 ;; \
+  esac \
+  && curl -fsSL -o /usr/local/bin/jq \
+    "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-linux-${TARGETARCH}" \
+  && echo "${jq_sha}  /usr/local/bin/jq" | sha256sum -c - \
+  && chmod 0755 /usr/local/bin/jq
 
 RUN npm install -g pnpm@11.23.0 @anthropic-ai/claude-code@2.1.302
 
