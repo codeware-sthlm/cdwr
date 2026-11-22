@@ -79,7 +79,7 @@ describe('alertsToRaise', () => {
     expect(notices).toEqual([]);
     expect(next).toEqual({
       'demo:down:cdwr-cms-demo': { at: AT, sent: true },
-      'demo:new-issue:CMS-12': { at: AT, sent: true }
+      'new-issue:CMS-12': { at: AT, sent: true }
     });
   });
 
@@ -120,12 +120,12 @@ describe('alertsToRaise', () => {
     const { notices, next } = raise({}, rows);
     expect(notices).toEqual([
       {
-        key: 'demo:new-issue:CMS-12',
+        key: 'new-issue:CMS-12',
         text: 'Platform: new Sentry issue on production in demo · CMS-12 · error https://cdwr.sentry.io/issues/?query=CMS-12'
       }
     ]);
     expect(notices[0]?.text).not.toContain('Boom');
-    expect(next).toEqual({ 'demo:new-issue:CMS-12': pending(AT) });
+    expect(next).toEqual({ 'new-issue:CMS-12': pending(AT) });
   });
 
   it('names the host apps for an issue of the shared row', () => {
@@ -141,9 +141,9 @@ describe('alertsToRaise', () => {
     const rows = rowsOf(
       stateRow('demo', { sentry: sentryWith([issue('CMS-12')]) })
     );
-    const again = raise({ 'demo:new-issue:CMS-12': pending() }, rows);
+    const again = raise({ 'new-issue:CMS-12': pending() }, rows);
     expect(again.notices).toHaveLength(1);
-    expect(again.next).toEqual({ 'demo:new-issue:CMS-12': pending() });
+    expect(again.next).toEqual({ 'new-issue:CMS-12': pending() });
   });
 
   it('carries a key already told, with its first time and no notice', () => {
@@ -175,18 +175,119 @@ describe('alertsToRaise', () => {
     expect(notices).toEqual([]);
   });
 
-  it('keeps a new-issue key while its read failed or the sentry column is empty', () => {
-    const previous = { 'demo:new-issue:CMS-12': told() };
-    expect(
-      raise(previous, rowsOf(stateRow('demo', { sentry: sentryWith(null) })))
-        .next
-    ).toEqual(previous);
-    expect(raise(previous, rowsOf(stateRow('demo'))).next).toEqual(previous);
+  it('keeps a new-issue key while any row had a sentry error', () => {
+    const previous = { 'new-issue:CMS-12': told() };
+    const rows = rowsOf(
+      stateRow('a', { sentry: sentryWith(null) }),
+      stateRow('b', { errors: { sentry: 'sentry failed' } })
+    );
+    expect(raise(previous, rows).next).toEqual(previous);
   });
 
-  it('drops a new-issue key once the issue is gone from a read that worked', () => {
-    const rows = rowsOf(stateRow('demo', { sentry: sentryWith([]) }));
-    expect(raise({ 'demo:new-issue:CMS-12': told() }, rows).next).toEqual({});
+  it('keeps a new-issue key while a row read no new issues', () => {
+    const previous = { 'new-issue:CMS-12': told() };
+    const rows = rowsOf(
+      stateRow('a', { errors: { sentry: 'top issue: x; new issues: y' } })
+    );
+    expect(raise(previous, rows).next).toEqual(previous);
+  });
+
+  it('drops a new-issue key when only a top issue read failed', () => {
+    const rows = rowsOf(
+      stateRow('a', {
+        sentry: sentryWith([]),
+        errors: { sentry: 'top issue: 502' }
+      })
+    );
+    expect(raise({ 'new-issue:CMS-12': told() }, rows).next).toEqual({});
+  });
+
+  it('groups a new-issue problem without a ref by the id in its key', () => {
+    const rows = rowsOf(stateRow('a'));
+    const problem = {
+      key: 'a:new-issue:CMS-12',
+      row: 'a',
+      kind: 'new-issue' as const,
+      severity: 'warn' as const,
+      title: 'New Sentry issue CMS-12',
+      evidence: [],
+      threshold: '',
+      actions: []
+    };
+    const previous = { 'a:new-issue:CMS-12': told() };
+    const { notices, next } = alertsToRaise(
+      previous,
+      [problem],
+      rows,
+      AT,
+      true
+    );
+    expect(notices).toEqual([]);
+    expect(next).toEqual({ 'new-issue:CMS-12': told() });
+  });
+
+  it('keeps a new-issue key when the tenants were not read', () => {
+    const previous = { 'new-issue:CMS-12': told() };
+    expect(raise(previous, rowsOf(stateRow('a')), false).next).toEqual(
+      previous
+    );
+  });
+
+  it('drops a new-issue key once the issue is gone, also from rows with no fresh read', () => {
+    const rows = rowsOf(
+      stateRow('a', { sentry: sentryWith([]) }),
+      stateRow('b', { sentry: sentryWith(null) }),
+      stateRow('c')
+    );
+    expect(raise({ 'new-issue:CMS-12': told() }, rows).next).toEqual({});
+  });
+
+  it('sends one notice for an issue seen in several rows, naming them', () => {
+    const fresh = sentryWith([issue('CMS-12')]);
+    const rows = rowsOf(
+      stateRow('_shared', { sentry: fresh }),
+      stateRow('b', { sentry: fresh }),
+      stateRow('a', { sentry: fresh })
+    );
+    const { notices, next } = raise({}, rows);
+    expect(notices).toEqual([
+      {
+        key: 'new-issue:CMS-12',
+        text: 'Platform: new Sentry issue on production in a, b and the host apps · CMS-12 · error https://cdwr.sentry.io/issues/?query=CMS-12'
+      }
+    ]);
+    expect(next).toEqual({ 'new-issue:CMS-12': pending(AT) });
+  });
+
+  it('folds older per-row keys, all sent, into one key with the earliest time and no notice', () => {
+    const fresh = sentryWith([issue('CMS-12')]);
+    const rows = rowsOf(
+      stateRow('a', { sentry: fresh }),
+      stateRow('b', { sentry: fresh })
+    );
+    const { notices, next } = raise(
+      {
+        'a:new-issue:CMS-12': told('2026-11-22T09:00:00.000Z'),
+        'b:new-issue:CMS-12': told(EARLIER)
+      },
+      rows
+    );
+    expect(notices).toEqual([]);
+    expect(next).toEqual({ 'new-issue:CMS-12': told(EARLIER) });
+  });
+
+  it('counts an issue as sent when one of its older per-row keys was', () => {
+    const fresh = sentryWith([issue('CMS-12')]);
+    const rows = rowsOf(
+      stateRow('a', { sentry: fresh }),
+      stateRow('b', { sentry: fresh })
+    );
+    const { notices, next } = raise(
+      { 'a:new-issue:CMS-12': pending(), 'b:new-issue:CMS-12': told(AT) },
+      rows
+    );
+    expect(notices).toEqual([]);
+    expect(next).toEqual({ 'new-issue:CMS-12': told(EARLIER) });
   });
 
   it('drops the keys of a row that is gone when the tenants were read', () => {
