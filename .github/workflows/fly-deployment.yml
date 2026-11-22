@@ -654,88 +654,6 @@ jobs:
           changelogs-path: ${{ runner.temp }}/fly-changelogs/nx-changelogs.json
           token: ${{ steps.generate-token.outputs.token }}
 
-  notify:
-    needs: [pre-deploy, build, deploy]
-    if: >-
-      always() &&
-      needs.build.result != 'skipped'
-    runs-on: ubuntu-latest
-    steps:
-      # pull_request event, then manual dispatch input
-      - name: Resolve PR number
-        id: resolve-pr
-        env:
-          DIRECT_PR: ${{ github.event.number }}
-          MANUAL_PR: ${{ github.event.inputs.pr-number }}
-        run: |
-          PR="${DIRECT_PR:-$MANUAL_PR}"
-          # Drop non-numeric input before it can reach tagging
-          [[ "$PR" =~ ^[0-9]+$ ]] || PR=""
-          echo "number=$PR" >> "$GITHUB_OUTPUT"
-
-      - name: Download projects artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: fly-deployed-projects-${{ github.run_id }}
-          path: ${{ runner.temp }}/fly-projects
-        continue-on-error: true
-
-      - name: Build Slack payload
-        id: build-payload
-        env:
-          ENVIRONMENT: ${{ needs.pre-deploy.outputs.environment }}
-          BUILD_RESULT: ${{ needs.build.result }}
-          DEPLOY_RESULT: ${{ needs.deploy.result }}
-          PR_NUMBER: ${{ steps.resolve-pr.outputs.number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          PROJECTS_FILE: ${{ runner.temp }}/fly-projects/fly-projects.json
-        run: |
-          ENV_LABEL=$([ "$ENVIRONMENT" = "production" ] && echo "Production" || echo "Preview")
-          PR_SUFFIX=$([ -n "$PR_NUMBER" ] && echo " · PR #${PR_NUMBER}" || echo "")
-          if [ "$DEPLOY_RESULT" = "success" ]; then
-            HEADER="✅ ${ENV_LABEL} Deployment${PR_SUFFIX}"
-          elif [ "$BUILD_RESULT" != "success" ]; then
-            HEADER="❌ ${ENV_LABEL} Build${PR_SUFFIX}"
-          else
-            HEADER="❌ ${ENV_LABEL} Deployment${PR_SUFFIX}"
-          fi
-
-          APPS_TEXT=""
-          if [ -f "$PROJECTS_FILE" ]; then
-            APPS_TEXT=$(jq -r '
-              .[] |
-              if .action == "deploy" then "✅ *" + .name + "* — <" + .url + "|" + .url + ">"
-              elif .action == "failed" then "❌ *" + .appOrProject + "* — " + .error
-              elif .action == "skipped" then "⏭️ *" + .appOrProject + "* — " + .reason
-              else empty
-              end
-            ' "$PROJECTS_FILE")
-          fi
-
-          PAYLOAD=$(jq -nc \
-            --arg header "$HEADER" \
-            --arg apps "$APPS_TEXT" \
-            --arg run_url "$RUN_URL" \
-            '{
-              "blocks": (
-                [{"type":"header","text":{"type":"plain_text","text":$header,"emoji":true}}]
-                + (if ($apps | length) > 0 then [{"type":"section","text":{"type":"mrkdwn","text":$apps}}] else [] end)
-                + [{"type":"context","elements":[{"type":"mrkdwn","text":("<" + $run_url + "|View workflow run>")}]}]
-              )
-            }')
-
-          echo "payload<<PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
-          echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
-          echo "PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
-
-      - name: Send Slack notification
-        uses: slackapi/slack-github-action@v3
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: incoming-webhook
-          errors: true
-          payload: ${{ steps.build-payload.outputs.payload }}
-
   destroy:
     needs: pre-deploy
     if: >-
@@ -824,16 +742,7 @@ jobs:
           git push --no-verify --atomic origin --delete "${tags[@]}"
 
   summary:
-    needs:
-      [
-        analyze-conditions,
-        pre-deploy,
-        build,
-        deploy,
-        destroy,
-        pr-comment,
-        notify
-      ]
+    needs: [analyze-conditions, pre-deploy, build, deploy, destroy, pr-comment]
     if: always()
     runs-on: ubuntu-latest
     steps:
