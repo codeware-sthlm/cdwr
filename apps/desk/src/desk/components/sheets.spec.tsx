@@ -732,4 +732,31 @@ describe('data sheets', () => {
     expect(c.querySelector('.reason')?.textContent).toBe('“not worth it”');
     expect(text(c)).toContain('1of them "not worth it"');
   });
+
+  it('show the devlog last and next run beside the suggestion', () => {
+    const c = body('ideas', filled());
+    expect(text(c)).toContain('Devlog');
+    expect(text(c)).toContain('No devlog run recorded yet.');
+    expect(text(c)).toContain("hasn't stored the next run yet");
+    const m = model(filled(), NOW);
+    const c2 = body('ideas', filled(), {
+      ...m,
+      devlog: {
+        last: { date: '2026-11-20', text: 'nothing this week' },
+        next: {
+          state: 'done',
+          next: '2026-11-27',
+          hour: 6,
+          text: 'done, next in 5 day(s)'
+        }
+      }
+    });
+    expect(text(c2)).toContain('2026-11-20 · nothing this week');
+    expect(text(c2)).toContain(
+      'Next on 2026-11-27, on the first idle tick after 06:00.'
+    );
+    expect(text(c2)).toContain(
+      'cdwr agent status says: done, next in 5 day(s)'
+    );
+  });
 });

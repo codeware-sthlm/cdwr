@@ -38,6 +38,17 @@ export type Suggested =
       text: string;
     };
 
+/** The devlog gate's answer as the scheduler stores it in `queue_state.devlog_next` */
+export type DevlogNext = {
+  state: 'due' | 'done' | 'early' | 'off';
+  next: string | null;
+  hour: number;
+  text: string;
+};
+
+/** The devlog's last run, from the `devlog` column: "YYYY-MM-DD · <outcome>" */
+export type DevlogLast = { date: string; text: string };
+
 /** A suggestion's description, as the suggest-improvement skill writes it */
 export type Idea = {
   evidence: string[];

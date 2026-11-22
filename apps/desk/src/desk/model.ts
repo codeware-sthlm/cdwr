@@ -79,6 +79,8 @@ import {
 import { reconcileView } from './reconcile';
 import type { DeskData, DeskState, Detail } from './state';
 import type {
+  DevlogLast,
+  DevlogNext,
   Job,
   NotifyDial,
   NotifyLevel,
@@ -278,6 +280,7 @@ export type Model = {
   ideasAccepted: Issue[];
   ideasDiscarded: Issue[];
   suggested: Suggested | null;
+  devlog: { last: DevlogLast | null; next: DevlogNext | null };
   /** The scheduler's next run in ms; null without a last run */
   nextRun: number | null;
   /** The scheduler's interval in minutes; the fallback interval while live */
@@ -1388,6 +1391,7 @@ export const model = (
       .filter((i) => ideaVerdict(i) === 'discarded')
       .sort((a, b) => (b.canceledAt ?? '').localeCompare(a.canceledAt ?? '')),
     suggested: runs?.suggested ?? null,
+    devlog: runs?.devlog ?? { last: null, next: null },
     nextRun: nextRunOf(runs, runMinutes, now),
     runMinutes,
     live: runs?.job?.live ?? false,

@@ -5,6 +5,8 @@ import { DAY_MS } from './desk/format';
 import { sampleMinutes, silentAfter } from './desk/live';
 import {
   parseAttended,
+  parseDevlogLast,
+  parseDevlogNext,
   parseJob,
   parseNotify,
   parseReviewRow,
@@ -14,6 +16,8 @@ import {
 } from './desk/parsers';
 import type {
   Attended,
+  DevlogLast,
+  DevlogNext,
   Job,
   NotifyDial,
   QueueView,
@@ -86,6 +90,7 @@ export type RunsPayload = {
   last: { when: string; outcome: string } | null;
   attended: Attended | null;
   suggested: Suggested | null;
+  devlog: { last: DevlogLast | null; next: DevlogNext | null };
   job: Job | null;
   qv: QueueView | null;
   /** The row carries a view that does not parse; `qv` is then null, or the last good one the page kept */
@@ -277,6 +282,10 @@ export const toRuns = (
     suggested: state.suggested
       ? parseSuggested(`Suggested: ${state.suggested}`)
       : null,
+    devlog: {
+      last: parseDevlogLast(state.devlog),
+      next: parseDevlogNext(state.devlog_next)
+    },
     // run.sh's job_line already starts with `Job: `; the other two lines are stored bare
     job: state.job ? parseJob(state.job) : null,
     qv,

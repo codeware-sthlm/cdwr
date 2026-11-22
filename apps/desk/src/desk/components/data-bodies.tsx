@@ -692,6 +692,27 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
   ) : (
     `${s.date} · ${s.text}`
   );
+  const { devlog } = m;
+  const dn = devlog.next;
+  const hh = dn ? `${String(dn.hour).padStart(2, '0')}:00` : '';
+  const nextText = !dn ? (
+    <>
+      The scheduler hasn&apos;t stored the next run yet. It writes it on every
+      tick once the <code>devlog_next</code> migration is applied and the NUC
+      runs this version.
+    </>
+  ) : dn.state === 'done' ? (
+    `Next on ${dn.next}, on the first idle tick after ${hh}.`
+  ) : dn.state === 'due' ? (
+    'Due now: it runs on the first idle tick, once the daily suggestion and review have had theirs.'
+  ) : dn.state === 'early' ? (
+    `Due today, on the first idle tick after ${hh}.`
+  ) : (
+    <>
+      Off: <code>AGENT_QUEUE_DEVLOG_DAYS</code> is 0 in the scheduler&apos;s
+      environment. Set it to the days between runs to turn the devlog back on.
+    </>
+  );
   const month = now.getTime() - 30 * 864e5;
   const recent = <T extends { createdAt: string }>(
     xs: readonly T[],
@@ -714,6 +735,20 @@ export const IdeasBody = ({ m, state, now }: BodyProps) => {
         >
           {lastText}
         </div>
+      </div>
+      <div className={GROUP}>
+        <h3>Devlog</h3>
+        <div className={devlog.last ? RULE : EMPTY}>
+          {devlog.last
+            ? `${devlog.last.date} · ${devlog.last.text}`
+            : 'No devlog run recorded yet.'}
+        </div>
+        <div className={dn ? RULE : EMPTY}>{nextText}</div>
+        {dn && (
+          <div className={EMPTY}>
+            <code>cdwr agent status</code> says: {dn.text}
+          </div>
+        )}
       </div>
       {m.ideasPending.length ? (
         <div className={GROUP}>

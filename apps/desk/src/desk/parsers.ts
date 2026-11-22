@@ -8,6 +8,8 @@ import type {
   Attended,
   AttendedVerdict,
   DeployState,
+  DevlogLast,
+  DevlogNext,
   Idea,
   Job,
   JobHost,
@@ -172,6 +174,39 @@ export function parseSuggested(
           ? 'failed'
           : 'other';
   return { date, kind, text: rest };
+}
+
+// The scheduler's `devlog_next` column: {state, next, hour, text}; anything else is null
+export function parseDevlogNext(value: unknown): DevlogNext | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return null;
+  const { state, next, hour, text } = value as Record<string, unknown>;
+  if (
+    state !== 'due' &&
+    state !== 'done' &&
+    state !== 'early' &&
+    state !== 'off'
+  )
+    return null;
+  // Only an off devlog has no next date
+  const isDate = typeof next === 'string' && /^\d{4}-\d\d-\d\d$/.test(next);
+  if (state === 'off' ? next !== null && !isDate : !isDate) return null;
+  // The gate takes any whole hour; 24 or more only keeps it early all day
+  if (typeof hour !== 'number' || !Number.isInteger(hour) || hour < 0)
+    return null;
+  if (typeof text !== 'string') return null;
+  return { state, next, hour, text };
+}
+
+// The `devlog` column, "YYYY-MM-DD · <outcome>"; null when empty or not that shape
+export function parseDevlogLast(
+  line: string | null | undefined
+): DevlogLast | null {
+  const dot = line ? line.indexOf('·') : -1;
+  if (!line || dot < 0) return null;
+  const date = line.slice(0, dot).trim();
+  const text = line.slice(dot + 1).trim();
+  return /^\d{4}-\d\d-\d\d$/.test(date) && text ? { date, text } : null;
 }
 
 // A suggestion's description, as the suggest-improvement skill writes it: Evidence bullets, What changes, Cost, Focus, Why now
