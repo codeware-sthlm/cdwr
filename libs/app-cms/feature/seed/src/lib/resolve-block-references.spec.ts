@@ -10,6 +10,7 @@ import {
 const resolver: ReferenceResolver = {
   media: (filename) => (filename === 'hero.jpg' ? 11 : undefined),
   tag: (slug) => (slug === 'reports' ? 22 : undefined),
+  category: (slug) => (slug === 'news' ? 66 : undefined),
   form: (title) => (title === 'Contact' ? 33 : undefined),
   customComponent: (slug) => (slug === 'metric-card' ? 55 : undefined),
   reusableContent: (title) => (title === 'Shared' ? 44 : undefined)
@@ -153,6 +154,19 @@ describe('resolveBlockReferences', () => {
     expect(resolved['tags']).toEqual([22]);
     expect(unresolved).toEqual([
       { blockType: 'file-area', field: 'tags', lookup: 'absent' }
+    ]);
+  });
+
+  it('resolves the categories a posts listing is filtered on, and says which it cannot', () => {
+    const { resolved, unresolved } = resolve({
+      blockType: 'posts',
+      title: 'News',
+      categories: [{ lookupSlug: 'news' }, { lookupSlug: 'absent' }]
+    });
+
+    expect(resolved).toMatchObject({ title: 'News', categories: [66] });
+    expect(unresolved).toEqual([
+      { blockType: 'posts', field: 'categories', lookup: 'absent' }
     ]);
   });
 

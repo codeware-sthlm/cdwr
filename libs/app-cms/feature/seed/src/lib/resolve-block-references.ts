@@ -6,12 +6,13 @@ import type { BlockDefinition } from '@codeware/shared/util/seed';
  * Resolved **per block type** rather than by walking for anything shaped like a
  * reference. `lookupTitle` means a form on one block and a reusable-content
  * document on another, so a generic walker would have to guess, and would guess
- * silently. Ten blocks carry references and the list is closed — being
+ * silently. The blocks that carry references are a closed list — being
  * explicit costs a switch and removes the guessing.
  */
 export type ReferenceResolver = {
   media: (filename: string) => number | undefined;
   tag: (slug: string) => number | undefined;
+  category: (slug: string) => number | undefined;
   form: (title: string) => number | undefined;
   customComponent: (slug: string) => number | undefined;
   reusableContent: (slug: string) => number | undefined;
@@ -74,6 +75,38 @@ export function resolveBlockReferences(
     }
 
     return { [field]: id };
+  };
+
+  /**
+   * Replaces a list of references, keeping those that resolve and recording
+   * each one that doesn't.
+   */
+  const swapMany = (
+    field: string,
+    lookupKey: string,
+    find: (value: string) => number | undefined
+  ): AnyBlock => {
+    const values = source[field];
+    if (!Array.isArray(values)) {
+      return {};
+    }
+
+    return {
+      [field]: values.flatMap((value) => {
+        const lookup = lookupValue(value, lookupKey);
+        const id = lookup === undefined ? undefined : find(lookup);
+
+        if (id === undefined) {
+          unresolved.push({
+            blockType,
+            field,
+            lookup: lookup ?? '(not a reference)'
+          });
+          return [];
+        }
+        return [id];
+      })
+    };
   };
 
   switch (blockType) {
@@ -147,33 +180,18 @@ export function resolveBlockReferences(
       };
     }
 
-    case 'file-area': {
-      const tags = Array.isArray(source['tags']) ? source['tags'] : undefined;
-
+    case 'file-area':
       return {
         ...source,
         ...swap('media', 'lookupFilename', resolver.media),
-        ...(tags
-          ? {
-              tags: tags.flatMap((tag) => {
-                const lookup = lookupValue(tag, 'lookupSlug');
-                const id =
-                  lookup === undefined ? undefined : resolver.tag(lookup);
-
-                if (id === undefined) {
-                  unresolved.push({
-                    blockType,
-                    field: 'tags',
-                    lookup: lookup ?? '(not a reference)'
-                  });
-                  return [];
-                }
-                return [id];
-              })
-            }
-          : {})
+        ...swapMany('tags', 'lookupSlug', resolver.tag)
       };
-    }
+
+    case 'posts':
+      return {
+        ...source,
+        ...swapMany('categories', 'lookupSlug', resolver.category)
+      };
 
     // The other blocks point at nothing, so there is nothing to resolve
     default:
