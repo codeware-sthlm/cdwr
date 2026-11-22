@@ -29,6 +29,7 @@ import {
   agentDraftOnly,
   agentNeverPublishes
 } from './hooks/agent-draft-only.hook';
+import { agentOwnCategories } from './hooks/agent-own-categories.hook';
 
 /**
  * Define which blocks are available for the rich text editor.
@@ -93,7 +94,7 @@ const posts: CollectionConfig<'posts'> = {
     delete: userOnlyAccess()
   },
   hooks: {
-    beforeOperation: [agentDraftOnly],
+    beforeOperation: [agentDraftOnly, agentOwnCategories],
     beforeChange: [agentNeverPublishes]
   },
   trash: true,

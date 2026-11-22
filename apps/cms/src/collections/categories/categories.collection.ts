@@ -8,6 +8,10 @@ import type { CollectionConfig } from 'payload';
 import { relatedContentAdmin } from '../../components/admin/related-content/related-content-admin';
 import { userOnlyAccess } from '../../security/user-only-access';
 import { userOrApiKeyAccess } from '../../security/user-or-api-key-access';
+import {
+  agentOr,
+  agentWorkspaceWhere
+} from '../posts/access/agent-post-access';
 
 /**
  * Categories collection
@@ -28,8 +32,9 @@ const categories: CollectionConfig = {
       workspace: 'tenant'
     })
   },
+  // An agent reads its own workspace's categories, to put a draft in one
   access: {
-    read: userOrApiKeyAccess(),
+    read: agentOr(userOrApiKeyAccess(), agentWorkspaceWhere),
     create: userOnlyAccess(),
     update: userOnlyAccess(),
     delete: userOnlyAccess()

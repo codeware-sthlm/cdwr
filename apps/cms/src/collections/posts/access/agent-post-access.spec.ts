@@ -10,7 +10,8 @@ import {
   agentDraftsWhere,
   agentMayCreate,
   agentOr,
-  agentTenantId
+  agentTenantId,
+  agentWorkspaceWhere
 } from './agent-post-access';
 
 jest.mock('@codeware/app-cms/feature/env-loader', () => ({
@@ -147,6 +148,18 @@ describe('agentTenantId', () => {
     expect(
       agentTenantId({ ...agent, tenant: { id: 7 } } as unknown as Agent)
     ).toBe(7);
+  });
+});
+
+describe('agentWorkspaceWhere', () => {
+  it('limits a read to the agent’s own workspace', () => {
+    expect(agentWorkspaceWhere(agent)).toEqual({ tenant: { equals: 7 } });
+  });
+
+  it('gives the same constraint for a populated tenant', () => {
+    const populated = { ...agent, tenant: { id: 7 } } as unknown as Agent;
+
+    expect(agentWorkspaceWhere(populated)).toEqual(agentWorkspaceWhere(agent));
   });
 });
 
