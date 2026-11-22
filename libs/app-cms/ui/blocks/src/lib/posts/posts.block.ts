@@ -50,6 +50,19 @@ export const postsBlock: Block = {
       defaultValue: 10,
       required: true
     },
+    {
+      name: 'categories',
+      type: 'relationship',
+      label: { en: 'Categories', sv: 'Kategorier' },
+      admin: {
+        description: {
+          en: 'Show only posts in at least one of these categories. Leave empty to show every post.',
+          sv: 'Visa bara inlägg i minst en av dessa kategorier. Lämna tomt för att visa alla inlägg.'
+        }
+      },
+      hasMany: true,
+      relationTo: 'categories'
+    },
     sectionBandField()
   ]
 };
