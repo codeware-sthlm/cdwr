@@ -1,7 +1,33 @@
+import { randomInt } from 'node:crypto';
+
 import type { BasePayload } from 'payload';
 import { describe, expect, it, vi } from 'vitest';
 
-import { forgetTotpTrust } from './forget-totp-trust';
+// The real draw, so a single spec can force a collision
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return { ...actual, randomInt: vi.fn(actual.randomInt) };
+});
+
+import { forgetTotpTrust, nextTrustEpoch } from './forget-totp-trust';
+
+describe('nextTrustEpoch', () => {
+  it.each([0, 4, null, undefined])(
+    'draws a positive epoch other than %s',
+    (from) => {
+      const next = nextTrustEpoch(from);
+
+      expect(next).not.toBe(from ?? 0);
+      expect(Number.isInteger(next) && next > 0).toBe(true);
+    }
+  );
+
+  it('draws again when it lands on the current epoch', () => {
+    vi.mocked(randomInt).mockReturnValueOnce(7).mockReturnValueOnce(9);
+
+    expect(nextTrustEpoch(7)).toBe(9);
+  });
+});
 
 const setup = (trustEpoch: number | null | undefined) => {
   const findByID = vi.fn().mockResolvedValue({ id: 10, trustEpoch });
