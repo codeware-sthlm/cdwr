@@ -1,6 +1,10 @@
 import type { AuthStrategy } from 'payload';
 
-import { readCookie, trustCookieName } from './trust-cookie';
+import {
+  expiredTrustCookie,
+  readCookie,
+  trustCookieName
+} from './trust-cookie';
 import { readTrustState } from './trust-state';
 import { secretHash, verifyTrustToken } from './trust-token';
 
@@ -16,16 +20,24 @@ export const totpTrustStrategy: AuthStrategy = {
   authenticate: async (args) => {
     const { headers, payload } = args;
     try {
-      const token = readCookie(
-        headers,
-        trustCookieName(payload.config.cookiePrefix)
-      );
+      const cookieName = trustCookieName(payload.config.cookiePrefix);
+      const token = readCookie(headers, cookieName);
+      // A cookie that can no longer vouch for anyone is expired on the way out
+      const stale = () => ({
+        user: null,
+        responseHeaders: new Headers({
+          'Set-Cookie': expiredTrustCookie({
+            payload,
+            collectionAuth: payload.collections['users'].config.auth
+          })
+        })
+      });
       if (!token) {
         return { user: null };
       }
       const claims = await verifyTrustToken(token, payload.secret);
       if (!claims) {
-        return { user: null };
+        return stale();
       }
 
       const passwordSession = payload.authStrategies.find(
@@ -37,7 +49,7 @@ export const totpTrustStrategy: AuthStrategy = {
         user.collection !== 'users' ||
         String(user.id) !== String(claims.userId)
       ) {
-        return { user: null };
+        return user ? stale() : { user: null };
       }
 
       const state = await readTrustState(payload, user.id);
@@ -46,7 +58,7 @@ export const totpTrustStrategy: AuthStrategy = {
         secretHash(state.totpSecret) !== claims.secretHash ||
         state.trustEpoch !== claims.trustEpoch
       ) {
-        return { user: null };
+        return stale();
       }
       return { user: { ...user, _strategy: 'totp' } };
     } catch {

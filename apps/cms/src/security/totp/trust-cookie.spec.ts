@@ -3,7 +3,12 @@
  */
 import { cookies } from 'next/headers';
 
-import { readCookie, setTrustCookie, trustCookieName } from './trust-cookie';
+import {
+  expiredTrustCookie,
+  readCookie,
+  setTrustCookie,
+  trustCookieName
+} from './trust-cookie';
 import { TRUST_TTL_SECONDS } from './trust-token';
 
 jest.mock('next/headers', () => ({ cookies: jest.fn() }));
@@ -19,6 +24,23 @@ describe('trust cookie', () => {
     expect(readCookie(headers, 'b')).toBe('two words');
     expect(readCookie(headers, 'x')).toBeUndefined();
     expect(readCookie(new Headers(), 'a')).toBeUndefined();
+  });
+
+  it('reads the last cookie of a name', () => {
+    const headers = new Headers({ cookie: 'a=first; b=2; a=last' });
+    expect(readCookie(headers, 'a')).toBe('last');
+  });
+
+  it('expires the cookie with the flags it is set with', () => {
+    const header = expiredTrustCookie({
+      payload: { config: { cookiePrefix: 'cdwr' } } as never,
+      collectionAuth: {
+        cookies: { domain: 'cdwr.io', secure: true, sameSite: 'Lax' }
+      }
+    });
+    expect(header).toBe(
+      'cdwr-totp-trust=; Path=/; Domain=cdwr.io; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+    );
   });
 
   it('sets a 30-day http-only cookie with the collection flags', async () => {

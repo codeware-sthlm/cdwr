@@ -12,9 +12,13 @@ jest.mock('./trust-cookie', () => ({ setTrustCookie: jest.fn() }));
 const secret = 'payload-secret';
 const collectionAuth = { cookies: { secure: true } };
 
-const run = async (body: Record<string, unknown>) => {
+const run = async (
+  body: Record<string, unknown>,
+  logger = { error: jest.fn() }
+) => {
   const req = {
     payload: {
+      logger,
       secret,
       collections: { users: { config: { auth: collectionAuth } } },
       findByID: jest
@@ -34,7 +38,7 @@ describe('totpTrustAfterVerify', () => {
   it.each([{}, { trust: false }, { trust: 'false' }, { trust: 1 }])(
     'sets no cookie for %j',
     async (body) => {
-      expect(await run(body)).toBeUndefined();
+      await run(body);
       expect(setTrustCookie).not.toHaveBeenCalled();
     }
   );
@@ -54,6 +58,15 @@ describe('totpTrustAfterVerify', () => {
       });
     }
   );
+});
+
+describe('totpTrustAfterVerify failures', () => {
+  it('logs instead of throwing when the cookie cannot be set', async () => {
+    const logger = { error: jest.fn() };
+    jest.mocked(setTrustCookie).mockRejectedValueOnce(new Error('no cookies'));
+    await expect(run({ trust: true }, logger)).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('totpTrustPlugin', () => {

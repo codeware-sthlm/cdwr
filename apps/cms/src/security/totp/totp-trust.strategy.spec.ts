@@ -44,6 +44,7 @@ const setup = async ({
   const payload = {
     secret,
     config: { cookiePrefix: 'payload' },
+    collections: { users: { config: { auth: { cookies: { secure: true } } } } },
     authStrategies: [{ name: 'local-jwt', authenticate }],
     findByID: jest.fn().mockResolvedValue(stored)
   };
@@ -70,10 +71,31 @@ describe('totpTrustStrategy', () => {
     ],
     ['a changed secret', { stored: { totpSecret: 'OTHER', trustEpoch: 0 } }],
     ['a removed secret', { stored: { totpSecret: null, trustEpoch: 0 } }],
-    ['a bumped epoch', { stored: { totpSecret, trustEpoch: 1 } }],
-    ['no password session', { sessionUser: null }]
-  ])('refuses %s', async (_name, options) => {
-    expect((await setup(options)).result).toEqual({ user: null });
+    ['a bumped epoch', { stored: { totpSecret, trustEpoch: 1 } }]
+  ])('refuses %s and expires the trust cookie', async (_name, options) => {
+    const { result } = await setup(options);
+    expect(result.user).toBeNull();
+    expect(result.responseHeaders?.get('set-cookie')).toMatch(
+      /^payload-totp-trust=; Path=\/; .*Max-Age=0/
+    );
+  });
+
+  it('leaves the cookie alone when there is only no password session', async () => {
+    expect((await setup({ sessionUser: null })).result).toEqual({
+      user: null
+    });
+  });
+
+  it('expires a cookie that is not a valid token', async () => {
+    const stale = await totpTrustStrategy.authenticate({
+      headers: new Headers({ cookie: 'payload-totp-trust=garbage' }),
+      payload: {
+        secret,
+        config: { cookiePrefix: 'payload' },
+        collections: { users: { config: { auth: { cookies: {} } } } }
+      }
+    } as unknown as AuthStrategyFunctionArgs);
+    expect(stale.responseHeaders?.get('set-cookie')).toContain('Max-Age=0');
   });
 
   it('accepts an epoch 0 token when the stored epoch is null', async () => {

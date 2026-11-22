@@ -1,28 +1,20 @@
 diff --git a/dist/api/verifyToken.js b/dist/api/verifyToken.js
-index 1f23541e8e92500175a99f64ffe01cf02e66d9dc..2bd0cbc7bc354f6922b05387bbc6933708d9bb38 100644
+index 1f23541e8e92500175a99f64ffe01cf02e66d9dc..2827f14121faaeab06d1afc0583ac7ffa162df74 100644
 --- a/dist/api/verifyToken.js
 +++ b/dist/api/verifyToken.js
-@@ -79,8 +79,20 @@ export function verifyToken(pluginOptions) {
+@@ -79,6 +79,12 @@ export function verifyToken(pluginOptions) {
              secret: payload.secret,
              user
          });
 +        // Lets the consumer act on a verified code, e.g. set a trusted-device cookie
-+        const extra = await pluginOptions.afterVerify?.({
++        await pluginOptions.afterVerify?.({
 +            body: data,
 +            req,
 +            user
 +        });
-+        const headers = new Headers();
-+        extra?.forEach((value, key)=>{
-+            headers.append(key, value);
-+        });
          return Response.json({
              ok: true
-+        }, {
-+            headers
          });
-     };
-     return handler;
 diff --git a/dist/components/Field/Setup.js b/dist/components/Field/Setup.js
 index ce9ada439acc1f6a9af4764323f7124ee7ae3efd..d175990696c1803c7667d3da8d47c0f630f7394d 100644
 --- a/dist/components/Field/Setup.js
@@ -139,7 +131,7 @@ index cbea6daf9cca138a0c44691cb9b76b78544a8d67..01670cb057971839873a2026fc9bada2
                      }),
                      /*#__PURE__*/ _jsx(ShowSecret, {
 diff --git a/dist/components/views/Verify/Form.js b/dist/components/views/Verify/Form.js
-index f749396fd3f995543633beb1bff70ba7f114107a..604759cd13a03c68860862b42f6e8eb2050aad05 100644
+index f749396fd3f995543633beb1bff70ba7f114107a..85714489409be11e90208c107d32a209f88747f0 100644
 --- a/dist/components/views/Verify/Form.js
 +++ b/dist/components/views/Verify/Form.js
 @@ -1,10 +1,10 @@
@@ -164,7 +156,21 @@ index f749396fd3f995543633beb1bff70ba7f114107a..604759cd13a03c68860862b42f6e8eb2
              body: JSON.stringify(Object.fromEntries(formData)),
              credentials: 'include',
              headers: {
-@@ -59,15 +59,34 @@ export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL
+@@ -45,7 +45,13 @@ export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL
+                     origin: window.location.origin
+                 }));
+             } else {
++                // A reset clears the code, and the choice to trust must survive a wrong one
++                const trust = form.current?.elements.namedItem('trust');
++                const checked = trust instanceof HTMLInputElement && trust.checked;
+                 form.current?.reset();
++                if (trust instanceof HTMLInputElement) {
++                    trust.checked = checked;
++                }
+             }
+             setIsPending(false);
+         }).catch((err)=>{
+@@ -59,15 +65,34 @@ export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL
          back,
          asyncOperation
      ]);
@@ -179,18 +185,12 @@ index f749396fd3f995543633beb1bff70ba7f114107a..604759cd13a03c68860862b42f6e8eb2
 -            onFilled: onFilled
 -        })
 +        children: [
-+            /*#__PURE__*/ _jsx(OTPInput, {
-+                disabled: isPending,
-+                length: length,
-+                name: "token",
-+                onFilled: onFilled
-+            }),
 +            /*#__PURE__*/ _jsxs("label", {
 +                style: {
 +                    alignItems: 'center',
 +                    display: 'flex',
 +                    gap: '8px',
-+                    marginTop: '16px'
++                    marginBottom: '16px'
 +                },
 +                children: [
 +                    /*#__PURE__*/ _jsx("input", {
@@ -201,6 +201,12 @@ index f749396fd3f995543633beb1bff70ba7f114107a..604759cd13a03c68860862b42f6e8eb2
 +                    }),
 +                    trustLabel
 +                ]
++            }),
++            /*#__PURE__*/ _jsx(OTPInput, {
++                disabled: isPending,
++                length: length,
++                name: "token",
++                onFilled: onFilled
 +            })
 +        ]
      });
@@ -237,7 +243,7 @@ index a21a4b979054305035baf5d38482c7e7c725354a..fbadae05f46371e4532f57bc1fc0858d
          ]
      });
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index 6a43500bd3372578b32b143a9557a45870850be4..e413102dec98b58b699d897cf1982db6acc22617 100644
+index 6a43500bd3372578b32b143a9557a45870850be4..aeaf22a5eb015a7948e038fdbba1396ba627a601 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
 @@ -1,12 +1,24 @@
@@ -246,14 +252,14 @@ index 6a43500bd3372578b32b143a9557a45870850be4..e413102dec98b58b699d897cf1982db6
 +import type { AuthStrategyResult, CollectionSlug, PayloadRequest } from 'payload';
  export type PayloadTOTPConfig = {
 +    /**
-+     * Runs after a correct code on the verify endpoint, never on a failure. Headers it returns,
-+     * such as `Set-Cookie`, are added to the response.
++     * Runs after a correct code on the verify endpoint, never on a failure. It sets what it needs,
++     * such as a cookie, itself.
 +     */
 +    afterVerify?: (args: {
 +        body: Record<string, unknown>;
 +        req: PayloadRequest;
 +        user: UserWithTotp;
-+    }) => Promise<Headers | undefined>;
++    }) => Promise<void>;
      collection: CollectionSlug;
      disableAccessWrapper?: boolean;
      disabled?: boolean;

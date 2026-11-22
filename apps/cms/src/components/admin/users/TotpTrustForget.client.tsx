@@ -6,6 +6,16 @@ import type {
 } from '@codeware/app-cms/util/i18n';
 import { Button } from '@codeware/shared/ui/shadcn/components/button';
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '@codeware/shared/ui/shadcn/components/dialog';
+import {
   toast,
   useConfig,
   useDocumentInfo,
@@ -25,6 +35,7 @@ export const TotpTrustForget: React.FC = () => {
   const { config } = useConfig();
   const { id } = useDocumentInfo();
 
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const forget = async () => {
@@ -38,6 +49,7 @@ export const TotpTrustForget: React.FC = () => {
         throw new Error(res.statusText);
       }
       toast.success(t('totpTrustForget:done'));
+      setOpen(false);
     } catch {
       toast.error(t('totpTrustForget:error'));
     } finally {
@@ -47,14 +59,44 @@ export const TotpTrustForget: React.FC = () => {
 
   return (
     <div className="codeware-admin twp mb-6 flex flex-col items-start gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        disabled={busy}
-        onClick={() => void forget()}
+      {/* Held open while it runs, so closing it never reads as a cancel */}
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!busy) {
+            setOpen(next);
+          }
+        }}
       >
-        {t('totpTrustForget:button')}
-      </Button>
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline">
+            {t('totpTrustForget:button')}
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="codeware-admin twp">
+          <DialogHeader>
+            <DialogTitle>{t('totpTrustForget:button')}</DialogTitle>
+            <DialogDescription>
+              {t('totpTrustForget:confirmMessage')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={busy}>
+                {t('general:cancel')}
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void forget()}
+            >
+              {t('totpTrustForget:confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <p className="text-muted-foreground text-sm">
         {t('totpTrustForget:description')}
       </p>

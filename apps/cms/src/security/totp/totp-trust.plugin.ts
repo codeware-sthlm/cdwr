@@ -20,27 +20,34 @@ export const totpTrustAfterVerify: AfterVerify = async ({
   user
 }) => {
   if (body.trust !== true && body.trust !== 'true') {
-    return undefined;
+    return;
   }
   const { payload } = req;
-  const state = await readTrustState(payload, user.id);
-  if (!state) {
-    return undefined;
+  // A cookie that cannot be set must not turn a correct code into an error
+  try {
+    const state = await readTrustState(payload, user.id);
+    if (!state) {
+      return;
+    }
+    const token = await signTrustToken(
+      {
+        userId: user.id,
+        secretHash: secretHash(state.totpSecret),
+        trustEpoch: state.trustEpoch
+      },
+      payload.secret
+    );
+    await setTrustCookie({
+      payload,
+      collectionAuth: payload.collections['users'].config.auth,
+      token
+    });
+  } catch (error) {
+    payload.logger.error(
+      { err: error },
+      `[totpTrust] Could not trust the device of user ${user.id}`
+    );
   }
-  const token = await signTrustToken(
-    {
-      userId: user.id,
-      secretHash: secretHash(state.totpSecret),
-      trustEpoch: state.trustEpoch
-    },
-    payload.secret
-  );
-  await setTrustCookie({
-    payload,
-    collectionAuth: payload.collections['users'].config.auth,
-    token
-  });
-  return undefined;
 };
 
 /**
