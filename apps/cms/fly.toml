@@ -6,6 +6,7 @@ primary_region = 'arn'
 
 [deploy]
   release_command = "node apps/cms/migrate.mjs"
+  strategy = 'bluegreen'
 
 [http_service]
   internal_port = 3000
