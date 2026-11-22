@@ -11,7 +11,7 @@ import { z } from 'zod';
 import type { TenantStateRow } from './platform.logic';
 
 /**
- * `platform-alerts.json` in the queue home: each urgent problem key with when it was first
+ * `platform-alerts.json` in the queue home: each urgent alert key with when it was first
  * raised (ISO) and whether its notice went out
  */
 export const PlatformAlertsSchema = z.record(
@@ -21,7 +21,7 @@ export const PlatformAlertsSchema = z.record(
 
 export type PlatformAlerts = z.infer<typeof PlatformAlertsSchema>;
 
-/** One urgent notice to send, for the problem it names */
+/** One urgent notice to send, for the alert it names */
 export type AlertNotice = { key: string; text: string };
 
 /** The kinds that raise an urgent notice */
@@ -61,67 +61,132 @@ export const urgentProblems = (
     now
   ).filter(urgent);
 
-const noticeText = (problem: Problem): string => {
+/** A per-row new-issue key, `<row>:new-issue:<shortId>` */
+const ROW_NEW_ISSUE = /^[^:]+:new-issue:(.+)$/;
+
+/** The alert a problem belongs to: a new issue is one alert across rows, a `down` one per row */
+const alertKey = (problem: Problem): string => {
+  if (problem.kind !== 'new-issue') return problem.key;
+  const id = problem.ref?.shortId ?? ROW_NEW_ISSUE.exec(problem.key)?.[1];
+  return id === undefined ? problem.key : `new-issue:${id}`;
+};
+
+/** "a", "a and b", "a, b and c" */
+const joinNames = (names: readonly string[]): string =>
+  names.length < 2
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+/** The rows of a group by key, the shared row last and written as the host apps */
+const whereText = (group: readonly Problem[]): string => {
+  const rows = [...new Set(group.map((p) => p.row))].sort();
+  const names = rows.filter((r) => r !== SHARED_KEY);
+  if (rows.includes(SHARED_KEY)) names.push('the host apps');
+  return joinNames(names);
+};
+
+const noticeText = (group: readonly Problem[]): string => {
+  const problem = group[0];
+  if (!problem) return '';
   if (problem.kind === 'new-issue' && problem.ref) {
-    const where = problem.row === SHARED_KEY ? 'the host apps' : problem.row;
-    return `Platform: new Sentry issue on production in ${where} · ${problem.ref.shortId} · ${problem.ref.level} ${problem.ref.url}`;
+    return `Platform: new Sentry issue on production in ${whereText(group)} · ${problem.ref.shortId} · ${problem.ref.level} ${problem.ref.url}`;
   }
   return `Platform: ${problem.title} · ${problem.evidence[0] ?? problem.kind}`;
 };
 
+/** Folds the older per-row new-issue keys into one key per issue: sent if any was, the earliest `at` */
+const normalise = (previous: PlatformAlerts): PlatformAlerts => {
+  const out: PlatformAlerts = {};
+  for (const [key, entry] of Object.entries(previous)) {
+    const id = ROW_NEW_ISSUE.exec(key)?.[1];
+    const target = id === undefined ? key : `new-issue:${id}`;
+    const seen = out[target];
+    out[target] = seen
+      ? {
+          at: seen.at <= entry.at ? seen.at : entry.at,
+          sent: seen.sent || entry.sent
+        }
+      : entry;
+  }
+  return out;
+};
+
 /**
- * Whether the read behind a problem key failed this tick, so its absence says nothing. A
- * row that is missing counts as failed unless the tenants were read.
+ * Whether a row's fresh issues were not read: the whole Sentry read or its new-issue read
+ * failed. A failed top-issue read leaves them read
+ */
+const freshUnread = (row: TenantRow): boolean =>
+  (row.errors['sentry'] ?? '')
+    .split('; ')
+    .some((part) => part !== '' && !part.startsWith('top issue: '));
+
+/**
+ * Whether the read behind an alert key failed this tick, so its absence says nothing. A
+ * new issue is kept while any row's fresh-issue read failed, or the tenants were not read. A
+ * `down` key follows its row: a missing row counts as failed unless the tenants were read,
+ * else a `fly` error on it.
  */
 const sourceFailed = (
   key: string,
   rows: readonly TenantRow[],
-  tenantsRead: boolean
+  tenantsRead: boolean,
+  freshFailed: boolean
 ): boolean => {
+  if (key.startsWith('new-issue:')) return !tenantsRead || freshFailed;
   const row = rows.find((r) => key.startsWith(`${r.key}:`));
   if (!row) return !tenantsRead;
   if (key.startsWith(`${row.key}:down:`))
     return row.errors['fly'] !== undefined;
-  if (key.startsWith(`${row.key}:new-issue:`)) return row.sentry?.fresh == null;
   return false;
 };
 
 /**
- * What a tick raises and what it remembers. A `new-issue` key gets its notice the first
- * tick it is raised; a `down` key only when raised on two consecutive ticks, so one failed
- * health check is not a notice. A key whose notice did not go (`sent` false) is tried again.
- * `next` holds the notice keys as not yet sent; the caller marks each sent. A key raised
- * before and not now is dropped, unless the read behind it failed this tick, when it is
- * kept so its return is not a second notice. With no `previous` (the first tick) every
- * urgent key is seeded as sent and nothing is sent. `at` is the ISO time of this tick;
- * `tenantsRead` is whether the tenants were read.
+ * What a tick raises and what it remembers, one alert per `down` problem and one per new
+ * Sentry issue across rows (older per-row new-issue keys in `previous` are folded in
+ * first). A `new-issue` alert gets its notice the first tick it is raised; a `down` one
+ * only when raised on two consecutive ticks, so one failed health check is not a notice. An
+ * alert whose notice did not go (`sent` false) is tried again. `next` holds the notice keys
+ * as not yet sent; the caller marks each sent. An alert raised before and not now is
+ * dropped, unless the read behind it failed this tick, when it is kept so its return is not
+ * a second notice. With no `previous` (the first tick) every alert is seeded as sent and
+ * nothing is sent. `at` is the ISO time of this tick; `tenantsRead` is whether the tenants
+ * were read.
  */
 export const alertsToRaise = (
-  previous: PlatformAlerts | null,
+  previousRaw: PlatformAlerts | null,
   problems: readonly Problem[],
   rows: readonly TenantRow[],
   at: string,
   tenantsRead: boolean
 ): { notices: AlertNotice[]; next: PlatformAlerts } => {
+  const previous = previousRaw === null ? null : normalise(previousRaw);
+  const groups = new Map<string, Problem[]>();
+  for (const problem of problems) {
+    const key = alertKey(problem);
+    const group = groups.get(key);
+    if (group) group.push(problem);
+    else groups.set(key, [problem]);
+  }
   const next: PlatformAlerts = {};
   const notices: AlertNotice[] = [];
-  for (const problem of problems) {
+  for (const [key, group] of groups) {
     if (previous === null) {
-      next[problem.key] = { at, sent: true };
+      next[key] = { at, sent: true };
       continue;
     }
-    const before = previous[problem.key];
+    const before = previous[key];
     if (before?.sent) {
-      next[problem.key] = before;
+      next[key] = before;
       continue;
     }
-    next[problem.key] = before ?? { at, sent: false };
-    const due = problem.kind === 'down' ? before !== undefined : true;
-    if (due) notices.push({ key: problem.key, text: noticeText(problem) });
+    next[key] = before ?? { at, sent: false };
+    const due = group[0]?.kind === 'down' ? before !== undefined : true;
+    if (due) notices.push({ key, text: noticeText(group) });
   }
   if (previous !== null) {
+    const freshFailed = rows.some(freshUnread);
     for (const [key, entry] of Object.entries(previous)) {
-      if (!(key in next) && sourceFailed(key, rows, tenantsRead))
+      if (!(key in next) && sourceFailed(key, rows, tenantsRead, freshFailed))
         next[key] = entry;
     }
   }
