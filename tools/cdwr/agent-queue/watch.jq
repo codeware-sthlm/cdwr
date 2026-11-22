@@ -866,13 +866,14 @@ def deploy_state($runs; $notes; $mergedAt; $now):
 
 # The image builds among the push workflows on the merge commit (`*-image.yml`; CI and E2E on main
 # are not part of a deploy): the newest run of each workflow; cancelled and skipped runs count for
-# nothing. failure when one failed, else pending while one runs, else success. failed and pending
+# nothing. failure when one finished without success (action_required and stale too), else pending
+# while one runs, else success. failed and pending
 # name the runs with their urls, sorted by name
 def builds_state($runs):
   ([ ($runs.workflow_runs // [])[] | select((.path // "") | endswith("-image.yml")) ]
    | group_by(.path) | map(sort_by(.created_at // "") | last)
    | map(select(((.conclusion // "") | IN("cancelled", "skipped")) | not))) as $kept
-  | ([ $kept[] | select((.conclusion // "") | IN("failure", "timed_out", "startup_failure")) | { name, url: .html_url } ] | unique_by(.name)) as $failed
+  | ([ $kept[] | select(.status == "completed" and .conclusion != "success") | { name, url: .html_url } ] | unique_by(.name)) as $failed
   | ([ $kept[] | select(.status != "completed") | { name, url: .html_url } ] | unique_by(.name)) as $pending
   | { state: (if ($failed | length) > 0 then "failure"
               elif ($pending | length) > 0 then "pending"
