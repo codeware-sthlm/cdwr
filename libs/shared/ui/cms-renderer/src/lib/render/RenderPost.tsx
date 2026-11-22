@@ -1,5 +1,6 @@
 'use client';
 
+import { t } from '@codeware/shared/util/i18n';
 import type { Post } from '@codeware/shared/util/payload-types';
 
 import { ImageBlock } from '../blocks/image/ImageBlock';
@@ -7,6 +8,7 @@ import { RichText } from '../blocks/RichText';
 import { Container } from '../layout/Container';
 import { usePayload } from '../providers/PayloadProvider';
 import { handleAsRoute } from '../utils/internal-link';
+import { formatPostDate } from '../utils/post-date';
 
 type RenderPostProps = {
   /**
@@ -21,18 +23,6 @@ type RenderPostProps = {
    */
   listingPath: string | null;
 };
-
-/**
- * Format a date to a readable string
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-}
 
 /**
  * Framework-agnostic post renderer.
@@ -58,7 +48,7 @@ function formatDate(dateString: string): string {
  * ```
  */
 export function RenderPost({ post, listingPath }: RenderPostProps) {
-  const { navigate } = usePayload();
+  const { locale, navigate } = usePayload();
 
   const handleBackClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!listingPath || !handleAsRoute(e)) return;
@@ -73,7 +63,7 @@ export function RenderPost({ post, listingPath }: RenderPostProps) {
             <a
               href={listingPath}
               onClick={handleBackClick}
-              aria-label="Go back to articles"
+              aria-label={t(locale, 'posts.backToPosts')}
               className="group bg-core-action-btn-background shadow-core-action-btn-shadow ring-core-action-btn-border hover:ring-core-action-btn-border-hover mb-8 flex h-10 w-10 items-center justify-center rounded-full shadow-md ring-1 transition lg:absolute lg:-left-5 lg:-mt-2 lg:mb-0 xl:-top-1.5 xl:left-0 xl:mt-0"
             >
               <svg
@@ -101,7 +91,9 @@ export function RenderPost({ post, listingPath }: RenderPostProps) {
                 className="text-muted-foreground order-first flex items-center text-base"
               >
                 <span className="bg-border h-4 w-0.5 rounded-full" />
-                <span className="ml-3">{formatDate(post.createdAt)}</span>
+                <span className="ml-3">
+                  {formatPostDate(post.createdAt, locale)}
+                </span>
               </time>
             </header>
             {post.heroImage && typeof post.heroImage === 'object' && (
