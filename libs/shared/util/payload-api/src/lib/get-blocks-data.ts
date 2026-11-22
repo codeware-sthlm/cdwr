@@ -61,9 +61,19 @@ export const getBlocksData = async (
   options: RequestBaseOptions
 ): Promise<BlocksData> => {
   const [posts, tours] = await Promise.all([
-    resolveListingBlocks(layout, 'posts', ({ limit }) =>
-      findPosts({ ...options, limit })
-    ),
+    resolveListingBlocks(layout, 'posts', ({ limit, categories }) => {
+      const categoryIds = (categories ?? [])
+        .map((category) =>
+          typeof category === 'object' ? category.id : category
+        )
+        .filter(Boolean);
+
+      return findPosts({
+        ...options,
+        limit,
+        ...(categoryIds.length > 0 && { categories: categoryIds })
+      });
+    }),
     resolveListingBlocks(layout, 'tours', ({ limit }) =>
       findTours({ ...options, limit })
     )
