@@ -18,6 +18,18 @@ export type BuildRow = {
   updated_at: string;
 };
 
+export type NoticeLevel = 'urgent' | 'action' | 'info';
+
+export type NoticeRow = {
+  id: string;
+  at: string;
+  host: 'github';
+  level: NoticeLevel;
+  source: 'github-webhook';
+  ticket: null;
+  text: string;
+};
+
 export type HandlerOptions = {
   secret: string | undefined;
   supabaseUrl: string | undefined;
@@ -164,6 +176,15 @@ export const toRow = (
   };
 };
 
+// Fixed, so the jobs URL is never taken from the payload
+const REPO = 'codeware-sthlm/cdwr';
+
+/** The workflow file a run belongs to, from its `path` (which may carry a ref) */
+const workflowOf = (run: Record<string, unknown>): string | null =>
+  /^\.github\/workflows\/([^/@]+)(?:@.*)?$/.exec(
+    text(run['path']) ?? ''
+  )?.[1] ?? null;
+
 /** The build row for a successful workflow run on main of a built workflow, or null for anything else */
 export const toBuild = (
   event: string | null,
@@ -180,10 +201,7 @@ export const toBuild = (
   )
     return null;
 
-  const match = /^\.github\/workflows\/([^/@]+)(?:@.*)?$/.exec(
-    text(run['path']) ?? ''
-  );
-  const workflow = BUILT.find((name) => name === match?.[1]);
+  const workflow = BUILT.find((name) => name === workflowOf(run));
   const sha = text(run['head_sha']);
   // The run's creation, not its start: a re-run of an old run starts anew but keeps it
   const created = text(run['created_at']);
@@ -204,6 +222,87 @@ export const toBuild = (
   };
 };
 
+const NO_NOTICE = [
+  'cancelled',
+  'skipped',
+  'neutral',
+  'action_required',
+  'stale'
+];
+
+/**
+ * The notice for a completed `fly-deployment.yml` run, or null for one that is not
+ * worth one. A success only counts when its build job ran, which the caller reads
+ * from the run's jobs: `jobsOf` is the run id to read them for (null when not needed)
+ * and `buildRan` reads the answer.
+ * On main (a push or a dispatch) a failure is `urgent`; anywhere else it is `action`;
+ * a success is `info`. `cancelled`, `skipped`, `neutral`, `action_required` and
+ * `stale` give nothing.
+ */
+export const toNotice = (
+  event: string | null,
+  payload: Record<string, unknown>,
+  at: Date
+): { row: NoticeRow; jobsOf: number | null } | null => {
+  if (event !== 'workflow_run' || payload['action'] !== 'completed')
+    return null;
+  const run = isRecord(payload['workflow_run']) ? payload['workflow_run'] : {};
+  const conclusion = text(run['conclusion']);
+  const id = number(run['id']);
+  if (
+    workflowOf(run) !== 'fly-deployment.yml' ||
+    !conclusion ||
+    NO_NOTICE.includes(conclusion) ||
+    id === null
+  )
+    return null;
+
+  const success = conclusion === 'success';
+  const trigger = text(run['event']);
+  // A dispatch on main deploys production, as `toBuild` reads it
+  const onMain =
+    (trigger === 'push' || trigger === 'workflow_dispatch') &&
+    run['head_branch'] === 'main';
+  const level: NoticeLevel = success ? 'info' : onMain ? 'urgent' : 'action';
+  const label = onMain
+    ? 'Production'
+    : trigger === 'pull_request'
+      ? 'Preview'
+      : 'Manual';
+
+  const prs = Array.isArray(run['pull_requests']) ? run['pull_requests'] : [];
+  const first: unknown = prs[0];
+  const pr = isRecord(first) ? number(first['number']) : null;
+  const url =
+    text(run['html_url']) ?? `https://github.com/${REPO}/actions/runs/${id}`;
+  const updated = text(run['updated_at']);
+  const when =
+    updated && !Number.isNaN(Date.parse(updated)) ? new Date(updated) : at;
+
+  return {
+    row: {
+      id: `github:fly-deployment:${id}:${number(run['run_attempt']) ?? 1}`,
+      at: when.toISOString(),
+      host: 'github',
+      level,
+      source: 'github-webhook',
+      ticket: null,
+      text: `${label} deploy ${success ? 'succeeded' : 'failed'}${pr === null ? '' : ` · PR ${pr}`}: ${url}`
+    },
+    jobsOf: success ? id : null
+  };
+};
+
+/** Whether the jobs of a run (the `jobs` array of GitHub's answer) include a `build` that succeeded */
+export const buildRan = (jobs: unknown): boolean =>
+  Array.isArray(jobs) &&
+  jobs.some(
+    (job: unknown) =>
+      isRecord(job) &&
+      job['name'] === 'build' &&
+      job['conclusion'] === 'success'
+  );
+
 const reply = (status: number, message: string): Response =>
   new Response(message, {
     status,
@@ -219,9 +318,10 @@ export const createHandler = ({
   log = (line) => console.log(JSON.stringify(line))
 }: HandlerOptions) => {
   const upsert = async (
-    table: 'github_events' | 'builds',
+    table: 'github_events' | 'builds' | 'notices',
     key: string,
-    row: GithubEventRow | BuildRow
+    row: GithubEventRow | BuildRow | NoticeRow,
+    resolution: 'merge' | 'ignore' = 'merge'
   ): Promise<Response> => {
     const url = `${(supabaseUrl ?? '').replace(/\/$/, '')}/rest/v1/${table}?on_conflict=${key}`;
     return fetch(url, {
@@ -229,10 +329,38 @@ export const createHandler = ({
       headers: {
         ...keyHeaders(serviceKey ?? ''),
         'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal'
+        Prefer: `resolution=${resolution}-duplicates,return=minimal`
       },
       body: JSON.stringify(row)
     });
+  };
+
+  /** Whether the run's build job succeeded, or null when GitHub could not be read */
+  const readBuild = async (id: string): Promise<boolean | null> => {
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/runs/${id}/jobs?per_page=100`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'cdwr-github-webhook'
+          }
+        }
+      );
+      if (!res.ok) {
+        log({ event: 'notice skipped', reason: 'jobs', status: res.status });
+        return null;
+      }
+      const body: unknown = await res.json();
+      return buildRan(isRecord(body) ? body['jobs'] : null);
+    } catch (error) {
+      log({
+        event: 'notice skipped',
+        reason: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
   };
 
   return async (request: Request): Promise<Response> => {
@@ -269,37 +397,59 @@ export const createHandler = ({
 
     const at = new Date(now());
     const build = toBuild(event, payload, at);
-    const row = build ? null : toRow(event, payload, at);
-    const write = build
-      ? () => upsert('builds', 'workflow', build)
-      : row
-        ? () => upsert('github_events', 'subject', row)
-        : null;
-    if (!write) return reply(200, 'Ignored');
+    const notice = toNotice(event, payload, at);
+    const row = toRow(event, payload, at);
 
-    let res: Response;
-    try {
-      res = await write();
-    } catch (error) {
-      log({
-        event: 'write failed',
-        reason: error instanceof Error ? error.message : String(error)
+    // Each write is idempotent, so a failed one answers 500: the delivery shows as failed
+    // in the webhook settings and can be redelivered by hand
+    const writes: {
+      write: () => Promise<Response>;
+      stored: Record<string, unknown>;
+    }[] = [];
+    if (build)
+      writes.push({
+        write: () => upsert('builds', 'workflow', build),
+        stored: { event: 'stored', workflow: build.workflow, sha: build.sha }
       });
-      return reply(500, 'Write failed');
-    }
-    if (!res.ok) {
-      log({ event: 'write failed', status: res.status });
-      return reply(500, 'Write failed');
-    }
-    log(
-      build
-        ? { event: 'stored', workflow: build.workflow, sha: build.sha }
-        : {
+    if (row)
+      writes.push({
+        write: () => upsert('github_events', 'subject', row),
+        stored: { event: 'stored', action: row.action, subject: row.subject }
+      });
+    if (notice) {
+      const built =
+        notice.jobsOf === null ? true : await readBuild(String(notice.jobsOf));
+      if (built)
+        writes.push({
+          write: () => upsert('notices', 'id', notice.row, 'ignore'),
+          stored: {
             event: 'stored',
-            action: row?.action,
-            subject: row?.subject
+            notice: notice.row.id,
+            level: notice.row.level
           }
+        });
+    }
+    if (writes.length === 0) return reply(200, 'Ignored');
+
+    const results = await Promise.allSettled(
+      writes.map(({ write }) => write())
     );
-    return reply(200, 'Stored');
+    let failed = false;
+    results.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        const error: unknown = result.reason;
+        log({
+          event: 'write failed',
+          reason: error instanceof Error ? error.message : String(error)
+        });
+        failed = true;
+      } else if (result.value.ok) {
+        log(writes[i].stored);
+      } else {
+        log({ event: 'write failed', status: result.value.status });
+        failed = true;
+      }
+    });
+    return failed ? reply(500, 'Write failed') : reply(200, 'Stored');
   };
 };
