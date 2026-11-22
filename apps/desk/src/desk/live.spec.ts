@@ -135,6 +135,7 @@ const runs = (
   last: null,
   attended: null,
   suggested: null,
+  devlog: { last: null, next: null },
   job: null,
   qv: null,
   viewInvalid,
