@@ -38,6 +38,14 @@ const run = async (
   return { exit, stdout: out.join('\n') };
 };
 
+const post = (body: string) =>
+  `# A title\nMeta title: A meta title\nDescription: ${'d'.repeat(60)}\n\n${body}\n`;
+
+const category = (docs: unknown[] = [{ id: 3 }]) =>
+  new Response(JSON.stringify({ docs }), { status: 200 });
+const created = () =>
+  new Response(JSON.stringify({ doc: { id: 77 } }), { status: 201 });
+
 describe('devlog draft', () => {
   let home: string;
   let file: string;
@@ -46,7 +54,7 @@ describe('devlog draft', () => {
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), 'devlog-'));
     file = join(home, 'post.md');
-    await writeFile(file, '# A title\n\nSome body text\n');
+    await writeFile(file, post('Some body text'));
     env = {
       CDWR_HOME: home,
       CMS_URL: 'https://cms.test/',
@@ -71,15 +79,20 @@ describe('devlog draft', () => {
   ];
 
   it('creates the draft and records what it covers', async () => {
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ doc: { id: 77 } }), { status: 201 })
-    );
+    fetchMock
+      .mockResolvedValueOnce(category())
+      .mockResolvedValueOnce(created());
 
     const { exit, stdout } = await run(args(), env);
 
     expect(exit).toBe(EXIT.ok);
     expect(stdout).toContain('"postId":77');
-    const [url, init] = fetchMock.mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [categoryCall, [url, init]] = fetchMock.mock.calls;
+    expect(categoryCall[0]).toBe(
+      'https://cms.test/api/categories?where%5Bslug%5D%5Bequals%5D=devlog&limit=1&depth=0'
+    );
+    expect(categoryCall[1].headers).toEqual(init.headers);
     expect(url).toBe('https://cms.test/api/posts?draft=true');
     expect(init.method).toBe('POST');
     expect(init.headers['Authorization']).toBe('agents API-Key agent-key');
@@ -87,6 +100,8 @@ describe('devlog draft', () => {
     expect(JSON.parse(init.body)).toEqual({
       title: 'A title',
       content: { root: { type: 'root' } },
+      meta: { title: 'A meta title', description: 'd'.repeat(60) },
+      categories: [3],
       _status: 'draft'
     });
 
@@ -117,7 +132,7 @@ describe('devlog draft', () => {
   });
 
   it('fails with the cms message on anything but 201, and records nothing', async () => {
-    fetchMock.mockResolvedValue(
+    fetchMock.mockResolvedValueOnce(category()).mockResolvedValueOnce(
       new Response(JSON.stringify({ errors: [{ message: 'Forbidden' }] }), {
         status: 403
       })
@@ -132,8 +147,41 @@ describe('devlog draft', () => {
     ).rejects.toThrow(/ENOENT/);
   });
 
+  it('fails before any POST when the category is missing', async () => {
+    fetchMock.mockResolvedValueOnce(category([]));
+
+    const { exit, stdout } = await run(args(), env);
+
+    expect(exit).toBe(EXIT.failed);
+    expect(stdout).toContain('no category with the slug devlog');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails before any POST when the category read is refused', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ errors: [{ message: 'Forbidden' }] }), {
+        status: 403
+      })
+    );
+
+    const { exit, stdout } = await run(args(), env);
+
+    expect(exit).toBe(EXIT.failed);
+    expect(stdout).toContain('403 when reading the devlog category');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a draft without the meta lines before asking the cms', async () => {
+    await writeFile(file, '# T\n\nBody\n');
+
+    const { exit } = await run(args(), env);
+
+    expect(exit).toBe(EXIT.failed);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('refuses a draft with a code fence before asking the cms', async () => {
-    await writeFile(file, '# T\n\n```\ncode\n```\n');
+    await writeFile(file, post('```\ncode\n```'));
 
     const { exit } = await run(args(), env);
 
