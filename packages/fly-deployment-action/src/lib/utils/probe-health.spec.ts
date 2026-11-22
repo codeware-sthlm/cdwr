@@ -30,7 +30,19 @@ describe('getHealthCheckPath', () => {
 describe('probeHealth', () => {
   const mockFetch = vi.fn();
 
+  /** Fake clock: sleeping advances time, nothing really waits */
+  let clock = 0;
+  const fast = {
+    budgetMs: 20_000,
+    intervalMs: 5_000,
+    sleep: async (ms: number) => {
+      clock += ms;
+    },
+    now: () => clock
+  };
+
   beforeEach(() => {
+    clock = 0;
     mockFetch.mockReset();
     vi.stubGlobal('fetch', mockFetch);
   });
@@ -54,7 +66,11 @@ describe('probeHealth', () => {
   it('should return the status when the app does not answer 200', async () => {
     mockFetch.mockResolvedValue({ status: 503 });
 
-    const reason = await probeHealth('https://app.fly.dev', '/api/health');
+    const reason = await probeHealth(
+      'https://app.fly.dev',
+      '/api/health',
+      fast
+    );
 
     expect(reason).toContain('answered 503');
     expect(reason).toContain('https://app.fly.dev/api/health');
@@ -65,16 +81,24 @@ describe('probeHealth', () => {
     error.name = 'TimeoutError';
     mockFetch.mockRejectedValue(error);
 
-    const reason = await probeHealth('https://app.fly.dev', '/api/health');
+    const reason = await probeHealth(
+      'https://app.fly.dev',
+      '/api/health',
+      fast
+    );
 
     expect(reason).toContain('could not be reached');
-    expect(reason).toContain('no answer within 60s');
+    expect(reason).toContain('no answer within');
   });
 
   it('should include the message of a network error', async () => {
     mockFetch.mockRejectedValue(new Error('getaddrinfo ENOTFOUND app.fly.dev'));
 
-    const reason = await probeHealth('https://app.fly.dev', '/api/health');
+    const reason = await probeHealth(
+      'https://app.fly.dev',
+      '/api/health',
+      fast
+    );
 
     expect(reason).toContain('could not be reached');
     expect(reason).toContain('getaddrinfo ENOTFOUND app.fly.dev');
@@ -100,5 +124,41 @@ describe('probeHealth', () => {
       'https://app.fly.dev/health',
       expect.anything()
     );
+  });
+
+  it('should retry until the app answers 200', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ status: 503 })
+      .mockResolvedValueOnce({ status: 200 });
+
+    await expect(
+      probeHealth('https://app.fly.dev', '/api/health', fast)
+    ).resolves.toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('should retry after a network error', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce({ status: 200 });
+
+    await expect(
+      probeHealth('https://app.fly.dev', '/api/health', fast)
+    ).resolves.toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('should give up with the last reason when the budget runs out', async () => {
+    mockFetch.mockResolvedValue({ status: 503 });
+
+    const reason = await probeHealth(
+      'https://app.fly.dev',
+      '/api/health',
+      fast
+    );
+
+    expect(reason).toContain('no 200 within 20s');
+    expect(reason).toContain('answered 503');
+    expect(mockFetch.mock.calls.length).toBeGreaterThan(1);
   });
 });
