@@ -10,6 +10,7 @@ import {
   domain,
   flag,
   flyApp,
+  freshIssue,
   machine,
   sentry,
   shared,
@@ -190,7 +191,8 @@ describe('parseTenantRow', () => {
         level: 'error',
         count: 31,
         title: 'TypeError: x is undefined'
-      }
+      },
+      fresh: []
     });
     expect(row.visitors?.today).toBe(12);
     expect(row.visitors?.days).toHaveLength(7);
@@ -250,6 +252,24 @@ describe('parseTenantRow', () => {
     expect(row.sentry).toBeNull();
     expect(row.visitors).toBeNull();
     expect(row.deploy).toBeNull();
+  });
+
+  it('parses the new issues, and reads a row from before them as null', () => {
+    const fresh = (over: Record<string, Json>) =>
+      parseTenantRow(tenant('acme', { sentry: sentry(over) })).sentry?.fresh;
+    expect(fresh({ fresh: [freshIssue()] })).toEqual([
+      {
+        shortId: 'CMS-12',
+        level: 'error',
+        title: 'TypeError: x is undefined',
+        firstSeen: '2026-11-22T09:30:00Z'
+      }
+    ]);
+    expect(fresh({ fresh: [{ shortId: 3 }, 'x', freshIssue()] })).toHaveLength(
+      1
+    );
+    expect(fresh({ fresh: undefined })).toBeNull();
+    expect(fresh({ fresh: 'x' })).toBeNull();
   });
 
   it('reads malformed sentry, visitors and deploy columns as absent', () => {

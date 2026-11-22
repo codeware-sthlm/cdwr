@@ -88,6 +88,15 @@ export const sentry = (over: Record<string, Json> = {}): Json => ({
   open24h: 2,
   count7d: 14,
   top: null,
+  fresh: [],
+  ...over
+});
+
+export const freshIssue = (over: Record<string, Json> = {}): Json => ({
+  shortId: 'CMS-12',
+  level: 'error',
+  title: 'TypeError: x is undefined',
+  firstSeen: '2026-11-22T09:30:00Z',
   ...over
 });
 

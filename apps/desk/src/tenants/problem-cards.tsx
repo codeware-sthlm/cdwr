@@ -34,6 +34,8 @@ export const problemLink = (
       href: sentryIssueUrl(row.sentry.org, row.sentry.top.shortId),
       text: `Open ${row.sentry.top.shortId} in Sentry`
     };
+  if (p.kind === 'new-issue' && p.ref)
+    return { href: p.ref.url, text: `Open ${p.ref.shortId} in Sentry` };
   if (p.kind === 'deploy' && row.deploy?.url.startsWith('https://'))
     return { href: row.deploy.url, text: `Open run ${row.deploy.runId}` };
   return null;

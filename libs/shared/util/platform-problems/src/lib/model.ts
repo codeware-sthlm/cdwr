@@ -95,13 +95,23 @@ export const utcClock = (iso: string): string => {
   return Number.isFinite(t) ? new Date(t).toISOString().slice(11, 16) : iso;
 };
 
-/** A tenant's Sentry read: the event counts of the last day (all, and of unresolved issues; null on a row from before the open count) and week, and the busiest issue */
+/** An unresolved issue first seen on production in the last 24 hours */
+export type TenantFreshIssue = {
+  shortId: string;
+  level: string;
+  title: string;
+  /** ISO time, as Sentry gave it */
+  firstSeen: string;
+};
+
+/** A tenant's Sentry read: the event counts of the last day (all, and of unresolved issues; null on a row from before the open count) and week, the busiest issue, and the issues first seen in the last day (null when not read: an old row, or a failed read) */
 export type TenantSentry = {
   org: string;
   count24h: number;
   open24h: number | null;
   count7d: number;
   top: { shortId: string; level: string; count: number; title: string } | null;
+  fresh: TenantFreshIssue[] | null;
 };
 
 /** A tenant's Umami read: visitors today and the seven days before, oldest first */
@@ -215,6 +225,23 @@ const app = (r: Rec): TenantApp | null => {
   };
 };
 
+const freshIssues = (value: unknown): TenantFreshIssue[] | null =>
+  Array.isArray(value)
+    ? records(value).flatMap((r) => {
+        const shortId = str(r['shortId']);
+        return shortId
+          ? [
+              {
+                shortId,
+                level: str(r['level']) ?? 'error',
+                title: str(r['title']) ?? '',
+                firstSeen: str(r['firstSeen']) ?? ''
+              }
+            ]
+          : [];
+      })
+    : null;
+
 const sentry = (value: unknown): TenantSentry | null => {
   if (!isRecord(value)) return null;
   const org = str(value['org']);
@@ -246,7 +273,8 @@ const sentry = (value: unknown): TenantSentry | null => {
             count,
             title: str(top['title']) ?? ''
           }
-        : null
+        : null,
+    fresh: freshIssues(value['fresh'])
   };
 };
 

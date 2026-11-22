@@ -12,7 +12,14 @@ import {
 // why it was raised. The row's status derives from the same predicates.
 
 export type ProblemKind =
-  'backup' | 'behind' | 'cert' | 'connections' | 'deploy' | 'down' | 'errors';
+  | 'backup'
+  | 'behind'
+  | 'cert'
+  | 'connections'
+  | 'deploy'
+  | 'down'
+  | 'errors'
+  | 'new-issue';
 
 export type ProblemSeverity = 'down' | 'warn';
 
@@ -29,6 +36,8 @@ export type Problem = {
   threshold: string;
   /** What can be done, one line each; the card has no buttons yet */
   actions: string[];
+  /** The Sentry issue a `new-issue` problem is about */
+  ref?: { shortId: string; level: string; url: string };
 };
 
 /** Open (unresolved) error events in the last 24 hours from which an error spike counts; a row from before the open count uses its total */
@@ -207,6 +216,30 @@ const errors = (row: TenantRow): Problem[] => {
   ];
 };
 
+/** One problem per unresolved issue first seen on production in the last 24 hours */
+const newIssue = (row: TenantRow): Problem[] => {
+  const org = row.sentry?.org;
+  if (!org) return [];
+  return (row.sentry?.fresh ?? []).map((issue) => ({
+    key: `${row.key}:new-issue:${issue.shortId}`,
+    ref: {
+      shortId: issue.shortId,
+      level: issue.level,
+      url: sentryIssueUrl(org, issue.shortId)
+    },
+    row: row.key,
+    kind: 'new-issue',
+    severity: 'warn',
+    title: `New Sentry issue ${issue.shortId}`,
+    evidence: [
+      `${issue.shortId} · ${issue.level} · ${issue.title}${issue.firstSeen ? ` · first seen ${issue.firstSeen}` : ''}`
+    ],
+    threshold:
+      'An unresolved Sentry issue first seen on production in the last 24 hours, level error or fatal. It leaves the list after a day, so it is raised once.',
+    actions: ['Open the issue in Sentry', 'Check what deployed in that time']
+  }));
+};
+
 const deploy = (row: TenantRow): Problem[] =>
   row.key === SHARED_KEY && row.deploy?.conclusion === 'failure'
     ? [
@@ -262,16 +295,16 @@ const backup = (row: TenantRow, now: number): Problem[] => {
   ];
 };
 
-const KIND_ORDER = [
-  'backup',
-  'behind',
-  'cert',
-  'connections',
-  'deploy',
-  'down',
-  'errors'
-];
-
+const KIND_ORDER: Record<ProblemKind, number> = {
+  backup: 0,
+  behind: 1,
+  cert: 2,
+  connections: 3,
+  deploy: 4,
+  down: 5,
+  errors: 6,
+  'new-issue': 7
+};
 /** The problems of one row; `deploySha` is the commit the newest deploy run of main carries, for the behind evidence; `now` is ms */
 export const problemsOf = (
   row: TenantRow,
@@ -283,6 +316,7 @@ export const problemsOf = (
   ...cert(row),
   ...connections(row),
   ...errors(row),
+  ...newIssue(row),
   ...deploy(row),
   ...backup(row, now)
 ];
@@ -301,7 +335,7 @@ export const allProblems = (
         Number(b.severity === 'down') - Number(a.severity === 'down') ||
         Number(b.row === SHARED_KEY) - Number(a.row === SHARED_KEY) ||
         a.row.localeCompare(b.row) ||
-        KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) ||
+        KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
         a.key.localeCompare(b.key)
     );
 };
