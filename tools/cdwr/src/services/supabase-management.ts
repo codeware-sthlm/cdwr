@@ -8,9 +8,9 @@ import { z } from 'zod';
 import { run } from './shell';
 
 /**
- * API keys of a Supabase project, through the Management API with your own
- * `supabase login`. No key or token is ever logged or put in an error; only
- * the create call asks for a key's value.
+ * API keys and SQL of a Supabase project, through the Management API with
+ * your own `supabase login`. No key or token is ever logged or put in an
+ * error; only the create call asks for a key's value.
  */
 
 const API = 'https://api.supabase.com';
@@ -202,6 +202,22 @@ export const createSecretKey = async (
   );
   return { id: created.id, value: created.api_key };
 };
+
+/**
+ * Runs SQL on the project's database as `postgres`, one row object per row.
+ * An error carries the API's message only, never the statement.
+ */
+export const runQuery = async (
+  token: string,
+  ref: string,
+  query: string
+): Promise<Record<string, unknown>[]> =>
+  call(
+    'database query',
+    z.array(z.record(z.string(), z.unknown())),
+    `/v1/projects/${encodeURIComponent(ref)}/database/query`,
+    { method: 'POST', token, body: { query } }
+  );
 
 export const deleteApiKey = async (
   token: string,

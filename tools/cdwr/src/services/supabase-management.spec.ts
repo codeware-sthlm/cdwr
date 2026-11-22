@@ -11,7 +11,8 @@ import {
   keyHash,
   keychainAccounts,
   listApiKeys,
-  projectRef
+  projectRef,
+  runQuery
 } from './supabase-management';
 
 const fetchMock = vi.fn();
@@ -140,6 +141,45 @@ describe('the API', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.supabase.com/v1/projects/ref/api-keys/old');
     expect(init.method).toBe('DELETE');
+  });
+
+  it('runs a query as a POST with the statement in the body', async () => {
+    fetchMock.mockResolvedValue(answer(201, [{ role_exists: true }]));
+    await expect(runQuery('tok', 'ref', 'select 1;')).resolves.toEqual([
+      { role_exists: true }
+    ]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.supabase.com/v1/projects/ref/database/query');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toEqual({
+      authorization: 'Bearer tok',
+      'content-type': 'application/json'
+    });
+    expect(JSON.parse(String(init.body))).toEqual({ query: 'select 1;' });
+  });
+
+  it('fails a query without echoing the statement', async () => {
+    fetchMock.mockResolvedValue(
+      answer(400, {
+        message: 'syntax error',
+        query: "ALTER ROLE x PASSWORD 'SCRAM-SHA-256$secret'"
+      })
+    );
+    const error = await runQuery(
+      'tok',
+      'ref',
+      "ALTER ROLE x PASSWORD 'SCRAM-SHA-256$secret'"
+    ).catch((e: unknown) => e);
+    expect(String(error)).toBe(
+      'SupabaseApiError: Supabase database query answered 400: syntax error'
+    );
+  });
+
+  it('refuses an answer that is not rows', async () => {
+    fetchMock.mockResolvedValue(answer(201, { rows: [] }));
+    await expect(runQuery('tok', 'ref', 'select 1;')).rejects.toThrow(
+      'unknown shape'
+    );
   });
 
   it("fails with the API's message, never the token", async () => {
