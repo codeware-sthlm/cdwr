@@ -741,8 +741,8 @@ is named after its role, `agent-host`, so moving to another box changes only the
    ```
 
 8. Install the root installer and its sudoers line, once, as in `apps/agent-host/README.md`,
-   "Installing it once". Read its warning first: the sudoers line waits until the hold list holds
-   the queue's own scripts, or until you accept the risk it names. The host needs `curl`, `jq` and `flock` (util-linux), and
+   "Installing it once". Read its warning first: it waits until the host's GitHub reads no longer
+   share the anonymous rate limit. The host needs `curl`, `jq` and `flock` (util-linux), and
    `cdwr agent deploy` needs `flock` there too. Its first run installs and enables everything in
    `apps/agent-host/nuc`, and every later merge that changes that folder reaches the host on its own:
    - the nightly backup of the `agent-home` volume (`cdwr-agent-backup.timer`, 03:30, the newest

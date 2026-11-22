@@ -7832,8 +7832,8 @@ describe('hold list', () => {
         reason: 'one-way on tenant data'
       });
       expect(holds.at(-1)).toEqual({
-        glob: 'tools/cdwr/agent-queue/hold-paths.txt',
-        reason: 'this list'
+        glob: '.claude/**',
+        reason: "the sessions' skills, agents and permissions"
       });
       expect(holds.every((h) => h.reason !== '')).toBe(true);
     });
@@ -7863,7 +7863,8 @@ describe('hold list', () => {
     it.each([
       'apps/cms/src/migrations.ts',
       'libs/shared/util/csp-extra/x.ts',
-      'tools/cdwr/agent-queue/implement.sh.bak'
+      'tools/cdwr/agent-queue.md',
+      'apps/agent-hostx/a.ts'
     ])('%s is held by none of the real globs', (path) => {
       expect(matches([path], holds)).toEqual([]);
     });
