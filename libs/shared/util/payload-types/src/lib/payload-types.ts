@@ -1892,6 +1892,10 @@ export interface PostsBlock {
    */
   limit: number;
   /**
+   * Show only posts in at least one of these categories. Leave empty to show every post.
+   */
+  categories?: (number | Category)[] | null;
+  /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */
   band?: ('none' | 'subtle' | 'strong' | 'gradient') | null;

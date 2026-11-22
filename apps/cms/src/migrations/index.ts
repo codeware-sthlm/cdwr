@@ -94,6 +94,7 @@ import * as migration_20261108_123050_cod_708_faq_topic from './20261108_123050_
 import * as migration_20261110_225226_cod_769_coming_soon from './20261110_225226_cod_769_coming_soon';
 import * as migration_20261112_135923_cod_779_agents from './20261112_135923_cod_779_agents';
 import * as migration_20261113_232648_code_shell from './20261113_232648_code_shell';
+import * as migration_20261122_195349_cod_889_posts_listing_categories from './20261122_195349_cod_889_posts_listing_categories';
 
 export const migrations = [
   {
@@ -575,5 +576,10 @@ export const migrations = [
     up: migration_20261113_232648_code_shell.up,
     down: migration_20261113_232648_code_shell.down,
     name: '20261113_232648_code_shell'
+  },
+  {
+    up: migration_20261122_195349_cod_889_posts_listing_categories.up,
+    down: migration_20261122_195349_cod_889_posts_listing_categories.down,
+    name: '20261122_195349_cod_889_posts_listing_categories'
   }
 ];
