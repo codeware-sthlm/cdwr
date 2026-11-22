@@ -11,5 +11,6 @@
 !/libs/shared/ui/shadcn/src
 !/libs/shared/util/ui/src
 !/libs/shared/util/agent-review/src
+!/libs/shared/util/platform-problems/src
 /apps/desk/src-tauri/target
 /apps/desk/node_modules
