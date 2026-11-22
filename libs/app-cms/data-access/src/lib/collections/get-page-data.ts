@@ -8,6 +8,7 @@ import type { PayloadRuntime } from '../payload-runtime.types';
 import { getPage } from './get-page';
 import { getPosts } from './get-posts';
 import { getTours } from './get-tours';
+import { listingCategoryIds } from './listing-category-ids';
 import type { QuerySingleOptions } from './types';
 
 export type PageData = {
@@ -84,13 +85,21 @@ export async function getPageData(
   }
 
   const [posts, tours] = await Promise.all([
-    resolveListingBlocks(page.layout, 'posts', async ({ limit }) => {
-      const result = await getPosts(resolvedRuntime, {
-        limit,
-        sort: '-createdAt' as 'createdAt'
-      });
-      return result?.docs ?? [];
-    }),
+    resolveListingBlocks(
+      page.layout,
+      'posts',
+      async ({ categories, limit }) => {
+        const categoryIds = listingCategoryIds(categories);
+        const result = await getPosts(resolvedRuntime, {
+          limit,
+          sort: '-createdAt' as 'createdAt',
+          ...(categoryIds.length > 0 && {
+            where: { categories: { in: categoryIds } }
+          })
+        });
+        return result?.docs ?? [];
+      }
+    ),
     resolveListingBlocks(page.layout, 'tours', async ({ limit }) => {
       const result = await getTours(resolvedRuntime, {
         limit,
