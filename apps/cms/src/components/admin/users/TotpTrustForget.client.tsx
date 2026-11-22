@@ -17,6 +17,7 @@ import {
 } from '@codeware/shared/ui/shadcn/components/dialog';
 import {
   toast,
+  useAuth,
   useConfig,
   useDocumentInfo,
   useTranslation
@@ -34,6 +35,9 @@ export const TotpTrustForget: React.FC = () => {
   const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const { config } = useConfig();
   const { id } = useDocumentInfo();
+  const { user } = useAuth();
+  // The note speaks to the account's owner, so only on your own account
+  const ownAccount = user?.id === id;
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,6 +104,11 @@ export const TotpTrustForget: React.FC = () => {
       <p className="text-muted-foreground text-sm">
         {t('totpTrustForget:description')}
       </p>
+      {ownAccount && (
+        <p className="text-muted-foreground text-sm">
+          {t('totpTrustForget:passwordNote')}
+        </p>
+      )}
     </div>
   );
 };
