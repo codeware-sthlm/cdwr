@@ -1,4 +1,6 @@
-# Blue-green deploys: new machines must pass health checks before traffic moves
+# Blue-green deploys: new machines must pass health checks before traffic moves.
+# Bluegreen requires `[[http_service.checks]]` on the app, so apply the
+# `health-check` patch first where the app has none.
 
 [deploy]
   strategy = 'bluegreen'
