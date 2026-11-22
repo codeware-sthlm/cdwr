@@ -1129,6 +1129,24 @@ describe('Fly', () => {
       );
     });
 
+    it.each([
+      [
+        'an absolute config path as given',
+        '/tmp/cdwr-fly-patch.toml',
+        '/tmp/cdwr-fly-patch.toml'
+      ],
+      [
+        'a relative config path against the working directory',
+        'test/fly.toml',
+        `${process.cwd()}/test/fly.toml`
+      ]
+    ])('should look up %s', async (_label, config, expected) => {
+      mockExistsSync.mockReturnValue(true);
+      const fly = new Fly(mockFlyConfig);
+      await fly.config.show({ config, local: true }).catch(() => null);
+      expect(mockExistsSync).toHaveBeenCalledWith(expected);
+    });
+
     it('should save remote config to local file', async () => {
       const fly = new Fly(mockFlyConfig);
       await fly.config.save({

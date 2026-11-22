@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import { cwd } from 'process';
 
 import {
@@ -1762,8 +1762,9 @@ ${JSON.stringify(response, null, 2)}`);
     const normalized = this.normalizeOptions(options);
     const config = normalized.config || this.instanceConfig;
 
-    // Check if the config file exists when a path is provided
-    if (config && !existsSync(join(cwd(), config))) {
+    // Check if the config file exists when a path is provided; an absolute
+    // path is checked as given, a relative one against the working directory
+    if (config && !existsSync(resolve(cwd(), config))) {
       throw new Error(`Config file '${config}' does not exist`);
     }
 
