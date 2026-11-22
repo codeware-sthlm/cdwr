@@ -11,6 +11,7 @@ import {
   deployRun,
   domain,
   flyApp,
+  freshIssue,
   machine,
   minutesAgo,
   sentry,
@@ -329,6 +330,70 @@ describe('errors', () => {
   it('is not raised without a sentry read', () => {
     expect(tenantProblems()).toEqual([]);
     expect(tenantProblems({ sentry: ['x'] })).toEqual([]);
+  });
+});
+
+describe('new-issue', () => {
+  const found = (fresh: Json) =>
+    tenantProblems({ sentry: sentry({ fresh }) }).filter(
+      (p) => p.kind === 'new-issue'
+    );
+
+  it('is raised once per new issue, keyed by its short id, as a warn', () => {
+    const problems = found([
+      freshIssue(),
+      freshIssue({ shortId: 'CMS-13', level: 'warning' })
+    ]);
+    expect(problems.map((p) => [p.key, p.severity, p.row])).toEqual([
+      ['acme:new-issue:CMS-12', 'warn', 'acme'],
+      ['acme:new-issue:CMS-13', 'warn', 'acme']
+    ]);
+    expect(problems[0].evidence[0]).toContain('CMS-12');
+    expect(problems[0].evidence[0]).toContain('error');
+    expect(problems[0].evidence[0]).toContain('TypeError: x is undefined');
+    expect(problems[0].evidence[0]).toContain('2026-11-22T09:30:00Z');
+    expect(problems[0].threshold).toContain('last 24 hours');
+    expect(problems[0].actions).toHaveLength(2);
+  });
+
+  it('carries the issue as its ref, with the Sentry url', () => {
+    const [problem] = found([freshIssue()]);
+    expect(problem?.ref).toEqual({
+      shortId: 'CMS-12',
+      level: 'error',
+      url: 'https://cdwr.sentry.io/issues/?query=CMS-12'
+    });
+  });
+
+  it('is not raised without new issues or without a read of them', () => {
+    expect(found([])).toEqual([]);
+    expect(found(undefined)).toEqual([]);
+    expect(tenantProblems()).toEqual([]);
+  });
+
+  it('keys the shared row by its own key', () => {
+    const problems = problemsOf(
+      parseTenantRow(shared({ sentry: sentry({ fresh: [freshIssue()] }) }))
+    );
+    expect(problems.map((p) => p.key)).toContain('_shared:new-issue:CMS-12');
+  });
+
+  it('sorts after the errors of the same row', () => {
+    const all = allProblems([
+      {
+        row: parseTenantRow(
+          tenant('acme', {
+            sentry: sentry({
+              count24h: 30,
+              open24h: 30,
+              count7d: 30,
+              fresh: [freshIssue()]
+            })
+          })
+        )
+      }
+    ]);
+    expect(all.map((p) => p.kind)).toEqual(['errors', 'new-issue']);
   });
 });
 
