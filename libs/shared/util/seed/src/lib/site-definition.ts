@@ -15,6 +15,7 @@ import type {
   PillListBlock,
   Place,
   Post,
+  PostsBlock,
   ReusableContent,
   ReusableContentBlock,
   SiteSetting,
@@ -71,6 +72,7 @@ type ReferencingBlock =
   | HeroBlock
   | ImageBlock
   | PillListBlock
+  | PostsBlock
   | ReusableContentBlock
   | TestimonialBlock;
 
@@ -79,7 +81,7 @@ type ReferencingBlock =
  *
  * Nothing in these blocks refers to another document, so there is nothing to
  * resolve and no reason to restate them here — `about`, `block-gallery`,
- * `card`, `code`, `coming-soon`, `feature-cards`, `posts`, `showcase`,
+ * `card`, `code`, `coming-soon`, `feature-cards`, `showcase`,
  * `social-media`, `spacing`, `theme-studio` and `tours`.
  */
 export type PlainBlockDefinition = Authored<
@@ -94,7 +96,6 @@ type PlainBlockType =
   | 'code'
   | 'coming-soon'
   | 'feature-cards'
-  | 'posts'
   | 'showcase'
   | 'social-media'
   | 'spacing'
@@ -230,6 +231,14 @@ export type FileAreaBlockDefinition = Omit<
   tags?: Array<TagRef> | null;
 };
 
+/** Categories are keyed by slug, as a post states its own */
+export type CategoryRef = { lookupSlug: string };
+
+/** A posts listing, filtered on the categories it names. */
+export type PostsBlockDefinition = Omit<Authored<PostsBlock>, 'categories'> & {
+  categories?: Array<CategoryRef> | null;
+};
+
 type Pill = NonNullable<PillListBlock['items']>[number];
 
 /**
@@ -273,7 +282,8 @@ export type BlockDefinition =
   | ReusableContentBlockDefinition
   | TestimonialBlockDefinition
   | FileAreaBlockDefinition
-  | PillListBlockDefinition;
+  | PillListBlockDefinition
+  | PostsBlockDefinition;
 
 export type MediaDefinition = {
   /**
