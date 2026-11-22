@@ -38,7 +38,8 @@ export async function getPostsListings(
     select: { slug: true, layout: { posts: { categories: true } } },
     depth: 0,
     locale: tenantConfig?.locale,
-    limit: 50,
+    // Every listing, since the one that shows the post can be on any page
+    pagination: false,
     sort: 'createdAt',
     overrideAccess,
     user: payload.authenticatedUser,
