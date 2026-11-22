@@ -340,6 +340,16 @@ describe('notify.sh', () => {
       expect(strict.status).toBe(1);
     });
 
+    it('is strict with AGENT_QUEUE_NOTIFY_STRICT=1 too', () => {
+      const spool = join(dir, 'not-a-dir');
+      writeFileSync(spool, '');
+      const r = exec(['--level', 'urgent', 'down'], {
+        AGENT_QUEUE_NOTIFY_SPOOL: spool,
+        AGENT_QUEUE_NOTIFY_STRICT: '1'
+      });
+      expect(r.status).toBe(1);
+    });
+
     it('exits 0 once the spool holds the notice', () => {
       const spool = join(dir, 'spool');
       const r = exec(['--strict', '--level', 'urgent', 'down'], {

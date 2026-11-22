@@ -771,8 +771,12 @@ export async function sendNotice(
   try {
     await run(
       join(home, 'notify.sh'),
-      ['--strict', '--level', 'urgent', '--source', 'platform', text],
-      { env: notifyEnv(env), timeout: NOTIFY_TIMEOUT_MS }
+      ['--level', 'urgent', '--source', 'platform', text],
+      // Strict through the environment, which a notify.sh older than the flag ignores
+      {
+        env: { ...notifyEnv(env), AGENT_QUEUE_NOTIFY_STRICT: '1' },
+        timeout: NOTIFY_TIMEOUT_MS
+      }
     );
     return true;
   } catch {

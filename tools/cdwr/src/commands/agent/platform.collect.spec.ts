@@ -163,7 +163,10 @@ describe('sendNotice', () => {
   it('runs notify.sh with only what it reads, none of the collector credentials', async () => {
     const home = mkdtempSync(join(tmpdir(), 'notify-'));
     const script = join(home, 'notify.sh');
-    writeFileSync(script, `#!/bin/sh\nenv > "${home}/seen.env"\n`);
+    writeFileSync(
+      script,
+      `#!/bin/sh\nenv > "${home}/seen.env"\necho "$@" > "${home}/seen.args"\n`
+    );
     chmodSync(script, 0o755);
     const sent = await sendNotice(
       {
@@ -183,6 +186,11 @@ describe('sendNotice', () => {
     expect(seen).toContain(`AGENT_QUEUE_HOME=${home}`);
     expect(seen).toContain('SLACK_WEBHOOK_URL=');
     expect(seen).not.toMatch(/FLY_API_TOKEN|PLATFORM_|sb-secret|fly-secret/);
+    // Strict through the environment, so a notify.sh older than --strict still parses the line
+    expect(seen).toContain('AGENT_QUEUE_NOTIFY_STRICT=1');
+    expect(readFileSync(join(home, 'seen.args'), 'utf8').trim()).toBe(
+      '--level urgent --source platform Platform: x'
+    );
   });
 
   it('picks only the variables notify.sh reads', () => {
