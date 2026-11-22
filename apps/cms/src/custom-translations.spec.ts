@@ -12,7 +12,10 @@ import { customTranslations } from '@codeware/app-cms/util/i18n';
  */
 
 /** Keys kept on purpose without a literal reference: built at runtime, or overriding a Payload string */
-const allowlist = new Set<string>();
+const allowlist = new Set<string>([
+  // Read by the `payload-totp` patch, which this scan does not cover
+  'totpTrust:rememberDevice'
+]);
 
 const workspaceRoot = resolve(__dirname, '../../..');
 

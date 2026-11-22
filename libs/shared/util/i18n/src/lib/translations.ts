@@ -117,6 +117,7 @@ export type TranslationKey =
   | 'memberLogin.signOut'
   | 'memberLogin.submit'
   | 'memberLogin.tooManyAttempts'
+  | 'memberLogin.trustDevice'
   | 'navigation.primary'
   | 'navigation.title'
   | 'notFound.description'
@@ -455,6 +456,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'memberLogin.submit': 'Sign in',
     'memberLogin.tooManyAttempts':
       'Too many attempts. Wait a moment, then try again.',
+    'memberLogin.trustDevice': 'Trust this device for 30 days',
     'navigation.primary': 'Main',
     'navigation.title': 'Navigation',
     'notFound.description':
@@ -840,6 +842,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'memberLogin.submit': 'Logga in',
     'memberLogin.tooManyAttempts':
       'För många försök. Vänta en stund och försök igen.',
+    'memberLogin.trustDevice': 'Lita på den här enheten i 30 dagar',
     'navigation.primary': 'Huvudmeny',
     'navigation.title': 'Navigation',
     'notFound.description': 'Tyvärr kunde vi inte hitta sidan du letade efter.',
