@@ -1,4 +1,8 @@
-import { getPost, getPostsListingPath } from '@codeware/app-cms/data-access';
+import {
+  getPost,
+  getPostsListings,
+  postsListingPath
+} from '@codeware/app-cms/data-access';
 import { docMeta, sitePath } from '@codeware/shared/util/payload-utils';
 import type { Metadata } from 'next';
 import { draftMode } from 'next/headers';
@@ -38,13 +42,20 @@ export default async function Post({ params }: Props) {
 
   const { isEnabled: draft } = await draftMode();
   const runtime = await payloadRuntime({ asVisitor: true });
-  const post = await getPost(runtime, slugString, { draft });
+  const [post, listings] = await Promise.all([
+    getPost(runtime, slugString, { draft }),
+    getPostsListings(runtime)
+  ]);
 
   if (!post) {
     notFound();
   }
 
-  const listingPath = await getPostsListingPath(runtime, post);
-
-  return <PostPreview post={post} listingPath={listingPath} live={draft} />;
+  return (
+    <PostPreview
+      post={post}
+      listingPath={postsListingPath(listings, post)}
+      live={draft}
+    />
+  );
 }
