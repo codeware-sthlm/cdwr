@@ -10,6 +10,7 @@ import { ChevronRightIcon } from 'lucide-react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { handleAsRoute } from '../../utils/internal-link';
+import { formatPostDate } from '../../utils/post-date';
 
 type Props = PostsBlockProps & {
   /**
@@ -18,15 +19,6 @@ type Props = PostsBlockProps & {
    */
   posts: Array<Post>;
 };
-
-function formatDate(dateString: string, locale: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(locale, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-}
 
 /**
  * Renders a listing of posts in Spotlight-style layout.
@@ -57,7 +49,7 @@ export function PostsBlock({ title, description, posts }: Props) {
             <article key={post.id} className="md:grid md:grid-cols-4 md:gap-8">
               <div className="text-muted-foreground relative z-10 mb-3 flex items-center text-sm md:col-span-1">
                 <time dateTime={post.createdAt}>
-                  {formatDate(post.createdAt, locale)}
+                  {formatPostDate(post.createdAt, locale)}
                 </time>
               </div>
               <a

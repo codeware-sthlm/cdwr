@@ -122,6 +122,7 @@ export type TranslationKey =
   | 'notFound.description'
   | 'notFound.goHome'
   | 'notFound.title'
+  | 'posts.backToPosts'
   | 'posts.readMore'
   | 'signup.title'
   | 'signup.intro'
@@ -460,6 +461,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
       'Sorry, we could not find the page you were looking for.',
     'notFound.goHome': 'Go back home',
     'notFound.title': 'Page not found',
+    'posts.backToPosts': 'Go back to articles',
     'posts.readMore': 'Read more',
     'signup.title': 'Create your site',
     'signup.intro': 'Fill in the details below to get your own site.',
@@ -843,6 +845,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'notFound.description': 'Tyvärr kunde vi inte hitta sidan du letade efter.',
     'notFound.goHome': 'Gå tillbaka till startsidan',
     'notFound.title': 'Sidan hittades inte',
+    'posts.backToPosts': 'Tillbaka till artiklarna',
     'posts.readMore': 'Läs mer',
     'signup.title': 'Skapa din webbplats',
     'signup.intro': 'Fyll i uppgifterna nedan för att få din egen webbplats.',
