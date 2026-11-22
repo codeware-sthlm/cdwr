@@ -23,6 +23,8 @@ import { tenantsArrayField } from './fields/tenants-array.field';
 import { forgotPasswordMail } from './forgot-password-email';
 import { applyTenantLocaleHook } from './hooks/apply-tenant-locale.hook';
 import { ensureTenantHook } from './hooks/ensure-tenant.hook';
+import { forgetTrustOnPasswordChangeHook } from './hooks/forget-trust-on-password-change.hook';
+import { forgetTrustOnPasswordResetHook } from './hooks/forget-trust-on-password-reset.hook';
 import { loginThrottleHook } from './hooks/login-throttle.hook';
 import { mailVerificationAfterCreateHook } from './hooks/mail-verification-after-create.hook';
 import { passwordPolicyHook } from './hooks/password-policy.hook';
@@ -133,8 +135,11 @@ const users: CollectionConfig<'users'> = {
       passwordPolicyHook,
       verifyOnlySelfServeHook
     ],
-    beforeValidate: [ensureTenantHook],
-    beforeChange: [validateTenantsArrayAccessHook],
+    beforeValidate: [ensureTenantHook, forgetTrustOnPasswordResetHook],
+    beforeChange: [
+      validateTenantsArrayAccessHook,
+      forgetTrustOnPasswordChangeHook
+    ],
     beforeDelete: [rememberStatsAccountHook],
     afterChange: [
       mailVerificationAfterCreateHook,
