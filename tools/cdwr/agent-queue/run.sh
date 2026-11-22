@@ -1258,9 +1258,11 @@ relabel_merged() {
 
 # read_deploy <entry json> [ticket]: the production deploy of a PR the watch merged on its own (an
 # entry with autoMerge, merged, a merge commit and no settled deploy). Reads the Fly Deployment push
-# runs of the merge commit and, once the newest one succeeded, the annotations of its jobs, and
-# prints { state, run, at } from watch.jq deploy_state. Prints nothing when there is nothing to read
-# or a read failed: the deploy stays as it was, with one warn.
+# runs of the merge commit (derived from the one list of its push runs) and, once the newest one
+# succeeded, the annotations of its jobs, and the image builds (`*-image.yml`) of that list. Prints
+# { state, run, at, failed, pending } from watch.jq deploy_state, builds_state and merge_state;
+# failed and pending are [{ name, url }]. Prints nothing when there is nothing to
+# read or a read failed: the deploy stays as it was, with one warn.
 # The hold list and the deploy reads fail every tick while they fail: noted each time, one warn row
 # an hour, as activity_warn, so a lasting failure can't push real rows out of runs.jsonl
 hold_list_warn() {
@@ -1282,14 +1284,15 @@ deploy_warn() {
 }
 read_deploy() {
   setopt local_options no_err_exit
-  local entry="$1" id="${2:-}" sha runs newest rid jobs job notes="$HOME_DIR/watch-notes.jsonl" state
+  local entry="$1" id="${2:-}" sha runs allruns newest rid jobs job notes="$HOME_DIR/watch-notes.jsonl" state
   jq -e '(.autoMerge.tries // 0) >= 1 and .state == "merged" and .mergeCommit != null
     and ((.deploy.state // "pending") == "pending")' >/dev/null 2>&1 <<<"$entry" || return 0
   sha="$(jq -r '.mergeCommit' <<<"$entry")"
-  runs="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=$sha&event=push" 2>/dev/null)" ||
-    { note "warn: watch: could not read the deploy of $sha ($id)"; deploy_warn "$id"; return 0; }
-  newest="$(jq -c '[.workflow_runs[]?] | sort_by(.created_at // "") | last' <<<"$runs" 2>/dev/null)" ||
-    { note "warn: watch: unreadable deploy runs for $sha ($id)"; deploy_warn "$id"; return 0; }
+  allruns="$(gh_read gh api "repos/codeware-sthlm/cdwr/actions/runs?head_sha=$sha&event=push&per_page=100" 2>/dev/null)" ||
+    { note "warn: watch: could not read the workflow runs of $sha ($id)"; deploy_warn "$id"; return 0; }
+  runs="$(jq -c '{workflow_runs: [.workflow_runs[]? | select((.path // "") | endswith("fly-deployment.yml"))]}' <<<"$allruns" 2>/dev/null)" &&
+    newest="$(jq -c '[.workflow_runs[]?] | sort_by(.created_at // "") | last' <<<"$runs" 2>/dev/null)" ||
+    { note "warn: watch: unreadable workflow runs for $sha ($id)"; deploy_warn "$id"; return 0; }
   : > "$notes"
   if [[ "$(jq -r '.status == "completed" and .conclusion == "success"' <<<"$newest")" == true ]]; then
     rid="$(jq -r '.id' <<<"$newest")"
@@ -1300,13 +1303,19 @@ read_deploy() {
         { rm -f "$notes"; note "warn: watch: could not read the deploy annotations of $sha ($id)"; deploy_warn "$id"; return 0; }
     done
   fi
-  state="$(watch -rn --argjson runs "$runs" --slurpfile notes "$notes" --arg merged "$(jq -r '.mergedAt // ""' <<<"$entry")" \
+  state="$(watch -nc --argjson runs "$runs" --argjson all "$allruns" --argjson newest "$newest" --slurpfile notes "$notes" --arg merged "$(jq -r '.mergedAt // ""' <<<"$entry")" \
     --argjson now "$(date +%s)" 'include "watch";
-    deploy_state($runs; ($notes | add // []); (if $merged == "" then null else $merged end); $now)')"
+    (if $merged == "" then null else $merged end) as $m
+    | deploy_state($runs; ($notes | add // []); $m; $now) as $d
+    | builds_state($all) as $b
+    | merge_state($d; $b; $m; $now) as $s
+    | ($newest.html_url // null) as $dr
+    | ((if $d == "failure" then [{name: "Fly Deployment", url: $dr}] else [] end) + $b.failed) as $failed
+    | { state: $s, run: (if $s == "failure" then ($failed[0].url // $dr) else $dr end),
+        failed: $failed, pending: $b.pending }')"
   rm -f "$notes"
   [[ -n "$state" ]] || { note "warn: watch: deploy_state failed for $sha ($id)$(watch_err)"; deploy_warn "$id"; return 0; }
-  jq -nc --arg s "$state" --argjson r "$newest" --arg at "$(date -u +%FT%TZ)" \
-    '{state: $s, run: ($r.html_url // null), at: $at}'
+  jq -nc --argjson s "$state" --arg at "$(date -u +%FT%TZ)" '$s + {at: $at}'
 }
 
 watch_prs() {
@@ -1433,7 +1442,10 @@ watch_prs() {
       [[ "$(jq -r '.state' <<<"$deploy")" == pending ]] ||
         own_event "$(jq -c --arg id "$id" --arg title "$(jq -r '.title // ""' <<<"$now")" '.entry
           | {event_id: "deploy:\($id):\(.pr)", kind: "deploy", ticket: $id, pr, title: (if $title == "" then null else $title end),
-             target: ((.mergeCommit // "")[0:7] | if . == "" then null else . end), result: .deploy.state}' <<<"$out")"
+             target: ((.mergeCommit // "")[0:7] | if . == "" then null else . end), result: .deploy.state}
+             + (if ((.deploy.failed // []) | length) > 0 then {reason: "\(.deploy.failed | map(.name) | join(", ")) failed"}
+                elif .deploy.state == "unknown" and ((.deploy.pending // []) | length) > 0 then {reason: "\(.deploy.pending | map(.name) | join(", ")) never settled"}
+                else {} end)' <<<"$out")"
     fi
     state="$(jq -c --arg id "$id" --argjson e "$(jq -c '.entry' <<<"$out")" '.[$id] = $e' <<<"$state")"
   done
