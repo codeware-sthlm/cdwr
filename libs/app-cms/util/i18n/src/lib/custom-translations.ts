@@ -463,6 +463,15 @@ const customTranslationsSchema = z.object({
     done: z.string(),
     failed: z.string()
   }),
+  totpTrust: z.object({
+    rememberDevice: z.string()
+  }),
+  totpTrustForget: z.object({
+    button: z.string(),
+    description: z.string(),
+    done: z.string(),
+    error: z.string()
+  }),
   tourSignups: z.object({
     anonymize: z.string(),
     anonymizeConfirm: z.string(),
@@ -1095,6 +1104,16 @@ You can assign multiple tags to a file.`,
       confirm: 'Reset',
       done: 'Two-factor login reset for {{name}}.',
       failed: 'Could not reset two-factor login.'
+    },
+    totpTrust: {
+      rememberDevice: 'Trust this device for 30 days'
+    },
+    totpTrustForget: {
+      button: 'Forget all trusted devices',
+      description:
+        'Every device that skips the code asks for it again at the next login.',
+      done: 'All trusted devices are forgotten.',
+      error: 'Could not forget the trusted devices.'
     },
     tourSignups: {
       anonymize: 'Clear passenger data',
@@ -1758,6 +1777,16 @@ Du kan tilldela flera etiketter till en fil.`,
       confirm: 'Återställ',
       done: 'Tvåstegsinloggningen är återställd för {{name}}.',
       failed: 'Det gick inte att återställa tvåstegsinloggningen.'
+    },
+    totpTrust: {
+      rememberDevice: 'Lita på den här enheten i 30 dagar'
+    },
+    totpTrustForget: {
+      button: 'Glöm alla betrodda enheter',
+      description:
+        'Alla enheter som hoppar över koden frågar efter den igen vid nästa inloggning.',
+      done: 'Alla betrodda enheter är glömda.',
+      error: 'Det gick inte att glömma de betrodda enheterna.'
     },
     tourSignups: {
       anonymize: 'Rensa passageraruppgifter',

@@ -84,7 +84,8 @@ export default async function MemberLoginPage({ searchParams }: Props) {
           labels={{
             code: t(locale, 'memberLogin.code'),
             submit: t(locale, 'memberLogin.codeSubmit'),
-            failed: t(locale, 'memberLogin.codeFailed')
+            failed: t(locale, 'memberLogin.codeFailed'),
+            trust: t(locale, 'memberLogin.trustDevice')
           }}
         />
       </main>

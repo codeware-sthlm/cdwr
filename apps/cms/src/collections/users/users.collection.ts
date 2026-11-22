@@ -11,7 +11,8 @@ import {
   getId,
   getUserTenantIDs,
   hasNoAdminRoles,
-  hasRole
+  hasRole,
+  isUser
 } from '@codeware/app-cms/util/misc';
 import { User } from '@codeware/shared/util/payload-types';
 import { CollectionConfig, Condition } from 'payload';
@@ -34,6 +35,7 @@ import { validateTenantsArrayAccessHook } from './hooks/validate-tenants-array-a
 import { verifyOnlySelfServeHook } from './hooks/verify-only-self-serve.hook';
 import { verifyTenantModeAccessHook } from './hooks/verify-tenant-mode-access.hook';
 import { userTotpResetEndpoint } from './totp-reset.endpoint';
+import { userTotpTrustForgetEndpoint } from './totp-trust-forget.endpoint';
 import { verifyEmailMail } from './verify-email';
 
 /**
@@ -124,7 +126,7 @@ const users: CollectionConfig<'users'> = {
     update: adminAccessToAllDocTenants('allowSelf'),
     delete: adminAccessToAllDocTenants('denySelf')
   },
-  endpoints: [userTotpResetEndpoint],
+  endpoints: [userTotpResetEndpoint, userTotpTrustForgetEndpoint],
   hooks: {
     beforeOperation: [
       loginThrottleHook,
@@ -211,6 +213,22 @@ const users: CollectionConfig<'users'> = {
                 components: {
                   Field:
                     '@codeware/apps/cms/components/admin/users/TotpReset.client'
+                }
+              }
+            },
+            {
+              name: 'totpTrustForget',
+              type: 'ui',
+              admin: {
+                disableListColumn: true,
+                // Own account always; another user's as `canResetTotp` allows
+                condition: (data, _, { user }) =>
+                  isUser(user) &&
+                  data?.id !== undefined &&
+                  (data.id === user.id || canResetTotp(user, data)),
+                components: {
+                  Field:
+                    '@codeware/apps/cms/components/admin/users/TotpTrustForget.client'
                 }
               }
             }

@@ -59,6 +59,7 @@ import { default as default_c09482d250ab6d202838d64026b532c8 } from '@codeware/a
 import { default as default_684605a40f01e98600c1b5e22bd87007 } from '@codeware/apps/cms/components/admin/tour-signups/TourSignupsField';
 import { default as default_83b1e477403db97f7c64cd4eca1f0fbb } from '@codeware/apps/cms/components/TourSignupsCell';
 import { default as default_615a41ecbb6403a934156338fd4ee907 } from '@codeware/apps/cms/components/admin/users/TotpReset.client';
+import { default as default_b6c27d2d465e600e99de2c0783605232 } from '@codeware/apps/cms/components/admin/users/TotpTrustForget.client';
 import { default as default_4a3552dc4f000a1797b4eb36166f8ff8 } from '@codeware/apps/cms/components/TenantsArrayField';
 import { default as default_dec1059b7bb8eb8da3a9f0fc400fffbd } from '@codeware/apps/cms/components/TenantsArrayRowLabel';
 import { TOTPField as TOTPField_4eaf6cb33cfb75be01716613e3c9a512 } from 'payload-totp/rsc';
@@ -218,6 +219,8 @@ export const importMap = {
     default_83b1e477403db97f7c64cd4eca1f0fbb,
   '@codeware/apps/cms/components/admin/users/TotpReset.client#default':
     default_615a41ecbb6403a934156338fd4ee907,
+  '@codeware/apps/cms/components/admin/users/TotpTrustForget.client#default':
+    default_b6c27d2d465e600e99de2c0783605232,
   '@codeware/apps/cms/components/TenantsArrayField#default':
     default_4a3552dc4f000a1797b4eb36166f8ff8,
   '@codeware/apps/cms/components/TenantsArrayRowLabel#default':

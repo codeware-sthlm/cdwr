@@ -7,7 +7,7 @@ type Props = {
   returnTo: string;
   /** Where `payload-totp` verifies the code */
   verifyPath: string;
-  labels: { code: string; submit: string; failed: string };
+  labels: { code: string; submit: string; failed: string; trust: string };
 };
 
 /**
@@ -23,7 +23,9 @@ export function MemberCodeForm({ returnTo, verifyPath, labels }: Props) {
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const token = String(new FormData(event.currentTarget).get('code') ?? '');
+    const form = new FormData(event.currentTarget);
+    const token = String(form.get('code') ?? '');
+    const trust = form.get('trust') === 'on';
 
     setSending(true);
     setFailed(false);
@@ -32,7 +34,7 @@ export function MemberCodeForm({ returnTo, verifyPath, labels }: Props) {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
+        body: JSON.stringify(trust ? { token, trust } : { token })
       });
       const result = (await response.json().catch(() => null)) as {
         ok?: boolean;
@@ -66,6 +68,11 @@ export function MemberCodeForm({ returnTo, verifyPath, labels }: Props) {
           autoFocus
           className="border-input bg-background rounded-md border px-3 py-2"
         />
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="trust" />
+        {labels.trust}
       </label>
 
       <button
