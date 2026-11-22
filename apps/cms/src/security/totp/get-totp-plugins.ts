@@ -4,6 +4,7 @@ import { payloadTotp, totpAccess } from 'payload-totp';
 
 import { totpEnrolmentPlugin } from './totp-enrolment.plugin';
 import { totpOptions } from './totp-options';
+import { totpTrustAfterVerify, totpTrustPlugin } from './totp-trust.plugin';
 
 /**
  * Upload collections whose files visitors load without a user: images on
@@ -70,5 +71,7 @@ export const getTotpPlugins = (): Array<Plugin> => [
   // as well as payload-totp's, while every other read keeps both
   totpEnrolmentPlugin({ collection: 'users' }),
   publicFiles,
-  payloadTotp(totpOptions)
+  payloadTotp({ ...totpOptions, afterVerify: totpTrustAfterVerify }),
+  // After payloadTotp, whose strategy it is placed behind
+  totpTrustPlugin
 ];

@@ -238,6 +238,9 @@ importers:
       isbot:
         specifier: ^4.4.0
         version: 4.4.0
+      jose:
+        specifier: ^5.10.0
+        version: 5.10.0
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.3.0)

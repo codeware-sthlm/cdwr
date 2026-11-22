@@ -95,6 +95,7 @@ import * as migration_20261110_225226_cod_769_coming_soon from './20261110_22522
 import * as migration_20261112_135923_cod_779_agents from './20261112_135923_cod_779_agents';
 import * as migration_20261113_232648_code_shell from './20261113_232648_code_shell';
 import * as migration_20261122_195349_cod_889_posts_listing_categories from './20261122_195349_cod_889_posts_listing_categories';
+import * as migration_20261122_221236_cod_892_trust_epoch from './20261122_221236_cod_892_trust_epoch';
 
 export const migrations = [
   {
@@ -581,5 +582,10 @@ export const migrations = [
     up: migration_20261122_195349_cod_889_posts_listing_categories.up,
     down: migration_20261122_195349_cod_889_posts_listing_categories.down,
     name: '20261122_195349_cod_889_posts_listing_categories'
+  },
+  {
+    up: migration_20261122_221236_cod_892_trust_epoch.up,
+    down: migration_20261122_221236_cod_892_trust_epoch.down,
+    name: '20261122_221236_cod_892_trust_epoch'
   }
 ];

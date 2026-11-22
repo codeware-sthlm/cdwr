@@ -13,6 +13,10 @@ jest.mock('payload-totp', () => {
 });
 // The misc barrel reaches an ESM-only module that Jest cannot load
 jest.mock('@payloadcms/plugin-multi-tenant/utilities', () => ({}));
+jest.mock('./totp-trust.plugin', () => ({
+  totpTrustAfterVerify: 'after-verify',
+  totpTrustPlugin: 'trust-plugin'
+}));
 jest.mock('./totp-enrolment.plugin', () => ({
   totpEnrolmentPlugin: jest.fn(() => 'enrolment-plugin')
 }));
@@ -96,17 +100,22 @@ describe('publicFileAccess', () => {
 });
 
 describe('getTotpPlugins', () => {
-  it('runs the enrolment wrapper first, public files next and payloadTotp last', () => {
+  it('runs the enrolment wrapper first, public files next, payloadTotp then the trust plugin', () => {
     const plugins = getTotpPlugins();
 
     // A visitor's file read must skip the enrolment wrapper too, so public
     // files wraps it rather than the other way round
-    expect(plugins).toHaveLength(3);
+    expect(plugins).toHaveLength(4);
     expect(plugins[0]).toBe('enrolment-plugin');
     expect(plugins[1]).toEqual(expect.any(Function));
     expect(plugins[2]).toBe('payload-totp-plugin');
+    expect(plugins[3]).toBe('trust-plugin');
     expect(payloadTotp).toHaveBeenCalledWith(
-      expect.objectContaining({ collection: 'users', forceSetup: false })
+      expect.objectContaining({
+        collection: 'users',
+        forceSetup: false,
+        afterVerify: 'after-verify'
+      })
     );
   });
 
