@@ -293,7 +293,7 @@
         "ciTargetName": "e2e-ci"
       }
     },
-    "./nx-payload-plugin.ts",
+    "./packages/nx-payload/plugin.mts",
     {
       "plugin": "@nx/storybook/plugin",
       "options": {
