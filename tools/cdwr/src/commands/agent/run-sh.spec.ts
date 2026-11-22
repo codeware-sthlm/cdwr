@@ -122,6 +122,17 @@ describe('run.sh', () => {
     expect(offline).toBeLessThan(SCRIPT.search(/\$\(linear "/));
   });
 
+  // A paused tick publishes queue_state, the devlog's next run included
+  it('defines the devlog gate before the paused tick records the state', () => {
+    const paused = SCRIPT.indexOf('if $paused; then');
+    expect(paused).toBeGreaterThan(0);
+    for (const fn of ['stamp_age', 'devlog_gate', 'devlog_next']) {
+      const at = SCRIPT.search(new RegExp(`^${fn}\\(\\) \\{`, 'm'));
+      expect(at).toBeGreaterThan(0);
+      expect(at).toBeLessThan(paused);
+    }
+  });
+
   it('leaves planned tickets out of the plan-only selection', () => {
     expect(SCRIPT).toContain('select((status_rows | length) == 0)');
     expect(SCRIPT).toMatch(
@@ -1113,7 +1124,7 @@ describe('run.sh telemetry', () => {
     );
     expect(SCRIPT).toMatch(/\( telemetry_queue_state "\$last" [^)]*\) &!/s);
     expect(SCRIPT).toMatch(
-      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" "\$deploy" "\$notify" \) &!/s
+      /telemetry_queue_state [^)]*"\$watch" "\$renovate" "\$devlog" "\$review" "\$deploy" "\$notify" "\$devlog_next" \) &!/s
     );
     expect(SCRIPT).toContain(
       'notify="$("$HOME_DIR/notify.sh" --dial 2>/dev/null)"'
@@ -1151,7 +1162,8 @@ describe('run.sh telemetry', () => {
         `HOME_DIR="${home}"; check=false; last_outcome=idle; launch_note=""; paused=false`,
         'telemetry_on() { return 0; }',
         'queue_job_line() { :; }',
-        `telemetry_queue_state() { print -r -- "$#|\${11}" > "${home}/state"; }`,
+        'devlog_next() { print \'{"state":"off"}\'; }',
+        `telemetry_queue_state() { print -r -- "$#|\${11}|\${12}" > "${home}/state"; }`,
         fn ?? '',
         'record_queue_state',
         'sleep 0.5'
@@ -1164,11 +1176,15 @@ describe('run.sh telemetry', () => {
 
     it('passes the dial as the 11th argument', () => {
       const dial = '{"level":"action","muteUntil":null}';
-      expect(record(dial)).toBe(`11|${dial}`);
+      expect(record(dial)).toBe(`12|${dial}|{"state":"off"}`);
+    });
+
+    it('passes the devlog gate answer as the 12th argument', () => {
+      expect(record(null)?.split('|')[2]).toBe('{"state":"off"}');
     });
 
     it('passes an empty 11th argument without an executable notify.sh', () => {
-      expect(record(null)).toBe('11|');
+      expect(record(null)).toBe('12||{"state":"off"}');
     });
   });
 
@@ -5990,6 +6006,65 @@ describe('run.sh devlog session', () => {
 
   it('waits for the hour', () => {
     expect(gate({ hour: '23' })).toMatch(/^(not before 23:00|due)$/);
+  });
+
+  describe('devlog_next', () => {
+    const next = (env: { days?: string; hour: string }, stamp?: string) => {
+      if (stamp) writeFileSync(join(home, 'devlog-ran-on'), `${stamp}\n`);
+      const out = spawnSync(
+        'zsh',
+        [
+          '-c',
+          [
+            `HOME_DIR="${home}"`,
+            `DEVLOG_DAYS="${env.days ?? '7'}"`,
+            `SUGGEST_HOUR="${env.hour}"`,
+            fn('stamp_age'),
+            fn('devlog_gate'),
+            fn('devlog_next'),
+            'devlog_next'
+          ].join('\n')
+        ],
+        { encoding: 'utf8' }
+      ).stdout.trim();
+      return JSON.parse(out) as Record<string, unknown>;
+    };
+
+    it('is off without a date when the interval is 0', () => {
+      expect(next({ days: '0', hour: '9' })).toEqual({
+        state: 'off',
+        next: null,
+        hour: 9,
+        text: 'off'
+      });
+    });
+
+    it('is done with the stamp date plus the interval', () => {
+      expect(next({ hour: '0' }, '2026-11-20')).toMatchObject({
+        state: 'done',
+        next: '2026-11-27',
+        hour: 0
+      });
+    });
+
+    it('is due today past the hour', () => {
+      expect(next({ hour: '0' }, day(8))).toEqual({
+        state: 'due',
+        next: day(0),
+        hour: 0,
+        text: 'due'
+      });
+    });
+
+    it('is early today before the hour', () => {
+      const out = next({ hour: '24' });
+      expect(out).toEqual({
+        state: 'early',
+        next: day(0),
+        hour: 24,
+        text: 'not before 24:00'
+      });
+    });
   });
 
   describe('the claude call', () => {

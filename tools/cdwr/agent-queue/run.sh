@@ -900,13 +900,55 @@ queue_job_line() {
   $paused && line+=" · paused"
   print -r -- "$line"
 }
+# Above the paused block, since record_queue_state reads the devlog gate on a paused tick too
+# stamp_age <file>: whole days since the date a stamp file holds; empty when there is no stamp
+stamp_age() {
+  local ran
+  ran="$(cat "$1" 2>/dev/null)"
+  [[ "$ran" == <->-<->-<-> ]] || return 0
+  print $(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || date -d "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
+}
+
+# devlog_gate: prints due, done (next in N day(s)), not before HH:00, or off. It starts after
+# SUGGEST_HOUR like the suggestion, on an idle tick the suggestion leaves.
+devlog_gate() {
+  setopt local_options no_err_exit
+  local age hour
+  if [[ "$DEVLOG_DAYS" != <-> || "$DEVLOG_DAYS" == 0 ]]; then print off; return 0; fi
+  age="$(stamp_age "$HOME_DIR/devlog-ran-on")"
+  if [[ -n "$age" ]] && (( age < DEVLOG_DAYS )); then print "done, next in $(( DEVLOG_DAYS - age )) day(s)"; return 0; fi
+  hour=$(( 10#$(date +%H) ))
+  if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
+  print due
+}
+
+# devlog_next: the devlog gate's answer as one JSON object for the desk:
+# {state: due|done|early|off, next: YYYY-MM-DD|null, hour, text}. next is the stamp's date plus
+# DEVLOG_DAYS when done, today when due or early, null when off.
+devlog_next() {
+  setopt local_options no_err_exit
+  local text state next="" ran
+  text="$(devlog_gate)"
+  case "$text" in
+    off) state=off ;;
+    done*)
+      state=done
+      ran="$(cat "$HOME_DIR/devlog-ran-on" 2>/dev/null)"
+      next="$(date -j -v+${DEVLOG_DAYS}d -f %F "$ran" +%F 2>/dev/null || date -d "$ran + $DEVLOG_DAYS days" +%F 2>/dev/null)" ;;
+    "not before "*) state=early; next="$(date +%F)" ;;
+    *) state=due; next="$(date +%F)" ;;
+  esac
+  jq -nc --arg state "$state" --arg next "$next" --arg hour "$SUGGEST_HOUR" --arg text "$text" \
+    '{state: $state, next: ($next | if . == "" then null else . end), hour: ($hour | tonumber? // null), text: $text}'
+}
+
 # This host's queue state as one row: the last run, the Attended and Suggested lines, the job
 # line and the queue view. Detached like record_run.
 record_queue_state() {
   $check && return 0
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local last attended suggested jl view watch renovate devlog review deploy notify
+  local last attended suggested jl view watch renovate devlog review deploy notify devlog_next
   notify="$("$HOME_DIR/notify.sh" --dial 2>/dev/null)"
   last="$(date '+%F %H:%M') · $last_outcome${launch_note:+ · no launch: $launch_note}"
   # attended-published is the cache before attended-line, until a verdict replaces it
@@ -919,7 +961,8 @@ record_queue_state() {
   devlog="$(cat "$HOME_DIR/devlog-line" 2>/dev/null)"
   review="$(cat "$HOME_DIR/review-line" 2>/dev/null)"
   deploy="$(cat "$HOME_DIR/deploy.json" 2>/dev/null)"
-  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" "$deploy" "$notify" ) &!
+  devlog_next="$(devlog_next 2>/dev/null)"
+  ( telemetry_queue_state "$last" "$attended" "$suggested" "$jl" "$view" "$watch" "$renovate" "$devlog" "$review" "$deploy" "$notify" "$devlog_next" ) &!
 }
 
 # A paused tick publishes the last run's Attended line and queue view with a paused job line, so
@@ -2286,14 +2329,6 @@ query {
 }
 GQL
 
-# stamp_age <file>: whole days since the date a stamp file holds; empty when there is no stamp
-stamp_age() {
-  local ran
-  ran="$(cat "$1" 2>/dev/null)"
-  [[ "$ran" == <->-<->-<-> ]] || return 0
-  print $(( ( $(date +%s) - $(date -j -f %F "$ran" +%s 2>/dev/null || date -d "$ran" +%s 2>/dev/null || echo 0) ) / 86400 ))
-}
-
 # suggest_gate: prints due (focus <dx|maintenance|looks>), done today, not before HH:00,
 # skipped, COD-n is open, unavailable (Linear did not answer, so nothing runs), or off.
 suggest_gate() {
@@ -2313,19 +2348,6 @@ suggest_gate() {
      | .identifier] | first // empty' <<<"$ideas" 2>/dev/null)"
   if [[ -n "$open" ]]; then print "skipped, $open is open"; return 0; fi
   print "due (focus ${focuses[$(( 10#$(date +%j) % 3 + 1 ))]})"
-}
-
-# devlog_gate: prints due, done (next in N day(s)), not before HH:00, or off. It starts after
-# SUGGEST_HOUR like the suggestion, on an idle tick the suggestion leaves.
-devlog_gate() {
-  setopt local_options no_err_exit
-  local age hour
-  if [[ "$DEVLOG_DAYS" != <-> || "$DEVLOG_DAYS" == 0 ]]; then print off; return 0; fi
-  age="$(stamp_age "$HOME_DIR/devlog-ran-on")"
-  if [[ -n "$age" ]] && (( age < DEVLOG_DAYS )); then print "done, next in $(( DEVLOG_DAYS - age )) day(s)"; return 0; fi
-  hour=$(( 10#$(date +%H) ))
-  if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
-  print due
 }
 
 # review_gate: prints requested (a desk click, which beats the schedule and the hour), due, ran today,
