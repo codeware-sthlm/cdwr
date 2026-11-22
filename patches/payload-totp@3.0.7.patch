@@ -1,7 +1,33 @@
+diff --git a/dist/api/verifyToken.js b/dist/api/verifyToken.js
+index 1f23541e8e92500175a99f64ffe01cf02e66d9dc..2bd0cbc7bc354f6922b05387bbc6933708d9bb38 100644
+--- a/dist/api/verifyToken.js
++++ b/dist/api/verifyToken.js
+@@ -79,8 +79,20 @@ export function verifyToken(pluginOptions) {
+             secret: payload.secret,
+             user
+         });
++        // Lets the consumer act on a verified code, e.g. set a trusted-device cookie
++        const extra = await pluginOptions.afterVerify?.({
++            body: data,
++            req,
++            user
++        });
++        const headers = new Headers();
++        extra?.forEach((value, key)=>{
++            headers.append(key, value);
++        });
+         return Response.json({
+             ok: true
++        }, {
++            headers
+         });
+     };
+     return handler;
 diff --git a/dist/components/Field/Setup.js b/dist/components/Field/Setup.js
+index ce9ada439acc1f6a9af4764323f7124ee7ae3efd..d175990696c1803c7667d3da8d47c0f630f7394d 100644
 --- a/dist/components/Field/Setup.js
 +++ b/dist/components/Field/Setup.js
-@@ -5,7 +5,6 @@
+@@ -5,7 +5,6 @@ export default function Setup({ backUrl, i18n, payload }) {
      let url = formatAdminURL({
          adminRoute: payload.config.routes.admin,
          path: '/setup-totp',
@@ -10,9 +36,10 @@ diff --git a/dist/components/Field/Setup.js b/dist/components/Field/Setup.js
      if (backUrl) {
          // `req.url` is absolute and, without a `serverURL`, always `http://<host>`, so on an HTTPS
 diff --git a/dist/components/Provider/index.js b/dist/components/Provider/index.js
+index 5626c80a9058b007f26276132f4271c56e6b26b3..27e5162c9e385255d434de3ae4476c9fc926f290 100644
 --- a/dist/components/Provider/index.js
 +++ b/dist/components/Provider/index.js
-@@ -24,9 +24,11 @@
+@@ -24,9 +24,11 @@ export const TOTPProvider = async (args)=>{
          'api-key',
          'totp'
      ].includes(user._strategy ?? '') && normalizedPathname !== normalizedVerifyUrl) {
@@ -27,6 +54,7 @@ diff --git a/dist/components/Provider/index.js b/dist/components/Provider/index.
          return /*#__PURE__*/ _jsx(TOTPProviderClient, {
              forceSetup: pluginOptions.forceSetup,
 diff --git a/dist/components/QRCode/index.d.ts b/dist/components/QRCode/index.d.ts
+index ed879360428ac0eb007e9e5fb6407df0901e85cf..ba264b693dc7b378df2dd21bc5964791e8d3974d 100644
 --- a/dist/components/QRCode/index.d.ts
 +++ b/dist/components/QRCode/index.d.ts
 @@ -1,7 +1,8 @@
@@ -40,6 +68,7 @@ diff --git a/dist/components/QRCode/index.d.ts b/dist/components/QRCode/index.d.
 +export default function QRCode({ forceWhiteBackgroundOnQrCode, image, totp }: Args): Promise<import("react").JSX.Element>;
  export {};
 diff --git a/dist/components/QRCode/index.js b/dist/components/QRCode/index.js
+index 9c549f976db8e3d1a5861609c95a8967de4a0bb5..da8388d39a246c144b4a8a5181eb858bc1c25429 100644
 --- a/dist/components/QRCode/index.js
 +++ b/dist/components/QRCode/index.js
 @@ -2,8 +2,10 @@
@@ -56,9 +85,10 @@ diff --git a/dist/components/QRCode/index.js b/dist/components/QRCode/index.js
              dark: '#fff',
              light: '#000'
 diff --git a/dist/components/views/Remove/Form.js b/dist/components/views/Remove/Form.js
+index b37638146db22073cc6c65d094c6df3dfea34d9c..ddb4efeebac8864adda32e47c8994a36072da5a7 100644
 --- a/dist/components/views/Remove/Form.js
 +++ b/dist/components/views/Remove/Form.js
-@@ -16,7 +16,7 @@
+@@ -16,7 +16,7 @@ export default function OTPForm({ apiRoute, length, serverURL }) {
          event.stopPropagation();
          setIsPending(true);
          const formData = new FormData(event.target);
@@ -68,9 +98,10 @@ diff --git a/dist/components/views/Remove/Form.js b/dist/components/views/Remove
              credentials: 'include',
              headers: {
 diff --git a/dist/components/views/Setup/Form.js b/dist/components/views/Setup/Form.js
+index 761a944976c8adc8a523e8ecde263aed3ca8fc39..d06139dcff095e5f36e0af60411cdb87cfe024df 100644
 --- a/dist/components/views/Setup/Form.js
 +++ b/dist/components/views/Setup/Form.js
-@@ -17,7 +17,7 @@
+@@ -17,7 +17,7 @@ export default function OTPForm({ adminRoute, apiRoute, back, length, secret, se
          event.stopPropagation();
          setIsPending(true);
          const formData = new FormData(event.target);
@@ -80,9 +111,10 @@ diff --git a/dist/components/views/Setup/Form.js b/dist/components/views/Setup/F
              credentials: 'include',
              headers: {
 diff --git a/dist/components/views/Setup/index.js b/dist/components/views/Setup/index.js
+index cbea6daf9cca138a0c44691cb9b76b78544a8d67..01670cb057971839873a2026fc9bada29f84857a 100644
 --- a/dist/components/views/Setup/index.js
 +++ b/dist/components/views/Setup/index.js
-@@ -15,15 +15,13 @@
+@@ -15,7 +15,6 @@ export const TOTPSetup = (args)=>{
          const url = formatAdminURL({
              adminRoute,
              path: '/login',
@@ -90,7 +122,7 @@ diff --git a/dist/components/views/Setup/index.js b/dist/components/views/Setup/
          });
          redirect(url);
      }
-     if (user.hasTotp) {
+@@ -23,7 +22,6 @@ export const TOTPSetup = (args)=>{
          const url = formatAdminURL({
              adminRoute,
              path: '/',
@@ -98,7 +130,7 @@ diff --git a/dist/components/views/Setup/index.js b/dist/components/views/Setup/
          });
          redirect(url);
      }
-@@ -56,6 +54,7 @@
+@@ -56,6 +54,7 @@ export const TOTPSetup = (args)=>{
                  children: [
                      /*#__PURE__*/ _jsx(QRCode, {
                          forceWhiteBackgroundOnQrCode: pluginOptions.forceWhiteBackgroundOnQrCode,
@@ -107,9 +139,23 @@ diff --git a/dist/components/views/Setup/index.js b/dist/components/views/Setup/
                      }),
                      /*#__PURE__*/ _jsx(ShowSecret, {
 diff --git a/dist/components/views/Verify/Form.js b/dist/components/views/Verify/Form.js
+index f749396fd3f995543633beb1bff70ba7f114107a..604759cd13a03c68860862b42f6e8eb2050aad05 100644
 --- a/dist/components/views/Verify/Form.js
 +++ b/dist/components/views/Verify/Form.js
-@@ -17,7 +17,7 @@
+@@ -1,10 +1,10 @@
+ /* eslint-disable no-restricted-exports */ 'use client';
+-import { jsx as _jsx } from "react/jsx-runtime";
++import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+ import { toast } from '@payloadcms/ui';
+ import React, { useCallback, useRef, useState } from 'react';
+ import { getSafeBackURL } from '../../../utilities/getSafeBackURL.js';
+ import OTPInput from '../../OTPInput/index.js';
+-export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL }) {
++export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL, trustLabel }) {
+     const [isPending, setIsPending] = useState(false);
+     const form = useRef(null);
+     const onFilled = ()=>{
+@@ -17,7 +17,7 @@ export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL
          event.stopPropagation();
          setIsPending(true);
          const formData = new FormData(event.target);
@@ -118,10 +164,53 @@ diff --git a/dist/components/views/Verify/Form.js b/dist/components/views/Verify
              body: JSON.stringify(Object.fromEntries(formData)),
              credentials: 'include',
              headers: {
+@@ -59,15 +59,34 @@ export default function OTPForm({ adminRoute, apiRoute, back, length, serverURL
+         back,
+         asyncOperation
+     ]);
+-    return /*#__PURE__*/ _jsx("form", {
++    return /*#__PURE__*/ _jsxs("form", {
+         onSubmit: handleSubmit,
+         ref: form,
+-        children: /*#__PURE__*/ _jsx(OTPInput, {
+-            disabled: isPending,
+-            length: length,
+-            name: "token",
+-            onFilled: onFilled
+-        })
++        children: [
++            /*#__PURE__*/ _jsx(OTPInput, {
++                disabled: isPending,
++                length: length,
++                name: "token",
++                onFilled: onFilled
++            }),
++            /*#__PURE__*/ _jsxs("label", {
++                style: {
++                    alignItems: 'center',
++                    display: 'flex',
++                    gap: '8px',
++                    marginTop: '16px'
++                },
++                children: [
++                    /*#__PURE__*/ _jsx("input", {
++                        disabled: isPending,
++                        name: "trust",
++                        type: "checkbox",
++                        value: "true"
++                    }),
++                    trustLabel
++                ]
++            })
++        ]
+     });
+ }
+ 
 diff --git a/dist/components/views/Verify/index.js b/dist/components/views/Verify/index.js
+index a21a4b979054305035baf5d38482c7e7c725354a..fbadae05f46371e4532f57bc1fc0858d462aaac9 100644
 --- a/dist/components/views/Verify/index.js
 +++ b/dist/components/views/Verify/index.js
-@@ -12,15 +12,13 @@
+@@ -12,7 +12,6 @@ export const TOTPVerify = (args)=>{
          const url = formatAdminURL({
              adminRoute,
              path: '/login',
@@ -129,7 +218,7 @@ diff --git a/dist/components/views/Verify/index.js b/dist/components/views/Verif
          });
          redirect(url);
      }
-     if (!user.hasTotp || user.hasTotp && user._strategy === 'totp') {
+@@ -20,7 +19,6 @@ export const TOTPVerify = (args)=>{
          const url = formatAdminURL({
              adminRoute,
              path: '/',
@@ -137,10 +226,36 @@ diff --git a/dist/components/views/Verify/index.js b/dist/components/views/Verif
          });
          redirect(url);
      }
+@@ -38,7 +36,8 @@ export const TOTPVerify = (args)=>{
+                 apiRoute: apiRoute,
+                 back: typeof back === 'string' && back || undefined,
+                 length: pluginOptions.totp?.digits,
+-                serverURL: serverURL
++                serverURL: serverURL,
++                trustLabel: i18n.t('totpTrust:rememberDevice')
+             })
+         ]
+     });
 diff --git a/dist/types.d.ts b/dist/types.d.ts
+index 6a43500bd3372578b32b143a9557a45870850be4..e413102dec98b58b699d897cf1982db6acc22617 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
-@@ -6,5 +6,8 @@
+@@ -1,12 +1,24 @@
+ import type { TOTP } from 'otpauth';
+-import type { AuthStrategyResult, CollectionSlug } from 'payload';
++import type { AuthStrategyResult, CollectionSlug, PayloadRequest } from 'payload';
+ export type PayloadTOTPConfig = {
++    /**
++     * Runs after a correct code on the verify endpoint, never on a failure. Headers it returns,
++     * such as `Set-Cookie`, are added to the response.
++     */
++    afterVerify?: (args: {
++        body: Record<string, unknown>;
++        req: PayloadRequest;
++        user: UserWithTotp;
++    }) => Promise<Headers | undefined>;
+     collection: CollectionSlug;
+     disableAccessWrapper?: boolean;
      disabled?: boolean;
      forceSetup?: boolean;
      forceWhiteBackgroundOnQrCode?: boolean;
@@ -150,3 +265,5 @@ diff --git a/dist/types.d.ts b/dist/types.d.ts
 +        image?: string;
 +    };
  };
+ /**
+  * The authenticated user as Payload hands it to a request.
