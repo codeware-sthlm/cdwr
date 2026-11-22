@@ -391,9 +391,9 @@ supabase functions deploy github-webhook --use-api --no-verify-jwt --project-ref
 supabase secrets set GITHUB_WEBHOOK_SECRET=… --project-ref xwmrptothspulojaxrvf
 ```
 
-A completed `workflow_run` of `fly-deployment.yml` can write a `notices` row (above) and no more; one of
-`agent-host-image.yml` or `desk.yml` goes to `builds`, and only when it is a successful `push` or
-`workflow_dispatch` run on `main`: one row per workflow with
+A completed `workflow_run` of `fly-deployment.yml`, `agent-host-image.yml` or `desk.yml` goes to `builds`
+when it is a successful `push` or `workflow_dispatch` run on `main`, and a `fly-deployment.yml` run can also
+write a `notices` row (above): one `builds` row per workflow with
 the commit and the time the run was created. Those workflows' path filters already say what touched the image
 or the desk, so a row there is a new version of it. Runs can finish out of order or be re-run, so a
 trigger keeps the row of the run created last, which a re-run of an old run never is; the image
