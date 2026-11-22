@@ -119,9 +119,10 @@ It will not:
 - write under `/etc/sudoers.d`
 - honour `NUC_APPLY_*` overrides when run as root (they exist for the specs; sudo drops them anyway)
 
-The control is the hold list: `tools/cdwr/agent-queue/hold-paths.txt` holds `apps/agent-host/nuc/**`,
-so a PR that changes what the installer installs, or the installer, never merges on its own.
-Root on the NUC follows a merge Håkan made.
+The control is the hold list: `tools/cdwr/agent-queue/hold-paths.txt` holds `apps/agent-host/**`,
+`tools/cdwr/agent-queue/**` and `.claude/**`. So a PR that changes what the installer installs,
+the installer, or the queue scripts that decide a merge never merges on its own. Root on the NUC
+follows a merge Håkan made.
 
 To change a script or unit, edit it in `nuc/` and merge. To add one, give it a name that fits the
 pattern; a timer is enabled on its first install. The apply list's `nuc-install` waits for the
@@ -132,9 +133,9 @@ image is built and self-deployed too; that is harmless. A failed run is retried 
 ### Installing it once
 
 On the NUC, as an admin user (`ssh -t hakans@cdwr-nuc`), once this installer is on main. `sha` is
-main's head, read from GitHub. Install the sudoers line only once the hold list holds the queue's
-own scripts too (`watch.jq`, `run.sh`, `lib.sh`), or once you accept that an agent PR that rewrites
-the merge verdict could reach root through it.
+main's head, read from GitHub. Run it only once the host's GitHub reads no longer share the
+anonymous rate limit (COD-891); before that `nuc-sync` stalls the way the self-deploy did on
+2026-11-22.
 
 ```sh
 sha="$(curl -fsS -H 'Accept: application/vnd.github.sha' https://api.github.com/repos/codeware-sthlm/cdwr/commits/main)"
