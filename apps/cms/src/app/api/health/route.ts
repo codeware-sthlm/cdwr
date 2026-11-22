@@ -22,8 +22,15 @@ const headers = {
 };
 
 /**
- * Whether the last check failed. Fly checks every 20 s, so only the first
- * failure of a run goes to Sentry
+ * A miss this soon after the process started is a boot: Fly's checker reaches
+ * a machine while Payload is still starting, so it answers 503 but stays out
+ * of Sentry. A failure that lasts past it is reported
+ */
+export const BOOT_QUIET_S = 120;
+
+/**
+ * Whether this run of failures is already reported. Fly checks every 20 s, so
+ * only the first reported failure of a run goes to Sentry
  */
 let failing = false;
 
@@ -42,7 +49,8 @@ export const resetHealthState = () => {
  *
  * One deadline covers Payload's start and the query, so a hung pool
  * answers 503 instead of hanging the check. The first failure after a
- * success goes to Sentry with the step, the pool's counts and who asked:
+ * success, once the process is past its boot, goes to Sentry with the step,
+ * the pool's counts and who asked:
  * the caller's user agent, whether it came through Fly's proxy, and how
  * long the process had run.
  */
@@ -77,7 +85,7 @@ export async function GET(request: Request) {
     failing = false;
     return new Response('Pong!', { status: 200, headers });
   } catch (error) {
-    if (!failing) {
+    if (!failing && process.uptime() >= BOOT_QUIET_S) {
       Sentry.captureException(error, {
         fingerprint: ['cms-health-check-failed'],
         tags: {
@@ -96,8 +104,8 @@ export async function GET(request: Request) {
           uptimeSeconds: Math.round(process.uptime())
         }
       });
+      failing = true;
     }
-    failing = true;
     return new Response('DB unavailable', { status: 503, headers });
   } finally {
     clearTimeout(timer);

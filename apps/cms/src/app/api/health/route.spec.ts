@@ -2,7 +2,12 @@
 import * as Sentry from '@sentry/nextjs';
 import { getPayload } from 'payload';
 
-import { GET, HEALTH_DEADLINE_MS, resetHealthState } from './route';
+import {
+  BOOT_QUIET_S,
+  GET,
+  HEALTH_DEADLINE_MS,
+  resetHealthState
+} from './route';
 
 jest.mock('@sentry/nextjs', () => ({ captureException: jest.fn() }));
 jest.mock('payload', () => ({ getPayload: jest.fn() }));
@@ -26,6 +31,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   jest.useRealTimers();
   resetHealthState();
+  jest.spyOn(process, 'uptime').mockReturnValue(BOOT_QUIET_S + 60);
   jest.mocked(getPayload).mockResolvedValue({ db: { pool } } as never);
   pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
 });
@@ -58,7 +64,7 @@ describe('GET /api/health', () => {
           poolTotal: 4,
           poolIdle: 0,
           poolWaiting: 7,
-          uptimeSeconds: expect.any(Number)
+          uptimeSeconds: BOOT_QUIET_S + 60
         }
       })
     );
@@ -114,7 +120,7 @@ describe('GET /api/health', () => {
           poolTotal: undefined,
           poolIdle: undefined,
           poolWaiting: undefined,
-          uptimeSeconds: expect.any(Number)
+          uptimeSeconds: BOOT_QUIET_S + 60
         }
       })
     );
@@ -138,6 +144,25 @@ describe('GET /api/health', () => {
         }
       })
     );
+  });
+
+  it('keeps a miss during the boot out of Sentry, but still answers 503', async () => {
+    jest.mocked(process.uptime).mockReturnValue(BOOT_QUIET_S - 1);
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+
+    expect((await GET(request())).status).toBe(503);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('reports a failure that lasts past the boot', async () => {
+    pool.query.mockRejectedValue(new Error('connection terminated'));
+    jest.mocked(process.uptime).mockReturnValue(BOOT_QUIET_S - 1);
+    await GET(request());
+
+    jest.mocked(process.uptime).mockReturnValue(BOOT_QUIET_S);
+    await GET(request());
+
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
   });
 
   it('clears its timer once answered', async () => {
