@@ -1,0 +1,4 @@
+# Blue-green deploys: new machines must pass health checks before traffic moves
+
+[deploy]
+  strategy = 'bluegreen'
