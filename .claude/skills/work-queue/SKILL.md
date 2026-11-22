@@ -404,6 +404,7 @@ to **What to take next**.
    | `supabase-migration <file>`                                | `tools/cdwr/agent-queue/supabase/migrations/<14 digits>_<name>.sql`, added by this PR                                                           |
    | `supabase-function <name>`                                 | parses, but the NUC refuses it as `not enabled`: keep a function deploy a checklist item                                                        |
    | `agent-deploy`                                             | none; waits for the NUC's self-deploy of the merge commit                                                                                       |
+   | `nuc-install`                                              | none; waits for the host's `nuc-apply` of a main containing the merge commit (only once Håkan's one-time install is done)                       |
    | `secret-copy <env> <folder> <from> <to>`                   | `production` or `preview`; `/apps/<app>` or `/tenants/<slug>/apps/<app>`; copies a key to a new key in the folder, never over an existing value |
    | `secret-rewrite <env> <folder> <key> host=… port=… user=…` | the same env and folder rules; changes only the host, port or user of a url secret, never its password                                          |
    | `secret-set <env> <folder> <key> <value>`                  | the same env and folder rules; a non-secret value the PR states: a whole number, `true`/`false`, or an `https://` url without credentials       |
