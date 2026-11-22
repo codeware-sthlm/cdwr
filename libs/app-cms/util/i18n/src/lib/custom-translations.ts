@@ -469,6 +469,7 @@ const customTranslationsSchema = z.object({
   totpTrustForget: z.object({
     button: z.string(),
     description: z.string(),
+    passwordNote: z.string(),
     confirmMessage: z.string(),
     confirm: z.string(),
     done: z.string(),
@@ -1114,6 +1115,7 @@ You can assign multiple tags to a file.`,
       button: 'Forget all trusted devices',
       description:
         'Every trusted device asks for the code again, this one included.',
+      passwordNote: 'Changing your password also forgets your trusted devices.',
       confirmMessage:
         'Forget all trusted devices? Each one asks for the code at the next request.',
       confirm: 'Forget',
@@ -1790,6 +1792,7 @@ Du kan tilldela flera etiketter till en fil.`,
       button: 'Glöm alla betrodda enheter',
       description:
         'Alla betrodda enheter frågar efter koden igen, även den här.',
+      passwordNote: 'Byter du lösenord glöms också dina betrodda enheter.',
       confirmMessage:
         'Glömma alla betrodda enheter? Var och en frågar efter koden vid nästa begäran.',
       confirm: 'Glöm',
