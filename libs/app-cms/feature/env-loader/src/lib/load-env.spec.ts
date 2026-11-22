@@ -286,4 +286,21 @@ describe('loadEnv', () => {
 
     expect(turnstile(await loadEnv()).HUMAN_CHECK_SOURCE).toBeUndefined();
   });
+
+  it('keeps a MAINTENANCE_MODE set before the load', async () => {
+    process.env['MAINTENANCE_MODE'] = 'true';
+    serve({ '/apps/cms': { PAYLOAD_SECRET_KEY: 'x' } });
+
+    expect((await loadEnv())?.['MAINTENANCE_MODE']).toBe('true');
+    expect(process.env['MAINTENANCE_MODE']).toBe('true');
+  });
+
+  it('drops a MAINTENANCE_MODE only Infisical supplies', async () => {
+    serve({
+      '/apps/cms': { PAYLOAD_SECRET_KEY: 'x', MAINTENANCE_MODE: 'true' }
+    });
+
+    expect((await loadEnv())?.['MAINTENANCE_MODE']).toBeUndefined();
+    expect(process.env['MAINTENANCE_MODE']).toBeUndefined();
+  });
 });

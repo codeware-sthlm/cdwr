@@ -97,6 +97,9 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   // Deploy metadata in /apps/cms, not configuration for the running app
   delete process.env['DEPLOY_ENABLED'];
 
+  // Set by hand as a Fly secret, never from Infisical
+  const maintenanceMode = process.env['MAINTENANCE_MODE'];
+
   // What was set before Infisical, the lowest source of the Turnstile pair.
   // A pair an earlier load in this process resolved keeps its folder's name
   const environment: TurnstileSource = {
@@ -182,10 +185,12 @@ export const loadEnv = async (): Promise<Env | undefined> => {
     console.warn('[ENV] Could not load tenant CORS secrets from Infisical');
   }
 
-  // MAINTENANCE_MODE is controlled exclusively by the deployment action via Fly secrets.
-  // Deleting it here prevents an accidental Infisical entry from locking the app in
-  // maintenance mode permanently — the Fly secret is always transient.
-  delete process.env['MAINTENANCE_MODE'];
+  // Restore the Fly secret, so an Infisical entry never turns maintenance on
+  if (maintenanceMode === undefined) {
+    delete process.env['MAINTENANCE_MODE'];
+  } else {
+    process.env['MAINTENANCE_MODE'] = maintenanceMode;
+  }
 
   // Validate loaded environment variables
   const { success, error, data } = EnvSchema.safeParse(process.env);
