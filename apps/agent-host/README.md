@@ -107,6 +107,8 @@ it:
 - after a unit changed, runs `daemon-reload`, then `enable` and `restart` for each changed timer.
   A changed service is only reloaded: they are oneshots their timers fire, and restarting
   `cdwr-agent-deploy.service` would start a deploy.
+- notes each installed unit in `/var/lib/nuc-apply/pending` until systemd has taken it, so a run
+  that failed between the install and the restart finishes that unit on the next run.
 
 It will not:
 

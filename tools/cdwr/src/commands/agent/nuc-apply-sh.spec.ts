@@ -68,6 +68,7 @@ while [ $# -gt 2 ]; do
 done
 echo "-m $m -o $o -g $g $1 -> $2" >> "$d/install.log"
 [ -e "$d/install-fail" ] && exit 1
+[ -e "$d/install-fail-$(basename "$2")" ] && exit 1
 cp "$1" "$2" && chmod "$m" "$2"
 `;
 
@@ -126,10 +127,13 @@ describe.skipIf(!hasBash || isRoot)('nuc-apply.sh', () => {
         NUC_APPLY_SBIN: sbin,
         NUC_APPLY_UNITS: units,
         NUC_APPLY_LOCK: join(root, 'nuc-apply.lock'),
+        NUC_APPLY_PENDING: pending(),
         ...env
       },
       encoding: 'utf8'
     });
+
+  const pending = () => join(root, 'state', 'pending');
 
   const out = (result: ReturnType<typeof run>) =>
     JSON.parse(result.stdout) as { sha: string; changed: string[] };
@@ -379,6 +383,56 @@ describe.skipIf(!hasBash || isRoot)('nuc-apply.sh', () => {
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('daemon-reload failed');
       expect(result.stdout).toBe('');
+    });
+  });
+
+  describe('a run that failed half way', () => {
+    it('reloads and restarts on the next run what systemd never took', () => {
+      writeFileSync(join(sbin, 'nuc-apply'), 'installer v2\n');
+      writeFileSync(fakePath('systemctl-fail'), '');
+      expect(run().status).toBe(1);
+      expect(lines('install.log')).toHaveLength(3);
+      expect(read(pending())).toBe(
+        'cdwr-agent-deploy.service\ncdwr-agent-deploy.timer\n'
+      );
+
+      rmSync(fakePath('systemctl-fail'));
+      rmSync(fakePath('systemctl.log'));
+      rmSync(fakePath('install.log'));
+      const result = run();
+      expect(result.status).toBe(0);
+      expect(lines('install.log')).toEqual([]);
+      expect(lines('systemctl.log')).toEqual([
+        'daemon-reload',
+        'enable cdwr-agent-deploy.timer',
+        'restart cdwr-agent-deploy.timer'
+      ]);
+      expect(existsSync(pending())).toBe(false);
+    });
+
+    it('carries a unit installed before a later install failed', () => {
+      writeFileSync(join(sbin, 'nuc-apply'), 'installer v2\n');
+      writeFileSync(fakePath('install-fail-cdwr-agent-deploy.timer'), '');
+      expect(run().status).toBe(1);
+      expect(lines('systemctl.log')).toEqual([]);
+      expect(read(pending())).toBe('cdwr-agent-deploy.service\n');
+
+      rmSync(fakePath('install-fail-cdwr-agent-deploy.timer'));
+      writeFileSync(join(units, 'cdwr-agent-deploy.timer'), 'timer v2\n');
+      const result = run();
+      expect(result.status).toBe(0);
+      expect(out(result).changed).toEqual([]);
+      expect(lines('systemctl.log')).toEqual(['daemon-reload']);
+      expect(existsSync(pending())).toBe(false);
+    });
+
+    it('drops a pending unit main no longer ships', () => {
+      mkdirSync(join(root, 'state'));
+      writeFileSync(pending(), 'cdwr-agent-old.timer\n');
+      folder({ 'self-deploy.sh': 'deploy v3\n' });
+      expect(run().status).toBe(0);
+      expect(lines('systemctl.log')).toEqual([]);
+      expect(existsSync(pending())).toBe(false);
     });
   });
 });

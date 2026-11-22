@@ -16,7 +16,8 @@
 #     /usr/local/sbin/nuc-apply by temp file and rename, so this run finishes as it started
 #   - after a unit changed, daemon-reload, then enable and restart each changed timer. A service
 #     only reloads: they are oneshots their timers fire, and restarting cdwr-agent-deploy.service
-#     would start a deploy
+#     would start a deploy. Each installed unit is noted in a pending file until systemd has it,
+#     so a run that failed in between finishes that unit on the next run, even though cmp matches
 # It never removes a file main deleted, never writes under /etc/sudoers.d and never installs
 # from a branch. On success it prints {"sha": …, "changed": [names]} on stdout; logs go to stderr.
 # Needs bash, curl, jq, flock, cmp, install and systemctl. NUC_APPLY_* replace paths and endpoints
@@ -33,12 +34,14 @@ if (( EUID == 0 )); then
   SBIN=/usr/local/sbin
   UNITS=/etc/systemd/system
   LOCK=/run/nuc-apply.lock
+  PENDING=/var/lib/nuc-apply/pending
 else
   API="${NUC_APPLY_API:-https://api.github.com}"
   RAW="${NUC_APPLY_RAW:-https://raw.githubusercontent.com}"
   SBIN="${NUC_APPLY_SBIN:-/usr/local/sbin}"
   UNITS="${NUC_APPLY_UNITS:-/etc/systemd/system}"
   LOCK="${NUC_APPLY_LOCK:-/run/nuc-apply.lock}"
+  PENDING="${NUC_APPLY_PENDING:-/var/lib/nuc-apply/pending}"
 fi
 
 log() { printf 'nuc-apply: %s\n' "$*" >&2; }
@@ -62,7 +65,7 @@ tmp=""
 
 main() {
   local sha status listing name unit
-  local -a names=() changed=()
+  local -a names=() changed=() units=()
 
   if (( $# != 1 )) || [[ ! "$1" =~ ^[0-9a-f]{40}$ ]]; then
     log "usage: nuc-apply <40-hex commit sha on main>"
@@ -98,6 +101,14 @@ main() {
     fi
   done
 
+  # Units an earlier run installed but systemd never took, still shipped at this sha
+  mkdir -p "$(dirname "$PENDING")" || fail "could not make $(dirname "$PENDING")"
+  if [[ -f "$PENDING" ]]; then
+    while read -r unit; do
+      [[ " ${names[*]} " == *" $unit "* && "$unit" =~ \.(service|timer)$ ]] && units+=("$unit")
+    done <"$PENDING"
+  fi
+
   for name in "${names[@]}"; do
     [[ "$name" == nuc-apply.sh ]] && continue
     cmp -s "$tmp/$name" "$(target "$name")" && continue
@@ -105,17 +116,22 @@ main() {
       fail "could not install $name to $(target "$name")"
     log "installed $name"
     changed+=("$name")
+    if [[ "$name" != *.sh && " ${units[*]-} " != *" $name "* ]]; then
+      units+=("$name")
+      printf '%s\n' "$name" >>"$PENDING" || fail "could not note $name in $PENDING"
+    fi
   done
 
-  # ${changed[@]+…}: bash before 4.4 calls an empty array unbound under set -u
-  if printf '%s\n' ${changed[@]+"${changed[@]}"} | grep -qE '\.(service|timer)$'; then
-    systemctl daemon-reload || fail "daemon-reload failed after installing ${changed[*]}"
-    for unit in "${changed[@]}"; do
+  # ${units[@]+…}: bash before 4.4 calls an empty array unbound under set -u
+  if (( ${#units[@]} > 0 )); then
+    systemctl daemon-reload || fail "daemon-reload failed after installing ${units[*]}"
+    for unit in "${units[@]}"; do
       [[ "$unit" == *.timer ]] || continue
       systemctl enable "$unit" && systemctl restart "$unit" || fail "could not enable and restart $unit"
       log "enabled and restarted $unit"
     done
   fi
+  rm -f "$PENDING"
 
   # Last, so a new installer only runs from the next call on
   if [[ " ${names[*]} " == *" nuc-apply.sh "* ]] && ! cmp -s "$tmp/nuc-apply.sh" "$SBIN/nuc-apply"; then
