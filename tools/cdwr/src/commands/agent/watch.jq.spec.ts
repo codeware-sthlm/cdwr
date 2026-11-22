@@ -9001,6 +9001,17 @@ describe('deploy after a self-merge', () => {
       });
     });
 
+    it.each(['action_required', 'stale', 'neutral'])(
+      'counts a finished %s run as failed: it built no image',
+      (conclusion) => {
+        expect(builds([wf('Desk image', conclusion)])).toEqual({
+          state: 'failure',
+          failed: [ref('Desk image')],
+          pending: []
+        });
+      }
+    );
+
     it('is pending naming the running image workflows with their urls', () => {
       expect(
         builds([wf('Docs image', 'success'), wf('Desk image', null)])
