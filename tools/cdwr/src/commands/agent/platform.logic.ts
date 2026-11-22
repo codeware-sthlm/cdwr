@@ -308,13 +308,22 @@ export type SentryTop = {
   title: string;
 };
 
-/** Errors per tenant slug over 24 hours and 7 days, the open (unresolved) ones of the 24 hours, and the top unresolved issue of each tenant with open errors */
+/** An unresolved issue first seen on production in the last 24 hours */
+export type SentryFresh = {
+  shortId: string;
+  level: string;
+  title: string;
+  firstSeen: string;
+};
+
+/** Errors per tenant slug over 24 hours and 7 days, the open (unresolved) ones of the 24 hours, and the top and the newest unresolved issues of each tenant with open errors */
 export type SentryRead = {
   org: string;
   day: Record<string, number>;
   week: Record<string, number>;
   open: Record<string, number>;
   tops: Record<string, Reading<SentryTop | null>>;
+  fresh: Record<string, Reading<SentryFresh[]>>;
 };
 
 const TITLE_MAX = 120;
@@ -327,15 +336,27 @@ export const sentryTop = (top: SentryTop): SentryTop => ({
   title: plainText(top.title, TITLE_MAX)
 });
 
+/** A new issue as a row field, cleaned as the top issue is */
+export const sentryFresh = (issue: SentryFresh): SentryFresh => ({
+  shortId: plainText(issue.shortId, 40),
+  level: plainText(issue.level, 20),
+  title: plainText(issue.title, TITLE_MAX),
+  firstSeen: plainText(issue.firstSeen, 40)
+});
+
 /** The `sentry` column of a tenant; a tenant absent from the grouped result has none */
 export const sentrySignal = (read: SentryRead, slug: string) => {
   const top = read.tops[slug];
+  // A tenant with no open events has no new issue; null only where the read failed
+  const fresh = read.fresh[slug];
   return {
     org: plainText(read.org, 80),
     count24h: read.day[slug] ?? 0,
     open24h: read.open[slug] ?? 0,
     count7d: read.week[slug] ?? 0,
-    top: top?.ok && top.value ? sentryTop(top.value) : null
+    top: top?.ok && top.value ? sentryTop(top.value) : null,
+    fresh:
+      fresh === undefined ? [] : fresh.ok ? fresh.value.map(sentryFresh) : null
   };
 };
 
@@ -751,6 +772,14 @@ export const buildRows = (
         (slug === SHARED_KEY || known?.some((t) => t.slug === slug))
       ) {
         note(errorsOf(slug), 'sentry', `top issue: ${top.reason}`);
+      }
+    }
+    for (const [slug, fresh] of Object.entries(sentry.value.fresh)) {
+      if (
+        !fresh.ok &&
+        (slug === SHARED_KEY || known?.some((t) => t.slug === slug))
+      ) {
+        note(errorsOf(slug), 'sentry', `new issues: ${fresh.reason}`);
       }
     }
   }

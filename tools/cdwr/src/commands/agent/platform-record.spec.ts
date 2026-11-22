@@ -17,7 +17,10 @@ const collect = vi.hoisted(() => ({
   readReleases: vi.fn(),
   readBackup: vi.fn(),
   readDbPeak: vi.fn(),
-  writeDbPeak: vi.fn()
+  writeDbPeak: vi.fn(),
+  readPlatformAlerts: vi.fn(),
+  writePlatformAlerts: vi.fn(),
+  sendNotice: vi.fn()
 }));
 
 vi.mock('./platform.collect', () => ({
@@ -66,6 +69,20 @@ const lastPeak = {
   sessionsOpened: 900
 };
 
+const withHome = { ...env, AGENT_QUEUE_HOME: '/queue' };
+const DOWN_KEY = '_shared:down:cdwr-cms';
+const DOWN_TEXT = 'Platform: cdwr-cms is down · Health check answered 502';
+
+const downApp = (...names: string[]) =>
+  ok(
+    (names.length > 0 ? names : ['cdwr-cms']).map((name) => ({
+      name,
+      machines: ok([{ id: 'm', state: 'started', region: 'arn' }]),
+      certs: ok([]),
+      health: { ok: false, status: 502, ms: 5 }
+    }))
+  );
+
 const deployed = ok({
   runId: 7,
   sha: 'd'.repeat(40),
@@ -88,7 +105,7 @@ describe('agent platform-record', () => {
     collect.readSentry
       .mockReset()
       .mockResolvedValue(
-        ok({ org: 'cdwr', day: {}, week: {}, open: {}, tops: {} })
+        ok({ org: 'cdwr', day: {}, week: {}, open: {}, tops: {}, fresh: {} })
       );
     collect.readVisitors.mockReset().mockResolvedValue({});
     collect.readDeploy.mockReset().mockResolvedValue(deployed);
@@ -98,6 +115,9 @@ describe('agent platform-record', () => {
     collect.readBackup.mockReset().mockReturnValue(null);
     collect.readDbPeak.mockReset().mockReturnValue(lastPeak);
     collect.writeDbPeak.mockReset();
+    collect.readPlatformAlerts.mockReset().mockReturnValue({});
+    collect.writePlatformAlerts.mockReset();
+    collect.sendNotice.mockReset().mockResolvedValue(true);
     ui = fakeUi([]);
   });
 
@@ -295,6 +315,118 @@ describe('agent platform-record', () => {
     collect.readFly.mockResolvedValue(failed('fly down'));
     await record(['--yes', '--json'], env);
     expect(collect.readReleases).toHaveBeenCalledWith('/ws/codeware', {});
+  });
+
+  describe('urgent notices', () => {
+    beforeEach(() => {
+      collect.readFly.mockResolvedValue(downApp());
+    });
+
+    const pendingDown = { [DOWN_KEY]: { at: '2026-01-01', sent: false } };
+    const toldDown = { [DOWN_KEY]: { at: '2026-01-01', sent: true } };
+
+    it('waits a tick before a down notice, remembering the key as unsent', async () => {
+      const { exit } = await record(['--yes', '--json'], withHome);
+      expect(exit).toBe(EXIT.ok);
+      expect(collect.sendNotice).not.toHaveBeenCalled();
+      expect(collect.writePlatformAlerts).toHaveBeenCalledWith(withHome, {
+        [DOWN_KEY]: { at: expect.any(String), sent: false }
+      });
+    });
+
+    it('sends one urgent notice on the second tick, then remembers the key as sent', async () => {
+      collect.readPlatformAlerts.mockReturnValue(pendingDown);
+      const { exit } = await record(['--yes', '--json'], withHome);
+      expect(exit).toBe(EXIT.ok);
+      expect(collect.sendNotice).toHaveBeenCalledTimes(1);
+      expect(collect.sendNotice).toHaveBeenCalledWith(withHome, DOWN_TEXT);
+      expect(collect.writePlatformAlerts).toHaveBeenLastCalledWith(withHome, {
+        [DOWN_KEY]: { at: '2026-01-01', sent: true }
+      });
+    });
+
+    it('sends nothing for a key already told', async () => {
+      collect.readPlatformAlerts.mockReturnValue(toldDown);
+      await record(['--yes', '--json'], withHome);
+      expect(collect.sendNotice).not.toHaveBeenCalled();
+      expect(collect.writePlatformAlerts).toHaveBeenCalledWith(
+        withHome,
+        toldDown
+      );
+    });
+
+    it('seeds the first run without sending', async () => {
+      collect.readPlatformAlerts.mockReturnValue(null);
+      await record(['--yes', '--json'], withHome);
+      expect(collect.sendNotice).not.toHaveBeenCalled();
+      expect(collect.writePlatformAlerts).toHaveBeenCalledWith(withHome, {
+        [DOWN_KEY]: { at: expect.any(String), sent: true }
+      });
+    });
+
+    it('keeps the key unsent when the notice did not go, so the next tick tries again', async () => {
+      collect.readPlatformAlerts.mockReturnValue(pendingDown);
+      collect.sendNotice.mockResolvedValue(false);
+      await record(['--yes', '--json'], withHome);
+      expect(collect.writePlatformAlerts).toHaveBeenLastCalledWith(
+        withHome,
+        pendingDown
+      );
+    });
+
+    it('writes the state after each notice that went out, so a dying loop keeps them', async () => {
+      collect.readFly.mockResolvedValue(downApp('cdwr-cms', 'cdwr-cms-two'));
+      collect.readPlatformAlerts.mockReturnValue({
+        [DOWN_KEY]: { at: '2026-01-01', sent: false },
+        '_shared:down:cdwr-cms-two': { at: '2026-01-01', sent: false }
+      });
+      collect.sendNotice
+        .mockResolvedValueOnce(true)
+        .mockRejectedValueOnce(new Error('boom'));
+      await record(['--yes', '--json'], withHome);
+      expect(collect.writePlatformAlerts).toHaveBeenCalledWith(withHome, {
+        [DOWN_KEY]: { at: '2026-01-01', sent: true },
+        '_shared:down:cdwr-cms-two': { at: '2026-01-01', sent: false }
+      });
+    });
+
+    it('still sends the notices when the prune fails, then fails the command', async () => {
+      collect.readPlatformAlerts.mockReturnValue(pendingDown);
+      fetchMock
+        .mockResolvedValueOnce(new Response(null, { status: 201 }))
+        .mockResolvedValueOnce(new Response('no', { status: 500 }));
+      const { exit } = await record(['--yes', '--json'], withHome);
+      expect(collect.sendNotice).toHaveBeenCalledTimes(1);
+      expect(collect.writePlatformAlerts).toHaveBeenLastCalledWith(
+        withHome,
+        toldDown
+      );
+      expect(exit).toBe(EXIT.failed);
+    });
+
+    it('sends and writes nothing when the upsert fails', async () => {
+      fetchMock.mockResolvedValue(new Response('no', { status: 500 }));
+      const { exit } = await record(['--yes', '--json'], withHome);
+      expect(exit).not.toBe(EXIT.ok);
+      expect(collect.sendNotice).not.toHaveBeenCalled();
+      expect(collect.writePlatformAlerts).not.toHaveBeenCalled();
+    });
+
+    it('lists the notice as a step on a dry run, sending and writing nothing', async () => {
+      collect.readPlatformAlerts.mockReturnValue(pendingDown);
+      const { exit } = await record(['--dry-run'], withHome);
+      expect(exit).toBe(EXIT.ok);
+      expect(JSON.stringify(ui.printed)).toContain(DOWN_TEXT);
+      expect(collect.sendNotice).not.toHaveBeenCalled();
+      expect(collect.writePlatformAlerts).not.toHaveBeenCalled();
+    });
+
+    it('raises no notice without a queue home', async () => {
+      await record(['--yes', '--json'], env);
+      expect(collect.readPlatformAlerts).not.toHaveBeenCalled();
+      expect(collect.sendNotice).not.toHaveBeenCalled();
+      expect(collect.writePlatformAlerts).not.toHaveBeenCalled();
+    });
   });
 
   it('fails, without printing the key, when Supabase refuses', async () => {

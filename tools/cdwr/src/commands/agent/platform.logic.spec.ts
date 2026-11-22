@@ -166,6 +166,7 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
     day: { acme: 3 },
     week: { acme: 10, beta: 1 },
     open: { acme: 2 },
+    fresh: {},
     tops: {
       acme: ok({
         shortId: 'CDWR-1',
@@ -741,21 +742,24 @@ describe('the sentry column', () => {
       count24h: 3,
       open24h: 2,
       count7d: 10,
-      top: { shortId: 'CDWR-1', level: 'error', count: 3, title: 'Boom' }
+      top: { shortId: 'CDWR-1', level: 'error', count: 3, title: 'Boom' },
+      fresh: []
     });
     expect(row(rows, 'beta').sentry).toEqual({
       org: 'cdwr',
       count24h: 0,
       open24h: 0,
       count7d: 1,
-      top: null
+      top: null,
+      fresh: []
     });
     expect(row(rows, SHARED_KEY).sentry).toEqual({
       org: 'cdwr',
       count24h: 0,
       open24h: 0,
       count7d: 0,
-      top: null
+      top: null,
+      fresh: []
     });
   });
 
@@ -767,6 +771,7 @@ describe('the sentry column', () => {
           day: { [SHARED_KEY]: 27 },
           week: { [SHARED_KEY]: 40 },
           open: { [SHARED_KEY]: 9 },
+          fresh: {},
           tops: {
             [SHARED_KEY]: ok({
               shortId: 'CDWR-9',
@@ -783,7 +788,8 @@ describe('the sentry column', () => {
       count24h: 27,
       open24h: 9,
       count7d: 40,
-      top: { shortId: 'CDWR-9', level: 'error', count: 20, title: 'Host boom' }
+      top: { shortId: 'CDWR-9', level: 'error', count: 20, title: 'Host boom' },
+      fresh: []
     });
   });
 
@@ -793,6 +799,7 @@ describe('the sentry column', () => {
       day: { acme: 1 },
       week: { acme: 1 },
       open: { acme: 1 },
+      fresh: {},
       tops: {
         acme: ok({
           shortId: 'CDWR-2',
@@ -824,6 +831,7 @@ describe('the sentry column', () => {
           day: { acme: 3 },
           week: { acme: 3 },
           open: { acme: 3 },
+          fresh: {},
           tops: { acme: failed('Sentry answered 500') }
         })
       })
@@ -832,6 +840,53 @@ describe('the sentry column', () => {
       sentry: 'top issue: Sentry answered 500'
     });
     expect(row(rows, 'acme').sentry).toMatchObject({ count24h: 3, top: null });
+  });
+
+  it('carries the new issues of a tenant, cleaned like the top issue', () => {
+    const read = {
+      org: 'cdwr',
+      day: { acme: 1 },
+      week: { acme: 1 },
+      open: { acme: 1 },
+      tops: {},
+      fresh: {
+        acme: ok([
+          {
+            shortId: 'CDWR-7',
+            level: 'error',
+            title: `fetch https://x.io/a?b=1 failed\n${'z'.repeat(300)}`,
+            firstSeen: '2026-11-22T09:30:00Z'
+          }
+        ])
+      }
+    };
+    const { fresh } = sentrySignal(read, 'acme');
+    expect(fresh).toHaveLength(1);
+    expect(fresh?.[0]).toMatchObject({
+      shortId: 'CDWR-7',
+      firstSeen: '2026-11-22T09:30:00Z'
+    });
+    expect(fresh?.[0]?.title).toHaveLength(120);
+    expect(fresh?.[0]?.title.startsWith('fetch [url] failed zzz')).toBe(true);
+  });
+
+  it('names a failed new-issues read on its tenant, with fresh null', () => {
+    const { rows } = buildRows(
+      readings({
+        sentry: ok({
+          org: 'cdwr',
+          day: { acme: 3 },
+          week: { acme: 3 },
+          open: { acme: 3 },
+          tops: {},
+          fresh: { acme: failed('Sentry answered 500') }
+        })
+      })
+    );
+    expect(row(rows, 'acme').errors).toEqual({
+      sentry: 'new issues: Sentry answered 500'
+    });
+    expect(row(rows, 'acme').sentry).toMatchObject({ fresh: null });
   });
 });
 
@@ -1667,6 +1722,7 @@ describe('what leaves the machine', () => {
           day: { acme: 1 },
           week: { acme: 1 },
           open: { acme: 1 },
+          fresh: {},
           tops: {
             acme: ok({
               shortId: 'CDWR-1',
