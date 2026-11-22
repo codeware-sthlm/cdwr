@@ -2,6 +2,8 @@ import {
   accessUrl,
   assertCanDraft,
   authHeader,
+  categoryIdFrom,
+  categoryUrl,
   createBody,
   createUrl,
   outcomeOf,
@@ -15,27 +17,81 @@ import {
 
 const DEVICE = '3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b';
 
+const META = 'Meta title: A meta title';
+const DESC = `Description: ${'d'.repeat(60)}`;
+const draft = (body = 'Body line', head = `${META}\n${DESC}`) =>
+  `# T\n${head}\n\n${body}\n`;
+
 describe('parseDraft', () => {
-  it('takes the first "# " line as the title and the rest as the body', () => {
+  it('takes the title, the two meta lines and the body', () => {
     expect(
-      parseDraft('intro\n#  The title \n\nBody line\n\n## Section\nMore\n\n')
-    ).toEqual({ title: 'The title', body: 'Body line\n\n## Section\nMore' });
+      parseDraft(
+        `intro\n#  The title \nMeta title:  A meta \n\n${DESC}\n\nBody line\n\n## Section\nMore\n\n`
+      )
+    ).toEqual({
+      title: 'The title',
+      metaTitle: 'A meta',
+      metaDescription: 'd'.repeat(60),
+      body: 'Body line\n\n## Section\nMore'
+    });
   });
 
   it('copes with CRLF', () => {
-    expect(parseDraft('# T\r\nBody\r\n')).toEqual({ title: 'T', body: 'Body' });
+    expect(parseDraft(draft('Body').replace(/\n/g, '\r\n'))).toEqual({
+      title: 'T',
+      metaTitle: 'A meta title',
+      metaDescription: 'd'.repeat(60),
+      body: 'Body'
+    });
   });
 
   it.each([
     ['no title', 'Just text\n\n## Not a title', /needs a title/],
     ['a "#" without a space', '#Title\nBody', /needs a title/],
     ['an empty title', '# \nBody', /title is empty/],
-    ['no body', '# Title\n\n  \n', /no body/],
-    ['a code fence', '# Title\nBody\n```ts\nx\n```', /code fence/],
-    ['a tilde fence', '# Title\nBody\n~~~\nx\n~~~', /code fence/],
-    ['an indented fence', '# Title\nBody\n   ```\nx\n   ```', /code fence/]
+    ['no meta title', `# T\n${DESC}\nBody`, /needs a "Meta title:" line/],
+    [
+      'the description first',
+      `# T\n${DESC}\n${META}\nBody`,
+      /needs a "Meta title:" line/
+    ],
+    ['no description', `# T\n${META}\nBody`, /needs a "Description:" line/],
+    [
+      'a body between the meta lines',
+      `# T\n${META}\nBody\n${DESC}`,
+      /needs a "Description:" line/
+    ],
+    [
+      'an empty meta title',
+      `# T\nMeta title:  \n${DESC}\nBody`,
+      /meta title is empty/
+    ],
+    [
+      'an empty description',
+      `# T\n${META}\nDescription:\nBody`,
+      /description is empty/
+    ],
+    ['no body', draft('  '), /no body/],
+    ['a code fence', draft('Body\n```ts\nx\n```'), /code fence/],
+    ['a tilde fence', draft('Body\n~~~\nx\n~~~'), /code fence/],
+    ['an indented fence', draft('Body\n   ```\nx\n   ```'), /code fence/]
   ])('refuses %s', (_name, text, message) => {
     expect(() => parseDraft(text)).toThrow(message);
+  });
+
+  it.each([
+    ['meta title of 60', 'Meta title', 60, true],
+    ['meta title of 61', 'Meta title', 61, false],
+    ['description of 49', 'Description', 49, false],
+    ['description of 50', 'Description', 50, true],
+    ['description of 160', 'Description', 160, true],
+    ['description of 161', 'Description', 161, false]
+  ])('checks %s', (_name, label, length, ok) => {
+    const meta = label === 'Meta title' ? 'x'.repeat(length) : 'A meta title';
+    const desc = label === 'Description' ? 'x'.repeat(length) : 'd'.repeat(60);
+    const text = `# T\nMeta title: ${meta}\nDescription: ${desc}\n\nBody`;
+    if (ok) expect(() => parseDraft(text)).not.toThrow();
+    else expect(() => parseDraft(text)).toThrow(/characters/);
   });
 });
 
@@ -95,11 +151,48 @@ describe('request building', () => {
   });
 
   it('sends a draft with no tenant or author', () => {
-    expect(createBody('T', { root: {} })).toEqual({
+    expect(
+      createBody({
+        title: 'T',
+        content: { root: {} },
+        metaTitle: 'M',
+        metaDescription: 'D',
+        categoryId: 5
+      })
+    ).toEqual({
       title: 'T',
       content: { root: {} },
+      meta: { title: 'M', description: 'D' },
+      categories: [5],
       _status: 'draft'
     });
+  });
+
+  it('looks the devlog category up by slug', () => {
+    const url = categoryUrl('https://cms.test//');
+    expect(url).toBe(
+      'https://cms.test/api/categories?where%5Bslug%5D%5Bequals%5D=devlog&limit=1&depth=0'
+    );
+    expect(new URL(url).searchParams.get('where[slug][equals]')).toBe('devlog');
+  });
+});
+
+describe('categoryIdFrom', () => {
+  it('reads the id of the first doc', () => {
+    expect(categoryIdFrom(200, { docs: [{ id: 9 }] })).toBe(9);
+    expect(categoryIdFrom(200, { docs: [{ id: 'abc' }] })).toBe('abc');
+  });
+
+  it('refuses an empty answer', () => {
+    expect(() => categoryIdFrom(200, { docs: [] })).toThrow(
+      "The cms has no category with the slug devlog in the agent's workspace. Apply the cdwr.io site definition, which seeds it."
+    );
+  });
+
+  it('refuses anything but 200', () => {
+    expect(() => categoryIdFrom(403, { docs: [{ id: 1 }] })).toThrow(
+      'The cms answered 403 when reading the devlog category'
+    );
   });
 });
 

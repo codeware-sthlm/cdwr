@@ -91,12 +91,22 @@ file `<home>/devlog-drafts/<YYYY-MM-DD>-<slug>.md`, written with Write:
 ```md
 # <The title, as a plain sentence>
 
+Meta title: <The title search engines show>
+Description: <The summary search engines show>
+
 <The body>
 ```
 
 - **Title**: what a reader can now do or see, in one plain sentence without a
   full stop. "Platform themes can be forked from the admin", "Every app
   releases itself". Never a commit message, never a ticket title.
+- **Meta title**: at most 60 characters, written for a search result, not
+  copied from the title. Lead with what the reader can do, and name the
+  platform when the title doesn't: "Fork a platform theme from the cdwr
+  admin".
+- **Description**: 50 to 160 characters, one or two sentences that make a
+  searcher want to read the post. Say what changed and why it matters to them,
+  not the first sentence of the body again.
 - **Body**: one to four short paragraphs, 60 to 200 words, for a reader who
   has never seen the repo. What changed, what it means for them, and when
   there was a trade-off, what was chosen and what was given up. An incident
@@ -110,8 +120,8 @@ file `<home>/devlog-drafts/<YYYY-MM-DD>-<slug>.md`, written with Write:
   refuses a fence.
 - **Language**: English, as the devlog is.
 
-Then post it. First a dry run, which validates the title, the body and the
-conversion without sending anything:
+Then post it. First a dry run, which validates the title, the meta title, the
+description, the body and the conversion without sending anything:
 
 ```sh
 tools/cdwr/agent-queue/devlog.sh draft --file <home>/devlog-drafts/<file>.md --covers <n,n> --dry-run
@@ -124,7 +134,9 @@ tools/cdwr/agent-queue/devlog.sh draft --file <home>/devlog-drafts/<file>.md --c
 ```
 
 `--yes` is required: the command confirms before it changes anything, and
-nobody is at the terminal. The JSON's `result` holds `postId` and `title`,
+nobody is at the terminal. The command puts the post in the `devlog` category
+itself; when the cms has none, it fails without posting, so end with that
+failure. The JSON's `result` holds `postId` and `title`,
 which the end line names. The command itself records the pull requests in
 `devlog-covered.jsonl`, so the next run skips them.
 
