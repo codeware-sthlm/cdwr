@@ -79,7 +79,9 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
       { name: 'Studio', slug: 'studio' },
       { name: 'Design system', slug: 'design-system' },
       { name: 'Accessibility', slug: 'accessibility' },
-      { name: 'Multi-tenancy', slug: 'multi-tenancy' }
+      { name: 'Multi-tenancy', slug: 'multi-tenancy' },
+      // Every devlog draft goes here (cdwr devlog draft looks it up by slug)
+      ...(devlog ? [{ name: 'Devlog', slug: 'devlog' }] : [])
     ],
 
     // The platform's own look, made the way any tenant would make one: a recipe

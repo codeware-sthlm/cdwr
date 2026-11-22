@@ -61,6 +61,11 @@ export const agentOr =
  */
 export const agentMayCreate = (): AccessResult => true;
 
+/** An agent reads what belongs to its own workspace, such as the categories a draft goes in */
+export const agentWorkspaceWhere = (agent: Agent): AccessResult => ({
+  tenant: { equals: agentTenantId(agent) }
+});
+
 /**
  * An agent reads the posts it drafted, in its own workspace, drafts included.
  *
