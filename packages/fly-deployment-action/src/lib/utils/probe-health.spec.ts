@@ -76,6 +76,30 @@ describe('probeHealth', () => {
     expect(reason).toContain('https://app.fly.dev/api/health');
   });
 
+  it('should return at once on a non-transient status', async () => {
+    mockFetch.mockResolvedValue({ status: 404 });
+
+    const reason = await probeHealth(
+      'https://app.fly.dev',
+      '/api/health',
+      fast
+    );
+
+    expect(reason).toBe('https://app.fly.dev/api/health answered 404');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry a 502 until the app answers 200', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ status: 502 })
+      .mockResolvedValueOnce({ status: 200 });
+
+    await expect(
+      probeHealth('https://app.fly.dev', '/api/health', fast)
+    ).resolves.toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
   it('should return a timeout reason when the request times out', async () => {
     const error = new Error('The operation was aborted due to timeout');
     error.name = 'TimeoutError';
