@@ -100,6 +100,19 @@ describe('agent-host image', () => {
     expect(dockerfile).toContain('/usr/local/bin flyctl');
     expect(dockerfile).toContain('ln -s flyctl /usr/local/bin/fly');
   });
+
+  // bookworm's jq 1.6 exits 0 on empty input under -e
+  it('installs jq from its release, pinned to 1.7 or newer and checksummed', () => {
+    const [major = 0, minor = 0] = (
+      dockerfile.match(/^ARG JQ_VERSION=(\S+)$/m)?.[1] ?? ''
+    )
+      .split('.')
+      .map(Number);
+    expect(major > 1 || (major === 1 && minor >= 7)).toBe(true);
+    expect(dockerfile).toContain('jqlang/jq/releases/download/');
+    expect(dockerfile).toMatch(/sha256sum -c -/);
+    expect(dockerfile).not.toMatch(/^\s+jq( \\)?$/m);
+  });
 });
 
 describe('agent-host session launcher', () => {
