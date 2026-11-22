@@ -27,6 +27,12 @@ export const CMS_TARGETS: readonly DbRoleTarget[] = ['platform', 'backup'];
 /** The `--admin-url` value that stands for the cms's `DATABASE_URL`, its IPv4 pooler */
 export const CMS_ADMIN = 'cms';
 
+/** The `--admin-url` value that stands for the Supabase Management API, as `postgres` (the default for desk) */
+export const SUPABASE_ADMIN = 'api';
+
+/** The role the Management API's query endpoint runs as */
+export const SUPABASE_ADMIN_ROLE = 'postgres';
+
 export const CMS_ADMIN_SECRET = {
   path: '/apps/cms',
   environment: 'production',
@@ -190,21 +196,21 @@ export function alterRoleSql(role: string, verifier: string): string {
 }
 
 /**
- * One row, `exists|can_alter`, read as the admin. A non-superuser needs
+ * One row, `role_exists|can_alter`, read as the admin. A non-superuser needs
  * CREATEROLE, a target that is no superuser, and from Postgres 16 the ADMIN
  * option on the target.
  */
 export function adminRightsSql(role: string): string {
   assertRole(role);
   return `select
-  exists (select 1 from pg_roles where rolname = '${role}'),
+  exists (select 1 from pg_roles where rolname = '${role}') as role_exists,
   coalesce((select a.rolsuper
     or (a.rolcreaterole
       and not coalesce((select t.rolsuper from pg_roles t where t.rolname = '${role}'), false)
       and (current_setting('server_version_num')::int < 160000
         or not exists (select 1 from pg_roles where rolname = '${role}')
         or pg_has_role(current_user, '${role}', 'MEMBER WITH ADMIN OPTION')))
-    from pg_roles a where a.rolname = current_user), false);
+    from pg_roles a where a.rolname = current_user), false) as can_alter;
 `;
 }
 
@@ -218,4 +224,17 @@ export function parseAdminRights(stdout: string): AdminRights {
   const match = /^([tf])\|([tf])$/m.exec(stdout.trim());
   if (!match) throw new Error('the admin rights read returned no row');
   return { exists: match[1] === 't', canAlter: match[2] === 't' };
+}
+
+/** The row of `adminRightsSql` as the Management API answers it, booleans by column */
+export function adminRightsOfRows(
+  rows: Record<string, unknown>[]
+): AdminRights {
+  const [row] = rows;
+  if (!row) throw new Error('the admin rights read returned no row');
+  const { role_exists: exists, can_alter: canAlter } = row;
+  if (typeof exists !== 'boolean' || typeof canAlter !== 'boolean') {
+    throw new Error('the admin rights read returned an unknown row');
+  }
+  return { exists, canAlter };
 }

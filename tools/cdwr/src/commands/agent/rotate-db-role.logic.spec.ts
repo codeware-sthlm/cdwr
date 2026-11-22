@@ -5,6 +5,7 @@ import { CATALOG } from '../secrets/catalog';
 import {
   CMS_ADMIN_SECRET,
   DB_ROLE_TARGETS,
+  adminRightsOfRows,
   adminRightsSql,
   alterRoleSql,
   generatePassword,
@@ -220,5 +221,22 @@ describe('the SQL', () => {
     expect(parseAdminRights('t|t\n')).toEqual({ exists: true, canAlter: true });
     expect(parseAdminRights('t|f')).toEqual({ exists: true, canAlter: false });
     expect(() => parseAdminRights('')).toThrow(/no row/);
+  });
+
+  it('names the columns the API answers by', () => {
+    const sql = adminRightsSql('desk_migrator');
+    expect(sql).toMatch(/\) as role_exists,\n/);
+    expect(sql).toMatch(/, false\) as can_alter;\n$/);
+  });
+
+  it("reads the admin rights from the API's rows", () => {
+    expect(
+      adminRightsOfRows([{ role_exists: true, can_alter: false }])
+    ).toEqual({ exists: true, canAlter: false });
+    expect(() => adminRightsOfRows([])).toThrow(/no row/);
+    expect(() =>
+      adminRightsOfRows([{ role_exists: 't', can_alter: 't' }])
+    ).toThrow(/unknown row/);
+    expect(() => adminRightsOfRows([{ exists: true }])).toThrow(/unknown row/);
   });
 });
