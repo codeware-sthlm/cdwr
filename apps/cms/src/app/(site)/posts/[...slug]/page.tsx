@@ -38,14 +38,13 @@ export default async function Post({ params }: Props) {
 
   const { isEnabled: draft } = await draftMode();
   const runtime = await payloadRuntime({ asVisitor: true });
-  const [post, listingPath] = await Promise.all([
-    getPost(runtime, slugString, { draft }),
-    getPostsListingPath(runtime)
-  ]);
+  const post = await getPost(runtime, slugString, { draft });
 
   if (!post) {
     notFound();
   }
+
+  const listingPath = await getPostsListingPath(runtime, post);
 
   return <PostPreview post={post} listingPath={listingPath} live={draft} />;
 }
