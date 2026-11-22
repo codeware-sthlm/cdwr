@@ -1,0 +1,9 @@
+{
+  "name": "shared-util-platform-problems",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/util/platform-problems/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:util"],
+  "// targets": "to see all targets run: nx show project shared-util-platform-problems --web",
+  "targets": {}
+}

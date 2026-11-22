@@ -1,4 +1,20 @@
-import type { TenantStateRow } from '../supabase';
+/** A `tenant_state` row as read: the shape of the desk's generated row, without its types */
+export type TenantStateInput = {
+  key: string;
+  at: string;
+  name: string | null;
+  deployment: string | null;
+  status: string | null;
+  apps: unknown;
+  domains: unknown;
+  switches: unknown;
+  db: unknown;
+  sentry: unknown;
+  visitors: unknown;
+  deploy: unknown;
+  backup: unknown;
+  errors: unknown;
+};
 
 // The tenant view's rows: a `tenant_state` row with its jsonb columns parsed. The NUC's
 // platform step writes them (tools/cdwr/src/commands/agent/platform.logic.ts); nothing is
@@ -311,7 +327,7 @@ const database = (value: unknown): TenantDb | null => {
 };
 
 /** A `tenant_state` row with its columns parsed */
-export const parseTenantRow = (row: TenantStateRow): TenantRow => ({
+export const parseTenantRow = (row: TenantStateInput): TenantRow => ({
   key: row.key,
   at: Date.parse(row.at),
   name: row.name,

@@ -3,6 +3,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@codeware/shared/ui/shadcn/components/collapsible';
+import { shortAge } from '@codeware/shared/util/platform-problems';
 import {
   type FocusEvent,
   type ReactNode,
@@ -13,7 +14,6 @@ import {
 import type { Issue } from '../../linear';
 import { type PrCommandKind, prCommandKey } from '../commands';
 import { CONFIRM_MS, GH_PR } from '../constants';
-import { shortAge } from '../format';
 import type { Model, WatchRef } from '../model';
 import type { DeskState, Detail } from '../state';
 import {

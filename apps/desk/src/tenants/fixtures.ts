@@ -1,7 +1,7 @@
+import { SHARED_KEY } from '@codeware/shared/util/platform-problems';
+
 import type { TenantStateRow, TenantsPayload } from '../supabase';
 import type { Json } from '../supabase.types';
-
-import { SHARED_KEY } from './model';
 
 // Rows as the NUC writes them, for the specs
 

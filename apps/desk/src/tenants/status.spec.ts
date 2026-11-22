@@ -1,3 +1,4 @@
+import { parseTenantRow } from '@codeware/shared/util/platform-problems';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -25,7 +26,6 @@ import {
   shared,
   tenant
 } from './fixtures';
-import { parseTenantRow } from './model';
 import {
   DB_CONNECTIONS_WARN_SHARE,
   TENANTS_STALE_MIN,

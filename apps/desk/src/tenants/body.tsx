@@ -1,3 +1,9 @@
+import type {
+  TenantApp,
+  TenantMachine
+} from '@codeware/shared/util/platform-problems';
+import { SHARED_KEY, utcClock } from '@codeware/shared/util/platform-problems';
+import { sentryIssueUrl } from '@codeware/shared/util/platform-problems';
 import type { ReactNode } from 'react';
 
 import { KV } from '../desk/components/sheet-ui';
@@ -5,9 +11,6 @@ import { bytes, seenAgo } from '../desk/format';
 
 import { type PlatformApi, TenantActions } from './actions';
 import { versionCell } from './cells';
-import type { TenantApp, TenantMachine } from './model';
-import { SHARED_KEY, utcClock } from './model';
-import { sentryIssueUrl } from './problems';
 import { Sparkline } from './sparkline';
 import { type TenantEntry, certPending, certReady, isBehind } from './status';
 import { Chip, StatusChip } from './ui';

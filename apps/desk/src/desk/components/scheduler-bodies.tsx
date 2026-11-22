@@ -1,15 +1,9 @@
+import { shortAge } from '@codeware/shared/util/platform-problems';
+
 import { REFRESH_MS } from '../../data';
 import { CLOSED_WINDOW_DAYS, IDEA_WINDOW_DAYS } from '../../linear';
 import { ACTIVITY_STALE_MIN, GH_COMMIT, LIMIT, STUCK_MIN } from '../constants';
-import {
-  ageText,
-  hhmm,
-  planWhen,
-  plural,
-  seenAgo,
-  shortAge,
-  usd
-} from '../format';
+import { ageText, hhmm, planWhen, plural, seenAgo, usd } from '../format';
 import { DETAIL_STALE_MS, HANDOFF_STALE_MS, REASON_STALE_MS } from '../load';
 import {
   BURN_ROLES,

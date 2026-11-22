@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Json } from '../supabase.types';
-
 import {
   BEHIND,
+  type Json,
   LATEST,
   MAIN,
   NOW,

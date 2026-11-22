@@ -1,7 +1,8 @@
+import { shortAge } from '@codeware/shared/util/platform-problems';
 import type { ReactNode } from 'react';
 
 import { SESSION_ATTENDED_MIN, SESSION_HANDBACK_MIN } from '../constants';
-import { ageText, hhmm, plural, runTime, shortAge, usd } from '../format';
+import { ageText, hhmm, plural, runTime, usd } from '../format';
 import {
   type HandBackState,
   type HealthCheck,

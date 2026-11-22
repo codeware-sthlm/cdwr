@@ -1,10 +1,12 @@
+import { shortAge } from '@codeware/shared/util/platform-problems';
+
 import {
   HOST_DISK_FREE_MIN,
   HOST_LOAD_PER_CORE_MAX,
   HOST_MEM_USED_MAX,
   LIMIT
 } from '../constants';
-import { hhmm, plural, shortAge, usd } from '../format';
+import { hhmm, plural, usd } from '../format';
 import type { HandBackState } from '../live';
 import type { Model } from '../model';
 

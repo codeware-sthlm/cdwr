@@ -1,3 +1,7 @@
+import {
+  SHARED_KEY,
+  type TenantDb
+} from '@codeware/shared/util/platform-problems';
 import { useState } from 'react';
 
 import { CAP_SUB } from '../desk/components/capacity';
@@ -18,7 +22,6 @@ import {
   switchesCell,
   versionCell
 } from './cells';
-import { SHARED_KEY, type TenantDb } from './model';
 import { NeedsYou, ProblemBody, ProblemSummary } from './problem-cards';
 import {
   TENANTS_STALE_MIN,
