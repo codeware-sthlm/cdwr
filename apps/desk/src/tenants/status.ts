@@ -1,13 +1,21 @@
-import type { TenantsPayload } from '../supabase';
-
-import { SHARED_KEY, type TenantRow, parseTenantRow } from './model';
-import { type Problem, allProblems, problemsOf } from './problems';
+import {
+  SHARED_KEY,
+  type TenantRow,
+  parseTenantRow
+} from '@codeware/shared/util/platform-problems';
+import {
+  type Problem,
+  allProblems,
+  problemsOf
+} from '@codeware/shared/util/platform-problems';
 import {
   DB_CONNECTIONS_WARN_SHARE,
   certPending,
   certReady,
   connectionsWarnAt
-} from './thresholds';
+} from '@codeware/shared/util/platform-problems';
+
+import type { TenantsPayload } from '../supabase';
 
 // What a tenant's row says: its status, and the state of the view as a whole. Pure; the page draws it.
 

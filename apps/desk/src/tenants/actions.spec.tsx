@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { parseTenantRow } from '@codeware/shared/util/platform-problems';
 import {
   act,
   cleanup,
@@ -19,7 +20,6 @@ import {
   sharedSha
 } from './actions';
 import { BEHIND, MAIN, flyApp, machine, tenant } from './fixtures';
-import { parseTenantRow } from './model';
 
 afterEach(cleanup);
 

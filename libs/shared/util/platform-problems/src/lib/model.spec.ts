@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Json } from '../supabase.types';
-
 import {
+  type Json,
   LATEST,
   MAIN,
   OLDER,

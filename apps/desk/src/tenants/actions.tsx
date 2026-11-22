@@ -1,3 +1,7 @@
+import type {
+  TenantApp,
+  TenantRow
+} from '@codeware/shared/util/platform-problems';
 import { type FormEvent, useState } from 'react';
 
 import {
@@ -8,8 +12,6 @@ import {
   type PlatformCommandState,
   platformCommandKey
 } from '../desk/commands';
-
-import type { TenantApp, TenantRow } from './model';
 
 // A tenant's actions on its sheet: restart an app, close or open the site. The commands go to the
 // host that writes `tenant_state` and the NUC's scheduler applies them; each asks for the tenant's

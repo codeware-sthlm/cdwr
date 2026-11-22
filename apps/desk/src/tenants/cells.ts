@@ -1,4 +1,8 @@
-import type { TenantDb, TenantRow } from './model';
+import type {
+  TenantDb,
+  TenantRow
+} from '@codeware/shared/util/platform-problems';
+
 import { certPending, certReady, connectionsWarnAt, isBehind } from './status';
 
 // The one-line summaries of a tenant row, as the page's columns and compact line show them

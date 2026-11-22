@@ -1,4 +1,5 @@
-import { shortAge } from '../format';
+import { shortAge } from '@codeware/shared/util/platform-problems';
+
 import type { PrStateName } from '../live';
 import { type Model, prOf } from '../model';
 import type { Detail } from '../state';

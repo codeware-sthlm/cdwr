@@ -178,6 +178,9 @@
       ],
       "@codeware/shared/util/misc": ["./libs/shared/util/misc/src/index.ts"],
       "@codeware/shared/util/node": ["./libs/shared/util/node/src/index.ts"],
+      "@codeware/shared/util/platform-problems": [
+        "./libs/shared/util/platform-problems/src/index.ts"
+      ],
       "@codeware/shared/util/nx-deploy": [
         "./libs/shared/util/nx-deploy/src/index.ts"
       ],

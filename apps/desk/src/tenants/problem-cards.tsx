@@ -1,9 +1,12 @@
+import type { TenantRow } from '@codeware/shared/util/platform-problems';
+import {
+  type Problem,
+  sentryIssueUrl
+} from '@codeware/shared/util/platform-problems';
 import type { ReactNode } from 'react';
 
 import { plural } from '../desk/format';
 
-import type { TenantRow } from './model';
-import { type Problem, sentryIssueUrl } from './problems';
 import { Chip } from './ui';
 
 // The tenants view's problems: the summary card, the "Needs you" cards and what a problem's sheet says

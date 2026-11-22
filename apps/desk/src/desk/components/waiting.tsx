@@ -3,9 +3,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@codeware/shared/ui/shadcn/components/collapsible';
+import { shortAge } from '@codeware/shared/util/platform-problems';
 import type { MouseEventHandler } from 'react';
 
-import { shortAge } from '../format';
 import type { Model } from '../model';
 import type { Detail } from '../state';
 import { livePr, prTone } from '../view/pr';

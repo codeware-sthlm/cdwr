@@ -1,13 +1,7 @@
+import { shortAge } from '@codeware/shared/util/platform-problems';
+
 import { SHIP_DAYS } from '../constants';
-import {
-  ageText,
-  dayKey,
-  dayLabel,
-  hhmm,
-  plural,
-  shortAge,
-  usd
-} from '../format';
+import { ageText, dayKey, dayLabel, hhmm, plural, usd } from '../format';
 import { type Model, activityMissing, ideaVerdict, shipped } from '../model';
 import { perTicketAverage, spendStats, ticketCosts } from '../spend';
 import { type DeskState, type SheetId, bucketsLoaded } from '../state';

@@ -1,5 +1,4 @@
-import { shortAge } from '../desk/format';
-
+import { shortAge } from './age';
 import { SHARED_KEY, type TenantRow, utcClock } from './model';
 import {
   BACKUP_STALE_HOURS,

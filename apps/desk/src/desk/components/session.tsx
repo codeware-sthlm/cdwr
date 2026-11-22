@@ -1,6 +1,7 @@
+import { shortAge } from '@codeware/shared/util/platform-problems';
 import type { MouseEventHandler } from 'react';
 
-import { planWhen, shortAge, tidy } from '../format';
+import { planWhen, tidy } from '../format';
 import { type Pulse, ofKind } from '../live';
 import type { Model, PlanWindow } from '../model';
 import type { Detail } from '../state';
