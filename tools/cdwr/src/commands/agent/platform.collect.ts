@@ -339,7 +339,7 @@ export async function readSentry(
                     'query',
                     tenantQuery(
                       slug,
-                      'is:unresolved age:-24h environment:production level:[error,fatal]'
+                      'is:unresolved firstSeen:-24h environment:production level:[error,fatal]'
                     )
                   ],
                   ['sort', 'new'],
@@ -771,7 +771,7 @@ export async function sendNotice(
   try {
     await run(
       join(home, 'notify.sh'),
-      ['--level', 'urgent', '--source', 'platform', text],
+      ['--strict', '--level', 'urgent', '--source', 'platform', text],
       { env: notifyEnv(env), timeout: NOTIFY_TIMEOUT_MS }
     );
     return true;
