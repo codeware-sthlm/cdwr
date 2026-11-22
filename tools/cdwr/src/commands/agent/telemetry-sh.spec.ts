@@ -889,6 +889,20 @@ describe('telemetry.sh', () => {
         expect(existsSync(join(queueHome, 'notices-drain.lock'))).toBe(false);
       });
 
+      it('reads an at that is no ISO time as now, and a source or ticket that is no string as null', async () => {
+        spoolFile(
+          '1-1.json',
+          notice('odd', { at: 'soon', source: 7, ticket: { id: 'COD-1' } })
+        );
+        await drain(keyed());
+        const [row] = rows();
+        expect(row?.['at']).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z$/);
+        expect(row?.['source']).toBeNull();
+        expect(row?.['ticket']).toBeNull();
+        expect(row?.['text']).toBe('odd');
+        expect(remaining()).toEqual([]);
+      });
+
       it('writes notices-drained-at when no insert failed', async () => {
         spoolFile('1-1.json', notice('a'));
         const before = Math.floor(Date.now() / 1000);

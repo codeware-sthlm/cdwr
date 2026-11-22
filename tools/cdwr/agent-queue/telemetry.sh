@@ -106,7 +106,7 @@ supabase_select_checked() {
 
 supabase_patch() {
   if [[ -z "${AGENT_SUPABASE_URL:-}" || -z "${AGENT_SUPABASE_SERVICE_KEY:-}" ]]; then print -r -- '[]'; return 0; fi
-  _supabase_rows PATCH "${AGENT_SUPABASE_URL%/}/rest/v1/$1?$2" "$3"
+  _supabase_rows PATCH "${AGENT_SUPABASE_URL%/}/rest/v1/$1?$2" "$3" "${4:-}"
 }
 
 supabase_insert() {
@@ -237,13 +237,16 @@ notices_drain() {
   host="$(telemetry_host)"
   for file in "$spool"/*.json(N.Om); do
     # The level, the age in seconds and the row, on one line (the row is compact JSON, its text's
-    # newlines escaped); a file that can't be read goes
+    # newlines escaped); a file that can't be read goes. An `at` that is no ISO time reads as now,
+    # and a source or ticket that is no string as null, so one bad file can't fail every insert
     if ! { IFS=$'\x1f' read -r level age row <<<"$(jq -r --arg host "$host" --arg name "${file:t:r}" '
         select((.text | type) == "string" and .text != "")
         | (if .level == "urgent" or .level == "info" then .level else "action" end) as $level
-        | [$level, (now - ((.at // "") | sub("\\.[0-9]+"; "") | fromdateiso8601? // now) | floor | tostring),
-           ({id: ($host + ":" + $name), at: (.at // (now | todate)), host: $host, level: $level,
-             source: .source, ticket: .ticket, text: .text} | tojson)]
+        | ((.at | strings | sub("\\.[0-9]+"; "") | fromdateiso8601?) // null) as $t
+        | [$level, (now - ($t // now) | floor | tostring),
+           ({id: ($host + ":" + $name), at: (if $t == null then now | todate else .at end), host: $host,
+             level: $level, source: ((.source | strings) // null), ticket: ((.ticket | strings) // null),
+             text: .text} | tojson)]
         | join("\u001f")' "$file" 2>/dev/null)" && [[ -n "$row" ]] }; then
       rm -f "$file"
       continue
