@@ -257,19 +257,22 @@ relay_notices() {
   rows="$(supabase_select_checked notices 'state=eq.pending&order=at.asc&limit=50&select=id,level,text')" || return 0
   for row in "${(@f)$(jq -c '.[]' <<<"$rows" 2>/dev/null)}"; do
     [[ -n "$row" ]] || continue
-    id="$(jq -r '.id' <<<"$row")"
+    id="$(jq -r '.id | @uri' <<<"$row")"
     level="$(jq -r '.level' <<<"$row")"
     if "$AGENT_QUEUE_HOME/notify.sh" --passes "$level" </dev/null; then
+      # Marked forwarded before the post, so a mark that fails can't post the row again every
+      # pass; a post that fails puts it back to pending for the next pass
+      supabase_patch notices "id=eq.$id" \
+        "$(jq -nc --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state: "forwarded", forwarded_at: $at}')" strict >/dev/null || return 0
       text="$(jq -r '.text' <<<"$row")"
       rc=0
       "$AGENT_QUEUE_HOME/notify.sh" --send "$level" "$text" </dev/null || rc=$?
+      (( rc == 0 )) && continue
+      supabase_patch notices "id=eq.$id" '{"state":"pending","forwarded_at":null}' >/dev/null || true
       # No webhook: nothing can be posted this pass, the rows stay pending
       (( rc == 3 )) && return 0
-      (( rc == 0 )) || continue
-      supabase_patch notices "id=eq.$(jq -rn --arg id "$id" '$id | @uri')" \
-        "$(jq -nc --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{state: "forwarded", forwarded_at: $at}')" >/dev/null || true
     else
-      supabase_patch notices "id=eq.$(jq -rn --arg id "$id" '$id | @uri')" '{"state":"held"}' >/dev/null || true
+      supabase_patch notices "id=eq.$id" '{"state":"held"}' >/dev/null || true
     fi
   done
 }

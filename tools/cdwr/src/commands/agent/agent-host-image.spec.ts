@@ -515,7 +515,11 @@ describe('agent-host entrypoint', () => {
     afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
     // A text "fail" does not post (1), "nohook" has no webhook (3); a row of level "info" is held
-    const relay = (rows: unknown[] | 'select-fails', telemetry = true) => {
+    const relay = (
+      rows: unknown[] | 'select-fails',
+      telemetry = true,
+      markFails = false
+    ) => {
       writeFileSync(join(dir, 'rows.json'), JSON.stringify(rows));
       writeFileSync(
         join(dir, 'notify.sh'),
@@ -534,7 +538,11 @@ supabase_select_checked() {
   print -r -- "$1|$2" >> "${dir}/selects"
   ${rows === 'select-fails' ? 'return 1' : `cat "${dir}/rows.json"`}
 }
-supabase_patch() { print -r -- "$1|$2|$3" >> "${dir}/patches"; print -r -- '[]'; }
+supabase_patch() {
+  print -r -- "$1|$2|$3" >> "${dir}/patches"
+  ${markFails ? '[[ "$4" == strict ]] && return 1' : ':'}
+  print -r -- '[]'
+}
 AGENT_QUEUE_HOME="${dir}"
 ${fn}
 relay_notices`;
@@ -573,14 +581,18 @@ relay_notices`;
       expect(r.patches).toEqual(['notices|id=eq.h1|{"state":"held"}']);
     });
 
-    it('leaves a failed post pending and goes on to the next row', () => {
+    it('puts a failed post back to pending and goes on to the next row', () => {
       const r = relay([
         { id: 'f1', level: 'urgent', text: 'fail it' },
         { id: 'f2', level: 'urgent', text: 'fine' }
       ]);
       expect(r.sent).toEqual(['urgent|fail it', 'urgent|fine']);
-      expect(r.patches).toHaveLength(1);
-      expect(r.patches[0]).toContain('notices|id=eq.f2|');
+      expect(r.patches).toHaveLength(3);
+      expect(r.patches[0]).toContain('notices|id=eq.f1|{"state":"forwarded"');
+      expect(r.patches[1]).toBe(
+        'notices|id=eq.f1|{"state":"pending","forwarded_at":null}'
+      );
+      expect(r.patches[2]).toContain('notices|id=eq.f2|{"state":"forwarded"');
     });
 
     it('stops the pass without a webhook, leaving every row pending', () => {
@@ -590,7 +602,25 @@ relay_notices`;
       ]);
       expect(r.status).toBe(0);
       expect(r.sent).toEqual(['urgent|nohook']);
-      expect(r.patches).toEqual([]);
+      expect(r.patches).toHaveLength(2);
+      expect(r.patches[1]).toBe(
+        'notices|id=eq.n1|{"state":"pending","forwarded_at":null}'
+      );
+    });
+
+    it('stops the pass without posting when a row cannot be marked forwarded', () => {
+      const r = relay(
+        [
+          { id: 'm1', level: 'urgent', text: 'once' },
+          { id: 'm2', level: 'urgent', text: 'twice' }
+        ],
+        true,
+        true
+      );
+      expect(r.status).toBe(0);
+      expect(r.sent).toEqual([]);
+      expect(r.patches).toHaveLength(1);
+      expect(r.patches[0]).toContain('notices|id=eq.m1|');
     });
 
     it('does nothing when the select fails', () => {
