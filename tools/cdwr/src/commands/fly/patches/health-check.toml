@@ -1,8 +1,8 @@
-# Standard health check: /api/health endpoint with 10s grace period
+# Standard health check: /api/health endpoint with 30s grace period
 
 [[http_service.checks]]
   method = 'GET'
   path = '/api/health'
-  grace_period = '10s'
+  grace_period = '30s'
   interval = '20s'
   timeout = '5s'
