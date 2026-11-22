@@ -172,6 +172,7 @@ export type Database = {
           view: Json | null;
           watch: Json | null;
           review: string | null;
+          notify: Json | null;
         };
         Insert: {
           host: string;
@@ -184,6 +185,7 @@ export type Database = {
           view?: Json | null;
           watch?: Json | null;
           review?: string | null;
+          notify?: Json | null;
         };
         Update: {
           host?: string;
@@ -196,6 +198,7 @@ export type Database = {
           view?: Json | null;
           watch?: Json | null;
           review?: string | null;
+          notify?: Json | null;
         };
         Relationships: [];
       };
@@ -454,6 +457,45 @@ export type Database = {
           status?: string;
           applied_at?: string | null;
           note?: string | null;
+        };
+        Relationships: [];
+      };
+      notices: {
+        Row: {
+          id: string;
+          at: string;
+          host: string;
+          level: string;
+          source: string | null;
+          ticket: string | null;
+          text: string;
+          state: string;
+          forwarded_at: string | null;
+          received_at: string;
+        };
+        Insert: {
+          id: string;
+          at: string;
+          host: string;
+          level: string;
+          source?: string | null;
+          ticket?: string | null;
+          text: string;
+          state?: string;
+          forwarded_at?: string | null;
+          received_at?: string;
+        };
+        Update: {
+          id?: string;
+          at?: string;
+          host?: string;
+          level?: string;
+          source?: string | null;
+          ticket?: string | null;
+          text?: string;
+          state?: string;
+          forwarded_at?: string | null;
+          received_at?: string;
         };
         Relationships: [];
       };
