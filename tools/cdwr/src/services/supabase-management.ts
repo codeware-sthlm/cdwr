@@ -206,7 +206,8 @@ export const createSecretKey = async (
 /**
  * Runs SQL on the project's database as `postgres`, one row object per row.
  * An error carries the API's message only, never the request body; Postgres
- * may still quote part of the statement in that message.
+ * may still quote part of the statement in that message. An empty answer
+ * (the published schema declares none) reads as no rows.
  */
 export const runQuery = async (
   token: string,
@@ -215,7 +216,10 @@ export const runQuery = async (
 ): Promise<Record<string, unknown>[]> =>
   call(
     'database query',
-    z.array(z.record(z.string(), z.unknown())),
+    z
+      .array(z.record(z.string(), z.unknown()))
+      .nullable()
+      .transform((rows) => rows ?? []),
     `/v1/projects/${encodeURIComponent(ref)}/database/query`,
     { method: 'POST', token, body: { query } }
   );
