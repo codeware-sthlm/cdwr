@@ -33,8 +33,8 @@ const READS = [
   // The apply list's reads: the production deploy of a merge commit, the files a PR added
   /^gh api "repos\/codeware-sthlm\/cdwr\/actions\/workflows\/fly-deployment\.yml\/runs\?head_sha=\$1&per_page=5" /,
   /^gh api --paginate "repos\/codeware-sthlm\/cdwr\/pulls\/\$pr\/files" /,
-  // read_deploy: the Fly Deployment runs of a merge commit, their jobs and annotations
-  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(workflows\/fly-deployment\.yml\/runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/
+  // read_deploy: the push runs of a merge commit (one list), the deploy's jobs and annotations
+  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/
 ];
 
 // The Copilot request and the merge command (the desk's, and the watch's own) are run.sh's only
@@ -2492,8 +2492,23 @@ describe('run.sh read_deploy', () => {
     mergedAt: new Date(Date.now() - 600_000).toISOString(),
     autoMerge: { tries: 1 }
   };
-  const run = (entry: unknown, runs: unknown[], notes: unknown[] = []) => {
-    put('runs.json', { workflow_runs: runs });
+  const run = (
+    entry: unknown,
+    runs: unknown[],
+    notes: unknown[] = [],
+    allRuns: unknown[] = []
+  ) => {
+    // The one list holds the Fly Deployment runs and every other push run of the commit
+    put('allruns.json', {
+      workflow_runs: [
+        ...runs.map((r) => ({
+          ...(r as object),
+          name: 'Fly Deployment',
+          path: '.github/workflows/fly-deployment.yml'
+        })),
+        ...allRuns
+      ]
+    });
     put('jobs.json', { jobs: [{ id: 11 }, { id: 12 }] });
     put('annotations.json', notes);
     const script = [
@@ -2503,7 +2518,7 @@ describe('run.sh read_deploy', () => {
       `watch() { jq -L "${DIR}" "$@"; }`,
       'watch_err() { :; }',
       // Every read is logged; the answer is by URL, and gh-fail makes the run list fail
-      'gh_read() { print -r -- "$3" >> "$ROOT/calls"; case "$3" in *workflows*) [[ -f "$ROOT/gh-fail" ]] && return 1; cat "$ROOT/runs.json" ;; */jobs\\?*) cat "$ROOT/jobs.json" ;; *) cat "$ROOT/annotations.json" ;; esac; }',
+      'gh_read() { print -r -- "$3" >> "$ROOT/calls"; case "$3" in *actions/runs\\?head_sha*) [[ -f "$ROOT/gh-fail" ]] && return 1; cat "$ROOT/allruns.json" ;; */jobs\\?*) cat "$ROOT/jobs.json" ;; *) cat "$ROOT/annotations.json" ;; esac; }',
       source,
       `read_deploy '${JSON.stringify(entry)}' COD-5`
     ].join('\n');
@@ -2522,10 +2537,11 @@ describe('run.sh read_deploy', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('asks for push runs of the merge commit', () => {
+  it('asks for the push runs of the merge commit in one list', () => {
     expect(source).toContain(
-      'actions/workflows/fly-deployment.yml/runs?head_sha=$sha&event=push'
+      'actions/runs?head_sha=$sha&event=push&per_page=100'
     );
+    expect(source).not.toContain('workflows/fly-deployment.yml/runs');
   });
 
   it('reads success from a clean deploy of the newest run', () => {
@@ -2542,7 +2558,7 @@ describe('run.sh read_deploy', () => {
     expect(deploy).toMatchObject({ state: 'success', run: newest.html_url });
     expect(deploy.at).toMatch(/^\d{4}-\d\d-\d\dT/);
     expect(read('calls').split('\n').filter(Boolean)).toEqual([
-      'repos/codeware-sthlm/cdwr/actions/workflows/fly-deployment.yml/runs?head_sha=cafe123&event=push',
+      'repos/codeware-sthlm/cdwr/actions/runs?head_sha=cafe123&event=push&per_page=100',
       'repos/codeware-sthlm/cdwr/actions/runs/99/jobs?per_page=100',
       'repos/codeware-sthlm/cdwr/check-runs/11/annotations',
       'repos/codeware-sthlm/cdwr/check-runs/12/annotations'
@@ -2568,6 +2584,101 @@ describe('run.sh read_deploy', () => {
     const r = run(merged, [{ ...newest, conclusion: 'failure' }]);
     expect(JSON.parse(r.stdout).state).toBe('failure');
     expect(read('calls').split('\n').filter(Boolean)).toHaveLength(1);
+  });
+
+  const build = (name: string, conclusion: string | null, over = {}) => ({
+    name,
+    path: `.github/workflows/${name.toLowerCase().replace(/ /g, '-')}.yml`,
+    html_url: `https://github.com/codeware-sthlm/cdwr/actions/runs/${name.toLowerCase().replace(/ /g, '-')}`,
+    status: conclusion === null ? 'in_progress' : 'completed',
+    conclusion,
+    created_at: '2026-01-03T00:00:00Z',
+    ...over
+  });
+
+  const ref = (name: string) => ({
+    name,
+    url: `https://github.com/codeware-sthlm/cdwr/actions/runs/${name.toLowerCase().replace(/ /g, '-')}`
+  });
+
+  it('prints no failed or pending workflows for a clean deploy', () => {
+    const r = run(merged, [newest], [], [build('Desk image', 'success')]);
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      state: 'success',
+      run: newest.html_url,
+      failed: [],
+      pending: []
+    });
+  });
+
+  it('reads failure naming a failed image build, with its run, over a successful deploy', () => {
+    const r = run(
+      merged,
+      [newest],
+      [],
+      [build('Desk image', 'failure'), build('ci', 'failure')]
+    );
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      state: 'failure',
+      run: ref('Desk image').url,
+      failed: [ref('Desk image')]
+    });
+  });
+
+  it('names a failed deploy first, with its own run', () => {
+    const r = run(
+      merged,
+      [{ ...newest, conclusion: 'failure' }],
+      [],
+      [build('Desk image', 'failure')]
+    );
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      state: 'failure',
+      run: newest.html_url,
+      failed: [
+        { name: 'Fly Deployment', url: newest.html_url },
+        ref('Desk image')
+      ]
+    });
+  });
+
+  it('ignores workflows that are not image builds', () => {
+    const r = run(
+      merged,
+      [newest],
+      [],
+      [build('ci', 'failure'), build('e2e', null)]
+    );
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      state: 'success',
+      failed: [],
+      pending: []
+    });
+  });
+
+  it('stays pending while an image build runs, naming it', () => {
+    const r = run(merged, [newest], [], [build('Desk image', null)]);
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      state: 'pending',
+      failed: [],
+      pending: [ref('Desk image')]
+    });
+  });
+
+  it('reads unknown naming the pending image build 3 hours after the merge', () => {
+    const r = run(
+      {
+        ...merged,
+        mergedAt: new Date(Date.now() - 4 * 3_600_000).toISOString()
+      },
+      [newest],
+      [],
+      [build('Desk image', null)]
+    );
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      state: 'unknown',
+      pending: [ref('Desk image')]
+    });
   });
 
   it('reads pending while the run is going or missing', () => {

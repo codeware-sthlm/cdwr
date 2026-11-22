@@ -864,6 +864,32 @@ def deploy_state($runs; $notes; $mergedAt; $now):
     elif $r.conclusion == "success" then "success"
     else "unknown" end;
 
+# The image builds among the push workflows on the merge commit (`*-image.yml`; CI and E2E on main
+# are not part of a deploy): the newest run of each workflow; cancelled and skipped runs count for
+# nothing. failure when one failed, else pending while one runs, else success. failed and pending
+# name the runs with their urls, sorted by name
+def builds_state($runs):
+  ([ ($runs.workflow_runs // [])[] | select((.path // "") | endswith("-image.yml")) ]
+   | group_by(.path) | map(sort_by(.created_at // "") | last)
+   | map(select(((.conclusion // "") | IN("cancelled", "skipped")) | not))) as $kept
+  | ([ $kept[] | select((.conclusion // "") | IN("failure", "timed_out", "startup_failure")) | { name, url: .html_url } ] | unique_by(.name)) as $failed
+  | ([ $kept[] | select(.status != "completed") | { name, url: .html_url } ] | unique_by(.name)) as $pending
+  | { state: (if ($failed | length) > 0 then "failure"
+              elif ($pending | length) > 0 then "pending"
+              else "success" end),
+      failed: $failed,
+      pending: $pending };
+
+# The settled outcome of a self-merge: a failed build is a failure, and a failed or skipped deploy
+# is never masked by a pending build; else a pending deploy or build stays pending, or unknown 3
+# hours after the merge, else the deploy's own state
+def merge_state($deploy; $builds; $mergedAt; $now):
+  if $builds.state == "failure" then "failure"
+  elif $deploy | IN("failure", "skipped") then $deploy
+  elif $deploy == "pending" or $builds.state == "pending" then
+    (if $mergedAt != null and ($now - ($mergedAt | epoch)) > 10800 then "unknown" else "pending" end)
+  else $deploy end;
+
 # True for a watch entry whose PR the watch enqueued at least once; a refused enqueue is no try
 def self_merged: (.autoMerge.tries // 0) >= 1;
 
@@ -1372,9 +1398,23 @@ def ticket_gaps($now; $watch):
                "Set \($t) Done (the PR body lacked Closes)") else empty end,
       if ($w | self_merged) and $w.state == "merged" and (($w.deploy.state // "") | IN("failure", "skipped", "unknown"))
       then gap($t; "self-merge-deploy";
-               "\($t) merged on its own and its production deploy \({ failure: "failed", skipped: "was skipped by the deploy guard", unknown: "never settled" }[$w.deploy.state])";
-               "Check the Fly Deployment run" + (if ($w.deploy.run // null) != null then " (\($w.deploy.run))" else "" end)
-               + " for \($w.mergeCommit | if . == null then "the merge commit" else .[0:7] end), redeploy or revert, then clear agent:review from \($t)")
+               (($w.deploy.failed // []) | map(.name)) as $f
+               | (($w.deploy.pending // []) | map(.name)) as $p
+               | (if $w.deploy.state == "failure" and ($f | length) > 0 then "\($t) merged on its own and its \($f | join(", ")) \(if ($f | length) > 1 then "runs" else "run" end) failed"
+                  elif $w.deploy.state == "unknown" and ($p | length) > 0 then "\($t) merged on its own and its \($p | join(", ")) \(if ($p | length) > 1 then "runs" else "run" end) never settled"
+                  else "\($t) merged on its own and its production deploy \({ failure: "failed", skipped: "was skipped by the deploy guard", unknown: "never settled" }[$w.deploy.state])" end);
+               ($w.mergeCommit | if . == null then "the merge commit" else .[0:7] end) as $sha
+               | ((if $w.deploy.state == "failure" then ($w.deploy.failed // [])[0]
+                   elif $w.deploy.state == "unknown" then ($w.deploy.pending // [])[0]
+                   else null end)) as $first
+               | if $first != null and $first.name != "Fly Deployment" then
+                   "Check the \($first.name) run" + (if $first.url != null then " (\($first.url))" else "" end)
+                   + " for \($sha): " + (if $w.deploy.state == "failure" then "fix it and re-run it" else "re-run or cancel it" end)
+                   + ", then clear agent:review from \($t)"
+                 else
+                   "Check the Fly Deployment run" + (if ($w.deploy.run // null) != null then " (\($w.deploy.run))" else "" end)
+                   + " for \($sha), redeploy or revert, then clear agent:review from \($t)"
+                 end)
       else empty end,
       if $w.state == "closed" and $lab == "agent:review" and $open
       then gap($t; "closed-pr"; "\($t) is agent:review but its PR was closed without merging";

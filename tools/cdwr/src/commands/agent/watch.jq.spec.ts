@@ -8964,6 +8964,161 @@ describe('deploy after a self-merge', () => {
     });
   });
 
+  describe('builds_state', () => {
+    type BuildRun = RunRow & { name: string; path: string; html_url: string };
+    const wf = (
+      name: string,
+      conclusion: string | null,
+      over: Partial<BuildRun> = {}
+    ): BuildRun => ({
+      name,
+      path: `.github/workflows/${name.toLowerCase().replace(/ /g, '-')}.yml`,
+      html_url: `https://x/runs/${name.toLowerCase().replace(/ /g, '-')}`,
+      status: conclusion === null ? 'in_progress' : 'completed',
+      conclusion,
+      created_at: iso(HOUR),
+      ...over
+    });
+    const builds = (runs: BuildRun[]) =>
+      run(`builds_state(${JSON.stringify({ workflow_runs: runs })})`);
+    const ref = (name: string) => ({
+      name,
+      url: `https://x/runs/${name.toLowerCase().replace(/ /g, '-')}`
+    });
+
+    it('is failure naming the failed image workflows with their urls, sorted and unique', () => {
+      expect(
+        builds([
+          wf('Desk image', 'failure'),
+          wf('Agent host image', 'timed_out'),
+          wf('Lint image', 'startup_failure'),
+          wf('Docs image', 'success')
+        ])
+      ).toEqual({
+        state: 'failure',
+        failed: [ref('Agent host image'), ref('Desk image'), ref('Lint image')],
+        pending: []
+      });
+    });
+
+    it('is pending naming the running image workflows with their urls', () => {
+      expect(
+        builds([wf('Docs image', 'success'), wf('Desk image', null)])
+      ).toEqual({
+        state: 'pending',
+        failed: [],
+        pending: [ref('Desk image')]
+      });
+    });
+
+    it('is failure, still listing pending ones, when one failed and one runs', () => {
+      expect(
+        builds([wf('Desk image', 'failure'), wf('Agent host image', null)])
+      ).toEqual({
+        state: 'failure',
+        failed: [ref('Desk image')],
+        pending: [ref('Agent host image')]
+      });
+    });
+
+    it('is success with all runs successful, or with none', () => {
+      expect(builds([wf('Desk image', 'success')])).toEqual({
+        state: 'success',
+        failed: [],
+        pending: []
+      });
+      expect(builds([])).toEqual({ state: 'success', failed: [], pending: [] });
+    });
+
+    it('counts only the image workflows, not CI, E2E or Chromatic', () => {
+      expect(
+        builds([
+          wf('CI', 'failure'),
+          wf('E2E', 'timed_out'),
+          wf('Chromatic', null)
+        ])
+      ).toEqual({ state: 'success', failed: [], pending: [] });
+      expect(
+        builds([wf('CI', 'failure'), wf('Desk image', 'failure')])
+      ).toEqual({ state: 'failure', failed: [ref('Desk image')], pending: [] });
+    });
+
+    it('ignores cancelled and skipped runs', () => {
+      expect(
+        builds([wf('Docs image', 'cancelled'), wf('Desk image', 'skipped')])
+      ).toEqual({ state: 'success', failed: [], pending: [] });
+    });
+
+    it('leaves out the fly-deployment workflow', () => {
+      expect(
+        builds([
+          wf('Fly Deployment', 'failure', {
+            path: '.github/workflows/fly-deployment.yml'
+          })
+        ])
+      ).toEqual({ state: 'success', failed: [], pending: [] });
+    });
+
+    it('reads the newest run of each workflow', () => {
+      expect(
+        builds([
+          wf('Desk image', 'failure', { created_at: iso(2 * HOUR) }),
+          wf('Desk image', 'success', { created_at: iso(HOUR) })
+        ])
+      ).toEqual({ state: 'success', failed: [], pending: [] });
+      expect(
+        builds([
+          wf('Desk image', 'success', { created_at: iso(2 * HOUR) }),
+          wf('Desk image', 'failure', { created_at: iso(HOUR) })
+        ])
+      ).toEqual({
+        state: 'failure',
+        failed: [ref('Desk image')],
+        pending: []
+      });
+    });
+  });
+
+  describe('merge_state', () => {
+    const merge = (
+      deploy: string,
+      builds: string,
+      mergedAt: string | null = iso(HOUR)
+    ) =>
+      run(
+        `merge_state(${JSON.stringify(deploy)}; ${JSON.stringify({ state: builds, failed: [], pending: [] })}; ${JSON.stringify(mergedAt)}; ${NOW})`
+      );
+
+    it('lets a failed build beat a successful deploy', () => {
+      expect(merge('success', 'failure')).toBe('failure');
+      expect(merge('pending', 'failure')).toBe('failure');
+    });
+
+    it('does not let a pending build mask a failed or skipped deploy', () => {
+      expect(merge('failure', 'pending')).toBe('failure');
+      expect(merge('skipped', 'pending')).toBe('skipped');
+      expect(merge('failure', 'pending', iso(4 * HOUR))).toBe('failure');
+      expect(merge('skipped', 'pending', iso(4 * HOUR))).toBe('skipped');
+    });
+
+    it('stays pending for a pending build or deploy', () => {
+      expect(merge('success', 'pending')).toBe('pending');
+      expect(merge('pending', 'success')).toBe('pending');
+    });
+
+    it('is unknown for a pending one 3 hours after the merge', () => {
+      expect(merge('success', 'pending', iso(4 * HOUR))).toBe('unknown');
+      expect(merge('pending', 'success', iso(4 * HOUR))).toBe('unknown');
+    });
+
+    it.each(['success', 'failure', 'skipped', 'superseded', 'unknown'])(
+      'keeps the deploy state %s when the builds succeeded',
+      (d) => {
+        expect(merge(d, 'success')).toBe(d);
+      }
+    );
+  });
+
   describe('deploy_hold', () => {
     const hold = (entry: Record<string, unknown> | undefined) =>
       run(
@@ -9051,6 +9206,98 @@ describe('deploy after a self-merge', () => {
       expect(g[0].what).toContain(words);
       expect(g[0].fix).toContain('abcdef0');
       expect(g[0].fix).toContain('clear agent:review from COD-1');
+    });
+
+    const ref = (name: string, url: string | null = null) => ({ name, url });
+
+    it('names the failed workflows instead of the deploy', () => {
+      expect(
+        gaps({
+          deploy: {
+            state: 'failure',
+            failed: [ref('Desk image', 'https://x/d')]
+          }
+        })[0].what
+      ).toBe('COD-1 merged on its own and its Desk image run failed');
+      expect(
+        gaps({
+          deploy: {
+            state: 'failure',
+            failed: [ref('Fly Deployment'), ref('Desk image')]
+          }
+        })[0].what
+      ).toBe(
+        'COD-1 merged on its own and its Fly Deployment, Desk image runs failed'
+      );
+      expect(
+        gaps({ deploy: { state: 'failure', failed: [] } })[0].what
+      ).toContain('production deploy failed');
+    });
+
+    it('points a failed build at its own run, not at a redeploy', () => {
+      const fix = gaps({
+        deploy: {
+          state: 'failure',
+          run: 'https://x/runs/fly',
+          failed: [ref('Desk image', 'https://x/runs/desk')]
+        }
+      })[0].fix;
+      expect(fix).toBe(
+        'Check the Desk image run (https://x/runs/desk) for abcdef0: fix it and re-run it, then clear agent:review from COD-1'
+      );
+    });
+
+    it('keeps the redeploy-or-revert text when the deploy itself failed', () => {
+      const fix = gaps({
+        deploy: {
+          state: 'failure',
+          run: 'https://x/runs/fly',
+          failed: [
+            ref('Fly Deployment', 'https://x/runs/fly'),
+            ref('Desk image', 'https://x/runs/desk')
+          ]
+        }
+      })[0].fix;
+      expect(fix).toBe(
+        'Check the Fly Deployment run (https://x/runs/fly) for abcdef0, redeploy or revert, then clear agent:review from COD-1'
+      );
+    });
+
+    it('names the pending runs of an unknown deploy and points at the first', () => {
+      const g = gaps({
+        deploy: {
+          state: 'unknown',
+          run: 'https://x/runs/fly',
+          pending: [
+            ref('Agent host image', 'https://x/runs/host'),
+            ref('Desk image', 'https://x/runs/desk')
+          ]
+        }
+      })[0];
+      expect(g.what).toBe(
+        'COD-1 merged on its own and its Agent host image, Desk image runs never settled'
+      );
+      expect(g.fix).toContain('(https://x/runs/host)');
+      expect(g.fix).toContain('abcdef0');
+      expect(g.fix).not.toContain('redeploy');
+      expect(
+        gaps({
+          deploy: {
+            state: 'unknown',
+            pending: [ref('Desk image', 'https://x/d')]
+          }
+        })[0].what
+      ).toBe('COD-1 merged on its own and its Desk image run never settled');
+    });
+
+    it('keeps the deploy wording for a skipped deploy and an unknown one with nothing pending', () => {
+      expect(
+        gaps({ deploy: { state: 'skipped', pending: [ref('Desk image')] } })[0]
+          .what
+      ).toContain('was skipped by the deploy guard');
+      expect(
+        gaps({ deploy: { state: 'unknown', pending: [] } })[0].what
+      ).toContain('production deploy never settled');
     });
 
     it('names the run when the entry has one', () => {
