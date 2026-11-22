@@ -7,12 +7,12 @@
 #   telemetry_on                                             succeeds when both are set
 #   telemetry_run <started_at> <outcome> <ticket> <detail> <attended> <kind> <interval> <limit> <version>
 #                                                            one row in `runs`; empty fields become null
-#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review] [deploy json] [notify json]
+#   telemetry_queue_state <last_run> <attended> <suggested> <job> <view json> [watch json] [renovate json] [devlog] [review] [deploy json] [notify json] [devlog next json]
 #                                                            upserts this host's row in `queue_state`; empty fields become null,
 #                                                            a view that isn't JSON too; a watch and a renovate state, when
 #                                                            given, are each patched on after (empty or invalid: null), then
 #                                                            a devlog line (empty: null), then a review line (same), then
-#                                                            a deploy state (empty or invalid: null), then the notify dial (same)
+#                                                            a deploy state (empty or invalid: null), then the notify dial (same), then the devlog's next run (same)
 #   notices_drain <queue home>                               moves the notify spool into `notices` (see the function)
 #   telemetry_session <id> <kind> [state] [detail]           upserts the session's heartbeat in `sessions`;
 #                                                            empty fields become null
@@ -219,6 +219,10 @@ telemetry_queue_state() {
   (( $# >= 11 )) || return 0
   supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
     "$(jq -nc --rawfile n <(print -rn -- "${11}") '{notify: ($n | try fromjson catch null)}')" >/dev/null || return 0
+  # And the devlog's next run, {state, next, hour, text}, the same way
+  (( $# >= 12 )) || return 0
+  supabase_patch queue_state "host=eq.$(jq -rn --arg h "$(telemetry_host)" '$h | @uri')" \
+    "$(jq -nc --rawfile n <(print -rn -- "${12}") '{devlog_next: ($n | try fromjson catch null)}')" >/dev/null || return 0
 }
 
 # notices_drain <queue home>: moves the queue home's notify spool into `notices`, oldest file first.

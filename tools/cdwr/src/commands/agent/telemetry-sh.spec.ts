@@ -768,6 +768,44 @@ describe('telemetry.sh', () => {
       });
     });
 
+    describe('the devlog next run', () => {
+      const next =
+        '{"state":"done","next":"2026-11-27","hour":9,"text":"done, next in 5 day(s)"}';
+
+      it('patches it in a patch of its own, after the notify dial', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}' '{}' '${next}'`
+        );
+        expect(hits).toHaveLength(8);
+        const host = (JSON.parse(hits[0]?.body ?? '') as { host: string }).host;
+        expect(hits[7]?.method).toBe('PATCH');
+        expect(hits[7]?.url).toBe(
+          `/rest/v1/queue_state?host=eq.${encodeURIComponent(host)}`
+        );
+        expect(JSON.parse(hits[7]?.body ?? '')).toEqual({
+          devlog_next: JSON.parse(next)
+        });
+      });
+
+      it('patches null when it is empty or not JSON', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}' '{}' ''`
+        );
+        expect(JSON.parse(hits[7]?.body ?? '')).toEqual({ devlog_next: null });
+      });
+
+      it('sends no patch for it when absent', async () => {
+        await zsh(
+          configured(),
+          `telemetry_queue_state 'x' '' '' '' '' '{}' '{}' '' '' '{}' '{}'`
+        );
+        expect(hits).toHaveLength(7);
+        expect(hits.every((h) => !h.body.includes('devlog_next'))).toBe(true);
+      });
+    });
+
     it('sends nothing without the env vars', async () => {
       const out = await zsh({}, `telemetry_queue_state x '' '' '' ''`);
       expect(out.stdout).toBe('rc=0');
