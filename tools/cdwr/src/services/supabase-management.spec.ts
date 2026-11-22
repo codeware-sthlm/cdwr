@@ -175,6 +175,13 @@ describe('the API', () => {
     );
   });
 
+  it('reads an empty answer as no rows', async () => {
+    fetchMock.mockResolvedValue(answer(201, undefined));
+    await expect(runQuery('tok', 'ref', 'alter role x;')).resolves.toEqual([]);
+    fetchMock.mockResolvedValue(answer(201, []));
+    await expect(runQuery('tok', 'ref', 'alter role x;')).resolves.toEqual([]);
+  });
+
   it('refuses an answer that is not rows', async () => {
     fetchMock.mockResolvedValue(answer(201, { rows: [] }));
     await expect(runQuery('tok', 'ref', 'select 1;')).rejects.toThrow(
