@@ -45,6 +45,25 @@ vi.mock('@cdwr/fly-node');
 vi.mock('./utils/release-order', () => ({
   checkReleaseOrder: vi.fn()
 }));
+// No real waiting between probe attempts
+vi.mock('./utils/probe-health', async () => {
+  const actual = await vi.importActual<typeof import('./utils/probe-health')>(
+    './utils/probe-health'
+  );
+  return {
+    ...actual,
+    probeHealth: (url: string, path: string) =>
+      actual.probeHealth(url, path, {
+        budgetMs: 10,
+        intervalMs: 1,
+        sleep: async () => undefined,
+        now: (() => {
+          let t = 0;
+          return () => (t += 5);
+        })()
+      })
+  };
+});
 vi.mock('@codeware/shared/feature/tenancy', () => ({
   fetchDeployments: vi.fn()
 }));

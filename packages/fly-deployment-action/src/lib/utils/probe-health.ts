@@ -1,6 +1,12 @@
 /** Long enough for `auto_start_machines` to wake a suspended machine and boot it */
 export const HEALTH_PROBE_TIMEOUT_MS = 60_000;
 
+/** Above the health route's 120 s boot window */
+export const HEALTH_PROBE_BUDGET_MS = 180_000;
+
+/** Wait between two attempts */
+export const HEALTH_PROBE_INTERVAL_MS = 5_000;
+
 /**
  * Read the health check path from an app's Fly config: the path of the
  * first `[[http_service.checks]]`.
@@ -19,37 +25,75 @@ export const getHealthCheckPath = (
   return typeof path === 'string' && path ? path : undefined;
 };
 
+export type ProbeHealthOptions = {
+  /** Total time to keep trying */
+  budgetMs?: number;
+  /** Wait between two attempts */
+  intervalMs?: number;
+  /** Replaceable in tests */
+  sleep?: (ms: number) => Promise<void>;
+  /** Replaceable in tests */
+  now?: () => number;
+};
+
 /**
- * Request a deployed app's health check once.
+ * Request a deployed app's health check until it answers 200 or the
+ * budget runs out.
  *
  * A deploy can go green without the app answering: no public address, a
  * retried first deploy that skipped the health wait on a suspended machine,
- * or an app that boots but cannot serve. One request catches all three.
+ * or an app that boots but cannot serve. `fly deploy` may also return while
+ * the new machine is still booting, and a booting machine answers 503 until
+ * Payload is up, so any failed attempt is retried while budget remains.
  *
  * @param url - The app's public url
  * @param path - The health check path
- * @returns `null` when the app answered 200, otherwise why it did not
+ * @param options - Budget, interval and clock, for tests
+ * @returns `null` when the app answered 200, otherwise why the last attempt failed
  */
 export const probeHealth = async (
   url: string,
-  path: string
+  path: string,
+  options: ProbeHealthOptions = {}
 ): Promise<string | null> => {
+  const {
+    budgetMs = HEALTH_PROBE_BUDGET_MS,
+    intervalMs = HEALTH_PROBE_INTERVAL_MS,
+    sleep = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    now = Date.now
+  } = options;
   const target = `${url.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
-  try {
-    const response = await fetch(target, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
-    });
-    return response.status === 200
-      ? null
-      : `${target} answered ${response.status}`;
-  } catch (error) {
-    const reason =
-      error instanceof Error && error.name === 'TimeoutError'
-        ? `no answer within ${HEALTH_PROBE_TIMEOUT_MS / 1000}s`
-        : error instanceof Error
-          ? error.message
-          : String(error);
-    return `${target} could not be reached: ${reason}`;
+  const start = now();
+  let last = '';
+
+  for (;;) {
+    const timeoutMs = Math.min(
+      HEALTH_PROBE_TIMEOUT_MS,
+      Math.max(budgetMs - (now() - start), 1)
+    );
+    try {
+      const response = await fetch(target, {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (response.status === 200) {
+        return null;
+      }
+      last = `${target} answered ${response.status}`;
+    } catch (error) {
+      const reason =
+        error instanceof Error && error.name === 'TimeoutError'
+          ? `no answer within ${timeoutMs / 1000}s`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      last = `${target} could not be reached: ${reason}`;
+    }
+
+    if (now() - start + intervalMs >= budgetMs) {
+      return `no 200 within ${budgetMs / 1000}s; last: ${last}`;
+    }
+    await sleep(intervalMs);
   }
 };

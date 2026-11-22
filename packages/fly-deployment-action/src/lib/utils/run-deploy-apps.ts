@@ -6,7 +6,11 @@ import type { ActionOutputs } from '../schemas/action-outputs.schema';
 import type { DeploymentConfig } from '../schemas/deployment-config.schema';
 
 import { addOpinionatedEnv } from './add-opinionated-env';
-import { getHealthCheckPath, probeHealth } from './probe-health';
+import {
+  HEALTH_PROBE_BUDGET_MS,
+  getHealthCheckPath,
+  probeHealth
+} from './probe-health';
 import { checkReleaseOrder } from './release-order';
 import type { ResolvedAppDetails } from './resolve-tenant-secrets';
 
@@ -236,7 +240,9 @@ export const runDeployApps = async (options: {
         // fly-node gives the app its addresses before deploying, so one
         // request to the app's own check settles it.
         if (healthCheckPath) {
-          core.info(`Probe ${result.url}${healthCheckPath}...`);
+          core.info(
+            `Probe ${result.url}${healthCheckPath} (up to ${HEALTH_PROBE_BUDGET_MS / 1000}s)...`
+          );
           const failure = await probeHealth(result.url, healthCheckPath);
           if (failure) {
             throw new Error(
