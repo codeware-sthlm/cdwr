@@ -238,8 +238,12 @@ A migration whose `up()` drops, renames or sets NOT NULL needs a `// contract: <
 
 #### Deploying a contract migration
 
-Put the apps in maintenance first, so no old release reads what the migration drops. Production apps: `cdwr-cms`, `cdwr-cms-cdwr-io`, `cdwr-cms-codeware`, `cdwr-cms-ks-vininfo`.
+All cms apps share one database, so the first app's release migrates for every app. Put every cms app on that database in maintenance first, not only the apps the deploy touches, so no old release reads what the migration drops. Production apps: `cdwr-cms`, `cdwr-cms-cdwr-io`, `cdwr-cms-codeware`, `cdwr-cms-ks-vininfo`.
 
-1. For each app that will run the release: `fly secrets set MAINTENANCE_MODE=true -a <app>`. The machines restart and serve `/maintenance` on every route except `/api/health`.
-2. Merge the PR. The deploy migrates and starts the new release, still in maintenance.
-3. Check the new release, e.g. `curl https://<app>.fly.dev/api/health` answers `Pong!`. Then for each app: `fly secrets unset MAINTENANCE_MODE -a <app>`. The machines restart out of maintenance.
+Maintenance only rewrites HTTP routes in `proxy.ts`. Payload's scheduled jobs (`jobs.autoRun`, e.g. the nightly queue around 03:05) and init work still run on the old machines. Deploy away from the nightly run, and not while a job could read what the migration drops.
+
+1. Make sure a release that keeps a Fly-set `MAINTENANCE_MODE` is running on every app. On an older release step 2 has no effect.
+2. For every cms app: `fly secrets set MAINTENANCE_MODE=true -a <app>`. The machines restart and serve `/maintenance` on every route except `/api/health`.
+3. Merge the PR. The deploy migrates and starts the new release, still in maintenance.
+4. Check the new release against the migrated schema on the PR's preview app, whose database the preview deploy migrated: open a few real pages and the admin there. `/api/health` only proves the process and `SELECT 1`.
+5. For every cms app: `fly secrets unset MAINTENANCE_MODE -a <app>`. The machines restart out of maintenance.

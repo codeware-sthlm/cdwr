@@ -19,7 +19,14 @@ const contractStatements: ReadonlyArray<{ name: string; pattern: RegExp }> = [
   { name: 'DROP TABLE', pattern: /DROP\s+TABLE/gi },
   { name: 'RENAME TO', pattern: /RENAME\s+TO/gi },
   { name: 'DROP TYPE', pattern: /DROP\s+TYPE/gi },
-  { name: 'SET NOT NULL', pattern: /SET\s+NOT\s+NULL/gi }
+  { name: 'SET NOT NULL', pattern: /SET\s+NOT\s+NULL/gi },
+  { name: 'SET DATA TYPE', pattern: /SET\s+DATA\s+TYPE/gi },
+  {
+    name: 'ALTER COLUMN TYPE',
+    pattern: /ALTER\s+COLUMN\s+("[^"]+"|\w+)\s+TYPE/gi
+  },
+  { name: 'DROP DEFAULT', pattern: /DROP\s+DEFAULT/gi },
+  { name: 'RENAME VALUE', pattern: /RENAME\s+VALUE/gi }
 ];
 
 /** Migrations that predate the rule, by exact file name. Sorted. */
@@ -44,7 +51,8 @@ const grandfathered: ReadonlyArray<string> = [
   '20260913_201538_cod_485_tenant_deployment.ts',
   '20260915_213755_cod_484_legal_pages_site_wide.ts',
   '20260926_160659_cod_509_renderer_polish.ts',
-  '20260927_010427_cod_512_theme_family.ts'
+  '20260927_010427_cod_512_theme_family.ts',
+  '20261108_123050_cod_708_faq_topic.ts'
 ];
 
 const contractReason = /^\s*\/\/ contract:\s*\S/m;
@@ -82,7 +90,7 @@ describe('migrations survive the old release', () => {
       expect({
         file,
         statements: found,
-        hasReason: contractReason.test(source),
+        hasReason: contractReason.test(upBody(source)),
         fix: 'Add a `// contract: <why the release before no longer reads it>` line, or split the migration into expand now, contract in a later release'
       }).toMatchObject({ hasReason: true });
     }
