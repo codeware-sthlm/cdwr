@@ -86,4 +86,7 @@ export { getTourSignups } from './lib/collections/get-tour-signups';
 
 export { getUser } from './lib/collections/get-user';
 export { resetTotp } from './lib/collections/reset-totp';
-export { forgetTotpTrust } from './lib/collections/forget-totp-trust';
+export {
+  forgetTotpTrust,
+  nextTrustEpoch
+} from './lib/collections/forget-totp-trust';
