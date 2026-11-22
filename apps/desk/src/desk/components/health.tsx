@@ -9,7 +9,16 @@ import {
   problemOf
 } from '../live';
 import type { Model, VersionState } from '../model';
-import { CAP_RANGE, LIMIT_RANGE } from '../view/controls';
+import type { NotifyLevel } from '../types';
+import {
+  CAP_RANGE,
+  LIMIT_RANGE,
+  MUTE_CHOICES,
+  type MuteChoice,
+  NOTIFY_CHOICES,
+  busy,
+  muteEndText
+} from '../view/controls';
 import { health } from '../view/header';
 
 import {
@@ -23,7 +32,13 @@ import {
   percent
 } from './capacity';
 import { HEAD, PANEL } from './card-ui';
-import { CmdButton, ControlStatus, MINI, Stepper } from './controls';
+import {
+  ChoiceGroup,
+  CmdButton,
+  ControlStatus,
+  MINI,
+  Stepper
+} from './controls';
 
 // The Agent health view: hosts, versions and health, with the queue's controls when the desk has a
 // control token. It fills `#health` in place of the Agent cards, and handles its own clicks.
@@ -40,6 +55,9 @@ export type HealthActions = {
   run: () => void;
   step: (control: 'limit' | 'cap', delta: number) => void;
   apply: (control: 'limit' | 'cap') => void;
+  notifyLevel: (level: NotifyLevel) => void;
+  notifyMute: (mute: MuteChoice) => void;
+  notify: () => void;
 };
 
 type Tone = 'ok' | 'wait' | 'bad' | 'muted' | 'work';
@@ -171,7 +189,81 @@ const SchedulerRow = ({ m, a }: { m: Model; a: HealthActions }) => {
   );
 };
 
-const Controls = ({ m, a }: { m: Model; a: HealthActions }) => {
+/** The Slack row: what the host reports, and with a control token the level and mute to send */
+const NotifyRow = ({
+  m,
+  a,
+  now
+}: {
+  m: Model;
+  a: HealthActions;
+  now: Date;
+}) => {
+  const c = m.controls;
+  const dial = c?.notify.current ?? m.runs?.notify;
+  const muted = muteEndText(dial, now);
+  const silent = c !== null && dial === undefined;
+  const value = !dial
+    ? '–'
+    : muted
+      ? `${dial.level} · muted until ${muted}`
+      : dial.level;
+  return (
+    <ControlRow
+      title="Slack notices"
+      line={
+        silent
+          ? 'the host reports no dial yet'
+          : 'what the host forwards to Slack; the rest stays on the Notices sheet'
+      }
+      value={value}
+      tone={muted ? 'wait' : ''}
+      actions={
+        c ? (
+          <>
+            <ChoiceGroup
+              label="Level"
+              choices={NOTIFY_CHOICES.map(({ level, label }) => ({
+                key: level,
+                label,
+                pressed: c.notify.level === level
+              }))}
+              disabled={busy(c.states.notify) || silent}
+              onPick={(level) => a.notifyLevel(level)}
+            />
+            <ChoiceGroup
+              label="Mute"
+              choices={MUTE_CHOICES.map(({ mute, label }) => ({
+                key: mute,
+                label,
+                pressed: c.notify.mute === mute
+              }))}
+              disabled={busy(c.states.notify) || silent}
+              onPick={(mute) => a.notifyMute(mute)}
+            />
+            <button
+              type="button"
+              className={`pf-mini ctl-apply ${MINI}`}
+              data-apply="notify"
+              disabled={
+                busy(c.states.notify) ||
+                silent ||
+                c.notify.level === null ||
+                !c.notify.changed
+              }
+              onClick={a.notify}
+            >
+              Apply
+            </button>
+            <ControlStatus view={c.states.notify} />
+          </>
+        ) : null
+      }
+    />
+  );
+};
+
+const Controls = ({ m, a, now }: { m: Model; a: HealthActions; now: Date }) => {
   const loaded = m.runs !== null;
   const { used, max } = m.limits.prs;
   const e = m.limits.effort;
@@ -241,6 +333,7 @@ const Controls = ({ m, a }: { m: Model; a: HealthActions }) => {
             ) : null
           }
         />
+        <NotifyRow m={m} a={a} now={now} />
         <SchedulerRow m={m} a={a} />
       </div>
       <p className={`pf-foot text-[12px] ${MUTED}`}>
@@ -611,7 +704,7 @@ export const AgentHealth = ({ m, now, actions }: Props) => {
         </div>
       </div>
       <div className="pf-grid grid grid-cols-[repeat(auto-fit,minmax(min(580px,100%),1fr))] items-start gap-4">
-        <Controls m={m} a={actions} />
+        <Controls m={m} a={actions} now={now} />
         <Hosts m={m} />
         <Versions m={m} />
         <HealthChecks m={m} now={now} onProblem={actions.problem} />

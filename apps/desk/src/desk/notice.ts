@@ -20,7 +20,8 @@ const SUPABASE_ERRORS: readonly string[] = [
   'snoozes',
   'reviews',
   'dismissals',
-  'tenants'
+  'tenants',
+  'notices'
 ];
 
 /** The sentence for a failure of the source behind `key` */

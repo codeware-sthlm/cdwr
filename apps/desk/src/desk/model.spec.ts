@@ -2359,6 +2359,75 @@ describe('controls', () => {
     expect(c?.cap.draft).toBe(55);
   });
 
+  it('reads the notify dial, and takes the draft over it', () => {
+    const withDial = (
+      draft?: NonNullable<DeskState['controls']['drafts']['notify']>
+    ) =>
+      model(
+        on((s) => {
+          if (s.data.runs)
+            s.data.runs = { ...s.data.runs, notify: { level: 'action' } };
+          if (draft) s.controls.drafts = { notify: draft };
+        }),
+        NOW
+      ).controls?.notify;
+    expect(withDial()).toEqual({
+      current: { level: 'action' },
+      level: 'action',
+      mute: 'none',
+      changed: false
+    });
+    expect(withDial({ level: 'all' })).toMatchObject({
+      level: 'all',
+      mute: 'none',
+      changed: true
+    });
+    expect(withDial({ mute: '1h' })).toMatchObject({
+      level: 'action',
+      mute: '1h',
+      changed: true
+    });
+    expect(withDial({ mute: 'none' })?.changed).toBe(false);
+  });
+
+  it('shows no mute choice while the host mute stands and none is picked', () => {
+    const c = model(
+      on((s) => {
+        if (s.data.runs)
+          s.data.runs = {
+            ...s.data.runs,
+            notify: { level: 'urgent', muteUntil: '2026-10-29T14:00:00Z' }
+          };
+      }),
+      NOW
+    ).controls;
+    expect(c?.notify.mute).toBeNull();
+  });
+
+  it('reads a mute that has passed as none', () => {
+    const c = model(
+      on((s) => {
+        if (s.data.runs)
+          s.data.runs = {
+            ...s.data.runs,
+            notify: { level: 'urgent', muteUntil: '2020-01-01T00:00:00Z' }
+          };
+      }),
+      NOW
+    ).controls;
+    expect(c?.notify.current).toEqual({ level: 'urgent' });
+    expect(c?.notify.mute).toBe('none');
+    expect(c?.notify.changed).toBe(false);
+  });
+
+  it('keeps no dial when the host reports none', () => {
+    const c = model(
+      on(() => undefined),
+      NOW
+    ).controls;
+    expect(c?.notify.current).toBeUndefined();
+  });
+
   it('reads the command rows', () => {
     const c = model(
       on((s) => {

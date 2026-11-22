@@ -9,6 +9,7 @@ import {
   parseHandoffs,
   parseIdea,
   parseJob,
+  parseNotify,
   parsePlan,
   parseReviewRow,
   parseSuggested,
@@ -1161,6 +1162,45 @@ describe('parseDeploy', () => {
     ['a time that is no date', { ...full, at: 'yesterday' }]
   ])('reads %s as undefined', (_name, json) => {
     expect(parseDeploy(json)).toBeUndefined();
+  });
+});
+
+describe('parseNotify', () => {
+  it.each([['urgent'], ['action'], ['all']] as const)(
+    'keeps the level %s',
+    (level) => {
+      expect(parseNotify({ level, muteUntil: null })).toEqual({ level });
+    }
+  );
+
+  it('keeps a UTC mute, with or without fractions', () => {
+    expect(
+      parseNotify({ level: 'action', muteUntil: '2026-11-22T20:00:00Z' })
+    ).toEqual({ level: 'action', muteUntil: '2026-11-22T20:00:00Z' });
+    expect(
+      parseNotify({ level: 'all', muteUntil: '2026-11-22T20:00:00.123Z' })
+    ).toEqual({ level: 'all', muteUntil: '2026-11-22T20:00:00.123Z' });
+  });
+
+  it.each([
+    ['an offset time', '2026-11-22T20:00:00+01:00'],
+    ['a plain date', '2026-11-22'],
+    ['a number', 5],
+    ['an empty string', '']
+  ])('drops a mute that is %s', (_name, muteUntil) => {
+    expect(parseNotify({ level: 'urgent', muteUntil })).toEqual({
+      level: 'urgent'
+    });
+  });
+
+  it.each([
+    ['null', null],
+    ['an array', []],
+    ['a string', 'urgent'],
+    ['no level', { muteUntil: null }],
+    ['an unknown level', { level: 'loud' }]
+  ])('reads %s as undefined', (_name, json) => {
+    expect(parseNotify(json)).toBeUndefined();
   });
 });
 

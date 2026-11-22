@@ -6,6 +6,7 @@ import { sampleMinutes, silentAfter } from './desk/live';
 import {
   parseAttended,
   parseJob,
+  parseNotify,
   parseReviewRow,
   parseSuggested,
   queueViewIssues,
@@ -14,6 +15,7 @@ import {
 import type {
   Attended,
   Job,
+  NotifyDial,
   QueueView,
   ReviewRecord,
   Suggested,
@@ -36,6 +38,7 @@ export type SessionRow = Tables['sessions']['Row'];
 export type DeskCommandRow = Tables['desk_commands']['Row'];
 export type SnoozeRow = Tables['snoozes']['Row'];
 export type DismissalRow = Tables['review_dismissals']['Row'];
+export type NoticeRow = Tables['notices']['Row'];
 export type TenantStateRow = Tables['tenant_state']['Row'];
 
 /** The NUC's platform rows, one per tenant plus `_shared`, and the commit of main's newest fly-deployment.yml build; null when none is recorded */
@@ -95,6 +98,8 @@ export type RunsPayload = {
   at: string;
   /** The host that wrote the picked row */
   host: string;
+  /** The picked host's notification dial; undefined when it reports none */
+  notify: NotifyDial | undefined;
   /** The other hosts that wrote a row within QUEUE_WRITER_MIN */
   others: { host: string; at: string; paused: boolean }[];
   /** The watch.json of every host that wrote a row within QUEUE_WRITER_MIN, as stored; the model parses it */
@@ -169,6 +174,8 @@ export type Payloads = QueuePayloads & {
   reviews: ReviewRecord | null;
   /** Every dismissed finding, by finding id */
   dismissals: DismissalRow[];
+  /** The newest 200 notices, newest first */
+  notices: NoticeRow[];
   /** The platform state per tenant; empty before the NUC's first write */
   tenants: TenantsPayload;
 };
@@ -278,6 +285,7 @@ export const toRuns = (
     viewIssues: viewInvalid ? queueViewIssues(state.view) : [],
     at: state.at,
     host: state.host,
+    notify: parseNotify(state.notify),
     others: queueStates
       .filter((r) => r !== state && publishing(r, now))
       .sort((a, b) => byTimeDesc(a.at, b.at))
@@ -785,6 +793,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
         : settle(result);
     });
 
+  // The notices table is applied by hand after merge, so a missing one reads as no notices
+  const readNotices = (): Promise<NoticeRow[]> =>
+    attempt(async () => {
+      const result = await client
+        .from('notices')
+        .select('*')
+        .order('at', { ascending: false })
+        .limit(200);
+      return result.error && MISSING_TABLE.includes(result.error.code ?? '')
+        ? []
+        : settle(result);
+    });
+
   // The tenant_state table is applied by hand after merge, so a missing one reads as no rows; the newest fly-deployment build is the commit a tenant's machines should run
   const readTenants = (): Promise<TenantsPayload> =>
     attempt(async () => {
@@ -824,7 +845,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
    * fires (debounced) on a new or updated `desk_commands` row, and on each (re)join;
    * `onSnoozes` likewise on a new, updated or deleted `snoozes` row; `onReviews` on a new
    * `reviews` row and `onDismissals` on a new, updated or deleted `review_dismissals` row;
-   * `onTenants` likewise on a new, updated or deleted `tenant_state` row.
+   * `onTenants` likewise on a new, updated or deleted `tenant_state` row; `onNotices` on a new or updated `notices` row.
    */
   const subscribe = (
     onChange: () => void,
@@ -839,7 +860,8 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     onSnoozes?: () => void,
     onReviews?: () => void,
     onDismissals?: () => void,
-    onTenants?: () => void
+    onTenants?: () => void,
+    onNotices?: () => void
   ): (() => Promise<void>) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hostTimer: ReturnType<typeof setTimeout> | undefined;
@@ -851,6 +873,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     let reviewsTimer: ReturnType<typeof setTimeout> | undefined;
     let dismissalsTimer: ReturnType<typeof setTimeout> | undefined;
     let tenantsTimer: ReturnType<typeof setTimeout> | undefined;
+    let noticesTimer: ReturnType<typeof setTimeout> | undefined;
     const changed = (): void => {
       clearTimeout(timer);
       timer = setTimeout(onChange, DEBOUNCE_MS);
@@ -890,6 +913,10 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     const tenantsChanged = (): void => {
       clearTimeout(tenantsTimer);
       tenantsTimer = setTimeout(() => onTenants?.(), DEBOUNCE_MS);
+    };
+    const noticesChanged = (): void => {
+      clearTimeout(noticesTimer);
+      noticesTimer = setTimeout(() => onNotices?.(), DEBOUNCE_MS);
     };
     let channel = client.channel('desk');
     for (const table of [
@@ -1033,6 +1060,19 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     tenants.subscribe((status) => {
       if (status === 'SUBSCRIBED') tenantsChanged();
     });
+    // Its own channel too, so before the notices migration is applied a refused subscription costs the notices only
+    let notices = client.channel('desk-notices');
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      notices = notices.on(
+        'postgres_changes',
+        { event, schema: 'public', table: 'notices' },
+        noticesChanged
+      );
+    }
+    // A (re)join catches up on a notice that landed while it was away
+    notices.subscribe((status) => {
+      if (status === 'SUBSCRIBED') noticesChanged();
+    });
     // One channel per plan usage table too, so a missing one fails only its own data
     const planChannel = client
       .channel('desk-plan')
@@ -1071,6 +1111,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
       clearTimeout(reviewsTimer);
       clearTimeout(dismissalsTimer);
       clearTimeout(tenantsTimer);
+      clearTimeout(noticesTimer);
       // Resolves once every channel is gone; a resubscribe before that gets the old one back
       return Promise.allSettled(
         [
@@ -1083,6 +1124,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
           reviews,
           dismissals,
           tenants,
+          notices,
           planChannel,
           hoursChannel
         ].map((c) => client.removeChannel(c))
@@ -1107,6 +1149,7 @@ export const createSupabase = ({ url, anonKey }: SupabaseConfig) => {
     readReviews,
     readDismissals,
     readTenants,
+    readNotices,
     subscribe,
     check
   };

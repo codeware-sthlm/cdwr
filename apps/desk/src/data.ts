@@ -91,6 +91,7 @@ export type AdapterOptions = {
     | 'readReviews'
     | 'readDismissals'
     | 'readTenants'
+    | 'readNotices'
     | 'subscribe'
   >;
   now?: () => number;
@@ -309,6 +310,7 @@ export const createAdapter = ({
   const reviews = track(SUPABASE, () => supabase.readReviews());
   const dismissals = track(SUPABASE, () => supabase.readDismissals());
   const tenants = track(SUPABASE, () => supabase.readTenants());
+  const notices = track(SUPABASE, () => supabase.readNotices());
   const details = new Map<string, Source<IssueDetail>>();
   const comments = new Map<string, Source<{ comments: Comment[] }>>();
 
@@ -366,6 +368,7 @@ export const createAdapter = ({
       if (tool === 'reviews') return bind(reviews, (row) => row);
       if (tool === 'dismissals') return bind(dismissals, (rows) => rows);
       if (tool === 'tenants') return bind(tenants, (payload) => payload);
+      if (tool === 'notices') return bind(notices, (rows) => rows);
     }
     return undefined;
   };
@@ -414,6 +417,9 @@ export const createAdapter = ({
   };
   const refreshTenants = () => {
     if (!stopped && tenants.watching()) void tenants.refresh();
+  };
+  const refreshNotices = () => {
+    if (!stopped && notices.watching()) void notices.refresh();
   };
   const refreshSupabase = () => {
     if (!stopped) void refreshWatched(SUPABASE);
@@ -615,7 +621,8 @@ export const createAdapter = ({
       refreshSnoozes,
       refreshReviews,
       refreshDismissals,
-      refreshTenants
+      refreshTenants,
+      refreshNotices
     );
   };
   let leave = join();

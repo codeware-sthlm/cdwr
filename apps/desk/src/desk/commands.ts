@@ -1,5 +1,8 @@
 // Sends desk commands to the desk-command Edge Function with the device token as the bearer
 
+import type { NotifyDial, NotifyLevel } from './types';
+import { liveMute } from './view/controls';
+
 export type CommandKind =
   | 'pause'
   | 'resume'
@@ -14,7 +17,8 @@ export type CommandKind =
   | 'review'
   | 'dismiss'
   | 'restart'
-  | 'gate';
+  | 'gate'
+  | 'notify';
 
 /** The kinds a PR's buttons send; they belong to a ticket's review row, like snooze and wake */
 export type PrCommandKind = 'copilot' | 'merge';
@@ -42,7 +46,8 @@ export type CommandStatus = 'pending' | 'applied' | 'refused';
  * snooze, wake, copilot and merge, and `kind` (a waiting row's kind) with `eventAt` (ISO, or
  * null) for snooze; `pr` (the number) for copilot and merge; `finding` (its id) with an
  * optional `note` for dismiss; `tenant` (its slug) for restart and gate, with `app` (the Fly
- * app) and `sha` (the commit its machines run, or null) for restart and `action` for gate
+ * app) and `sha` (the commit its machines run, or null) for restart and `action` for gate;
+ * `level` with `muteUntil` (a future UTC ISO time, or null to clear the mute) for notify
  */
 export type CommandArgs = {
   finding?: string;
@@ -57,6 +62,8 @@ export type CommandArgs = {
   app?: string;
   sha?: string | null;
   action?: 'open' | 'close';
+  level?: NotifyLevel;
+  muteUntil?: string | null;
 };
 
 /** The function's answer to a stored command */
@@ -177,7 +184,7 @@ export const sendCommand = async (
 };
 
 /** The controls the desk shows; pause and resume share one */
-export type Control = 'pause' | 'run' | 'limit' | 'cap' | 'abandon';
+export type Control = 'pause' | 'run' | 'limit' | 'cap' | 'abandon' | 'notify';
 
 const CONTROL: Record<ControlKind, Control> = {
   pause: 'pause',
@@ -185,7 +192,8 @@ const CONTROL: Record<ControlKind, Control> = {
   run: 'run',
   limit: 'limit',
   cap: 'cap',
-  abandon: 'abandon'
+  abandon: 'abandon',
+  notify: 'notify'
 };
 
 /** The fields of a `desk_commands` row the state reads */
@@ -212,6 +220,8 @@ export type Reported = {
   paused: boolean;
   limit: number | null;
   cap: number | null;
+  /** The host's notification dial; undefined when it reports none */
+  notify: NotifyDial | undefined;
 };
 
 const valueOf = (args: unknown): number | null =>
@@ -222,12 +232,28 @@ const valueOf = (args: unknown): number | null =>
     ? args.value
     : null;
 
+/** Whether the host's dial shows the level and mute a notify asked for; a mute that has passed reads as none */
+const notifyTookEffect = (
+  args: unknown,
+  dial: NotifyDial | undefined,
+  now: number
+): boolean => {
+  if (typeof args !== 'object' || args === null || !dial) return false;
+  const asked = 'muteUntil' in args ? liveMute(args.muteUntil, now) : null;
+  return (
+    'level' in args &&
+    args.level === dial.level &&
+    asked === liveMute(dial.muteUntil, now)
+  );
+};
+
 /** Whether the host reports what an applied command asked for; a paused tick republishes an old queue view, so the time alone is not enough */
 const tookEffect = (
   kind: ControlKind,
   args: unknown,
   appliedAt: string | null,
-  reported: Reported
+  reported: Reported,
+  now: number
 ): boolean => {
   if (kind === 'abandon') return true;
   if (appliedAt === null || reported.at === null) return false;
@@ -243,6 +269,8 @@ const tookEffect = (
       return reported.limit === valueOf(args);
     case 'cap':
       return reported.cap === valueOf(args);
+    case 'notify':
+      return notifyTookEffect(args, reported.notify, now);
   }
 };
 
@@ -272,7 +300,8 @@ export const controlStates = (
     run: { state: 'idle' },
     limit: { state: 'idle' },
     cap: { state: 'idle' },
-    abandon: { state: 'idle' }
+    abandon: { state: 'idle' },
+    notify: { state: 'idle' }
   };
   const newest = new Map<Control, { row: CommandRowLike; kind: ControlKind }>();
   for (const row of rows) {
@@ -295,7 +324,7 @@ export const controlStates = (
         };
     } else if (
       row.status === 'applied' &&
-      !tookEffect(kind, row.args, row.applied_at, reported) &&
+      !tookEffect(kind, row.args, row.applied_at, reported, now) &&
       age <= PENDING_MAX_MS
     )
       states[control] = { state: 'pending', kind };

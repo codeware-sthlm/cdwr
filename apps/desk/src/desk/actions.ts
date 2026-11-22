@@ -39,7 +39,13 @@ import {
   viewOf
 } from './state';
 import { createStore } from './store';
-import { CAP_RANGE, LIMIT_RANGE } from './view/controls';
+import type { NotifyLevel } from './types';
+import {
+  CAP_RANGE,
+  LIMIT_RANGE,
+  type MuteChoice,
+  muteUntil
+} from './view/controls';
 import { canonicalId, isTicketId } from './view/ids';
 
 // This build, and whether it is the web desk the NUC serves rather than the Mac app: that
@@ -297,6 +303,38 @@ function applyDraft(control: 'limit' | 'cap'): void {
     sendControl(control, m.host, control, { value: draft });
 }
 
+/** Picks the level a notify applies; the mute stays as it is */
+function pickNotifyLevel(level: NotifyLevel): void {
+  const d = state.controls.drafts;
+  d.notify = { ...d.notify, level };
+  render();
+}
+
+/** Picks how long a notify mutes for; the level stays as it is */
+function pickNotifyMute(mute: MuteChoice): void {
+  const d = state.controls.drafts;
+  d.notify = { ...d.notify, mute };
+  render();
+}
+
+/** Sends the dial: the chosen level (else the host's) and a mute counted from now (else the host's own) */
+function applyNotify(): void {
+  const m = controlsNow();
+  const level = m?.notify.level ?? null;
+  if (!m || level === null) return;
+  const now = new Date();
+  const kept = m.notify.current?.muteUntil;
+  sendControl('notify', m.host, 'notify', {
+    level,
+    muteUntil:
+      m.notify.mute !== null
+        ? muteUntil(m.notify.mute, now)
+        : kept !== undefined && Date.parse(kept) > now.getTime()
+          ? kept
+          : null
+  });
+}
+
 /** Scrolls to a problem's card on Agent */
 function showProblem(id: string): void {
   showView('agent', false);
@@ -313,7 +351,10 @@ export const healthActions: HealthActions = {
   pause: pauseQueue,
   run: runNow,
   step: stepDraft,
-  apply: applyDraft
+  apply: applyDraft,
+  notifyLevel: pickNotifyLevel,
+  notifyMute: pickNotifyMute,
+  notify: applyNotify
 };
 
 /** The abandon button: the first press asks to confirm, the second marks the run abandoned */
@@ -461,6 +502,10 @@ export const sheetActions: SheetActions = {
   onSnoozedOpen: setSnoozedOpen,
   onActFilter: (ticket) => {
     state.ui.actFilter = ticket;
+    render();
+  },
+  onNoticeFilter: (filter) => {
+    state.ui.noticeFilter = filter;
     render();
   },
   onFilter: (filter) => {
@@ -780,7 +825,7 @@ export function sendControl(
       // A refused value stays in the stepper to adjust; an accepted one shows once the host reports it
       if (
         reply.status !== 'refused' &&
-        (control === 'limit' || control === 'cap')
+        (control === 'limit' || control === 'cap' || control === 'notify')
       )
         delete c.drafts[control];
     })

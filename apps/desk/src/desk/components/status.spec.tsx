@@ -125,6 +125,80 @@ describe('Status', () => {
     ).toBe('page');
   });
 
+  describe('the Slack button', () => {
+    const slack = (
+      notify: NonNullable<ReturnType<typeof runs>['notify']> | undefined,
+      onSheet = vi.fn(),
+      pill = true,
+      now = NOW
+    ) => {
+      const state = filled();
+      if (state.data.runs) state.data.runs = { ...state.data.runs, notify };
+      const { container } = render(
+        <Status
+          m={model(state, NOW)}
+          connection={connection(true)}
+          onView={vi.fn()}
+          onSheet={onSheet}
+          pill={pill}
+          now={now}
+        />
+      );
+      return {
+        onSheet,
+        button: container.querySelector<HTMLElement>('button.slack')
+      };
+    };
+
+    it('shows the level after the Agent health pill and opens the notices', () => {
+      const { button, onSheet } = slack({ level: 'action' });
+      expect(button?.textContent).toBe('Slack: action');
+      expect(button?.previousElementSibling?.classList.contains('health')).toBe(
+        true
+      );
+      fireEvent.click(button as HTMLElement);
+      expect(onSheet).toHaveBeenCalledWith('notices');
+    });
+
+    it('says urgent only until the time while a mute is ahead', () => {
+      const until = new Date(NOW.getTime() + 3600_000);
+      const { button } = slack({
+        level: 'all',
+        muteUntil: until.toISOString()
+      });
+      expect(button?.textContent).toBe(
+        `Slack: urgent only until ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      );
+    });
+
+    it('reads a mute that has passed as none', () => {
+      const { button } = slack({
+        level: 'all',
+        muteUntil: new Date(NOW.getTime() - 60_000).toISOString()
+      });
+      expect(button?.textContent).toBe('Slack: all');
+    });
+
+    it('puts the day in front when the mute ends on another day', () => {
+      const until = new Date(NOW.getTime() + 30 * 3600_000);
+      const { button } = slack({
+        level: 'all',
+        muteUntil: until.toISOString()
+      });
+      const time = until.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      expect(button?.textContent).toContain(time);
+      expect(button?.textContent).not.toBe(`Slack: urgent only until ${time}`);
+    });
+
+    it('is absent without a dial, and where the pill is', () => {
+      expect(slack(undefined).button).toBeNull();
+      expect(slack({ level: 'all' }, vi.fn(), false).button).toBeNull();
+    });
+  });
+
   it('leaves out the pill but keeps the connection indicator without it', () => {
     const { container } = render(
       <Status

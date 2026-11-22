@@ -208,6 +208,15 @@ export type DeployState = {
   failed: string | null;
 };
 
+/** How much of the host's notices reach Slack: urgent only, urgent and action, or everything */
+export type NotifyLevel = 'urgent' | 'action' | 'all';
+
+/** The notification dial a host reports; `muteUntil` (UTC ISO) is set only while a mute is ahead */
+export type NotifyDial = { level: NotifyLevel; muteUntil?: string };
+
+/** What a notice is worth: urgent needs you now, action waits on you, info is for the record */
+export type NoticeLevel = 'urgent' | 'action' | 'info';
+
 /** The queue view (watch.jq `queue_view`) after the page's defaults are applied */
 export type QueueView = {
   at: string | undefined;

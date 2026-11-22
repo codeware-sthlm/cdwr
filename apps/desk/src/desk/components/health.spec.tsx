@@ -32,7 +32,10 @@ const actions = () =>
     pause: vi.fn(),
     run: vi.fn(),
     step: vi.fn(),
-    apply: vi.fn()
+    apply: vi.fn(),
+    notifyLevel: vi.fn(),
+    notifyMute: vi.fn(),
+    notify: vi.fn()
   }) satisfies HealthActions;
 
 const jobWith = (
@@ -550,5 +553,139 @@ describe('AgentHealth with controls', () => {
     expect(p.a.step).toHaveBeenLastCalledWith('cap', -5);
     fireEvent.click(p.q('[data-apply="limit"]') as HTMLElement);
     expect(p.a.apply).toHaveBeenCalledWith('limit');
+  });
+
+  describe('Slack notices', () => {
+    const withDial = (notify: RunsPayload['notify']) =>
+      on((s) => {
+        if (s.data.runs) s.data.runs = { ...s.data.runs, notify };
+      });
+
+    it('shows the reported dial, and the mute while one is ahead', () => {
+      expect(mount(withDial({ level: 'action' })).text).toContain('action');
+      const muted = mount(
+        withDial({
+          level: 'urgent',
+          muteUntil: new Date(NOW.getTime() + 3600_000).toISOString()
+        })
+      );
+      expect(muted.text).toContain('muted until');
+    });
+
+    it('reads a mute that has passed as none', () => {
+      const p = mount(
+        withDial({
+          level: 'urgent',
+          muteUntil: new Date(NOW.getTime() - 60_000).toISOString()
+        })
+      );
+      expect(p.text).not.toContain('muted until');
+      expect(
+        p
+          .q('[role="group"][aria-label="Mute"]')
+          ?.querySelector('[aria-pressed="true"]')?.textContent
+      ).toBe('Unmuted');
+    });
+
+    it('puts the day in front when the mute ends on another day', () => {
+      const until = new Date(NOW.getTime() + 30 * 3600_000);
+      const p = mount(
+        withDial({ level: 'urgent', muteUntil: until.toISOString() })
+      );
+      const time = until.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      expect(p.text).toContain(time);
+      expect(p.text).not.toContain(`muted until ${time}`);
+    });
+
+    it('offers no apply while the host reports no dial', () => {
+      const p = mount(withDial(undefined));
+      expect(p.text).toContain('the host reports no dial yet');
+      expect(p.q<HTMLButtonElement>('[data-apply="notify"]')?.disabled).toBe(
+        true
+      );
+      for (const name of ['Level', 'Mute']) {
+        const buttons =
+          p
+            .q(`[role="group"][aria-label="${name}"]`)
+            ?.querySelectorAll('button') ?? [];
+        expect([...buttons].every((b) => b.disabled)).toBe(true);
+      }
+    });
+
+    it('presses the reported level and the unmuted choice', () => {
+      const p = mount(withDial({ level: 'action' }));
+      const pressed = (name: string, label: string) =>
+        p
+          .q(`[role="group"][aria-label="${name}"]`)
+          ?.querySelector(`[aria-pressed="true"]`)?.textContent === label;
+      expect(pressed('Level', 'Action')).toBe(true);
+      expect(pressed('Mute', 'Unmuted')).toBe(true);
+      expect(p.q<HTMLButtonElement>('[data-apply="notify"]')?.disabled).toBe(
+        true
+      );
+    });
+
+    it('shows the draft and enables Apply when it differs', () => {
+      const p = mount(
+        on((s) => {
+          if (s.data.runs)
+            s.data.runs = { ...s.data.runs, notify: { level: 'action' } };
+          s.controls.drafts = { notify: { level: 'all', mute: '4h' } };
+        })
+      );
+      const group = (name: string) =>
+        p.q(`[role="group"][aria-label="${name}"]`);
+      expect(
+        group('Level')?.querySelector('[aria-pressed="true"]')?.textContent
+      ).toBe('All');
+      expect(
+        group('Mute')?.querySelector('[aria-pressed="true"]')?.textContent
+      ).toBe('4 hours');
+      expect(p.q<HTMLButtonElement>('[data-apply="notify"]')?.disabled).toBe(
+        false
+      );
+    });
+
+    it('sends the picks and the apply to the actions', () => {
+      const p = mount(withDial({ level: 'action' }));
+      const click = (name: string, label: string) => {
+        const button = [
+          ...(p
+            .q(`[role="group"][aria-label="${name}"]`)
+            ?.querySelectorAll('button') ?? [])
+        ].find((b) => b.textContent === label);
+        fireEvent.click(button as HTMLElement);
+      };
+      click('Level', 'Urgent');
+      expect(p.a.notifyLevel).toHaveBeenCalledWith('urgent');
+      click('Mute', 'Until 08:00');
+      expect(p.a.notifyMute).toHaveBeenCalledWith('morning');
+    });
+
+    it('disables the row while a notify is pending', () => {
+      const p = mount(
+        on((s) => {
+          if (s.data.runs)
+            s.data.runs = { ...s.data.runs, notify: { level: 'action' } };
+          s.data.deskCommands = [row(1, 'notify')];
+        })
+      );
+      expect(p.q<HTMLButtonElement>('[data-apply="notify"]')?.disabled).toBe(
+        true
+      );
+      expect(p.text).toContain('pending…');
+    });
+
+    it('draws no buttons without a control token', () => {
+      const s = filled();
+      if (s.data.runs)
+        s.data.runs = { ...s.data.runs, notify: { level: 'all' } };
+      const p = mount(s);
+      expect(p.q('[data-apply="notify"]')).toBeNull();
+      expect(p.text).toContain('Slack notices');
+    });
   });
 });

@@ -71,6 +71,7 @@ const setup = (getIssue: (id: string) => Promise<IssueDetail>) => {
     readReviews: vi.fn(() => Promise.resolve(null)),
     readDismissals: vi.fn(() => Promise.resolve([])),
     readTenants: vi.fn(() => Promise.resolve({ rows: [], main: null })),
+    readNotices: vi.fn(() => Promise.resolve([])),
     subscribe: vi.fn(() => () => Promise.resolve())
   };
   const adapter = createAdapter({

@@ -104,6 +104,8 @@ const setup = () => {
   const supabaseReadDeskCommands = vi.fn(() => Promise.resolve([]));
   const supabaseReadSnoozes = vi.fn(() => Promise.resolve([]));
   let snoozesEvent: () => void = () => undefined;
+  let noticesEvent: () => void = () => undefined;
+  const supabaseReadNotices = vi.fn(() => Promise.resolve([]));
   let hostEvent: () => void = () => undefined;
   let planEvent: () => void = () => undefined;
   let hoursEvent: () => void = () => undefined;
@@ -122,6 +124,7 @@ const setup = () => {
     readReviews: vi.fn(() => Promise.resolve(null)),
     readDismissals: vi.fn(() => Promise.resolve([])),
     readTenants: vi.fn(() => Promise.resolve({ rows: [], main: null })),
+    readNotices: supabaseReadNotices,
     subscribe: vi.fn(
       (
         onChange: () => void,
@@ -133,9 +136,14 @@ const setup = () => {
         onGithub?: (row: GithubEventRow) => void,
         onSessions?: () => void,
         onDeskCommands?: () => void,
-        onSnoozes?: () => void
+        onSnoozes?: () => void,
+        _onReviews?: () => void,
+        _onDismissals?: () => void,
+        _onTenants?: () => void,
+        onNotices?: () => void
       ) => {
         if (onSnoozes) snoozesEvent = onSnoozes;
+        if (onNotices) noticesEvent = onNotices;
         changed = onChange;
         if (onGithub) githubEvent = onGithub;
         if (onSessions) sessionsEvent = onSessions;
@@ -185,6 +193,7 @@ const setup = () => {
     fireSessions: () => sessionsEvent(),
     fireDeskCommands: () => deskCommandsEvent(),
     fireSnoozes: () => snoozesEvent(),
+    fireNotices: () => noticesEvent(),
     fireStatus: (healthy: boolean, channel?: ChannelStatus) =>
       status(healthy, channel ?? (healthy ? 'SUBSCRIBED' : 'CLOSED')),
     fireFocus: () => focus()
@@ -1227,6 +1236,22 @@ describe('createAdapter', () => {
       fireSnoozes();
       await vi.advanceTimersByTimeAsync(0);
       expect(supabase.readSnoozes).toHaveBeenCalledTimes(2);
+      expect(supabase.read).not.toHaveBeenCalled();
+    });
+
+    it('rereads notices only when watched', async () => {
+      const { adapter, supabase, fireNotices } = setup();
+      fireNotices();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readNotices).not.toHaveBeenCalled();
+
+      adapter.watchTool('Supabase', 'notices', {}, () => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readNotices).toHaveBeenCalledTimes(1);
+
+      fireNotices();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(supabase.readNotices).toHaveBeenCalledTimes(2);
       expect(supabase.read).not.toHaveBeenCalled();
     });
   });

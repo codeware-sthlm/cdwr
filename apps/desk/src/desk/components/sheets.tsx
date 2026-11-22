@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 
 import { SHIP_DAYS } from '../constants';
 import type { Model } from '../model';
-import type { DeskState, Filter, SheetId } from '../state';
+import type { DeskState, Filter, NoticeFilter, SheetId } from '../state';
 import { ticketState } from '../view/ticket';
 
 import { BeforeSheet, type WaitActions } from './before';
@@ -11,6 +11,7 @@ import {
   AllBody,
   EffortBody,
   IdeasBody,
+  NoticesBody,
   ShippedBody
 } from './data-bodies';
 import { HandoffsBody, LimitBody, NextBody, ReviewBody } from './queue-bodies';
@@ -36,6 +37,8 @@ export type SheetActions = {
   onActFilter: (ticket: string) => void;
   /** The All sheet's filter */
   onFilter: (filter: Filter) => void;
+  /** The Notices sheet's filter */
+  onNoticeFilter: (filter: NoticeFilter) => void;
 };
 
 export type SheetProps = {
@@ -141,6 +144,13 @@ export const SHEETS: Record<SheetId, SheetDef> = {
     title: 'Agent suggestions',
     sub: 'One evidence-led idea a day, from the first idle run after 06:00. Accept it with agent:ready; discard it by cancelling with one word in a comment.',
     Body: IdeasBody
+  },
+  notices: {
+    title: 'Slack notices',
+    sub: 'What the host raised, newest first: sent to Slack, held back by the level or a mute, or waiting for the edge function',
+    Body: ({ state, now, actions }) => (
+      <NoticesBody state={state} now={now} onFilter={actions.onNoticeFilter} />
+    )
   },
   ticket: {
     title: (m, state) => {
