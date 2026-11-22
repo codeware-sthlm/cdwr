@@ -474,7 +474,7 @@ DESK_STALE_SECS=7200
 apply_commands() {
   telemetry_on || return 0
   setopt local_options no_err_exit
-  local host rows line id kind actor at ticket pr args value verdict why change effect body acked stamp now target ranat
+  local host rows line id kind actor at ticket pr args value verdict why change effect body acked stamp now target ranat level mute
   host="$(telemetry_host)"
   rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
   if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
@@ -522,6 +522,15 @@ apply_commands() {
           if [[ "$value" == <->(|.<->) ]] && (( value <= 500 )); then
             effect=implement-cap change="implement cap set to \$$value from the desk ($actor)"
           else verdict=refused why="bad value"; fi ;;
+        notify)
+          level="$(jq -r '.level // ""' <<<"$args" 2>/dev/null)"
+          mute="$(jq -r '.muteUntil // ""' <<<"$args" 2>/dev/null)"
+          if [[ "$level" == (urgent|action|all) ]] &&
+            { [[ -z "$mute" ]] || [[ "$mute" =~ '^[0-9]{4}-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\.[0-9]+)?Z$' ]]; }; then
+            effect=notify change="notify dial set to $level"
+            [[ -z "$mute" ]] || change="$change, muted until $mute"
+            change="$change from the desk ($actor)"
+          else verdict=refused why="bad value"; fi ;;
         copilot|merge)
           # Checked against a fresh read before the ack; the write itself follows it
           why="$(desk_pr_check "$kind" "$ticket" "$pr")"
@@ -556,6 +565,11 @@ apply_commands() {
       review) : > "$HOME_DIR/review-requested" ;;
       limit|implement-cap)
         print -r -- "$value" > "$HOME_DIR/$effect.tmp" && mv "$HOME_DIR/$effect.tmp" "$HOME_DIR/$effect" ;;
+      notify)
+        print -r -- "$level" > "$HOME_DIR/notify-level.tmp" && mv "$HOME_DIR/notify-level.tmp" "$HOME_DIR/notify-level" &&
+          if [[ -n "$mute" ]]; then
+            print -r -- "$mute" > "$HOME_DIR/notify-mute-until.tmp" && mv "$HOME_DIR/notify-mute-until.tmp" "$HOME_DIR/notify-mute-until"
+          else rm -f "$HOME_DIR/notify-mute-until"; fi ;;
     esac || { note "warn: desk command $id ($kind): acked, but $effect could not be written"; record warn "" "desk command $id: $effect not written"; }
     # A GitHub write that fails after the ack turns the row refused, with GitHub's reason
     if [[ "$effect" == (copilot|merge) ]] && ! why="$(desk_pr_act "$kind" "$pr" ${=target})"; then

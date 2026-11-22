@@ -3883,6 +3883,50 @@ describe('run.sh apply_commands', () => {
     }
   });
 
+  it('sets the notify level and a mute, and clears the mute', () => {
+    const lvl = apply([
+      { id: 1, kind: 'notify', args: { level: 'action', muteUntil: null } }
+    ]);
+    expect(file('notify-level')).toBe('action');
+    expect(file('notify-mute-until')).toBeNull();
+    expect(changes(lvl)).toEqual([
+      'notify dial set to action from the desk (mac)'
+    ]);
+
+    const mute = apply([
+      {
+        id: 1,
+        kind: 'notify',
+        args: { level: 'all', muteUntil: '2999-01-01T10:00:00.000Z' }
+      }
+    ]);
+    expect(file('notify-level')).toBe('all');
+    expect(file('notify-mute-until')).toBe('2999-01-01T10:00:00.000Z');
+    expect(changes(mute)).toEqual([
+      'notify dial set to all, muted until 2999-01-01T10:00:00.000Z from the desk (mac)'
+    ]);
+
+    apply([{ id: 1, kind: 'notify', args: { level: 'all', muteUntil: null } }]);
+    expect(file('notify-mute-until')).toBeNull();
+    expect(file('notify-level')).toBe('all');
+  });
+
+  it('refuses a bad notify level or time and writes nothing', () => {
+    for (const args of [
+      { level: 'loud', muteUntil: null },
+      { level: 'all', muteUntil: 'tomorrow' },
+      { level: 'all', muteUntil: '2999-01-01T10:00:00+02:00' }
+    ]) {
+      const r = apply([{ id: 1, kind: 'notify', args }]);
+      expect(statuses(r)).toEqual([['refused', 'bad value']]);
+      expect(file('notify-level')).toBeNull();
+      expect(file('notify-mute-until')).toBeNull();
+      expect(changes(r)).toEqual([
+        'notify refused from the desk (mac): bad value'
+      ]);
+    }
+  });
+
   it('sets the implement cap up to 500 and refuses the rest', () => {
     const zero = apply([{ id: 1, kind: 'cap', value: 0 }]);
     expect(file('implement-cap')).toBe('0');
@@ -7195,7 +7239,20 @@ describe('run.sh notice', () => {
     expect(notice).toContain('notice() {');
     expect(SCRIPT).not.toMatch(/^notify\(\) \{/m);
     expect(SCRIPT).not.toContain('notify-slack.sh');
-    expect(SCRIPT).not.toContain('notify-level');
+    // The dial is only ever written; every mention is a tmp write, its mv or an rm
+    const WRITES = [
+      /> "\$HOME_DIR\/notify-(?:level|mute-until)\.tmp"/g,
+      /mv "\$HOME_DIR\/notify-(?:level|mute-until)\.tmp" "\$HOME_DIR\/notify-(?:level|mute-until)"/g,
+      /rm -f "\$HOME_DIR\/notify-mute-until"/g
+    ];
+    const mentions = SCRIPT.split('\n').filter((l) =>
+      /notify-(level|mute-until)/.test(l)
+    );
+    expect(mentions.length).toBeGreaterThan(0);
+    for (const line of mentions) {
+      const rest = WRITES.reduce((l, w) => l.replace(w, ''), line);
+      expect(rest).not.toMatch(/notify-(level|mute-until)/);
+    }
     expect(SCRIPT).not.toMatch(/\bnotify "/);
   });
 
