@@ -363,6 +363,46 @@ describe('parseCommand', () => {
     );
   });
 
+  it.each([
+    ['a level only', { level: 'urgent' }, { level: 'urgent', muteUntil: null }],
+    [
+      'a null mute',
+      { level: 'all', muteUntil: null },
+      { level: 'all', muteUntil: null }
+    ],
+    [
+      'a future mute, normalised',
+      { level: 'action', muteUntil: '2999-01-01T12:00+02:00' },
+      { level: 'action', muteUntil: '2999-01-01T10:00:00.000Z' }
+    ]
+  ])('accepts notify with %s', (_name, args, expected) => {
+    expect(parseCommand({ host: 'nuc', kind: 'notify', args })).toEqual({
+      host: 'nuc',
+      kind: 'notify',
+      args: expected
+    });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no level', {}],
+    ['an unknown level', { level: 'loud' }],
+    ['another key', { level: 'all', value: 1 }],
+    ['a date only', { level: 'all', muteUntil: '2999-01-01' }],
+    ['a number', { level: 'all', muteUntil: 5 }],
+    ['a past time', { level: 'all', muteUntil: '2020-01-01T00:00:00Z' }]
+  ])('refuses notify with %s', (_name, args) => {
+    expect(typeof parseCommand({ host: 'nuc', kind: 'notify', args })).toBe(
+      'string'
+    );
+  });
+
+  it('refuses a notify level with the message', () => {
+    expect(
+      parseCommand({ host: 'nuc', kind: 'notify', args: { level: 'x' } })
+    ).toBe('notify takes a level: urgent, action or all');
+  });
+
   it('accepts dismiss with a finding and trims the note', () => {
     expect(
       parseCommand({
@@ -585,6 +625,23 @@ describe('createHandler', () => {
       note: null
     });
     expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('stores a pending notify command with the mute normalised', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(
+      post({
+        host: 'nuc',
+        kind: 'notify',
+        args: { level: 'action', muteUntil: '2999-01-01T12:00:00Z' }
+      })
+    );
+    expect(res.status).toBe(202);
+    expect(bodyOf(callsTo(fetch, 'desk_commands')[0])).toMatchObject({
+      kind: 'notify',
+      args: { level: 'action', muteUntil: '2999-01-01T12:00:00.000Z' },
+      status: 'pending'
+    });
   });
 
   it('refuses a command for a host nothing reports from, and logs activity', async () => {

@@ -16,9 +16,14 @@ export const KINDS = [
   'review',
   'dismiss',
   'restart',
-  'gate'
+  'gate',
+  'notify'
 ] as const;
 export type Kind = (typeof KINDS)[number];
+
+/** The notify dial's levels, as `cdwr agent notify` takes them */
+export const NOTIFY_LEVELS = ['urgent', 'action', 'all'] as const;
+export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 
 /** The Waiting on you row kinds a snooze may record, as the desk's WaitRow names them */
 export const ROW_KINDS = [
@@ -67,7 +72,8 @@ export type Command = {
    * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
    * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze; `ticket`
    * and `pr` for copilot and merge; `finding` and an optional `note` for dismiss; `tenant`, `app`
-   * and a `sha` or null for restart; `tenant` and `action` for gate
+   * and a `sha` or null for restart; `tenant` and `action` for gate; `level` and a future
+   * `muteUntil` or null for notify
    */
   args: {
     tenant?: string;
@@ -82,6 +88,8 @@ export type Command = {
     pr?: number;
     kind?: RowKind;
     eventAt?: string | null;
+    level?: NotifyLevel;
+    muteUntil?: string | null;
   };
 };
 
@@ -281,6 +289,35 @@ export const parseCommand = (payload: unknown): Command | string => {
       }
     };
   }
+  if (kind === 'notify') {
+    const message = 'notify takes a level: urgent, action or all';
+    if (!isRecord(args)) return message;
+    const { level, muteUntil = null } = args;
+    if (
+      Object.keys(args).some((k) => !['level', 'muteUntil'].includes(k)) ||
+      typeof level !== 'string' ||
+      !(NOTIFY_LEVELS as readonly string[]).includes(level)
+    )
+      return message;
+    if (muteUntil !== null) {
+      if (
+        typeof muteUntil !== 'string' ||
+        !ISO_TIME.test(muteUntil) ||
+        Number.isNaN(Date.parse(muteUntil))
+      )
+        return 'notify takes a mute time as a UTC time or null';
+      if (Date.parse(muteUntil) <= Date.now())
+        return 'notify takes a mute time in the future';
+    }
+    return {
+      host,
+      kind,
+      args: {
+        level: level as NotifyLevel,
+        muteUntil: muteUntil === null ? null : new Date(muteUntil).toISOString()
+      }
+    };
+  }
   if (kind !== 'limit' && kind !== 'cap') {
     if (
       args !== undefined &&
@@ -324,9 +361,11 @@ export const changeText = (
               ? `gate ${command.args.action} for ${command.args.tenant} asked from the desk (${device})`
               : command.kind === 'review'
                 ? `review asked on ${command.host} from the desk (${device})`
-                : command.kind === 'dismiss'
-                  ? `dismissed ${command.args.finding} from the desk (${device})`
-                  : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
+                : command.kind === 'notify'
+                  ? `notify dial set to ${command.args.level}${command.args.muteUntil ? `, muted until ${command.args.muteUntil}` : ''} from the desk (${device})`
+                  : command.kind === 'dismiss'
+                    ? `dismissed ${command.args.finding} from the desk (${device})`
+                    : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
