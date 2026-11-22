@@ -361,13 +361,17 @@ export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 export const parseNotifyLevel = (text: string | undefined): NotifyLevel =>
   NOTIFY_LEVELS.find((level) => level === text?.trim()) ?? 'urgent';
 
-/** The mute's end as the file holds it, when it parses and is after `now`; else undefined */
+/**
+ * The mute's end as the file holds it, when it is after `now`; else undefined. Only the UTC form
+ * `notify` writes counts, the one notify.sh's jq reads: an offset would show a mute the relay ignores.
+ */
 export const parseNotifyMuteUntil = (
   text: string | undefined,
   now: Date
 ): string | undefined => {
   const value = text?.trim();
-  if (!value) return undefined;
+  if (!value || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(value))
+    return undefined;
   const at = Date.parse(value);
   return Number.isNaN(at) || at <= now.getTime() ? undefined : value;
 };

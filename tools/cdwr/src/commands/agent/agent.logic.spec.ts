@@ -415,7 +415,9 @@ describe('parseNotifyMuteUntil', () => {
     ['2026-11-21T11:59:59Z', undefined],
     ['2026-11-21T12:00:00Z', undefined],
     ['2026-11-21T12:00:01Z\n', '2026-11-21T12:00:01Z'],
-    ['2026-11-22T08:00:00+01:00', '2026-11-22T08:00:00+01:00']
+    ['2026-11-22T08:00:00.000Z', '2026-11-22T08:00:00.000Z'],
+    // notify.sh reads only the UTC form, so an offset is no mute here either
+    ['2026-11-22T08:00:00+01:00', undefined]
   ])('reads %j as %j', (text, until) => {
     expect(parseNotifyMuteUntil(text, now)).toBe(until);
   });
