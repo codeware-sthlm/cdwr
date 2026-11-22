@@ -11,23 +11,32 @@ const setup = (trustEpoch: number | null | undefined) => {
 };
 
 describe('forgetTotpTrust', () => {
-  it.each([
-    { from: 0, to: 1 },
-    { from: 4, to: 5 },
-    { from: null, to: 1 },
-    { from: undefined, to: 1 }
-  ])('raises the epoch from $from to $to', async ({ from, to }) => {
-    const { payload, update } = setup(from);
+  it.each([0, 4, null, undefined])(
+    'writes a fresh epoch other than %s',
+    async (from) => {
+      const { payload, update } = setup(from);
 
-    await expect(forgetTotpTrust(payload, { id: 10 })).resolves.toBe(to);
+      const next = await forgetTotpTrust(payload, { id: 10 });
 
-    expect(update).toHaveBeenCalledWith({
-      collection: 'users',
-      id: 10,
-      data: { trustEpoch: to },
-      depth: 0,
-      overrideAccess: true
-    });
+      expect(next).not.toBe(from ?? 0);
+      expect(Number.isInteger(next) && next > 0).toBe(true);
+      expect(update).toHaveBeenCalledWith({
+        collection: 'users',
+        id: 10,
+        data: { trustEpoch: next },
+        depth: 0,
+        overrideAccess: true
+      });
+    }
+  );
+
+  it('two forgets in a row end on different epochs', async () => {
+    const first = setup(0);
+    const a = await forgetTotpTrust(first.payload, { id: 10 });
+    const second = setup(a);
+    const b = await forgetTotpTrust(second.payload, { id: 10 });
+
+    expect(b).not.toBe(a);
   });
 
   it('reads the hidden epoch with access overridden', async () => {
