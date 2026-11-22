@@ -1,30 +1,29 @@
 import type { Post } from '@codeware/shared/util/payload-types';
+import { listingCategoryIds } from '@codeware/shared/util/payload-utils';
 import type { BasePayload } from 'payload';
 
 import { mapToRuntime } from '../map-to-runtime';
 import type { PayloadRuntime } from '../payload-runtime.types';
 
-import { listingCategoryIds } from './listing-category-ids';
 import { resolveDraftQuery } from './resolve-draft-query';
 
+/** A page with a posts block, and the categories that block is filtered on. */
+export type PostsListing = {
+  path: string;
+  categoryIds: Array<number>;
+};
+
 /**
- * The path of the page that lists a post, found among the pages with a posts
- * block on it, so a post can link back to wherever the site lists it.
- *
- * A listing filtered on one of the post's categories comes first, then a
- * listing with no filter. A filtered listing that doesn't show the post is
- * never picked.
- *
- * Returns null when no page lists the post.
+ * The posts listings of the site: one entry per posts block, in page order,
+ * oldest page first. Fetched apart from the post, so a post page can run
+ * both queries at once and pick with `postsListingPath`.
  *
  * @param runtime - Authenticated Payload runtime instance
- * @param post - The post to link back from
- * @returns A path such as `/devlog`, or null
+ * @returns The listings, empty when no page has a posts block
  */
-export async function getPostsListingPath(
-  runtime: PayloadRuntime | BasePayload,
-  post: Pick<Post, 'categories'>
-): Promise<string | null> {
+export async function getPostsListings(
+  runtime: PayloadRuntime | BasePayload
+): Promise<Array<PostsListing>> {
   const resolvedRuntime = mapToRuntime(runtime);
   const { payload, tenantConfig } = resolvedRuntime;
 
@@ -35,34 +34,69 @@ export async function getPostsListingPath(
   const result = await payload.find({
     collection: 'pages',
     where,
-    select: { slug: true, layout: true },
+    // Only the posts blocks' filter, not the rest of each layout
+    select: { slug: true, layout: { posts: { categories: true } } },
     depth: 0,
     locale: tenantConfig?.locale,
     limit: 50,
+    sort: 'createdAt',
     overrideAccess,
     user: payload.authenticatedUser,
     disableErrors: true
   });
 
+  return result.docs.flatMap((page) =>
+    page.slug
+      ? (page.layout ?? []).flatMap((block) =>
+          block.blockType === 'posts'
+            ? [
+                {
+                  path: `/${page.slug}`,
+                  categoryIds: listingCategoryIds(block.categories)
+                }
+              ]
+            : []
+        )
+      : []
+  );
+}
+
+/**
+ * The path of the listing a post links back to.
+ *
+ * A listing filtered on one of the post's categories comes first, then a
+ * listing with no filter. A listing filtered only on categories the post
+ * isn't in is never picked. The block's limit is not considered, so an older
+ * post may link to a listing that shows only the newest posts of its category.
+ *
+ * @param listings - The site's listings, from `getPostsListings`
+ * @param post - The post to link back from
+ * @returns A path such as `/devlog`, or null when no listing fits
+ */
+export function postsListingPath(
+  listings: Array<PostsListing>,
+  post: Pick<Post, 'categories'>
+): string | null {
   const postCategoryIds = new Set(listingCategoryIds(post.categories));
-  let unfilteredSlug: string | null = null;
 
-  for (const page of result.docs) {
-    if (!page.slug) {
-      continue;
-    }
-    for (const block of page.layout ?? []) {
-      if (block.blockType !== 'posts') {
-        continue;
-      }
-      const categoryIds = listingCategoryIds(block.categories);
-      if (!categoryIds.length) {
-        unfilteredSlug ??= page.slug;
-      } else if (categoryIds.some((id) => postCategoryIds.has(id))) {
-        return `/${page.slug}`;
-      }
-    }
-  }
+  const filtered = listings.find(({ categoryIds }) =>
+    categoryIds.some((id) => postCategoryIds.has(id))
+  );
+  const unfiltered = listings.find(({ categoryIds }) => !categoryIds.length);
 
-  return unfilteredSlug ? `/${unfilteredSlug}` : null;
+  return (filtered ?? unfiltered)?.path ?? null;
+}
+
+/**
+ * The path of the page that lists a post. See `postsListingPath`.
+ *
+ * @param runtime - Authenticated Payload runtime instance
+ * @param post - The post to link back from
+ * @returns A path such as `/devlog`, or null
+ */
+export async function getPostsListingPath(
+  runtime: PayloadRuntime | BasePayload,
+  post: Pick<Post, 'categories'>
+): Promise<string | null> {
+  return postsListingPath(await getPostsListings(runtime), post);
 }
