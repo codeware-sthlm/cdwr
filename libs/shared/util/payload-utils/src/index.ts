@@ -59,6 +59,7 @@ export {
   parseComponentSource
 } from './lib/parse-component-source';
 export { getExcerpt } from './lib/get-excerpt';
+export { listingCategoryIds } from './lib/listing-category-ids';
 export { resolveDocMeta, resolveMeta } from './lib/resolve-meta';
 export {
   type ResolvedSubmissionField,
