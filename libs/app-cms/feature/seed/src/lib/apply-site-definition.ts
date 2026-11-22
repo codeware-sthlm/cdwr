@@ -558,6 +558,7 @@ export async function applySiteDefinition(
     const resolver = {
       media: (filename: string) => media.get(filename),
       tag: (slug: string) => tags.get(slug),
+      category: (slug: string) => categories.get(slug),
       form: (title: string) => forms.get(title),
       customComponent: (slug: string) => customComponents.get(slug),
       reusableContent: (title: string) => reusableContent.get(title)
