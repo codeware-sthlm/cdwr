@@ -1,3 +1,9 @@
+## 0.3.6 (2026-11-23)
+
+### 🐞 Bug Fixes
+
+- **fly-node:** an absolute config path is found by config show ([edbfd5c86](https://github.com/codeware-sthlm/cdwr/commit/edbfd5c86))
+
 ## 0.3.5 (2026-11-15)
 
 ### 🐞 Bug Fixes

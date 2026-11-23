@@ -1,3 +1,9 @@
+## 3.0.3 (2026-11-23)
+
+### 🐞 Bug Fixes
+
+- **repo:** load the nx-payload plugin through plugin.mts in the package ([624c92b8b](https://github.com/codeware-sthlm/cdwr/commit/624c92b8b))
+
 ## 3.0.2 (2026-11-15)
 
 This was a version bump only for nx-payload to align it with other projects, there were no code changes.

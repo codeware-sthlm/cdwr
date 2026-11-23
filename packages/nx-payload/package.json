@@ -1,6 +1,6 @@
 {
   "name": "@cdwr/nx-payload",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "private": false,
   "description": "The Nx Payload plugin adds support for Payload applications within an Nx workspace.",
   "repository": {

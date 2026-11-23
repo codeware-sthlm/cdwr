@@ -1,3 +1,7 @@
+## 3.0.3 (2026-11-23)
+
+This was a version bump only for create-nx-payload to align it with other projects, there were no code changes.
+
 ## 3.0.2 (2026-11-15)
 
 This was a version bump only for create-nx-payload to align it with other projects, there were no code changes.
