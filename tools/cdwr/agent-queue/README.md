@@ -19,6 +19,15 @@ A ticket whose report (the text before `## Plan`) holds `**Ask me before impleme
 heading or bold line starting "Open question", keeps the old `**Agent: plan ready**` gate. A
 question only Håkan can answer stays a needs-input gate.
 
+No plan-only run starts while an attended `/work-queue` session is alive or waiting at a prompt, a
+mirrored one from the Mac included: that session plans what it claims, and a run beside it raced
+its claim. The scheduler notes `skip: a /work-queue session is alive, it plans its own`,
+and `--check` prints the same line. A launched implement session (`kind` in its session file) never
+claims new work, so it holds nothing back, and neither does an attended one while the queue is at
+the limit, since it starts no new ticket then. A plan-only run that finds the ticket claimed when it
+reads it again before writing ends with `not planned: COD-n · <why>`, which the scheduler notes as
+a skip instead of `fail: planned nothing`.
+
 To start an attended session, run `cdwr agent attend [COD-n]` from anywhere: it moves `codeware-queue` to `origin/main` (installing when the lockfile changed) and starts `/work-queue` there in the same terminal (`--no-start` prints the line instead). On the Mac it also runs `cdwr agent install --yes` from that checkout when the installed queue scripts differ from main's, before the session starts; if that fails it stops and names the command to run by hand. In the container it leaves the scripts alone. A session started on a detached checkout that is behind main warns at start and names that one command (the SessionStart hook, `tools/cdwr/agent-queue/session-start.sh`).
 
 The scheduler runs in the NUC's agent container, plan-only every 10 minutes; `cdwr agent status --host <host>` says what it would take next. The Mac is attended-only: `cdwr agent install` there sets up the attended side (the script copies, the Linear app's Keychain items, `agent_linear`), `--scheduler` adds a launchd job (a plain `install` keeps an existing one current), and `cdwr agent uninstall` removes it (`--worktree-remove` takes the planner checkout too) and keeps the session side. Without the job, bare `status` shows the attended rows and `pause`, `resume` and `run` name the host that has the scheduler; `status`, `notify`, `pause`, `resume` and `run` take `--host <host>` to act on the container's queue over ssh (`run` there wakes its loop). Any other `cdwr` command in the container, such as a hand-off, is `cdwr agent exec --host <host> -- <args>` (a hand-off for the NUC is written as the one line `pnpm cdwr agent exec --host agent-host -- <command> --yes`, never a shell inside the container; a command that runs `gh` gets the app's token), which runs it through `secrets.sh` with the vault's keys; a plain `docker exec` has none. Launchd runs an installed copy of

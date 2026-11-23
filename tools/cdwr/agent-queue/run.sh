@@ -2077,6 +2077,15 @@ fi
 attended_line=""
 queue_view=""
 attended_watch=""
+# session_state of the live /work-queue sessions, for the plan-only launch; `none` until attended
+# reads it, so a Linear error there leaves planning as it was
+attended_session='{"state":"none"}'
+SESSION_PLANS="skip: a /work-queue session is alive, it plans its own"
+# session_plans: true while a session below the limit is alive or waiting at a prompt, a mirrored
+# one included
+session_plans() {
+  jq -e '(.state == "alive" or .state == "waiting") and (.full | not)' <<<"$attended_session" >/dev/null 2>&1
+}
 # audit_notices <view>: one action notice per gap of the view's audit that has stood for 15 minutes
 # without being told, so a state that settles by itself (a merge before its label moves, a label
 # before its comment) stays quiet. audit-seen.json maps a gap id to { first, told }; an id that left
@@ -2191,6 +2200,11 @@ attended() {
     --argjson renovate "$renovate" --argjson session "$session" \
     'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
+  # A launched implement session never claims a new ticket, so it holds no planning back; nor
+  # does a session at the limit, which starts no new ticket
+  attended_session="$(watch -c --argjson now "$(date +%s)" --argjson v "$verdict" \
+    'include "watch"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }' <<<"$sessions_json" 2>/dev/null)" ||
+    attended_session='{"state":"none"}'
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
   [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
@@ -2759,9 +2773,13 @@ if $check; then
   print -r -- "review: $(review_gate)"
   print -r -- "devlog: $(devlog_gate)"
   limit_at="$(limit_held)" && print -r -- "limit: claude runs held until $limit_at"
+  if session_plans; then echo "$SESSION_PLANS"; exit 0; fi
   echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
 fi
 
+# A live /work-queue session plans what it claims; a plan-only run beside it races its claim.
+# A note, not a row, each tick.
+if session_plans; then note "$SESSION_PLANS"; exit 0; fi
 if limit_at="$(limit_held)"; then note "skip: session limit, planning held until $limit_at"; exit 0; fi
 linear_ok || exit 0
 cd "$REPO"
@@ -2819,7 +2837,15 @@ if after="$(linear "$PLANNED")" && [[ -n "$after" ]] && ! jq -e '.errors' >/dev/
   done
   # A clean exit that planned nothing is a failure all the same, e.g. no Linear tools.
   # Planned tickets are left out of `ready`, so this fires only for a ticket that really needed a plan.
-  if (( rc == 0 && planned == 0 )); then
+  # Unless the run found the ticket claimed when it read it again before writing: it ends with
+  # `not planned: COD-n · <why>`, read like the suggestion's verdict
+  not_planned="$(jq -r '.result // empty' "$result" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' |
+    grep -E '^not planned: COD-[0-9]+ · .+$' | tail -n 1 || true)"
+  if (( rc == 0 && planned == 0 )) && [[ -n "$not_planned" ]]; then
+    not_planned="${not_planned#not planned: }"
+    note "skip: ${not_planned%% · *} not planned, ${not_planned#* · }"
+    record skip "${not_planned%% · *}" "not planned, ${not_planned#* · }$spent"
+  elif (( rc == 0 && planned == 0 )); then
     note "fail: planned nothing (see $log)"
     notice action plan "Agent queue: a planning run exited cleanly but planned nothing. Log: $log"
     record "planned nothing" "" "log $log$spent"

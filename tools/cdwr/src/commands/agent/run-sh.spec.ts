@@ -159,6 +159,78 @@ describe('run.sh', () => {
     expect(SCRIPT).toMatch(/note "fail: planned nothing/);
   });
 
+  // A plan-only run beside a live session raced its claim
+  describe('a live /work-queue session', () => {
+    const plan = SCRIPT.slice(
+      SCRIPT.indexOf(
+        'if $check; then\n  print -r -- "suggest: $(suggest_gate)"'
+      )
+    );
+
+    it('holds the plan-only launch with a note, no row and no notice', () => {
+      expect(SCRIPT).toContain(
+        'SESSION_PLANS="skip: a /work-queue session is alive, it plans its own"'
+      );
+      const line = 'if session_plans; then note "$SESSION_PLANS"; exit 0; fi';
+      const at = plan.indexOf(line);
+      expect(at).toBeGreaterThan(0);
+      expect(at).toBeLessThan(plan.indexOf('to_main planning'));
+      expect(at).toBeLessThan(
+        plan.indexOf('"${claude_launch[@]}" -p "/work-queue')
+      );
+    });
+
+    it('says so on --check in place of the tickets it would plan', () => {
+      const check = plan.slice(0, plan.indexOf('\nfi\n'));
+      expect(
+        check.indexOf(
+          'if session_plans; then echo "$SESSION_PLANS"; exit 0; fi'
+        )
+      ).toBeLessThan(check.indexOf('would plan one of'));
+    });
+
+    // A session at the limit starts no new ticket, so planning goes on beside it
+    it.each([
+      ['{"state":"alive","full":false}', true],
+      ['{"state":"waiting","full":false}', true],
+      ['{"state":"alive","full":true}', false],
+      ['{"state":"stopped","full":false}', false],
+      ['{"state":"none"}', false]
+    ])('session_plans on %s is %s', (session, holds) => {
+      const fn = SCRIPT.slice(
+        SCRIPT.indexOf('session_plans() {'),
+        SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('session_plans() {')) + 3
+      );
+      const result = spawnSync(
+        'zsh',
+        ['-c', `${fn}attended_session='${session}'; session_plans`],
+        { encoding: 'utf8' }
+      );
+      expect(result.status === 0).toBe(holds);
+    });
+
+    it('leaves launched implement sessions out, and plans when attended never read them', () => {
+      expect(SCRIPT).toContain(`attended_session='{"state":"none"}'\n`);
+      expect(SCRIPT).toContain(
+        `'include "watch"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }'`
+      );
+    });
+  });
+
+  it('turns a run that found the ticket claimed into a skip', () => {
+    const tail = SCRIPT.slice(SCRIPT.indexOf("read -r -d '' PLANNED"));
+    expect(tail).toContain("grep -E '^not planned: COD-[0-9]+ · .+$'");
+    const skip = tail.indexOf(
+      'note "skip: ${not_planned%% · *} not planned, ${not_planned#* · }"'
+    );
+    expect(skip).toBeGreaterThan(0);
+    expect(skip).toBeLessThan(tail.indexOf('note "fail: planned nothing'));
+    // The notice belongs to the failure branch only
+    expect(
+      tail.slice(skip, tail.indexOf('elif (( rc == 0 && planned == 0 ))'))
+    ).not.toContain('notice');
+  });
+
   // wait.sh keeps <id>.seen per session; it goes with the session, and an orphan is swept
   it('removes the .seen file with its session, and orphans', () => {
     expect(SCRIPT).toContain(
