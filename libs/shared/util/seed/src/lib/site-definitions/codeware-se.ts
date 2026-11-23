@@ -21,31 +21,31 @@ import {
  */
 export const codewareSe: SiteDefinition = {
   name: 'codeware.se',
-  description:
-    'Konsultverksamhet — systemutveckling, arkitektur och mentorskap',
+  // The offer in one wording, the same in the hero and the footer
+  description: 'Konsultbolag inom systemutveckling och arkitektur',
 
   pages: [
     {
       name: 'Hem',
       slug: 'hem',
       meta: {
-        title: 'Mjukvara som fungerar. Även om fem år.',
+        title: 'Systemutveckling och arkitektur',
         description:
-          'Codeware utvecklar system och leder tekniskt arbete i verksamheter där systemen inte får stanna. Det som byggs ska fungera länge.'
+          'Codeware är ett konsultbolag inom systemutveckling och arkitektur. Bolaget arbetar med verksamheter där systemen inte får stanna.'
       },
       layout: [
         {
           blockType: 'hero',
           badge: 'Codeware Sthlm',
-          heading: 'Mjukvara som fungerar. Även om fem år.',
-          lede: 'Codeware utvecklar system och leder tekniskt arbete i verksamheter där systemen inte får stanna. Det som byggs ska fungera länge, även när den som byggde det inte längre är kvar.',
+          heading: 'Systemutveckling och arkitektur',
+          lede: 'Codeware är ett konsultbolag inom systemutveckling och arkitektur. Bolaget arbetar med verksamheter där systemen inte får stanna.',
           illustration: codewareHeroIllustration
         },
         {
           blockType: 'feature-cards',
-          eyebrow: 'Så arbetar Codeware',
+          eyebrow: 'Arbetssätt',
           band: 'subtle',
-          heading: 'Byggt för att kunna förvaltas, inte bara för att levereras',
+          heading: 'Så arbetar Codeware',
           columns: '3',
           items: [
             {
@@ -56,12 +56,12 @@ export const codewareSe: SiteDefinition = {
             {
               title: 'Håller över tid',
               description:
-                'Verksamheten förändras, och kraven med den. Ett system ska tåla det i många år utan att behöva byggas om.'
+                'Verksamheten förändras, och kraven med den. Systemen byggs för att klara det i många år utan att behöva byggas om.'
             },
             {
-              title: 'Värdet stannar i koden',
+              title: 'Kunskapen lämnas över',
               description:
-                'Målet är att inte behövas. Det bestående värdet är det som finns kvar i koden, i testerna, i dokumentationen och hos dem som tar över, inte en person som måste finnas på plats.'
+                'Koden testas och dokumenteras, och de som tar över får det de behöver för att kunna förvalta systemet utan Codeware.'
             }
           ]
         },
@@ -73,7 +73,7 @@ export const codewareSe: SiteDefinition = {
           heading:
             'Den här sidan körs på en plattform som Codeware bygger själv',
           intro:
-            'Samma plattform driver flera webbplatser, var och en med sin egen adress, sitt eget utseende och sitt eget innehåll. Den utvecklas öppet och går att följa på cdwr.io.',
+            'Samma plattform driver flera webbplatser, och varje webbplats har sin adress, sitt utseende och sitt innehåll. Plattformen utvecklas öppet och går att följa på cdwr.io.',
           enableLink: true,
           link: {
             type: 'custom',
@@ -87,15 +87,15 @@ export const codewareSe: SiteDefinition = {
           subFeatures: [
             {
               title: 'En plattform, många webbplatser',
-              body: 'Varje webbplats är en egen driftsättning av samma kodbas, med egen domän och eget certifikat.'
+              body: 'Varje webbplats körs för sig med sin egen domän, men alla bygger på samma kod.'
             },
             {
-              title: 'Utseendet är en konfiguration',
-              body: 'Färger, typsnitt och ljust eller mörkt läge ställs in i administrationen och kontrolleras mot läsbarhetskrav.'
+              title: 'Utseendet väljs i administrationen',
+              body: 'Färger, typsnitt och ljust eller mörkt läge väljs utan programmering. Plattformen kontrollerar att texten går att läsa.'
             },
             {
               title: 'Granskat innan det lanseras',
-              body: 'Varje ändring får en egen driftsatt miljö med egen databas, så att innehåll och kod kan granskas på samma sätt.'
+              body: 'Varje ändring prövas först i en separat testmiljö, där både innehåll och kod granskas innan något publiceras.'
             }
           ]
         }
@@ -132,7 +132,7 @@ export const codewareSe: SiteDefinition = {
       variant: 'expanded',
       linkSource: 'none',
       // The name stands beside the mark and in the copyright; not here too
-      tagline: 'Arkitektur, utveckling och drift av system som ska hålla.',
+      tagline: 'Konsultbolag inom systemutveckling och arkitektur.',
       contact: [
         { platform: 'email', email: 'hello@codeware.se' },
         {
