@@ -164,10 +164,12 @@ main() {
       # A live session registering again keeps its ticket; one resumed after it ended starts clean
       held=
       [[ "$state" != ended ]] && held="$(jq -r '.ticket // empty' "$file" 2>/dev/null)"
+      # kind tells the scheduler a launched session, which never claims new work, from an attended one
       jq -n --arg id "$id" --argjson pid "$(claude_pid)" --arg now "$(now)" \
         --arg cwd "$(jq -r '.cwd // empty' <<<"$payload")" --arg host "$(host_id)" --arg held "$held" \
+        --arg kind "${AGENT_QUEUE_SESSION_KIND:-attended}" \
         '{id: $id, pid: $pid, startedAt: $now, lastSeen: $now, state: "working", ticket: ($held | if . == "" then null else . end),
-          detail: null, cwd: $cwd, host: $host}' > "$file.tmp.$$" &&
+          detail: null, cwd: $cwd, host: $host, kind: $kind}' > "$file.tmp.$$" &&
         mv "$file.tmp.$$" "$file" || rm -f "$file.tmp.$$"
       mirror force
       heartbeat "$state" working

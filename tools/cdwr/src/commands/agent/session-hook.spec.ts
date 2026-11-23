@@ -94,12 +94,29 @@ describe('session-hook.sh', () => {
       state: 'working',
       ticket: null,
       detail: null,
-      cwd: '/work'
+      cwd: '/work',
+      kind: 'attended'
     });
     expect(read().startedAt).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     expect(typeof read().pid).toBe('number');
     expect(typeof read().host).toBe('string');
     expect(read().host).not.toBe('');
+  });
+
+  // The scheduler leaves a launched session out when it decides whether to plan
+  it('marks a launched session as implement', () => {
+    spawnSync('zsh', [SCRIPT], {
+      input: JSON.stringify(REGISTER),
+      env: {
+        ...process.env,
+        AGENT_QUEUE_SESSION_KIND: 'implement',
+        AGENT_QUEUE_SESSIONS: dir,
+        AGENT_QUEUE_ENV_FILE: '/dev/null',
+        CLAUDE_PROJECT_DIR: dir
+      },
+      encoding: 'utf8'
+    });
+    expect(read().kind).toBe('implement');
   });
 
   it.each([
