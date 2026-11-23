@@ -75,17 +75,13 @@ const shared = {
 
 export const reusableContentGallery: BlockGalleryDoc<ReusableContentBlockProps> =
   {
-    name: {
-      en: 'Written once, placed anywhere',
-      sv: 'Skrivet en gång, placerat var som helst'
-    },
     summary: {
       en: 'A fragment authored in one place and referenced from many.',
       sv: 'Ett avsnitt som skrivs på ett ställe och refereras från flera.'
     },
     whenToUse: {
-      en: 'When the same content belongs on several pages and should only be edited once — an office address, a standard disclaimer, a contact panel. It holds its own blocks, so what is reused can be a whole section rather than a paragraph.',
-      sv: 'När samma innehåll hör hemma på flera sidor och bara ska redigeras på ett ställe — en besöksadress, en standardformulering, en kontaktruta. Det innehåller egna block, så det som återanvänds kan vara ett helt avsnitt och inte bara ett stycke.'
+      en: 'For content that appears on several pages and should be edited in one place, such as an office address, a standard text or a contact section. The content is written once as its own document, and this block shows it. The document can hold several blocks, so a whole section can be reused.',
+      sv: 'För innehåll som visas på flera sidor och ska redigeras på ett ställe, till exempel en besöksadress, en standardtext eller en kontaktruta. Innehållet skrivs en gång som ett eget dokument, och det här blocket visar det. Dokumentet kan innehålla flera block, så ett helt avsnitt kan återanvändas.'
     },
     example: {
       blockType: 'reusable-content',

@@ -55,17 +55,13 @@ const form = {
 } as unknown as FormType;
 
 export const formGallery: BlockGalleryDoc<FormBlockProps> = {
-  name: {
-    en: 'Messages that land in the admin',
-    sv: 'Meddelanden som hamnar i administrationen'
-  },
   summary: {
     en: 'A form built in the admin, with its fields and confirmation.',
     sv: 'Ett formulär byggt i administrationen, med sina fält och sin bekräftelse.'
   },
   whenToUse: {
-    en: 'When the page needs an answer back. The fields are built once as a form document and referenced here, so the same form can sit on several pages, and every submission lands in the admin rather than with a third party.',
-    sv: 'När sidan behöver ett svar tillbaka. Fälten byggs en gång som ett formulärdokument och refereras här, så samma formulär kan sitta på flera sidor, och varje inskickat svar hamnar i administrationen i stället för hos en tredje part.'
+    en: 'When visitors should be able to send something, such as a question or a booking request. The form is built once under Forms and chosen here, so the same form can be used on several pages. Submissions are stored in the admin.',
+    sv: 'När besökare ska kunna skicka något, till exempel en fråga eller en bokningsförfrågan. Formuläret byggs en gång under Formulär och väljs här, så samma formulär kan användas på flera sidor. Inskickade svar sparas i administrationen.'
   },
   example: {
     blockType: 'form',

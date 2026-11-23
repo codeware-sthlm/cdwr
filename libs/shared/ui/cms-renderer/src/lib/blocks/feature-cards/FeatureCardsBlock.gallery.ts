@@ -3,17 +3,13 @@ import type { FeatureCardsBlock as FeatureCardsBlockProps } from '@codeware/shar
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const featureCardsGallery: BlockGalleryDoc<FeatureCardsBlockProps> = {
-  name: {
-    en: 'Claims of equal weight',
-    sv: 'Påståenden med samma tyngd'
-  },
   summary: {
-    en: 'Three or four claims of equal weight, each with an icon and a sentence.',
-    sv: 'Tre eller fyra påståenden med samma tyngd, var och en med en ikon och en mening.'
+    en: 'A heading above three or four cards, each with an icon and a sentence.',
+    sv: 'En rubrik över tre eller fyra kort, vart och ett med en ikon och en mening.'
   },
   whenToUse: {
-    en: 'When the things are genuinely parallel — same weight, same shape, no order between them. It brings its own heading, so it states the claim and the cards support it; a bare grid following someone else\u2019s claim is the card block instead. Five is where it breaks: the row wraps and the last two read as an afterthought.',
-    sv: 'När sakerna verkligen är jämbördiga — samma tyngd, samma form, ingen inbördes ordning. Blocket har en egen rubrik och gör alltså sitt eget påstående som korten stöttar; ett rutnät som följer på någon annans påstående är i stället blocket card. Vid fem slutar det fungera: raden bryts och de två sista uppfattas som eftertankar.'
+    en: 'For three or four things of equal importance, such as what a service includes. The cards sit under the block\u2019s own heading; use the Card block when the heading is already on the page. With five or more cards the row wraps and the last ones end up on a line of their own.',
+    sv: 'För tre eller fyra saker som är lika viktiga, till exempel vad en tjänst innehåller. Blocket har en egen rubrik ovanför korten; välj blocket Kort när rubriken redan finns på sidan. Med fem eller fler kort bryts raden och de sista hamnar på en egen rad.'
   },
   example: {
     blockType: 'feature-cards',

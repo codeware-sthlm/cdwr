@@ -38,23 +38,19 @@ const tour = (
   }) as unknown as Tour;
 
 export const toursGallery: BlockGalleryDoc<ToursBlockProps> = {
-  name: {
-    en: 'What is coming up',
-    sv: 'Det som är på gång'
-  },
   summary: {
-    en: 'The latest tours, newest first.',
-    sv: 'De senaste turerna, nyast först.'
+    en: 'The most recently added tours, newest first.',
+    sv: 'De senast tillagda resorna, nyast först.'
   },
   whenToUse: {
-    en: 'On a page that should end with what is new rather than with a claim. The heading and the count are the editor\u2019s; the entries themselves are fetched for the page when it is served, so the list is never edited and never out of date.',
-    sv: 'På en sida som ska sluta med det senaste i stället för med ett påstående. Rubriken och antalet bestämmer redaktören; turerna hämtas för sidan när den levereras, så listan redigeras aldrig och blir aldrig inaktuell.'
+    en: 'For showing tours on a page, such as the start page or a page about the trips on offer. The heading and the number of tours are the editor\u2019s choice. The tours are fetched when the page is served, so a new tour appears without anyone editing the page.',
+    sv: 'För att visa resor på en sida, till exempel startsidan eller en sida om resorna som erbjuds. Redaktören anger rubriken och hur många resor som visas. Resorna hämtas när sidan levereras, så en ny resa syns utan att någon redigerar sidan.'
   },
   example: {
     blockType: 'tours',
     id: ID,
     title: 'Departures',
-    description: 'Trips with places left, soonest first.',
+    description: 'Trips with places left.',
     limit: 3
   },
   exampleData: {

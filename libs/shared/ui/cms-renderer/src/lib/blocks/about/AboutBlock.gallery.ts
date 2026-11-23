@@ -4,16 +4,16 @@ import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const aboutGallery: BlockGalleryDoc<AboutBlockProps> = {
   name: {
-    en: 'What is running, right now',
-    sv: 'Vad som körs just nu'
+    en: 'Deployment info',
+    sv: 'Driftinformation'
   },
   summary: {
     en: 'The deployment behind the page: version, commit, environment, build time.',
     sv: 'Driftsättningen bakom sidan: version, incheckning, miljö och byggtid.'
   },
   whenToUse: {
-    en: 'On a page about the platform rather than about the business. It takes nothing from the editor beyond a heading — the values come from the running app, so what it shows is true of the deployment serving the page and cannot be typed in wrong.',
-    sv: 'På en sida som handlar om plattformen snarare än om verksamheten. Den kräver inget av redaktören utöver en rubrik — värdena kommer från appen som körs, så det som visas gäller den driftsättning som levererar sidan och kan inte skrivas in fel.'
+    en: 'On a page about how the site is run, such as an about or status page. The editor sets only the heading. The version, commit, environment and build time are read from the running app, so they always match the deployment that serves the page.',
+    sv: 'På en sida om hur webbplatsen drivs, till exempel en om-sida eller en statussida. Redaktören anger bara rubriken. Version, incheckning, miljö och byggtid läses från appen som körs, så de stämmer alltid med den driftsättning som levererar sidan.'
   },
   example: { blockType: 'about', heading: 'About this deployment' }
 };

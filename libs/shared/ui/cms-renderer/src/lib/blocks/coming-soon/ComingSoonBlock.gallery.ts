@@ -3,10 +3,6 @@ import type { ComingSoonBlock as ComingSoonBlockProps } from '@codeware/shared/u
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const comingSoonGallery: BlockGalleryDoc<ComingSoonBlockProps> = {
-  name: {
-    en: 'A temporary landing page',
-    sv: 'En tillfällig startsida'
-  },
   summary: {
     en: 'A full-screen page for a site that is not open yet: a drawing, a heading, the opening date and a way to ask for a notice.',
     sv: 'En helskärmssida för en webbplats som inte har öppnat: en teckning, en rubrik, öppningsdatum och ett sätt att be om besked.'

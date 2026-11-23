@@ -8,8 +8,8 @@ export const codeGallery: BlockGalleryDoc<CodeBlockProps> = {
     sv: 'Ett kodavsnitt med syntaxfärgning och ett angivet språk.'
   },
   whenToUse: {
-    en: 'When the code is the point and a screenshot of it would not be. It highlights on the server, so the snippet is readable before any JavaScript arrives and stays selectable and copyable.',
-    sv: 'När koden är poängen och en skärmbild av den inte hade varit det. Färgningen sker på servern, så avsnittet går att läsa innan någon JavaScript hunnit fram och går fortfarande att markera och kopiera.'
+    en: 'For code the reader should be able to read and copy, such as an example in a guide. The highlighting is done on the server, so the code is readable before the page has loaded its JavaScript, and it can be selected and copied as text.',
+    sv: 'För kod som läsaren ska kunna läsa och kopiera, till exempel ett kodexempel i en guide. Färgningen görs på servern, så koden går att läsa innan sidan har laddat sin JavaScript, och den kan markeras och kopieras som text.'
   },
   example: {
     blockType: 'code',

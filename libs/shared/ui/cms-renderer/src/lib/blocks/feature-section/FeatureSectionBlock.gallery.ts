@@ -5,17 +5,13 @@ import { showcaseMedia } from '../gallery-media';
 
 export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
   {
-    name: {
-      en: 'A claim with its evidence',
-      sv: 'Ett påstående och beläggen för det'
-    },
     summary: {
-      en: 'One claim, one visual, and the supporting points beneath it.',
-      sv: 'Ett påstående, en bild och de stödjande punkterna nedanför.'
+      en: 'A heading, a text and an image, with a few points beneath them.',
+      sv: 'En rubrik, en text och en bild, med några punkter under.'
     },
     whenToUse: {
-      en: 'The workhorse of a long marketing page, repeated down it. Use it when a single claim deserves a visual that makes it checkable, with two to four points that qualify it rather than compete with it.',
-      sv: 'Det block som gör grovjobbet på en lång säljsida, upprepat hela vägen ner. Använd det när ett enskilt påstående förtjänar en bild som gör det möjligt att se att det stämmer, med två till fyra punkter som preciserar påståendet snarare än konkurrerar med det.'
+      en: 'For explaining one feature or service with a picture, such as a screenshot or a diagram. Two to four points below the text give the details. On a long page the block can be repeated, one section per feature.',
+      sv: 'För att förklara en funktion eller tjänst med hjälp av en bild, till exempel en skärmbild eller ett diagram. Två till fyra punkter under texten ger detaljerna. På en lång sida kan blocket upprepas, ett avsnitt per funktion.'
     },
     example: {
       blockType: 'feature-section',

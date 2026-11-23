@@ -48,17 +48,13 @@ const post = (
   }) as unknown as Post;
 
 export const postsGallery: BlockGalleryDoc<PostsBlockProps> = {
-  name: {
-    en: 'The latest writing',
-    sv: 'Det senast skrivna'
-  },
   summary: {
     en: 'The latest posts, newest first.',
     sv: 'De senaste inläggen, nyast först.'
   },
   whenToUse: {
-    en: 'On a page that should end with what is new rather than with a claim. The heading and the count are the editor\u2019s; the entries themselves are fetched for the page when it is served, so the list is never edited and never out of date.',
-    sv: 'På en sida som ska sluta med det senaste i stället för med ett påstående. Rubriken och antalet bestämmer redaktören; inläggen hämtas för sidan när den levereras, så listan redigeras aldrig och blir aldrig inaktuell.'
+    en: 'For showing the latest posts on a page, such as the start page or a news page. The heading and the number of posts are the editor\u2019s choice. The posts are fetched when the page is served, so the list stays up to date without anyone editing it.',
+    sv: 'För att visa de senaste inläggen på en sida, till exempel startsidan eller en nyhetssida. Redaktören anger rubriken och hur många inlägg som visas. Inläggen hämtas när sidan levereras, så listan hålls aktuell utan att någon redigerar den.'
   },
   example: {
     blockType: 'posts',

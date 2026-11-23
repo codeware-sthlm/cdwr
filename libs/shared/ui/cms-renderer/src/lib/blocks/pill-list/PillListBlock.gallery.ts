@@ -3,17 +3,13 @@ import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const pillListGallery: BlockGalleryDoc<PillListBlockProps> = {
-  name: {
-    en: 'A set, not an argument',
-    sv: 'En uppsättning, inte ett argument'
-  },
   summary: {
     en: 'Short labels in a row, linked where there is somewhere to go.',
     sv: 'Korta etiketter på rad, länkade där det finns något att gå till.'
   },
   whenToUse: {
-    en: 'For names that belong together and need no explanation — packages, tags, capabilities. The list itself is the point: nothing here outranks anything else, and a pill has no room to argue.',
-    sv: 'För namn som hör ihop och inte behöver förklaras — paket, etiketter, förmågor. Själva listan är poängen: inget här väger tyngre än något annat, och en etikett har inte plats att argumentera.'
+    en: 'For a short list of names, such as packages, technologies or tags. Each label can link to a page of its own. All labels look the same, so the block suits names that need no explanation.',
+    sv: 'För en kort lista med namn, till exempel paket, tekniker eller etiketter. Varje etikett kan länka till en egen sida. Alla etiketter ser likadana ut, så blocket passar för namn som inte behöver förklaras.'
   },
   example: {
     blockType: 'pill-list',

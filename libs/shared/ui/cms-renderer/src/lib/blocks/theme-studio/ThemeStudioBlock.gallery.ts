@@ -3,17 +3,13 @@ import type { ThemeStudioBlock as ThemeStudioBlockProps } from '@codeware/shared
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const themeStudioGallery: BlockGalleryDoc<ThemeStudioBlockProps> = {
-  name: {
-    en: 'The theme studio, live',
-    sv: 'Temastudion, live'
-  },
   summary: {
     en: 'The real theme editor in the page, with saving and export switched off.',
     sv: 'Den riktiga temaredigeraren i sidan, med sparande och export avstängt.'
   },
   whenToUse: {
-    en: 'When a page claims something about themes that a visitor should be able to try rather than take on trust. It is the same component the admin opens — same derivation, same contrast report — so use it where the claim is the studio itself, and not as decoration: it is heavy, and it asks for the whole width.',
-    sv: 'När en sida påstår något om teman som besökaren ska kunna pröva i stället för att lita på. Det är samma komponent som administrationen öppnar — samma härledning, samma kontrastrapport — så använd det där påståendet gäller själva studion, inte som utsmyckning: det är tungt och vill ha hela bredden.'
+    en: 'On a page about themes, to let visitors try the theme editor. It is the same editor as in the admin, with the same colour derivation and contrast report, but nothing can be saved or exported. It is heavy to load and needs the full width of the page, so use it only where the editor itself is the subject.',
+    sv: 'På en sida om teman, för att låta besökare prova temaredigeraren. Det är samma redigerare som i administrationen, med samma härledning av färger och samma kontrastrapport, men inget kan sparas eller exporteras. Den är tung att ladda och behöver sidans hela bredd, så använd den bara där redigeraren själv är ämnet.'
   },
   example: {
     blockType: 'theme-studio',
