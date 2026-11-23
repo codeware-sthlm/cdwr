@@ -21,6 +21,7 @@ const vars = (
   errorMonitoring: true,
   errorMonitoringEu: true,
   analytics: true,
+  themeSwitch: true,
   ...overrides
 });
 
@@ -32,7 +33,8 @@ const flags = [
   'sendgrid',
   'errorMonitoring',
   'errorMonitoringEu',
-  'analytics'
+  'analytics',
+  'themeSwitch'
 ] as const;
 
 describe('renderLegalTemplate', () => {
@@ -107,6 +109,42 @@ describe('renderLegalTemplate', () => {
       renderLegalTemplate('privacy', 'sv', vars({ sendgrid: false })).markdown
     ).not.toContain('Twilio SendGrid');
   });
+
+  it.each([
+    ['en', '- the theme you pick', 'a year\n- light or dark mode'],
+    ['sv', '- vilket tema du väljer', 'ett år\n- ljust eller mörkt läge']
+  ] as const)(
+    'lists the theme cookie only when visitors can switch theme (%s)',
+    (locale, theme, joined) => {
+      const scheme = joined.slice(joined.indexOf('\n') + 1);
+      const switching = renderLegalTemplate('privacy', locale, vars()).markdown;
+      const single = renderLegalTemplate(
+        'privacy',
+        locale,
+        vars({ themeSwitch: false })
+      ).markdown;
+
+      // One list either way, with no blank line splitting it
+      expect(switching).toContain(theme);
+      expect(switching).toContain(joined);
+      expect(single).not.toContain(theme);
+      expect(single).toContain(`:\n\n${scheme}`);
+    }
+  );
+
+  it.each([
+    ['en', '## Contact'],
+    ['sv', '## Kontakt']
+  ] as const)(
+    'puts the name and the address on lines of their own (%s)',
+    (locale, heading) => {
+      const { markdown } = renderLegalTemplate('privacy', locale, vars());
+
+      expect(markdown).toMatch(
+        new RegExp(`${heading}\\n\\nMoon Tours\\n\\nhello@moon\\.test$`)
+      );
+    }
+  );
 
   it('keeps a section inside another one', () => {
     const withEu = renderLegalTemplate('privacy', 'en', vars()).markdown;

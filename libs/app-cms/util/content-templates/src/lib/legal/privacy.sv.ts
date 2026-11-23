@@ -84,8 +84,8 @@ Våra formulär använder Cloudflare Turnstile för att skilja människor från 
 
 Vi använder inga cookies för spårning eller reklam, så det finns inget att godkänna. Webbplatsen kommer bara ihåg val som du själv gör:
 
-- vilket tema du väljer, i en cookie som sparas i ett år
-- ljust eller mörkt läge när du byter, i webbläsarens lokala lagring eller i en cookie som sparas i ett år
+{{#themeSwitch}}- vilket tema du väljer, i en cookie som sparas i ett år
+{{/themeSwitch}}- ljust eller mörkt läge när du byter, i webbläsarens lokala lagring eller i en cookie som sparas i ett år
 
 Ingenting sparas förrän du gör ett val.
 
@@ -97,4 +97,6 @@ Du kan också vända dig till dataskyddsmyndigheten i ditt land om du tycker att
 
 ## Kontakt
 
-{{tenantName}} {{contactEmail}}`;
+{{tenantName}}
+
+{{contactEmail}}`;

@@ -42,6 +42,14 @@ describe.each([
     expect(renderLegalTemplate('privacy', locale, vars).markdown).toBe(privacy);
   });
 
+  it('list the theme cookie exactly when the site offers a choice of theme', () => {
+    const general = definition.siteSettings?.general;
+    const offered =
+      (general?.themes?.length ?? 0) + (general?.customThemes?.length ?? 0);
+
+    expect(vars.themeSwitch).toBe(offered > 1);
+  });
+
   it('are the text of the pages the legal settings point at', () => {
     const markdownOf = (slug: string) =>
       JSON.stringify(definition.pages.find((page) => page.slug === slug));
