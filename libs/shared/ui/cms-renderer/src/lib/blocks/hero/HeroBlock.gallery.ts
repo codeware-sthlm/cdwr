@@ -4,17 +4,13 @@ import type { BlockGalleryDoc } from '../gallery-doc';
 import { showcaseMedia } from '../gallery-media';
 
 export const heroGallery: BlockGalleryDoc<HeroBlockProps> = {
-  name: {
-    en: 'The opening claim',
-    sv: 'Sidans öppning'
-  },
   summary: {
-    en: 'The first thing on a page: one headline, one sentence, and up to two actions.',
-    sv: 'Det första på sidan: en rubrik, en mening och upp till två knappar.'
+    en: 'The top of a page: a headline, a short text and up to two buttons.',
+    sv: 'Sidans topp: en rubrik, en kort text och upp till två knappar.'
   },
   whenToUse: {
-    en: 'At the top of a page that has something to claim. The headline carries the claim, the sentence below makes it understandable, and the actions give the reader somewhere to go. One per page — a second hero means neither reads as the beginning.',
-    sv: 'Överst på en sida som har något att hävda. Rubriken bär påståendet, meningen under gör det begripligt och knapparna ger läsaren någonstans att ta vägen. Ett per sida — ett andra gör att inget av dem uppfattas som början.'
+    en: 'At the top of a page, to say what the page is about. The headline names the subject, the text below explains it in a sentence or two, and the buttons lead to the next step. Use one per page.',
+    sv: 'Överst på en sida, för att säga vad sidan handlar om. Rubriken anger ämnet, texten under förklarar det med en eller två meningar och knapparna leder till nästa steg. Använd ett per sida.'
   },
   example: {
     blockType: 'hero',

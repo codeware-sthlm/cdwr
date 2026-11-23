@@ -35,17 +35,13 @@ const prose = (text: string) =>
   >;
 
 export const contentGallery: BlockGalleryDoc<ContentBlockProps> = {
-  name: {
-    en: 'Prose, in columns',
-    sv: 'Brödtext i spalter'
-  },
   summary: {
     en: 'Rich text in one to four columns, with blocks allowed inside each.',
     sv: 'Redigerbar text i en till fyra spalter, där block får placeras i varje.'
   },
   whenToUse: {
-    en: 'The default body of a page: anything that is written rather than composed. Each column takes prose and can hold blocks of its own, so an image or a code sample sits inside the argument instead of interrupting it. Widths are set per column, and every column becomes full width on a phone.',
-    sv: 'Sidans vanliga brödtext: allt som skrivs snarare än sätts samman. Varje spalt tar text och kan innehålla egna block, så att en bild eller ett kodexempel hamnar inuti resonemanget i stället för att avbryta det. Bredden ställs in per spalt, och alla spalter blir fullbredd i mobilen.'
+    en: 'For the running text of a page. Each column holds rich text and can also hold blocks, such as an image or a code example, placed where they belong in the text. The width is set per column, and on a phone every column takes the full width.',
+    sv: 'För sidans löpande text. Varje spalt innehåller formaterad text och kan också innehålla block, till exempel en bild eller ett kodexempel, placerade där de hör hemma i texten. Bredden ställs in per spalt, och i mobilen tar varje spalt hela bredden.'
   },
   example: {
     blockType: 'content',

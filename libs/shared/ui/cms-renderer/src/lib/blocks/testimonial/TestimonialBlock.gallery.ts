@@ -4,17 +4,13 @@ import type { BlockGalleryDoc } from '../gallery-doc';
 import { showcaseMedia } from '../gallery-media';
 
 export const testimonialGallery: BlockGalleryDoc<TestimonialBlockProps> = {
-  name: {
-    en: "Someone else's words",
-    sv: 'Ett citat utifrån'
-  },
   summary: {
     en: 'A quote from outside the site, with attribution.',
     sv: 'Ett externt citat, med angiven källa.'
   },
   whenToUse: {
-    en: 'When a claim you have already made needs corroboration from someone who is not you. It reads as evidence set into the page rather than another thing being sold, which is why it is a surface with a rule and not a card.',
-    sv: 'När ett påstående du redan gjort behöver bekräftas av någon annan än dig själv. Det uppfattas som ett belägg, infogat i sidan snarare än ännu en sak som säljs in, vilket är skälet till att det är en avgränsad yta och inte ett kort.'
+    en: 'For a quote from a customer or a partner, with their name and role. Place it after the section the quote is about, such as the description of a service.',
+    sv: 'För ett citat från en kund eller en samarbetspartner, med namn och roll. Placera det efter avsnittet som citatet handlar om, till exempel beskrivningen av en tjänst.'
   },
   example: {
     blockType: 'testimonial',

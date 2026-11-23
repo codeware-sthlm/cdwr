@@ -33,17 +33,13 @@ const caption = {
 } as unknown as never;
 
 export const imageGallery: BlockGalleryDoc<ImageBlockProps> = {
-  name: {
-    en: 'A figure, with something to say about it',
-    sv: 'En bild med en förklarande text'
-  },
   summary: {
     en: 'One image with an optional caption beneath it.',
     sv: 'En bild med en valfri bildtext under.'
   },
   whenToUse: {
-    en: 'When the picture carries part of the argument and deserves a line explaining what it shows. It sits inside a content column as readily as it sits on its own, so a diagram can be placed in the middle of the prose it belongs to.',
-    sv: 'När bilden bär en del av resonemanget och förtjänar en rad som förklarar vad den visar. Den fungerar lika bra inuti en textspalt som på egen hand, så ett diagram kan placeras mitt i den text det hör till.'
+    en: 'For a single picture, such as a photo, a screenshot or a diagram, with a caption that says what it shows. It can be placed on its own or in a column of the Content block, next to the text it belongs to.',
+    sv: 'För en enskild bild, till exempel ett foto, en skärmbild eller ett diagram, med en bildtext som säger vad bilden visar. Den kan placeras för sig eller i en spalt i blocket Innehåll, intill texten den hör till.'
   },
   example: {
     blockType: 'image',

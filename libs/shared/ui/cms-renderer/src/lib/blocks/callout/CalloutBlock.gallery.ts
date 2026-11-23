@@ -4,17 +4,13 @@ import type { BlockGalleryDoc } from '../gallery-doc';
 import { showcaseMedia } from '../gallery-media';
 
 export const calloutGallery: BlockGalleryDoc<CalloutBlockProps> = {
-  name: {
-    en: 'An ask, set into the page',
-    sv: 'En uppmaning infälld i sidan'
-  },
   summary: {
-    en: 'Compact and centred: one heading, one sentence, one button.',
-    sv: 'Kompakt och centrerad: en rubrik, en mening och en knapp.'
+    en: 'A band with a heading, a short text and an optional button.',
+    sv: 'Ett band med en rubrik, en kort text och en valfri knapp.'
   },
   whenToUse: {
-    en: 'Partway down a page, when the reader has seen enough to act but the page has not finished. One action only: a band with two buttons asks the reader to choose rather than to move.',
-    sv: 'En bit ner på sidan, när läsaren sett tillräckligt för att kunna agera men sidan inte är slut. Bara en knapp: ett band med två knappar ber läsaren välja i stället för att gå vidare.'
+    en: 'Partway down a page, to point the reader to a next step, such as booking a call or reading a guide. There is room for one button. An image or an illustration can sit beside the text.',
+    sv: 'En bit ner på sidan, för att visa läsaren ett nästa steg, till exempel att boka ett samtal eller läsa en guide. Det finns plats för en knapp. En bild eller en illustration kan placeras bredvid texten.'
   },
   example: {
     blockType: 'callout',

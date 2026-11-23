@@ -62,17 +62,13 @@ const files: NonNullable<FileAreaBlockProps['files']> = [
 ];
 
 export const fileAreaGallery: BlockGalleryDoc<FileAreaBlockProps> = {
-  name: {
-    en: 'Things to take away',
-    sv: 'Sådant man tar med sig'
-  },
   summary: {
     en: 'Downloads with a name, a type and a size.',
     sv: 'Nedladdningar med namn, filtyp och storlek.'
   },
   whenToUse: {
-    en: 'When the page hands over documents rather than describing them — a brief, a price list, a specification. Each row states its type and weight before the reader commits to the download, and the files can be listed one by one or pulled in by tag.',
-    sv: 'När sidan lämnar över dokument i stället för att beskriva dem — ett underlag, en prislista, en specifikation. Varje rad anger filtyp och storlek innan läsaren bestämmer sig för att ladda ner, och filerna kan listas en och en eller hämtas via etikett.'
+    en: 'For documents the reader should download, such as a brochure, a price list or a specification. Each row shows the file type and size before the download. The files can be picked one by one or listed by tag.',
+    sv: 'För dokument som läsaren ska ladda ner, till exempel en broschyr, en prislista eller en specifikation. Varje rad visar filtyp och storlek före nedladdningen. Filerna kan väljas en och en eller listas efter etikett.'
   },
   example: {
     blockType: 'file-area',

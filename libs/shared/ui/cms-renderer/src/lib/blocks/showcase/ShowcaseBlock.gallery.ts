@@ -3,17 +3,13 @@ import type { ShowcaseBlock as ShowcaseBlockProps } from '@codeware/shared/util/
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const showcaseGallery: BlockGalleryDoc<ShowcaseBlockProps> = {
-  name: {
-    en: 'Work worth naming one at a time',
-    sv: 'Arbeten värda att nämna ett i taget'
-  },
   summary: {
-    en: 'Peer items in rows, each with a tag, a paragraph and a link.',
-    sv: 'Jämbördiga poster i rader, var och en med en etikett, ett stycke och en länk.'
+    en: 'Items in rows, each with a tag, a paragraph and a link.',
+    sv: 'Poster i rader, var och en med en etikett, ett stycke och en länk.'
   },
   whenToUse: {
-    en: 'For work that deserves naming individually — projects, case studies, packages. Each row has room for a sentence about what the thing was and a line of technical detail, which a grid of cards cannot give it.',
-    sv: 'För arbeten som förtjänar att nämnas var för sig — projekt, kundcase, paket. Varje rad har plats för en mening om vad saken var och en rad teknisk detalj, vilket ett rutnät med kort inte kan ge den.'
+    en: 'For presenting work one item at a time, such as projects, case studies or packages. Each row has room for a sentence about the item and a line of technical detail, which is more than a card has room for.',
+    sv: 'För att presentera arbeten ett i taget, till exempel projekt, kundcase eller paket. Varje rad har plats för en mening om arbetet och en rad med tekniska detaljer, vilket är mer än ett kort rymmer.'
   },
   example: {
     blockType: 'showcase',
