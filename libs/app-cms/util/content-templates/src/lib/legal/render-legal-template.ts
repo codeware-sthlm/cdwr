@@ -30,6 +30,8 @@ export type LegalTemplateVars = {
   errorMonitoringEu: boolean;
   /** Visits are counted with Umami, heatmaps included */
   analytics: boolean;
+  /** The site offers more than one theme, so the visitor's pick is stored */
+  themeSwitch: boolean;
 };
 
 const templates: Record<LegalTemplateKind, Record<'en' | 'sv', string>> = {

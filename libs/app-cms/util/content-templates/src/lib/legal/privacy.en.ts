@@ -92,8 +92,8 @@ Our forms use Cloudflare Turnstile to tell people apart from automated spam. On 
 
 We do not use cookies for tracking or advertising, so there is nothing to accept. The website only remembers choices you make yourself:
 
-- the theme you pick, in a cookie kept for a year
-- light or dark mode when you switch it, in your browser's local storage or in a cookie kept for a year
+{{#themeSwitch}}- the theme you pick, in a cookie kept for a year
+{{/themeSwitch}}- light or dark mode when you switch it, in your browser's local storage or in a cookie kept for a year
 
 Nothing is stored until you make a choice.
 
@@ -105,4 +105,6 @@ You can also complain to the data protection authority in your country if you th
 
 ## Contact
 
-{{tenantName}} {{contactEmail}}`;
+{{tenantName}}
+
+{{contactEmail}}`;

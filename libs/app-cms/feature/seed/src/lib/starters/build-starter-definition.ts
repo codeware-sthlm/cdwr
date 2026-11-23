@@ -139,7 +139,9 @@ export function buildStarterDefinition(
       published: false,
       forms: true,
       tenantName: appName,
-      contactEmail: ''
+      contactEmail: '',
+      // A starter applies one theme, so there is no choice to remember
+      themeSwitch: false
     });
     pages.push({
       name: title,

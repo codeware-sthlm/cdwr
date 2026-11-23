@@ -118,6 +118,11 @@ export const createLegalPageEndpoint: Endpoint = {
         tourRetentionDays:
           settings?.tourSignups?.retentionDays ?? FALLBACK_RETENTION_DAYS,
         formsRetentionDays: settings?.forms?.retentionDays ?? null,
+        // More than one theme gives visitors a selector, and their pick a cookie
+        themeSwitch:
+          (settings?.general?.themes?.length ?? 0) +
+            (settings?.general?.customThemes?.length ?? 0) >
+          1,
         ...deploymentPrivacyFacts(tenant?.statsWebsiteId)
       });
 
