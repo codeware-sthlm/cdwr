@@ -22,14 +22,14 @@ const devlogPage: PageDefinition = {
   meta: {
     title: 'What shipped, and why',
     description:
-      'Short entries when something lands. Written once, dated, and not edited afterwards.'
+      'Short dated notes on changes to the platform: what shipped and why.'
   },
   layout: [
     {
       blockType: 'hero',
       badge: 'Devlog',
       heading: 'What shipped, and why',
-      lede: 'Short entries when something lands. Written once, dated, and not edited afterwards — which makes this the honest answer to whether the platform is maintained.'
+      lede: 'Short dated notes on changes to the platform: what shipped and why.'
     },
     {
       blockType: 'posts',
@@ -52,7 +52,7 @@ const devlogPage: PageDefinition = {
  * **Written for the person who signs**, in words an engineer will recognise
  * as the real thing. So the landing page is the show — long, sectioned, one
  * claim per band — and every other page tells the same story plainly: what
- * this is, the live thing itself, three facts, and where to go next. Section
+ * this is, the live thing itself, a few facts, and where to go next. Section
  * headings may hook; eyebrows and the small titles under them say exactly
  * what the visitor is looking at.
  *
@@ -70,8 +70,7 @@ const devlogPage: PageDefinition = {
 export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
   return {
     name: 'cdwr.io',
-    description:
-      'The platform showcase — a live demo, not a description of one',
+    description: 'The Codeware platform, shown on a site that runs on it',
 
     categories: [
       { name: 'Themes', slug: 'themes' },
@@ -146,7 +145,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-cards',
             eyebrow: 'What you get',
             band: 'subtle',
-            heading: 'Four things, each of them demonstrable',
+            heading: 'What the platform does',
             columns: '2',
             items: [
               {
@@ -155,19 +154,19 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                   'Its own domain, certificate and secrets, from one shared build. Sites are isolated without a build per customer.'
               },
               {
-                title: 'The look is a setting, not a stylesheet',
+                title: 'The look is set in the admin',
                 description:
                   'A site chooses its palette, its light or dark scheme and whether visitors may switch. Changed in the admin, live at once.'
               },
               {
                 title: 'Pages are built from blocks',
                 description:
-                  'Composable blocks — prose, media, code, forms, tours. Editors compose; nothing is hand-coded per site.'
+                  'Editors build pages from ready blocks for text, images, code, forms and tours. No site needs code of its own.'
               },
               {
                 title: 'Every change is reviewed running',
                 description:
-                  'Each pull request gets a site of its own with its own database. Content and code are checked the same way: by using them.'
+                  'Each pull request gets a site of its own with its own database, so a change is tried on a running site before it is merged.'
               }
             ]
           },
@@ -177,7 +176,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             heading: 'Change the look. Nothing reloads.',
             illustration: themingIllustration,
             intro:
-              'A site chooses its palette, its colour scheme, and whether visitors may switch at all. Set in the admin, not in a stylesheet.',
+              'A site chooses its palette, its colour scheme, and whether visitors may switch at all. All of it is set in the admin.',
             enableLink: true,
             link: {
               type: 'custom',
@@ -218,8 +217,8 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 body: 'Open a platform theme, change what you need, keep the rest.'
               },
               {
-                title: 'The randomiser cannot fail',
-                body: 'It re-rolls until the result passes, so it never hands you an unreadable theme.'
+                title: 'Random themes are readable too',
+                body: 'The random button tries again until the result passes the contrast check.'
               }
             ]
           },
@@ -230,7 +229,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 size: 'full',
                 richText: {
                   markdown:
-                    'An inaccessible colour theme cannot be published on this platform. Each site runs on its own app, isolated from the others, and every app is hosted in Stockholm, in the EU.'
+                    'Every site runs as its own app, apart from the others, and all of them are hosted in Stockholm, in the EU.'
                 }
               }
             ]
@@ -259,10 +258,10 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             blockType: 'feature-section',
             eyebrow: 'Content',
-            heading: 'Every block, rendered by the renderer that serves it',
+            heading: 'A gallery of every block',
             illustration: blocksIllustration,
             intro:
-              'Each on its own page, with the production component and a paragraph on when to reach for it. Editors compose pages from these; a block that renders badly is visible to everyone, immediately.',
+              'Editors build pages from these blocks. The gallery shows each one with the same component a site uses, and says when to use it.',
             enableLink: true,
             link: {
               type: 'custom',
@@ -273,9 +272,9 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             blockType: 'pill-list',
             eyebrow: 'Built on',
-            heading: 'Nothing exotic, and nothing hidden',
+            heading: 'What the platform runs on',
             intro:
-              'The interesting decisions are in how these fit together, not in the list itself.',
+              'Open-source tools and hosted services. Each name links to its own site.',
             band: 'subtle',
             items: [
               {
@@ -319,8 +318,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 {
                   blockType: 'posts' as const,
                   title: 'What shipped recently',
-                  description:
-                    'Short entries when something lands. The honest answer to whether the platform is maintained.',
+                  description: 'Short dated notes on changes to the platform.',
                   limit: 3
                 }
               ]
@@ -340,17 +338,17 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         name: 'Blocks',
         slug: 'blocks',
         meta: {
-          title: 'Every block, rendered by the renderer that serves it',
+          title: 'Block gallery',
           description:
-            'Not a gallery of screenshots. Each example is the production component, drawing from the same content API a site uses.'
+            'Every block a page can be built from, drawn by the same component a site uses, with a note on when to use it.'
         },
         layout: [
           {
             blockType: 'block-gallery',
-            eyebrow: 'Every block',
-            heading: 'Rendered by the renderer that serves it',
+            eyebrow: 'Block gallery',
+            heading: 'Every block a page can be built from',
             intro:
-              'Not a gallery of screenshots. Each example below is the production component, drawing from the same content API a site uses — so a block that renders badly under a theme is visible here, to everyone, immediately.',
+              'Each example is drawn by the same component a site uses, in the theme you have chosen. Open a block to see its fields and when to use it.',
             mode: 'index'
           }
         ]
@@ -376,22 +374,22 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             // What the fact cards below leave out: the rule that makes the claim
             blockType: 'feature-section',
             eyebrow: 'Readability',
-            heading: 'Readable is a number, so it can be checked',
+            heading: 'How readability is checked',
             illustration: contrastIllustration,
             intro:
-              'A theme here is a recipe, not a stylesheet written by hand, and every colour it produces is measured against the colour it sits on.',
+              'The studio builds a theme from a few choices and measures the contrast between each colour and the colour behind it.',
             subFeatures: [
               {
                 title: 'Measured while you work',
-                body: 'Each pairing is checked against the accessibility standard as the theme changes, not in a review afterwards.'
+                body: 'Each pairing is checked against the accessibility standard every time the theme changes.'
               },
               {
-                title: 'A line, not a feeling',
-                body: '4.5:1 for text and 3:1 for large headings: the levels the standard sets, applied to every pair a visitor reads.'
+                title: '4.5:1 for text, 3:1 for large headings',
+                body: 'These are the contrast levels the WCAG standard sets. Every pair of colours a visitor reads has to reach them.'
               },
               {
                 title: 'Saving stays off until it passes',
-                body: 'While any pair is below the line the theme cannot be saved, so it never reaches a visitor.'
+                body: 'While any pair is below these levels the theme cannot be saved, so it never reaches a visitor.'
               }
             ]
           },
@@ -400,11 +398,11 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             // just the studio, opened on the theme this site runs
             blockType: 'theme-studio',
             startFrom: 'spotlight',
-            note: 'Live — the studio itself, not a screenshot of it. Nothing you do here leaves your browser.'
+            note: 'This is the real studio. Nothing you do here leaves your browser.'
           },
           {
             blockType: 'feature-cards',
-            eyebrow: 'Three facts',
+            eyebrow: 'Saved themes',
             heading: 'What the studio guarantees',
             columns: '3',
             items: [
@@ -445,9 +443,9 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             blockType: 'feature-section',
             eyebrow: 'How it works',
-            heading: 'Written, saved, placed',
+            heading: 'From code to page',
             intro:
-              'A component is source typed in the admin, not a release to deploy. The site it belongs to is the only one that sees it.',
+              'A component is code written in the admin and needs no release. Only the site it belongs to can use it.',
             subFeatures: [
               {
                 title: 'Written in the admin',
@@ -478,7 +476,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
-            eyebrow: 'Three facts',
+            eyebrow: 'Limits',
             heading: 'What a component can and cannot do',
             columns: '3',
             items: [
@@ -521,7 +519,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'hero',
             badge: 'Architecture',
             heading: 'Every site is its own deployment',
-            lede: 'A site is not a row in a table with a theme name. It is an app of its own, on its own domain, with its own certificate and its own secrets — built once and run many times.'
+            lede: 'Each site runs as an app of its own, on its own domain, with its own certificate and secrets. Every one of them is started from the same build.'
           },
           {
             blockType: 'feature-section',
@@ -541,13 +539,13 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               },
               {
                 title: 'The same software, twice',
-                body: 'codeware.se and cdwr.io are the same build. A third site would be that build again, with different everything else.'
+                body: 'codeware.se and cdwr.io run the same build. A third site would run it too, with its own domain, content and theme.'
               }
             ]
           },
           {
             blockType: 'feature-cards',
-            eyebrow: 'Three facts',
+            eyebrow: 'Pull requests',
             heading: 'What a pull request gets',
             columns: '3',
             items: [
@@ -655,7 +653,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
-            eyebrow: 'Hosted, by invitation',
+            eyebrow: 'Hosted',
             band: 'subtle',
             heading: 'From invite code to live site',
             columns: '2',
@@ -663,7 +661,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               {
                 title: '1. Get an invite code',
                 description:
-                  'Signup is by invitation for now. A code lets you create an account.'
+                  'A code lets you create an account. Ask for one by email, below.'
               },
               {
                 title: '2. Sign up',
@@ -689,7 +687,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 size: 'full',
                 richText: {
                   markdown:
-                    'Signup is by invitation for now. To ask for a code, write to [hello@codeware.se](mailto:hello@codeware.se).'
+                    'To ask for an invite code, write to [hello@codeware.se](mailto:hello@codeware.se).'
                 }
               }
             ]
