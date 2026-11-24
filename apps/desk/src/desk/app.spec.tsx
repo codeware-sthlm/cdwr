@@ -14,10 +14,15 @@ import {
   openStartHash,
   openTicket,
   setSettingsOpener,
+  sheetActions,
+  showSheet,
   showView,
   store
 } from './actions';
 import { App } from './app';
+import { createState } from './state';
+import type { QueueTreeNode } from './types';
+import { filled, gap, runs, view } from './view/fixtures';
 
 beforeEach(() => {
   // jsdom has no matchMedia: the sheet reads it for the phone width
@@ -356,5 +361,171 @@ describe('App', () => {
     });
     expect(store.state.ui.openSheet).toBe('before');
     expect(window.location.hash).toBe('#before');
+  });
+});
+
+describe('App Show in tree', () => {
+  const node = (
+    ticket: string,
+    over: Partial<QueueTreeNode> = {}
+  ): QueueTreeNode => ({
+    ticket,
+    title: `Title of ${ticket}`,
+    state: 'started',
+    label: null,
+    pr: null,
+    position: null,
+    waiting: false,
+    blockers: [],
+    gaps: [],
+    children: [],
+    ...over
+  });
+
+  /** A root with a queued child that holds a gap, and the audit's ready-planned gap on the child */
+  const load = (): void => {
+    const s = filled();
+    s.data.runs = runs(
+      view({
+        audit: [gap('COD-1', 'ready-planned')],
+        tree: [
+          node('COD-10', {
+            position: 1,
+            children: [
+              node('COD-1', {
+                position: 1,
+                label: 'agent:ready',
+                gaps: [{ kind: 'ready-planned', candidate: false }]
+              }),
+              node('COD-11')
+            ]
+          })
+        ]
+      })
+    );
+    Object.assign(store.state, s);
+  };
+
+  const scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    // jsdom has no scrollIntoView, which a revealed row calls
+    Element.prototype.scrollIntoView = scrollIntoView;
+    scrollIntoView.mockClear();
+    Object.assign(store.state, createState());
+    store.state.ui.view = 'agent';
+    load();
+  });
+
+  afterEach(() => {
+    Object.assign(store.state, createState());
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  const showButton = (): HTMLElement =>
+    document.querySelector('[data-tree="COD-1"]') as HTMLElement;
+
+  it('closes the sheet, opens the closed root and focuses the ticket row once the sheet has closed', async () => {
+    // The viewer closed the root by hand
+    store.state.ui.treeOpen = { 'COD-10': false };
+    const { container } = render(<App />);
+    act(() => showSheet('before'));
+    expect(screen.getByRole('dialog')).not.toBeNull();
+    act(() => {
+      fireEvent.click(showButton());
+    });
+    expect(store.state.ui.openSheet).toBeNull();
+    expect(store.state.ui.view).toBe('tree');
+    expect(container.querySelector('#tree-title')).not.toBeNull();
+    expect(store.state.ui.treeOpen['COD-10']).toBe(true);
+    expect(
+      container.querySelector('button[aria-label="Collapse COD-10 sub-issues"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('#tree-COD-10')?.hasAttribute('hidden')
+    ).toBe(false);
+    await waitFor(() => {
+      const row = container.querySelector('#tree-row-COD-1');
+      expect(row).not.toBeNull();
+      expect(document.activeElement).toBe(row);
+    });
+    const row = container.querySelector('#tree-row-COD-1') as HTMLElement;
+    expect(row.hasAttribute('data-shown')).toBe(true);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    // The mark goes with the focus
+    act(() => row.blur());
+    expect(row.hasAttribute('data-shown')).toBe(false);
+  });
+
+  it('opens a root that starts collapsed because it is finished in full', async () => {
+    const s = filled();
+    s.data.runs = runs(
+      view({
+        audit: [gap('COD-1', 'ready-planned')],
+        tree: [
+          node('COD-10', {
+            state: 'completed',
+            children: [node('COD-1', { state: 'completed' })]
+          })
+        ]
+      })
+    );
+    Object.assign(store.state, s);
+    // Closed shows the finished root, so the filter does not hide it
+    store.state.ui.tree = { closed: true, gaps: false, unqueued: false };
+    const { container } = render(<App />);
+    act(() => showSheet('before'));
+    act(() => {
+      fireEvent.click(showButton());
+    });
+    expect(store.state.ui.treeOpen['COD-10']).toBe(true);
+    expect(
+      container.querySelector('#tree-COD-10')?.hasAttribute('hidden')
+    ).toBe(false);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        container.querySelector('#tree-row-COD-1')
+      )
+    );
+  });
+
+  it('turns off only the Not queued filter that hides the root, and keeps the others', async () => {
+    store.state.ui.tree = { closed: true, gaps: true, unqueued: true };
+    const { container } = render(<App />);
+    act(() => showSheet('before'));
+    act(() => {
+      fireEvent.click(showButton());
+    });
+    expect(store.state.ui.tree).toEqual({
+      closed: true,
+      gaps: true,
+      unqueued: false
+    });
+    expect(
+      container
+        .querySelector('[data-filter="unqueued"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('false');
+    expect(
+      container
+        .querySelector('[data-filter="gaps"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        container.querySelector('#tree-row-COD-1')
+      )
+    );
+  });
+
+  it('focuses the row at once when no sheet is open', () => {
+    const { container } = render(<App />);
+    expect(store.state.ui.openSheet).toBeNull();
+    act(() => sheetActions.wait.showInTree('COD-1'));
+    expect(store.state.ui.view).toBe('tree');
+    expect(container.querySelector('#tree-title')).not.toBeNull();
+    const row = container.querySelector('#tree-row-COD-1');
+    expect(document.activeElement).toBe(row);
+    expect(row?.hasAttribute('data-shown')).toBe(true);
   });
 });
