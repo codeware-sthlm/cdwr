@@ -47,6 +47,19 @@ export const filterTree = (
       (!filter.unqueued || !hasPosition(root))
   );
 
+/** The tickets from a root down to the ticket, both included; null when the tree does not hold it */
+export const treePath = (
+  tree: readonly QueueTreeNode[],
+  ticket: string
+): string[] | null => {
+  for (const node of tree) {
+    if (node.ticket === ticket) return [ticket];
+    const below = treePath(node.children, ticket);
+    if (below) return [node.ticket, ...below];
+  }
+  return null;
+};
+
 /** What a closed root shows of its children: the worst thing on any of them, as a chip kind and text */
 export type Worst = { kind: 'conflict' | 'held' | 'blocked'; text: string };
 

@@ -16,12 +16,15 @@ import { type PrCommandKind, prCommandKey } from '../commands';
 import { CONFIRM_MS, GH_PR } from '../constants';
 import type { Model, WatchRef } from '../model';
 import type { DeskState, Detail } from '../state';
+import { treePath } from '../view/tree';
 import {
   type PrUi,
   type SnoozeUi,
+  type WaitGap,
   type WaitRow,
   awaitsWatch,
   copilotView,
+  fixCommand,
   labelState,
   mergeBlocker,
   rowLabel,
@@ -81,6 +84,10 @@ export type WaitActions = {
   wake: (ticket: string) => void;
   label: (ticket: string) => void;
   pr: (ticket: string, kind: PrCommandKind, host: string, pr: number) => void;
+  /** Copies a command; `shown` is the node to select when the clipboard is blocked */
+  copy: (text: string, shown: HTMLElement) => void;
+  /** Closes the sheet and shows the ticket's row in the tree */
+  showInTree: (ticket: string) => void;
 };
 
 /** A control's button and its note, apart: a card shows the notes with its statuses and the buttons on one row; null is nothing */
@@ -376,6 +383,96 @@ const WaitCard = ({
   );
 };
 
+/**
+ * A gap's card: what is wrong and its one fix, with Open ticket, Copy for the command the fix
+ * names and Show in tree. The cleanup card lists its closed tickets instead, each a link to
+ * remove the label in Linear. Neither snoozes: fixing the gap clears it
+ */
+const GapCard = ({
+  r,
+  gap,
+  inTree,
+  actions
+}: {
+  r: WaitRow;
+  gap: WaitGap;
+  /** Tickets the tree holds, which get Show in tree */
+  inTree: (ticket: string) => boolean;
+  actions: WaitActions;
+}) => {
+  const cleanup = r.kind === 'cleanup';
+  const command = cleanup ? null : fixCommand(gap.fix);
+  const treeButton = (ticket: string, text = 'Show in tree') =>
+    inTree(ticket) ? (
+      <button
+        type="button"
+        className={WSNOOZE_CARD}
+        data-tree={ticket}
+        onClick={() => actions.showInTree(ticket)}
+      >
+        {text}
+      </button>
+    ) : null;
+  return (
+    <article className={WCARD}>
+      <div className={WC_HEAD}>
+        {cleanup ? null : <IdLink id={r.id} />}
+        <span className={`kind k-${r.kind} ${cleanup ? KIND_QUIET : KIND}`}>
+          {rowLabel(r)}
+        </span>
+      </div>
+      <div className={WC_TITLE}>{r.title}</div>
+      <div className={WC_STATUS}>
+        <div className={WC_NOTE}>
+          <LinkIds text={gap.what} />
+        </div>
+        <div className={`fix ${WC_NOTE} text-[color:var(--fg)]`}>
+          <Inline text={gap.fix} />
+        </div>
+      </div>
+      {cleanup ? (
+        <ul className="cleanup-list flex flex-col gap-1.5">
+          {gap.tickets.map((t) => (
+            <li key={t.id} className="flex min-w-0 items-center gap-2">
+              <IdLink id={t.id} />
+              <span className={`${WC_TITLE} flex-1`}>{t.title}</span>
+              {treeButton(t.id, 'Tree')}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className={WC_ACTIONS}>
+          <a
+            className={ACT_PRIMARY}
+            href={r.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open ticket
+          </a>
+          {command ? (
+            <button
+              type="button"
+              className={ACT_SECONDARY}
+              data-copy={r.id}
+              title={command}
+              onClick={(e) => {
+                const shown = e.currentTarget
+                  .closest('article')
+                  ?.querySelector<HTMLElement>('.fix code');
+                actions.copy(command, shown ?? e.currentTarget);
+              }}
+            >
+              Copy command
+            </button>
+          ) : null}
+          {treeButton(r.id)}
+        </div>
+      )}
+    </article>
+  );
+};
+
 /** A suggestion's card: the ticket's Evidence, What changes, Cost and Why now; its paragraphs, headings and bullets */
 const IDEA =
   'idea grid min-w-0 gap-2.5 rounded-[10px] border border-l-4 border-[color:var(--line)] border-l-[color:var(--accent)] px-3.5 py-3';
@@ -472,6 +569,8 @@ const ticketOf = (button: HTMLElement): string | null =>
   button.dataset.wake ??
   button.dataset.merge ??
   button.dataset.copilot ??
+  button.dataset.copy ??
+  button.dataset.tree ??
   null;
 
 type Props = {
@@ -534,17 +633,27 @@ export const BeforeSheet = ({
     if (!m.v) return <div className={EMPTY}>No queue view yet.</div>;
     const ui = snoozeUi(m, state.controls);
     const { details } = state;
-    const card = (r: WaitRow) => (
-      <WaitCard
-        key={r.id + r.kind}
-        m={m}
-        details={details}
-        ui={ui}
-        now={now}
-        r={r}
-        actions={actions}
-      />
-    );
+    const inTree = (ticket: string) => treePath(m.tree, ticket) !== null;
+    const card = (r: WaitRow) =>
+      r.gap ? (
+        <GapCard
+          key={r.id + rowLabel(r)}
+          r={r}
+          gap={r.gap}
+          inTree={inTree}
+          actions={actions}
+        />
+      ) : (
+        <WaitCard
+          key={r.id + r.kind}
+          m={m}
+          details={details}
+          ui={ui}
+          now={now}
+          r={r}
+          actions={actions}
+        />
+      );
     // Ideas wait on you too, but their card below carries the evidence to decide on
     const all = waitRows(m, details, now);
     const rows = all.filter((r) => !r.snoozed);
@@ -579,18 +688,29 @@ export const BeforeSheet = ({
       </div>
     ) : null;
     // Approved plans only wait on a blocker, so they come after everything that waits on you
-    const awake = cards((k) => k !== 'idea' && k !== 'approved');
+    // and the closed tickets to clean up come after the ideas
+    const awake = cards(
+      (k) => k !== 'idea' && k !== 'approved' && k !== 'cleanup'
+    );
+    const cleanup = cards((k) => k === 'cleanup');
     const approved = cards((k) => k === 'approved');
-    if (!awake.length && !ideas && !approved.length && !snoozed.length)
+    if (
+      !awake.length &&
+      !ideas &&
+      !cleanup.length &&
+      !approved.length &&
+      !snoozed.length
+    )
       return (
         <div className={EMPTY}>
-          No PR, hand-off, plan, question, label or idea waits for you.
+          No gap, PR, hand-off, plan, question, label or idea waits for you.
         </div>
       );
     return (
       <>
         {awake}
         {ideas}
+        {cleanup}
         {approved}
         {snoozed.length ? (
           <Collapsible

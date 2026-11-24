@@ -29,7 +29,14 @@ import { whyLine } from './queue-bodies';
 import { SHEETS, type SheetActions } from './sheets';
 
 const actions: SheetActions = {
-  wait: { snooze: vi.fn(), wake: vi.fn(), label: vi.fn(), pr: vi.fn() },
+  wait: {
+    snooze: vi.fn(),
+    wake: vi.fn(),
+    label: vi.fn(),
+    pr: vi.fn(),
+    copy: vi.fn(),
+    showInTree: vi.fn()
+  },
   onTicket: vi.fn(),
   onDismiss: vi.fn(),
   onSnoozedOpen: vi.fn(),

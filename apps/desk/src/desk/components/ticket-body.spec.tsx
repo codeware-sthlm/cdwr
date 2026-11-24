@@ -12,7 +12,14 @@ import type { SheetActions } from './sheets';
 import { TicketBody } from './ticket-body';
 
 const actions: SheetActions = {
-  wait: { snooze: vi.fn(), wake: vi.fn(), label: vi.fn(), pr: vi.fn() },
+  wait: {
+    snooze: vi.fn(),
+    wake: vi.fn(),
+    label: vi.fn(),
+    pr: vi.fn(),
+    copy: vi.fn(),
+    showInTree: vi.fn()
+  },
   onTicket: vi.fn(),
   onDismiss: vi.fn(),
   onSnoozedOpen: vi.fn(),

@@ -4,7 +4,7 @@ import {
   CollapsibleTrigger
 } from '@codeware/shared/ui/shadcn/components/collapsible';
 import { shortAge } from '@codeware/shared/util/platform-problems';
-import type { MouseEventHandler } from 'react';
+import type { MouseEventHandler, ReactNode } from 'react';
 
 import type { Model } from '../model';
 import type { Detail } from '../state';
@@ -23,6 +23,31 @@ import { Prn } from './links';
 
 // The Waiting on you card: everything that waits on you, furthest along first, each with how long it has waited
 
+/** A row's line: a link to the ticket, or plain for a row that covers several */
+const Line = ({
+  className,
+  href,
+  link,
+  children
+}: {
+  className: string;
+  href: string;
+  link: boolean;
+  children: ReactNode;
+}) =>
+  link ? (
+    <a
+      className={className}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ) : (
+    <span className={className}>{children}</span>
+  );
+
 /** One line per row: the row links to the ticket, the PR number beside it tinted by its state. Notes and buttons are the panel's */
 const Row = ({
   m,
@@ -40,6 +65,7 @@ const Row = ({
     livePr(m, details, { ticket: r.id, pr: r.pr }).live?.state ?? null
   );
   const approved = r.kind === 'approved';
+  const cleanup = r.kind === 'cleanup';
   // A snoozed or approved row is quiet: no fill, no hover, the kind in grey
   const quiet = approved || r.snoozed;
   const li = capped
@@ -56,10 +82,13 @@ const Row = ({
       : 'kind ml-auto flex-none text-[11px] text-[color:var(--wait)]';
   return (
     <li className={approved ? `${li} approved` : li}>
-      <a className={row} href={r.url} target="_blank" rel="noopener noreferrer">
-        <span className="id mr-1.5 flex-none font-[family-name:var(--font-mono)] text-[12px] leading-[normal] font-semibold text-[color:var(--muted)]">
-          {r.id}
-        </span>
+      {/* The cleanup row covers several tickets: it links to none, and a click opens the sheet that lists them */}
+      <Line className={row} href={r.url} link={!cleanup}>
+        {cleanup ? null : (
+          <span className="id mr-1.5 flex-none font-[family-name:var(--font-mono)] text-[12px] leading-[normal] font-semibold text-[color:var(--muted)]">
+            {r.id}
+          </span>
+        )}
         <span className="t min-w-0 flex-[1_1_auto] overflow-hidden text-[12px] text-ellipsis whitespace-nowrap text-[color:var(--muted)]">
           {r.title}
         </span>
@@ -69,7 +98,7 @@ const Row = ({
         {r.age === null ? null : (
           <time className={TIME}>{shortAge(r.age)}</time>
         )}
-      </a>
+      </Line>
       <Prn n={r.pr} tone={tone} />
     </li>
   );
@@ -140,7 +169,13 @@ export const WaitingCard = ({
         <>
           <ul className="wrows flex flex-col gap-2">
             {rows.map((r) => (
-              <Row key={r.id + r.kind} m={m} details={details} r={r} capped />
+              <Row
+                key={r.id + rowLabel(r)}
+                m={m}
+                details={details}
+                r={r}
+                capped
+              />
             ))}
           </ul>
           {rows.length > PHONE_ROWS ? (

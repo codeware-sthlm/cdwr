@@ -5,7 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SnoozeRow } from '../../supabase';
 import { model } from '../model';
 import { type DeskState, createState } from '../state';
-import { NOW, activity, carries, filled, runs, view } from '../view/fixtures';
+import {
+  NOW,
+  activity,
+  carries,
+  filled,
+  gap,
+  runs,
+  view
+} from '../view/fixtures';
 
 import { CARD } from './card-ui';
 import { WaitingCard } from './waiting';
@@ -339,6 +347,46 @@ describe('WaitingCard', () => {
     expect(link?.querySelector('.t')?.textContent).toBe('Title of COD-3');
     expect(link?.querySelector('.kind')?.textContent).toBe('review');
     expect(li?.querySelector('a.prn')?.textContent).toBe('#7');
+  });
+
+  it('lists a gap row first and the cleanup row after the ideas, both counted', () => {
+    const s = filled();
+    s.data.runs = runs(
+      view({
+        audit: [
+          gap('COD-1', 'ready-planned'),
+          gap('COD-2', 'label-on-closed'),
+          gap('COD-30', 'label-on-closed')
+        ]
+      })
+    );
+    const c = card(s);
+    const items = Array.from(c.querySelectorAll('li.wrow-li'));
+    const gapRow = items[0].querySelector('a.wrow');
+    expect(gapRow?.querySelector('.id')?.textContent).toBe('COD-1');
+    expect(gapRow?.querySelector('.kind')?.textContent).toBe(
+      'gap · ready-planned'
+    );
+    expect(gapRow?.getAttribute('href')).toBe(
+      'https://linear.app/codeware/issue/COD-1'
+    );
+    // The cleanup row covers several tickets, so it is no link
+    expect(items[items.length - 1].querySelector('a')).toBeNull();
+    const cleanup = items[items.length - 1].querySelector('.wrow');
+    expect(cleanup?.querySelector('.kind')?.textContent).toBe('cleanup · 2');
+    expect(cleanup?.querySelector('.id')).toBeNull();
+    expect(ids(c)).not.toContain('cleanup');
+    // The idea row sits between them
+    expect(ids(c)).toEqual([
+      'COD-1',
+      'COD-3',
+      'COD-5',
+      'COD-4',
+      'COD-6',
+      'COD-50'
+    ]);
+    // Gap, review, hand-offs, plan, label, idea and cleanup
+    expect(c.querySelector('b.count')?.textContent).toBe('7');
   });
 
   describe('snoozed rows', () => {
