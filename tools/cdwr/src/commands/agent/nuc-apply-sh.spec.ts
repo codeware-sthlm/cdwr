@@ -22,29 +22,45 @@ const SCRIPT = fileURLToPath(
 const hasBash = spawnSync('bash', ['-c', 'true']).status === 0;
 const isRoot = process.getuid?.() === 0;
 
-// Serves compare, contents and raw files from what the test writes, and logs every url
+// Serves compare, contents and raw files from what the test writes. A REST read answers with the
+// status (<name>-status, 500 for <name>-fail, <name>-status-signed when the token signs it) and
+// headers (<name>-headers) the test wrote, else 200. Logs every url, and whether the read was
+// signed, never the token.
 const FAKE_CURL = `#!/bin/bash
 d="$FAKE_DIR"
 out=""
+head=""
 url=""
+auth=anon
+echo "$*" >> "$d/curl.argv"
 while [ $# -gt 0 ]; do
   case "$1" in
     -o) out="$2"; shift 2 ;;
-    -H|--max-time) shift 2 ;;
+    -D) head="$2"; shift 2 ;;
+    -H)
+      case "$2" in @*) grep -q '^Authorization: Bearer ' "\${2#@}" && auth=signed ;; esac
+      shift 2 ;;
+    -w|--max-time) shift 2 ;;
     -*) shift ;;
     *) url="$1"; shift ;;
   esac
 done
 echo "$url" >> "$d/curl.log"
+echo "$url $auth" >> "$d/auth.log"
+rest() {
+  status=200
+  [ -e "$d/$1-fail" ] && status=500
+  [ -e "$d/$1-status" ] && status="$(cat "$d/$1-status")"
+  [ "$auth" = signed ] && [ -e "$d/$1-status-signed" ] && status="$(cat "$d/$1-status-signed")"
+  { printf 'HTTP/2 %s\\r\\n' "$status"; awk '{ printf "%s\\r\\n", $0 }' "$d/$1-headers" 2>/dev/null; printf '\\r\\n'; } > "$head"
+  case "$status" in 2??) printf '%s' "$2" > "$out" ;; *) : > "$out" ;; esac
+  printf '%s' "$status"
+  [ "$status" = 000 ] && exit 28
+  exit 0
+}
 case "$url" in
-  */compare/*)
-    [ -e "$d/compare-fail" ] && exit 22
-    printf '{"status":"%s"}' "$(cat "$d/status")"
-    ;;
-  */contents/*)
-    [ -e "$d/contents-fail" ] && exit 22
-    cat "$d/contents.json"
-    ;;
+  */compare/*) rest compare "{\\"status\\":\\"$(cat "$d/status")\\"}" ;;
+  */contents/*) rest contents "$(cat "$d/contents.json")" ;;
   https://raw.test/*)
     name="\${url##*/}"
     [ -e "$d/raw-fail-$name" ] && exit 22
@@ -85,8 +101,12 @@ exit 0
 `;
 
 const SHA = 'a'.repeat(40);
+const TOKEN = `ghp_${'A1'.repeat(12)}`;
+// The hour GitHub says the limit resets, from an epoch in the header
+const hhmm = (seconds: number) =>
+  `${new Date(seconds * 1000).toISOString().slice(11, 16)}Z`;
 
-describe.skipIf(!hasBash || isRoot)('nuc-apply.sh', () => {
+describe.skipIf(!hasBash || isRoot)('nuc-apply.sh', { timeout: 20_000 }, () => {
   requireTools('jq');
   let root: string;
   let fake: string;
@@ -128,12 +148,14 @@ describe.skipIf(!hasBash || isRoot)('nuc-apply.sh', () => {
         NUC_APPLY_UNITS: units,
         NUC_APPLY_LOCK: join(root, 'nuc-apply.lock'),
         NUC_APPLY_PENDING: pending(),
+        NUC_APPLY_TOKEN_FILE: tokenFile(),
         ...env
       },
       encoding: 'utf8'
     });
 
   const pending = () => join(root, 'state', 'pending');
+  const tokenFile = () => join(root, 'github-read.token');
 
   const out = (result: ReturnType<typeof run>) =>
     JSON.parse(result.stdout) as { sha: string; changed: string[] };
@@ -433,6 +455,193 @@ describe.skipIf(!hasBash || isRoot)('nuc-apply.sh', () => {
       expect(run().status).toBe(0);
       expect(lines('systemctl.log')).toEqual([]);
       expect(existsSync(pending())).toBe(false);
+    });
+  });
+
+  describe('reading GitHub', () => {
+    const auth = () => lines('auth.log');
+    const rest = () => auth().filter((l) => l.startsWith('https://api.test/'));
+    const COMPARE_URL = `https://api.test/repos/codeware-sthlm/cdwr/compare/main...${SHA}`;
+    const CONTENTS_URL = `https://api.test/repos/codeware-sthlm/cdwr/contents/apps/agent-host/nuc?ref=${SHA}`;
+    const answers = (name: string, status: string, headers = '') => {
+      writeFileSync(fakePath(`${name}-status`), status);
+      writeFileSync(fakePath(`${name}-headers`), headers);
+    };
+    const reset = Math.floor(Date.now() / 1000) + 900;
+    const limited = `x-ratelimit-remaining: 0\nx-ratelimit-reset: ${reset}`;
+    const anonymous = () => `read anonymously, no token in ${tokenFile()}`;
+
+    describe('the token', () => {
+      it.each([
+        ['a token', `${TOKEN}\n`, 'signed'],
+        ['no file', null, 'anon'],
+        ['a malformed file', 'not a token\n', 'anon']
+      ])('reads with %s as %s', (_, content, how) => {
+        if (content !== null) writeFileSync(tokenFile(), content);
+        const result = run();
+        expect(result.status).toBe(0);
+        expect(rest()).toEqual([
+          `${COMPARE_URL} ${how}`,
+          `${CONTENTS_URL} ${how}`
+        ]);
+        expect(result.stderr.includes('holds no token')).toBe(
+          content !== null && how === 'anon'
+        );
+      });
+
+      it('never signs the raw downloads', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        run();
+        const raw = auth().filter((l) => l.startsWith('https://raw.test/'));
+        expect(raw).toHaveLength(4);
+        expect(raw.every((l) => l.endsWith(' anon'))).toBe(true);
+      });
+
+      it('reads once more without it when it is refused', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        writeFileSync(fakePath('compare-status-signed'), '401');
+        const result = run();
+        expect(result.status).toBe(0);
+        expect(rest()).toEqual([
+          `${COMPARE_URL} signed`,
+          `${COMPARE_URL} anon`,
+          `${CONTENTS_URL} anon`
+        ]);
+      });
+
+      it('words a failing read after it as refused, rate limits included', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        writeFileSync(fakePath('compare-status-signed'), '401');
+        writeFileSync(fakePath('contents-status'), '500');
+        const failed = run();
+        expect(failed.status).toBe(1);
+        expect(failed.stderr).toContain(
+          `could not list apps/agent-host/nuc at aaaaaaa: GitHub answered 500; the token in ${tokenFile()} was refused`
+        );
+
+        answers('contents', '403', limited);
+        const limitedRun = run();
+        expect(limitedRun.status).toBe(75);
+        expect(limitedRun.stderr).toContain(
+          `rate limited until ${hhmm(reset)}; the token in ${tokenFile()} was refused`
+        );
+      });
+
+      it('forgets the refusal with the run: no marker, and the next run signs again', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        writeFileSync(fakePath('compare-status-signed'), '401');
+        run();
+        run();
+        expect(
+          rest().filter(
+            (l) => l.startsWith(COMPARE_URL) && l.endsWith('signed')
+          )
+        ).toHaveLength(2);
+        expect(readdirSync(root).filter((f) => f.endsWith('.refused'))).toEqual(
+          []
+        );
+      });
+
+      it('names the refused token in the reason when the anonymous read fails too', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        writeFileSync(fakePath('compare-status-signed'), '401');
+        writeFileSync(fakePath('compare-status'), '500');
+        const result = run();
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain(
+          `could not compare aaaaaaa with main: GitHub answered 500; the token in ${tokenFile()} was refused`
+        );
+      });
+
+      it('is in no log or output', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        writeFileSync(fakePath('compare-status-signed'), '401');
+        writeFileSync(fakePath('compare-status'), '500');
+        const result = run();
+        expect(result.stdout).not.toContain(TOKEN);
+        expect(result.stderr).not.toContain(TOKEN);
+        const files = readdirSync(fake)
+          .filter((f) => f !== 'files')
+          .map((f) => join(fake, f));
+        expect(files.length).toBeGreaterThan(3);
+        for (const f of files) expect(read(f)).not.toContain(TOKEN);
+        expect(read(fakePath('curl.argv'))).toContain('-H @/dev/fd/');
+      });
+    });
+
+    describe('rate limited', () => {
+      it.each([
+        [
+          'the compare on the hourly limit',
+          'compare',
+          '403',
+          () => limited,
+          () =>
+            `could not compare aaaaaaa with main: rate limited until ${hhmm(reset)}; ${anonymous()}`,
+          1
+        ],
+        [
+          'the compare on a 429 with retry-after',
+          'compare',
+          '429',
+          () => 'retry-after: 120',
+          () => 'could not compare aaaaaaa with main: rate limited until',
+          1
+        ],
+        [
+          'the contents on the hourly limit',
+          'contents',
+          '403',
+          () => limited,
+          () =>
+            `could not list apps/agent-host/nuc at aaaaaaa: rate limited until ${hhmm(reset)}; ${anonymous()}`,
+          2
+        ]
+      ])(
+        'exits 75 with nothing installed on %s',
+        (_, name, status, headers, reason, reads) => {
+          answers(name, status, headers());
+          const result = run();
+          expect(result.status).toBe(75);
+          expect(result.stdout).toBe('');
+          expect(result.stderr).toContain(reason());
+          expect(result.stderr).toMatch(/rate limited until \d\d:\d\dZ/);
+          expect(rest()).toHaveLength(reads);
+          expect(lines('install.log')).toEqual([]);
+          expect(lines('systemctl.log')).toEqual([]);
+          expect(readdirSync(join(root, 'tmp'))).toEqual([]);
+        }
+      );
+
+      it('leaves out the anonymous hint when the token signed the read', () => {
+        writeFileSync(tokenFile(), TOKEN);
+        answers('compare', '403', limited);
+        const result = run();
+        expect(result.status).toBe(75);
+        expect(result.stderr).toContain(
+          `with main: rate limited until ${hhmm(reset)}\n`
+        );
+      });
+
+      it.each([
+        ['a 403 without limit headers', '403', '', 'GitHub answered 403'],
+        [
+          'a 403 with requests left',
+          '403',
+          'x-ratelimit-remaining: 12',
+          'GitHub answered 403'
+        ],
+        ['a 500', '500', '', 'GitHub answered 500'],
+        ['no answer', '000', '', 'GitHub answered no answer']
+      ])('still fails with exit 1 on %s', (_, status, headers, why) => {
+        answers('compare', status, headers);
+        const result = run();
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain(
+          `could not compare aaaaaaa with main: ${why}`
+        );
+        expect(lines('install.log')).toEqual([]);
+      });
     });
   });
 });
