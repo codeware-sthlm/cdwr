@@ -2077,14 +2077,15 @@ fi
 attended_line=""
 queue_view=""
 attended_watch=""
-# session_state of the live /work-queue sessions, for the plan-only launch; `none` until attended
-# reads it, so a Linear error there leaves planning as it was
-attended_session='{"state":"none"}'
-SESSION_PLANS="skip: a /work-queue session is alive, it plans its own"
-# session_plans: true while a session below the limit is alive or waiting at a prompt, a mirrored
-# one included
-session_plans() {
-  jq -e '(.state == "alive" or .state == "waiting") and (.full | not)' <<<"$attended_session" >/dev/null 2>&1
+# session_state of the live /work-queue sessions, for the plan-only launch; `unread` until attended
+# reads it, so a Linear error there holds planning for the tick rather than racing a session
+attended_session='{"state":"unread"}'
+# session_hold: why the plan-only launch waits, or nothing. A session below the limit that is alive
+# or waiting at a prompt holds it, a mirrored one included.
+session_hold() {
+  jq -r 'if .state == "unread" then "skip: the session state is unread, planning waits for the next tick"
+         elif (.state == "alive" or .state == "waiting") and (.full | not) then "skip: a /work-queue session is alive, it plans its own"
+         else empty end' <<<"$attended_session" 2>/dev/null
 }
 # audit_notices <view>: one action notice per gap of the view's audit that has stood for 15 minutes
 # without being told, so a state that settles by itself (a merge before its label moves, a label
@@ -2204,7 +2205,7 @@ attended() {
   # does a session at the limit, which starts no new ticket
   attended_session="$(watch -c --argjson now "$(date +%s)" --argjson v "$verdict" \
     'include "watch"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }' <<<"$sessions_json" 2>/dev/null)" ||
-    attended_session='{"state":"none"}'
+    attended_session='{"state":"unread"}'
   attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
   [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
   attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
@@ -2773,13 +2774,13 @@ if $check; then
   print -r -- "review: $(review_gate)"
   print -r -- "devlog: $(devlog_gate)"
   limit_at="$(limit_held)" && print -r -- "limit: claude runs held until $limit_at"
-  if session_plans; then echo "$SESSION_PLANS"; exit 0; fi
+  hold="$(session_hold)"; [[ -n "$hold" ]] && { print -r -- "$hold"; exit 0; }
   echo "would plan one of: $(print -r -- "$ready" | tr '\n' ' ')"; exit 0
 fi
 
 # A live /work-queue session plans what it claims; a plan-only run beside it races its claim.
 # A note, not a row, each tick.
-if session_plans; then note "$SESSION_PLANS"; exit 0; fi
+hold="$(session_hold)"; [[ -n "$hold" ]] && { note "$hold"; exit 0; }
 if limit_at="$(limit_held)"; then note "skip: session limit, planning held until $limit_at"; exit 0; fi
 linear_ok || exit 0
 cd "$REPO"

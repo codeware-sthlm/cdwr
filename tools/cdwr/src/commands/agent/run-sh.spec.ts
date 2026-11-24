@@ -168,10 +168,8 @@ describe('run.sh', () => {
     );
 
     it('holds the plan-only launch with a note, no row and no notice', () => {
-      expect(SCRIPT).toContain(
-        'SESSION_PLANS="skip: a /work-queue session is alive, it plans its own"'
-      );
-      const line = 'if session_plans; then note "$SESSION_PLANS"; exit 0; fi';
+      const line =
+        'hold="$(session_hold)"; [[ -n "$hold" ]] && { note "$hold"; exit 0; }';
       const at = plan.indexOf(line);
       expect(at).toBeGreaterThan(0);
       expect(at).toBeLessThan(plan.indexOf('to_main planning'));
@@ -182,35 +180,39 @@ describe('run.sh', () => {
 
     it('says so on --check in place of the tickets it would plan', () => {
       const check = plan.slice(0, plan.indexOf('\nfi\n'));
-      expect(
-        check.indexOf(
-          'if session_plans; then echo "$SESSION_PLANS"; exit 0; fi'
-        )
-      ).toBeLessThan(check.indexOf('would plan one of'));
+      const line =
+        'hold="$(session_hold)"; [[ -n "$hold" ]] && { print -r -- "$hold"; exit 0; }';
+      expect(check.indexOf(line)).toBeGreaterThan(0);
+      expect(check.indexOf(line)).toBeLessThan(
+        check.indexOf('would plan one of')
+      );
     });
 
-    // A session at the limit starts no new ticket, so planning goes on beside it
+    // A session at the limit starts no new ticket, so planning goes on beside it; an unread
+    // state waits a tick rather than racing a session
     it.each([
-      ['{"state":"alive","full":false}', true],
-      ['{"state":"waiting","full":false}', true],
-      ['{"state":"alive","full":true}', false],
-      ['{"state":"stopped","full":false}', false],
-      ['{"state":"none"}', false]
-    ])('session_plans on %s is %s', (session, holds) => {
+      ['{"state":"alive","full":false}', 'a /work-queue session is alive'],
+      ['{"state":"waiting","full":false}', 'a /work-queue session is alive'],
+      ['{"state":"unread"}', 'the session state is unread'],
+      ['{"state":"alive","full":true}', ''],
+      ['{"state":"stopped","full":false}', ''],
+      ['{"state":"none"}', '']
+    ])('session_hold on %s says "%s"', (session, hold) => {
       const fn = SCRIPT.slice(
-        SCRIPT.indexOf('session_plans() {'),
-        SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('session_plans() {')) + 3
+        SCRIPT.indexOf('session_hold() {'),
+        SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('session_hold() {')) + 3
       );
       const result = spawnSync(
         'zsh',
-        ['-c', `${fn}attended_session='${session}'; session_plans`],
+        ['-c', `${fn}attended_session='${session}'; session_hold`],
         { encoding: 'utf8' }
       );
-      expect(result.status === 0).toBe(holds);
+      if (hold) expect(result.stdout).toMatch(`skip: ${hold}`);
+      else expect(result.stdout).toBe('');
     });
 
-    it('leaves launched implement sessions out, and plans when attended never read them', () => {
-      expect(SCRIPT).toContain(`attended_session='{"state":"none"}'\n`);
+    it('leaves launched implement sessions out, and holds until attended reads them', () => {
+      expect(SCRIPT).toContain(`attended_session='{"state":"unread"}'\n`);
       expect(SCRIPT).toContain(
         `'include "watch"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }'`
       );
