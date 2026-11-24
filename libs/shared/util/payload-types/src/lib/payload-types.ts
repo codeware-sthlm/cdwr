@@ -2400,6 +2400,10 @@ export interface SiteSettingsGeneral {
    */
   brandLabel?: string | null;
   /**
+   * Dimmed draws the icon in the muted text colour, so the page leads. The colour only reaches an icon drawn in the text colour; an icon from an uploaded image, or with colours of its own, stays as it is.
+   */
+  iconStyle?: ('own' | 'brand' | 'muted') | null;
+  /**
    * The page that will be used as the landing page for the application.
    */
   landingPage: number | Page;
@@ -3542,6 +3546,7 @@ export interface SiteSettingsSelect<T extends boolean = true> {
 export interface SiteSettingsGeneralSelect<T extends boolean = true> {
   appName?: T;
   brandLabel?: T;
+  iconStyle?: T;
   landingPage?: T;
   icon?:
     | T
