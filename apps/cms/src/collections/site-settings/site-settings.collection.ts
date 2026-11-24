@@ -101,6 +101,36 @@ const siteSettings: CollectionConfig = {
               }
             },
             {
+              name: 'iconStyle',
+              type: 'select',
+              label: {
+                en: 'Icon in the header and footer',
+                sv: 'Ikonen i sidhuvud och sidfot'
+              },
+              enumName: enumName('site_settings_icon_style'),
+              defaultValue: 'own',
+              options: [
+                {
+                  label: { en: 'In the text colour', sv: 'I textfärgen' },
+                  value: 'own'
+                },
+                {
+                  label: {
+                    en: 'In the brand colour',
+                    sv: 'I varumärkets färg'
+                  },
+                  value: 'brand'
+                },
+                { label: { en: 'Dimmed', sv: 'Nedtonad' }, value: 'muted' }
+              ],
+              admin: {
+                description: {
+                  en: 'Dimmed draws the icon in the muted text colour, so the page leads. The colour only reaches an icon drawn in the text colour; an icon from an uploaded image, or with colours of its own, stays as it is.',
+                  sv: 'Nedtonad ritar ikonen i den dämpade textfärgen, så sidan leder. Färgen når bara en ikon som är ritad i textfärgen; en ikon från en uppladdad bild, eller med egna färger, förblir som den är.'
+                }
+              }
+            },
+            {
               name: 'landingPage',
               type: 'relationship',
               relationTo: 'pages',
