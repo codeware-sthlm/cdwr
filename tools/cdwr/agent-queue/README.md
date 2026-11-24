@@ -24,7 +24,8 @@ mirrored one from the Mac included: that session plans what it claims, and a run
 its claim. The scheduler notes `skip: a /work-queue session is alive, it plans its own`,
 and `--check` prints the same line. A launched implement session (`kind` in its session file) never
 claims new work, so it holds nothing back, and neither does an attended one while the queue is at
-the limit, since it starts no new ticket then. A plan-only run that finds the ticket claimed when it
+the limit, since it starts no new ticket then. A tick whose attended read failed plans nothing and
+notes why. A plan-only run that finds the ticket claimed when it
 reads it again before writing ends with `not planned: COD-n · <why>`, which the scheduler notes as
 a skip instead of `fail: planned nothing`.
 
