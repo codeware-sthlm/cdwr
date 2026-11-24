@@ -3,6 +3,10 @@ import type { ShowcaseBlock as ShowcaseBlockProps } from '@codeware/shared/util/
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const showcaseGallery: BlockGalleryDoc<ShowcaseBlockProps> = {
+  name: {
+    en: 'Rows with a tag, text and link',
+    sv: 'Rader med etikett, text och länk'
+  },
   summary: {
     en: 'Items in rows, each with a tag, a paragraph and a link.',
     sv: 'Poster i rader, var och en med en etikett, ett stycke och en länk.'

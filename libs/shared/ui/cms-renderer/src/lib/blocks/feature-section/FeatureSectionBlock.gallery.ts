@@ -5,6 +5,10 @@ import { showcaseMedia } from '../gallery-media';
 
 export const featureSectionGallery: BlockGalleryDoc<FeatureSectionBlockProps> =
   {
+    name: {
+      en: 'A heading, a paragraph and a few points',
+      sv: 'En rubrik, ett stycke och några punkter'
+    },
     summary: {
       en: 'A heading, a text and an image, with a few points beneath them.',
       sv: 'En rubrik, en text och en bild, med några punkter under.'

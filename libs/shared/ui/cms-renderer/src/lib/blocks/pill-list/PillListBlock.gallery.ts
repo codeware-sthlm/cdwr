@@ -3,6 +3,10 @@ import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const pillListGallery: BlockGalleryDoc<PillListBlockProps> = {
+  name: {
+    en: 'A row of linked tags',
+    sv: 'En rad med länkade etiketter'
+  },
   summary: {
     en: 'Short labels in a row, linked where there is somewhere to go.',
     sv: 'Korta etiketter på rad, länkade där det finns något att gå till.'

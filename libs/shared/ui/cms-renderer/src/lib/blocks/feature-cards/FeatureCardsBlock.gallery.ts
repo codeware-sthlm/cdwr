@@ -3,6 +3,10 @@ import type { FeatureCardsBlock as FeatureCardsBlockProps } from '@codeware/shar
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const featureCardsGallery: BlockGalleryDoc<FeatureCardsBlockProps> = {
+  name: {
+    en: 'Cards with a title and a sentence',
+    sv: 'Kort med rubrik och en mening'
+  },
   summary: {
     en: 'A heading above three or four cards, each with an icon and a sentence.',
     sv: 'En rubrik över tre eller fyra kort, vart och ett med en ikon och en mening.'

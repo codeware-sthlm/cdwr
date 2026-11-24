@@ -62,6 +62,10 @@ const files: NonNullable<FileAreaBlockProps['files']> = [
 ];
 
 export const fileAreaGallery: BlockGalleryDoc<FileAreaBlockProps> = {
+  name: {
+    en: 'Files to download',
+    sv: 'Filer att ladda ner'
+  },
   summary: {
     en: 'Downloads with a name, a type and a size.',
     sv: 'Nedladdningar med namn, filtyp och storlek.'
