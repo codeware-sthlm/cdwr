@@ -3,17 +3,19 @@ import { describe, expect, it } from 'vitest';
 import type { SnoozeRow } from '../../supabase';
 import { model } from '../model';
 import type { DeskState } from '../state';
-import type { QueueParked, WatchEntry } from '../types';
+import type { QueueGap, QueueParked, WatchEntry } from '../types';
 
-import { NOW, activity, filled, runs, view } from './fixtures';
+import { NOW, activity, filled, gap, runs, view } from './fixtures';
 import { headline } from './session';
 import {
   copilotView,
   countedRows,
+  fixCommand,
   forgetLabelled,
   isSnoozed,
   labelState,
   mergeBlocker,
+  rowLabel,
   waitRows
 } from './waiting';
 
@@ -39,6 +41,78 @@ describe('waiting card and queue sheets', () => {
       ['COD-6', 'ready to label'],
       ['COD-50', 'idea']
     ]);
+  });
+});
+
+describe('gaps on the waiting rows', () => {
+  const rows = (audit: QueueGap[]) => {
+    const state = filled();
+    state.data.runs = runs(view({ audit }));
+    const m = model(state, NOW);
+    return waitRows(m, state.details, NOW);
+  };
+
+  it('puts a blocking gap first, labelled by its kind, with its fix', () => {
+    const r = rows([gap('COD-898', 'ready-planned')]);
+    expect(r[0]).toMatchObject({
+      id: 'COD-898',
+      kind: 'gap',
+      snoozed: false,
+      gap: {
+        kind: 'ready-planned',
+        what: 'COD-898 is ready-planned',
+        tickets: [{ id: 'COD-898' }]
+      }
+    });
+    expect(rowLabel(r[0])).toBe('gap · ready-planned');
+    expect(fixCommand(r[0].gap?.fix ?? '')).toBe('cdwr agent attend COD-898');
+  });
+
+  it('folds closed tickets with a label into one cleanup row after the ideas', () => {
+    const r = rows([
+      gap('COD-801', 'label-on-closed'),
+      gap('COD-802', 'label-on-closed'),
+      gap('COD-898', 'ready-planned')
+    ]);
+    expect(r.map((x) => [x.id, x.kind])).toEqual([
+      ['COD-898', 'gap'],
+      ['COD-3', 'review'],
+      ['COD-5', 'hand-offs'],
+      ['COD-4', 'plan'],
+      ['COD-6', 'ready to label'],
+      ['COD-50', 'idea'],
+      ['cleanup', 'cleanup']
+    ]);
+    const cleanup = r[r.length - 1];
+    expect(rowLabel(cleanup)).toBe('cleanup · 2');
+    expect(cleanup.gap?.tickets.map((t) => t.id)).toEqual([
+      'COD-801',
+      'COD-802'
+    ]);
+    expect(cleanup.gap?.fix).toBe(
+      'An attended session cleans it up, or remove the label'
+    );
+    // Each gap row counts, the cleanup row once
+    expect(
+      countedRows(r).filter((x) => x.kind === 'gap' || x.kind === 'cleanup')
+    ).toHaveLength(2);
+  });
+
+  it('leaves candidates out', () => {
+    expect(
+      rows([gap('COD-7', 'stale', { candidate: true })]).some(
+        (x) => x.kind === 'gap'
+      )
+    ).toBe(false);
+  });
+
+  it('takes the title from the gap for a ticket outside the index', () => {
+    const r = rows([gap('COD-700', 'two-labels', { title: 'Canceled one' })]);
+    expect(r[0].title).toBe('Canceled one');
+  });
+
+  it('copies no command from a fix without a code span', () => {
+    expect(fixCommand('Keep one of agent:ready, agent:review')).toBeNull();
   });
 });
 
