@@ -1,10 +1,16 @@
 import type { SnoozeRow } from '../../supabase';
 import { PENDING_MAX_MS, type PrCommandState } from '../commands';
 import { CONFIRM_MS } from '../constants';
-import { type Blocker, type Model, type WatchRef, prOf } from '../model';
+import {
+  type Blocker,
+  type Model,
+  type WatchRef,
+  isRealGap,
+  prOf
+} from '../model';
 import { openApply } from '../parsers';
 import type { ControlsUi, Detail } from '../state';
-import type { PrRef, QueueParked, WatchEntry } from '../types';
+import type { PrRef, QueueGap, QueueParked, WatchEntry } from '../types';
 
 import { copilotStall, prWaitPlain } from './parked';
 import { queuePr } from './pr';
@@ -27,7 +33,9 @@ export type WaitRow = {
     | 'plan'
     | 'ready to label'
     | 'idea'
-    | 'approved';
+    | 'approved'
+    | 'gap'
+    | 'cleanup';
   /** The ticket's pull request; null without one, and always for an idea */
   pr: PrRef | null;
   /** Minutes waited; null without activity to tell */
@@ -42,7 +50,27 @@ export type WaitRow = {
   gateAt: string | null;
   /** Snoozed until something changes; such a row leaves every count */
   snoozed: boolean;
+  /** The audit's gap a gap or cleanup row stands for; null for any other kind */
+  gap: WaitGap | null;
 };
+
+/** A gap as the Waiting on you rows carry it: its audit kind, what is wrong, the one fix, and the tickets it covers (several for cleanup) */
+export type WaitGap = {
+  kind: string;
+  what: string;
+  fix: string;
+  tickets: { id: string; title: string; url: string }[];
+};
+
+/** The audit kind folded into one cleanup row: a closed ticket still carrying an agent label, a one-label fix each */
+export const CLEANUP_GAP = 'label-on-closed';
+
+/** The id of the one cleanup row */
+export const CLEANUP_ID = 'cleanup';
+
+/** The first command a gap's fix names in a code span, for the Copy button; null without one */
+export const fixCommand = (fix: string): string | null =>
+  /`([^`]+)`/.exec(fix)?.[1] ?? null;
 
 /**
  * Whether a snooze still holds for a row. It holds while the row has the kind it was snoozed
@@ -194,9 +222,17 @@ export const rowLabel = (r: WaitRow): string =>
     ? `approved · waits on ${r.blockers}`
     : r.kind === 'hand-offs'
       ? `hand-offs · ${r.count ?? 0}`
-      : r.kind;
+      : r.kind === 'gap'
+        ? `gap · ${r.gap?.kind ?? ''}`
+        : r.kind === 'cleanup'
+          ? `cleanup · ${r.count ?? 0}`
+          : r.kind;
 
-/** What waits on you, furthest along first: PRs to review, hand-offs, questions, plans, tickets to label, ideas; approved plans held by a blocker come last */
+/**
+ * What waits on you, furthest along first: gaps that stop work, PRs to review, hand-offs,
+ * questions, plans, tickets to label, ideas, then the closed tickets to clean up as one row;
+ * approved plans held by a blocker come last. Candidate gaps are hints for the review, not rows
+ */
 export const waitRows = (
   m: Model,
   details: ReadonlyMap<string, Detail>,
@@ -224,10 +260,53 @@ export const waitRows = (
       blockers: blockerText(opts.blockers ?? []),
       wait: [prWaitPlain(m, id), opts.stall].filter(Boolean).join('. '),
       gateAt,
-      snoozed: isSnoozed({ id, kind }, gateAt, m.snoozes)
+      snoozed: isSnoozed({ id, kind }, gateAt, m.snoozes),
+      gap: null
     };
   };
   const open = (id: string): readonly Blocker[] => m.blockers.get(id) ?? [];
+  // A ticket outside the desk's index is a stub without a title; the gap carries its own
+  const ticketOf = (g: QueueGap) => {
+    const { title, url } = m.get(g.ticket);
+    return { id: g.ticket, title: title || g.title || '', url };
+  };
+  const real = m.gaps.filter(isRealGap);
+  // A gap is fixed, not snoozed: its row never sleeps
+  const gaps = real
+    .filter((g) => g.kind !== CLEANUP_GAP)
+    .map((g): WaitRow => {
+      const t = ticketOf(g);
+      return {
+        ...row(g.ticket, 'gap'),
+        title: t.title,
+        snoozed: false,
+        gap: { kind: g.kind, what: g.what, fix: g.fix, tickets: [t] }
+      };
+    });
+  const closed = real.filter((g) => g.kind === CLEANUP_GAP);
+  const cleanup: WaitRow[] = closed.length
+    ? [
+        {
+          id: CLEANUP_ID,
+          title: 'Closed tickets still carrying an agent label',
+          url: ticketOf(closed[0]).url,
+          kind: 'cleanup',
+          pr: null,
+          age: null,
+          count: closed.length,
+          blockers: '',
+          wait: '',
+          gateAt: null,
+          snoozed: false,
+          gap: {
+            kind: CLEANUP_GAP,
+            what: `${closed.length} closed ${closed.length === 1 ? 'ticket still carries' : 'tickets still carry'} an agent label`,
+            fix: closed[0].fix,
+            tickets: closed.map(ticketOf)
+          }
+        }
+      ]
+    : [];
   const before = (kind: 'plan' | 'question') =>
     m.before
       .filter((x) => (x.kind === 'plan' ? 'plan' : 'question') === kind)
@@ -235,6 +314,7 @@ export const waitRows = (
   const stall = (p: QueueParked | undefined) =>
     p ? copilotStall(p, now) : null;
   return [
+    ...gaps,
     ...m.prs.map((x) =>
       row(x.ticket, 'review', {
         blockers: open(x.ticket),
@@ -270,9 +350,11 @@ export const waitRows = (
         blockers: '',
         wait: '',
         gateAt,
-        snoozed: isSnoozed({ id: i.id, kind: 'idea' }, gateAt, m.snoozes)
+        snoozed: isSnoozed({ id: i.id, kind: 'idea' }, gateAt, m.snoozes),
+        gap: null
       };
     }),
+    ...cleanup,
     ...m.heldApprovals.map((h) =>
       row(h.ticket, 'approved', { blockers: h.blockers })
     )

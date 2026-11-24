@@ -8,7 +8,7 @@ import type {
   UsagePayload
 } from '../../supabase';
 import { type DeskState, createState } from '../state';
-import type { QueueView, ReviewRecord, SessionState } from '../types';
+import type { QueueGap, QueueView, ReviewRecord, SessionState } from '../types';
 
 import { ACTIVITY_MAX } from './ticket';
 
@@ -127,6 +127,23 @@ export const view = (over: Partial<QueueView> = {}): QueueView => ({
       { ticket: 'COD-5', kind: 'handoffs', items: ['check it'] }
     ]
   },
+  ...over
+});
+
+/** An audit gap on a ticket, the fix in the audit's words */
+export const gap = (
+  ticket: string,
+  kind: string,
+  over: Partial<QueueGap> = {}
+): QueueGap => ({
+  id: `${kind}:${ticket}`,
+  ticket,
+  kind,
+  what: `${ticket} is ${kind}`,
+  fix:
+    kind === 'ready-planned'
+      ? `Start \`cdwr agent attend ${ticket}\`. A self-approved plan launches only while \`**Agent: plan approved**\` is the agent's newest comment`
+      : 'An attended session cleans it up, or remove the label',
   ...over
 });
 
