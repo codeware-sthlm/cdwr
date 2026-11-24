@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 import * as TOML from 'smol-toml';
+import type { TomlTable, TomlValue } from 'smol-toml';
 
 import { FLY_CONFIG_APP_NAMES, TENANT_APPS } from './tenant-apps';
 
@@ -17,12 +18,17 @@ describe('FLY_CONFIG_APP_NAMES', () => {
   });
 });
 
+const isTable = (value: TomlValue | undefined): value is TomlTable =>
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  !(value instanceof TOML.TomlDate);
+
 describe('fly.toml and fly.production.toml', () => {
   // Preview scales to zero, production keeps one machine: the only difference
   const parse = (app: string, file: string) => {
     const config = TOML.parse(readConfig(app, file));
     const service = config['http_service'];
-    if (service && typeof service === 'object' && !Array.isArray(service)) {
+    if (isTable(service)) {
       delete service['min_machines_running'];
     }
     return config;
