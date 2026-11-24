@@ -358,11 +358,18 @@ export const waitRows = (
       row(h.ticket, 'approved', { blockers: h.blockers })
     )
   ];
-  // A ticket another row already lists keeps that row: a gap row beside it would count it twice
-  const listed = new Set(rest.map((r) => r.id));
-  const gaps = real
-    .filter((g) => g.kind !== CLEANUP_GAP && !listed.has(g.ticket))
-    .map(gapRow);
+  // One row per ticket: a ticket another row or the cleanup row already lists keeps that row,
+  // and a ticket with several gaps shows the first the audit gives
+  const listed = new Set([
+    ...rest.map((r) => r.id),
+    ...closed.map((g) => g.ticket)
+  ]);
+  const gaps: WaitRow[] = [];
+  for (const g of real) {
+    if (g.kind === CLEANUP_GAP || listed.has(g.ticket)) continue;
+    listed.add(g.ticket);
+    gaps.push(gapRow(g));
+  }
   return [...gaps, ...rest];
 };
 
