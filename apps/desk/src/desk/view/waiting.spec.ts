@@ -105,6 +105,25 @@ describe('gaps on the waiting rows', () => {
     ]);
   });
 
+  it('lists a closed ticket with a second gap only in the cleanup row', () => {
+    const r = rows([
+      gap('COD-801', 'label-on-closed'),
+      gap('COD-801', 'two-labels')
+    ]);
+    expect(r.filter((x) => x.kind === 'gap')).toEqual([]);
+    expect(rowLabel(r[r.length - 1])).toBe('cleanup · 1');
+  });
+
+  it('gives a ticket with two gaps one row, the first gap', () => {
+    const r = rows([
+      gap('COD-800', 'two-labels'),
+      gap('COD-800', 'review-no-pr')
+    ]);
+    expect(r.filter((x) => x.kind === 'gap').map((x) => x.gap?.kind)).toEqual([
+      'two-labels'
+    ]);
+  });
+
   it('leaves candidates out', () => {
     expect(
       rows([gap('COD-7', 'stale', { candidate: true })]).some(
