@@ -6895,7 +6895,8 @@ describe('run.sh platform step', () => {
   const tick = async (
     env: Record<string, string>,
     wait = true,
-    move = false
+    move = false,
+    stubs: string[] = []
   ) => {
     const script = [
       `exec 2>>"${root}/err"`,
@@ -6920,6 +6921,7 @@ describe('run.sh platform step', () => {
       fn('drop_run_lock'),
       fn('to_main'),
       fn('platform_move'),
+      ...stubs,
       fn('record_platform'),
       'platform_env',
       'unexported_env $DESK_VARS',
@@ -7217,6 +7219,41 @@ describe('run.sh platform step', () => {
     expect(sibling).not.toMatch(
       /FLY_API_TOKEN|PLATFORM_|DESK_|fly-secret|db-secret|sentry-secret|umami-secret|desk-secret/
     );
+  });
+
+  describe('the deploy read token', () => {
+    // github-app.sh stand-ins: app_token logs what it was asked for and exports the token
+    const app = (minted: boolean) => [
+      `app_env() { print -r -- "env $1" >> "${root}/app.calls"; ${minted ? 'return 0' : 'return 1'}; }`,
+      `app_token() { print -r -- "token $1" >> "${root}/app.calls"; export GH_TOKEN=ghs_read GITHUB_TOKEN=ghs_read; }`
+    ];
+
+    it('mints a read-only token and gives it to the command alone', async () => {
+      stubNode('exit 0');
+      await tick(CREDS, true, false, app(true));
+      expect(read('app.calls')).toBe(
+        `env ${root}/tools/cdwr/.env\ntoken {"actions":"read","metadata":"read"}\n`
+      );
+      expect(read('node.env')).toContain('PLATFORM_GITHUB_TOKEN=ghs_read');
+      // CI may set its own GITHUB_TOKEN; only the minted one must stay in the mint's subshell
+      expect(read('node.env')).not.toMatch(
+        /^(GH_TOKEN|GITHUB_TOKEN)=ghs_read$/m
+      );
+      expect(read('sibling.env')).not.toContain('ghs_read');
+    });
+
+    it('runs the command anonymously when the app is not there', async () => {
+      stubNode('exit 0');
+      await tick(CREDS, true, false, app(false));
+      expect(read('app.calls')).toBe(`env ${root}/tools/cdwr/.env\n`);
+      expect(read('notes')).toContain(
+        'warn: platform: the deploy read goes anonymous'
+      );
+      expect(read('node.env')).toMatch(/^PLATFORM_GITHUB_TOKEN=$/m);
+      expect(read('node.calls')).toBe(
+        'tools/cdwr/bin/cdwr.mjs agent platform-record --yes --json\n'
+      );
+    });
   });
 
   it('reads the desk write credentials from the env file and leaves them unexported', () => {

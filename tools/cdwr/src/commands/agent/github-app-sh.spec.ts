@@ -46,7 +46,9 @@ describe('github-app.sh', () => {
     expect(code).toContain(
       'openssl dgst -sha256 -sign "$AGENT_GITHUB_APP_KEY_PATH"'
     );
-    expect(code).toContain(`-d '{"repositories":["cdwr"]}'`);
+    expect(code).toContain('then {repositories: ["cdwr"]}');
+    expect(code).toContain('{repositories: ["cdwr"], permissions: $p}');
+    expect(code).toContain('-d "$body"');
   });
 
   it('answers git from the env token only and never offers an SSH key', () => {
@@ -354,6 +356,35 @@ describe('github-app.sh', () => {
         `/app/installations/${INSTALLATION_ID}/access_tokens`
       );
     });
+
+    it('app_token narrows the token to the permissions it is given', async () => {
+      const result = await zsh(
+        [
+          `app_env "${good()}" && app_token '{"actions":"read","metadata":"read"}' || exit 1`,
+          'print -r -- "token=$GH_TOKEN"'
+        ].join('\n')
+      );
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(`token=${TOKEN}`);
+      expect(JSON.parse(requests[0]?.body ?? '')).toEqual({
+        repositories: ['cdwr'],
+        permissions: { actions: 'read', metadata: 'read' }
+      });
+    });
+
+    it.each([`'actions=read'`, `'"actions"'`, `'["actions"]'`])(
+      'app_token refuses permissions that are no JSON object (%s), before any request',
+      async (perms) => {
+        const result = await zsh(
+          `app_env "${good()}" && app_token ${perms} || exit 1`
+        );
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain(
+          'the permissions are not a JSON object'
+        );
+        expect(requests).toHaveLength(0);
+      }
+    );
 
     it('fails closed when GitHub refuses the exchange, with the reason', async () => {
       exchange = 'denied';

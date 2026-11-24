@@ -4,8 +4,9 @@
 # the branch rules from GitHub itself. Sourced by implement.sh; every function fails closed.
 #   app_env <.env file>   reads AGENT_GITHUB_APP_ID, _INSTALLATION_ID and _KEY_PATH, nothing else
 #   app_jwt               a 9-minute RS256 JWT for the app, signed with openssl
-#   app_token             exchanges the JWT for an installation token on cdwr and exports GH_TOKEN
-#                         and GITHUB_TOKEN, for reads
+#   app_token [perms]     exchanges the JWT for an installation token on cdwr and exports GH_TOKEN
+#                         and GITHUB_TOKEN, for reads; perms, a JSON object such as
+#                         {"actions":"read"}, narrows the token to those permissions
 #   app_session           app_token, then an env-only git credential helper and the bot's commit identity
 # AGENT_QUEUE_GITHUB_API replaces https://api.github.com in specs.
 
@@ -51,13 +52,16 @@ app_jwt() {
 # Exports GH_TOKEN and GITHUB_TOKEN alone; returns non-zero, with the reason on stderr, otherwise
 app_token() {
   setopt localoptions extendedglob
-  local jwt resp token
+  local jwt resp token body
+  body="$(jq -cne --argjson p "${1:-null}" 'if $p == null then {repositories: ["cdwr"]}
+    elif ($p | type) == "object" then {repositories: ["cdwr"], permissions: $p} else false end')" ||
+    { print -ru2 -- "github app: the permissions are not a JSON object"; return 1; }
   jwt="$(app_jwt)" || { print -ru2 -- "github app: could not sign the JWT"; return 1; }
   # The token reaches only cdwr, whatever else the app is installed on
   resp="$(curl -sS -m 20 -X POST \
     -H "Authorization: Bearer $jwt" -H 'Accept: application/vnd.github+json' \
     -H 'X-GitHub-Api-Version: 2022-11-28' \
-    -d '{"repositories":["cdwr"]}' \
+    -d "$body" \
     "$GITHUB_API/app/installations/$AGENT_GITHUB_APP_INSTALLATION_ID/access_tokens")" ||
     { print -ru2 -- "github app: token exchange failed"; return 1; }
   token="$(jq -r '.token // empty' <<<"$resp" 2>/dev/null)"
