@@ -84,17 +84,20 @@ record() {
 
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
 
-# The read-only token, when installed and not refused; empty reads anonymously, and anon says why
+# The read-only token, when installed and not refused; empty reads anonymously, and anon says why.
+# A refusal whose notice did not go out yet reads `<mtime> pending` in the marker.
 token=""
+refusal_pending=false
 anon="; read anonymously, no token in $TOKEN_FILE"
 if [[ -r "$TOKEN_FILE" ]]; then
   token="$(tr -d '[:space:]' < "$TOKEN_FILE")"
   if ! [[ "$token" =~ ^(github_pat_|gh[pousr]_)[A-Za-z0-9_]+$ ]]; then
     log "$TOKEN_FILE holds no token: reading anonymously"
     token=""
-  elif [[ -s "$REFUSED" && "$(cat "$REFUSED" 2>/dev/null)" == "$(mtime "$TOKEN_FILE")" ]]; then
+  elif mark="$(cat "$REFUSED" 2>/dev/null)" && [[ -n "$mark" && "${mark%% *}" == "$(mtime "$TOKEN_FILE")" ]]; then
     token=""
     anon="; read anonymously, GitHub refused the token in $TOKEN_FILE"
+    [[ "$mark" == *" pending" ]] && refusal_pending=true
   else
     anon=""
   fi
@@ -156,13 +159,18 @@ get() {
 }
 
 # Once per token: a refused one is marked, so neither host script signs with it again until the
-# file is replaced, and told once
+# file is replaced, and told once. The marker stays pending until the container took the notice.
 token_refused() {
-  [[ -e "$http/refused" && ! -e "$http/refused-told" ]] || return 0
+  [[ -e "$http/refused" ]] || $refusal_pending || return 0
+  [[ -e "$http/refused-told" ]] && return 0
   : > "$http/refused-told"
-  mtime "$TOKEN_FILE" > "$REFUSED" 2>/dev/null || log "could not write $REFUSED"
-  log "GitHub refused the token in $TOKEN_FILE: reading anonymously until it is replaced"
-  notice "agent-host: GitHub refused the read-only token in $TOKEN_FILE (expired or revoked?), so the host reads anonymously and shares the IP's 60 calls an hour. Make a new one: apps/agent-host/README.md, Installing the token"
+  if ! $refusal_pending; then
+    printf '%s pending\n' "$(mtime "$TOKEN_FILE")" > "$REFUSED" 2>/dev/null || log "could not write $REFUSED"
+    log "GitHub refused the token in $TOKEN_FILE: reading anonymously until it is replaced"
+  fi
+  notice "agent-host: GitHub refused the read-only token in $TOKEN_FILE (expired or revoked?), so the host reads anonymously and shares the IP's 60 calls an hour. Make a new one: apps/agent-host/README.md, Installing the token" &&
+    { mtime "$TOKEN_FILE" > "$REFUSED" 2>/dev/null || log "could not write $REFUSED"; }
+  return 0
 }
 
 # Prints `<newest green sha> <newest run sha>`: the newest run on main, whatever its state, says

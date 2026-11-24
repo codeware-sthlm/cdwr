@@ -773,6 +773,27 @@ describe.skipIf(!hasBash || !hasGnuDate)(
           expect(existsSync(path('self-deploy.json'))).toBe(false);
         });
 
+        it('keeps the refusal pending until the container takes its notice', () => {
+          writeFileSync(fakePath('notify-fail'), '');
+          tick();
+          expect(read(marker())).toBe('1000000 pending\n');
+          const second = tick();
+          // the pending notice is sent again, never the token
+          expect(auth()).toEqual([
+            `${RUNS_URL} signed`,
+            `${RUNS_URL} anon`,
+            `${RUNS_URL} anon`
+          ]);
+          expect(second.stdout).not.toContain('GitHub refused the token');
+          expect(notices()).toHaveLength(2);
+          rmSync(fakePath('notify-fail'));
+          tick();
+          expect(notices()).toHaveLength(3);
+          expect(read(marker())).toBe('1000000\n');
+          tick();
+          expect(notices()).toHaveLength(3);
+        });
+
         it('words a failing anonymous read after it, rate limits included', () => {
           writeFileSync(fakePath('runs-status'), '500');
           const result = tick();
