@@ -1,6 +1,6 @@
 import { t } from '@codeware/shared/util/i18n';
 import { BLOCK_META } from '@codeware/shared/util/payload-utils';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -25,6 +25,8 @@ vi.mock('../gallery-docs', () => {
   return {
     galleryDocs: {
       callout: doc('callout', 'none'),
+      form: doc('form', 'none'),
+      'theme-studio': doc('theme-studio', 'none'),
       card: doc('card', 'subtle')
     }
   };
@@ -124,5 +126,79 @@ describe('BlockGalleryBlock full screen', () => {
         .getAttribute('aria-checked')
     ).toBe('true');
     expect(within(dialog).getByTestId('example').textContent).toBe('strong');
+  });
+});
+
+describe('BlockGalleryBlock index', () => {
+  const renderIndex = () =>
+    render(
+      <PayloadProvider
+        value={
+          {
+            colorScheme: 'light',
+            lockedColorScheme: 'light',
+            locale: 'en',
+            getSearchParam: () => null
+          } as unknown as PayloadValue
+        }
+      >
+        <BlockGalleryBlock
+          blockType="block-gallery"
+          mode="index"
+          render={Example}
+        />
+      </PayloadProvider>
+    );
+
+  const observed: Array<() => void> = [];
+  beforeEach(() => {
+    observed.length = 0;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          observed.push(() =>
+            callback(
+              [{ isIntersecting: true } as IntersectionObserverEntry],
+              this as unknown as IntersectionObserver
+            )
+          );
+        }
+        observe = vi.fn();
+        disconnect = vi.fn();
+      }
+    );
+  });
+  const scrollIntoView = () => act(() => observed.forEach((hit) => hit()));
+
+  it('draws a thumbnail on a card with an example, and none without', () => {
+    renderIndex();
+    scrollIntoView();
+
+    const withExample = screen.getByText('callout').closest('li');
+    const without = screen.getByText('hero').closest('li');
+
+    expect(
+      within(withExample as HTMLElement).getByTestId('block-thumbnail')
+    ).toBeTruthy();
+    expect(
+      within(without as HTMLElement).queryByTestId('block-thumbnail')
+    ).toBe(null);
+  });
+
+  it('draws no thumbnail until the card nears the viewport', () => {
+    renderIndex();
+
+    expect(screen.queryByTestId('block-thumbnail')).toBe(null);
+  });
+
+  it.each(['form', 'theme-studio'])('draws no thumbnail for %s', (slug) => {
+    renderIndex();
+    scrollIntoView();
+
+    const card = screen.getByText(slug).closest('li');
+    expect(within(card as HTMLElement).queryByTestId('block-thumbnail')).toBe(
+      null
+    );
   });
 });

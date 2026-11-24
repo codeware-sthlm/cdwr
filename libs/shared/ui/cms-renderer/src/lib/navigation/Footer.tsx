@@ -331,7 +331,7 @@ function ExpandedFooter({
                   <nav
                     aria-label={t(locale, 'navigation.footer')}
                     className={cn(
-                      'text-core-nav-link gap-x-8 text-center text-sm font-medium md:text-left',
+                      'text-muted-foreground gap-x-8 text-center text-xs md:text-left',
                       links.length >= 4 ? 'columns-1 sm:columns-2' : 'columns-1'
                     )}
                   >

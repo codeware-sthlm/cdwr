@@ -10,11 +10,11 @@ import {
   type BlockMeta
 } from '@codeware/shared/util/payload-utils';
 import { cn } from '@codeware/shared/util/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { interactiveSurface } from '../../utils/interactive-surface';
-import { type AnyBlockGalleryDoc, localized } from '../gallery-doc';
+import { type AnyBlockGalleryDoc, hasExample, localized } from '../gallery-doc';
 import { galleryDocs } from '../gallery-docs';
 
 import { BlockGalleryEntry, type RenderExample } from './BlockGalleryEntry';
@@ -36,24 +36,77 @@ const structural = new Set<BlockSlug>([
 /** Where the gallery itself is rendered, so it never lists itself. */
 const self: BlockSlug = 'block-gallery';
 
+/**
+ * Blocks never drawn as a thumbnail: `theme-studio` pulls a heavy lazy chunk,
+ * fonts and token parsing, and `form` repeats input ids and labels per card.
+ */
+const noThumbnail = new Set<BlockSlug>(['theme-studio', 'form']);
+
+/**
+ * True once the element has come within `margin` of the viewport, and stays
+ * true. Never true on the server; without an observer it is true at once.
+ */
+function useNearViewport<T extends Element>(margin = '200px') {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (hits) => {
+        if (hits.some((hit) => hit.isIntersecting)) {
+          setNear(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: margin }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [margin]);
+
+  return [ref, near] as const;
+}
+
 type Entry = {
   meta: BlockMeta;
   doc?: AnyBlockGalleryDoc;
 };
 
-/** One card: the slug an editor sees in the layout builder, then the name. */
-function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
+/**
+ * One card: the slug an editor sees in the layout builder, then the name, then
+ * the block drawn small.
+ *
+ * The card is the `li`; the button is stretched across it. The drawing can
+ * hold links and buttons of its own, and those cannot sit inside a `button`.
+ */
+function BlockCard({
+  meta,
+  doc,
+  render: RenderExample,
+  onOpen
+}: Entry & { render?: RenderExample; onOpen: () => void }) {
   const { locale } = usePayload();
+  const example =
+    doc && hasExample(doc) && !noThumbnail.has(meta.slug) ? doc : null;
+  const [frame, near] = useNearViewport<HTMLDivElement>();
 
   return (
-    <li>
+    <li
+      className={cn(
+        'relative flex h-full flex-col gap-2.5 rounded-xl p-5',
+        interactiveSurface()
+      )}
+    >
       <button
         type="button"
         onClick={onOpen}
-        className={cn(
-          'flex h-full w-full flex-col gap-2.5 rounded-xl p-5 text-left',
-          interactiveSurface()
-        )}
+        className="flex w-full flex-col gap-2.5 text-left outline-none after:absolute after:inset-0 after:rounded-xl after:content-['']"
       >
         <code className="text-core-link font-mono text-xs">{meta.slug}</code>
         <p className="text-foreground text-base font-semibold tracking-tight">
@@ -80,6 +133,29 @@ function BlockCard({ meta, doc, onOpen }: Entry & { onOpen: () => void }) {
               )}
         </p>
       </button>
+      {/* A picture, not a control: inert and hidden from assistive tech, the
+          button above carries the card. `zoom` shrinks the drawing and the
+          room it takes, so the block lays out as on a wide page */}
+      {example?.example && RenderExample && (
+        <div
+          ref={frame}
+          aria-hidden
+          inert
+          className="bg-core-background-content pointer-events-none mt-auto h-40 overflow-hidden rounded-lg border"
+        >
+          {/* Mounted on the client, once the card is near the screen: the
+              server HTML carries the empty frame only */}
+          {near && (
+            <div data-testid="block-thumbnail" className="[zoom:0.35]">
+              <RenderExample
+                blocks={[example.example]}
+                blocksData={example.exampleData}
+                preview
+              />
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
@@ -88,11 +164,13 @@ function Section({
   title,
   note,
   entries,
+  render,
   onOpen
 }: {
   title: string;
   note?: string;
   entries: Array<Entry>;
+  render?: RenderExample;
   onOpen: (slug: BlockSlug) => void;
 }) {
   if (entries.length === 0) {
@@ -114,6 +192,7 @@ function Section({
           <BlockCard
             key={entry.meta.slug}
             {...entry}
+            render={render}
             onOpen={() => onOpen(entry.meta.slug)}
           />
         ))}
@@ -276,18 +355,21 @@ export const BlockGalleryBlock: React.FC<
       <Section
         title={t(locale, 'gallery.contentBlocks')}
         entries={design}
+        render={render}
         onOpen={setSelected}
       />
       <Section
         title={t(locale, 'gallery.structural')}
         note={t(locale, 'gallery.structuralNote')}
         entries={plumbing}
+        render={render}
         onOpen={setSelected}
       />
       <Section
         title={t(locale, 'gallery.pending')}
         note={t(locale, 'gallery.pendingNote')}
         entries={pending}
+        render={render}
         onOpen={setSelected}
       />
     </section>
