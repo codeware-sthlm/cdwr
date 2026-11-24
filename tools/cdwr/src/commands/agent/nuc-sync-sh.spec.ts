@@ -623,6 +623,24 @@ describe.skipIf(!hasBash || !hasGnuDate)(
           expect(notices()).toHaveLength(1);
         });
 
+        it('keeps the refusal pending until the container takes its notice', () => {
+          writeFileSync(fakePath('notify-fail'), '');
+          tick();
+          expect(read(marker())).toBe('1000000 pending\n');
+          tick();
+          expect(auth().slice(3)).toEqual([
+            `${HEAD_URL} anon`,
+            `${FOLDER_URL} anon`
+          ]);
+          expect(notices()).toHaveLength(2);
+          rmSync(fakePath('notify-fail'));
+          tick();
+          expect(notices()).toHaveLength(3);
+          expect(read(marker())).toBe('1000000\n');
+          tick();
+          expect(notices()).toHaveLength(3);
+        });
+
         it('words the anonymous reads after it, a rate limit included', () => {
           tick();
           answers('head', '500');
