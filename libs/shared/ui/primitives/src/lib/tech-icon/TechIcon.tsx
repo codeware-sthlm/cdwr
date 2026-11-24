@@ -5,6 +5,8 @@ import { type TechBrand, techIconsMap } from './tech-icons';
 
 type TechIconProps = {
   brand: TechBrand;
+  /** Take the surrounding text colour instead of the brand's */
+  followText?: boolean;
 } & React.ComponentPropsWithoutRef<'svg'>;
 
 /**
@@ -14,6 +16,7 @@ type TechIconProps = {
  */
 export const TechIcon: React.FC<TechIconProps> = ({
   brand,
+  followText,
   className,
   style,
   ...props
@@ -27,10 +30,15 @@ export const TechIcon: React.FC<TechIconProps> = ({
   return (
     <tech.Component
       aria-hidden
-      style={{ '--brand': tech.hex, ...style } as CSSProperties}
+      style={
+        followText
+          ? style
+          : ({ '--brand': tech.hex, ...style } as CSSProperties)
+      }
       className={cn(
-        'shrink-0 text-(--brand)',
-        tech.dark && 'dark:text-current',
+        'shrink-0',
+        !followText && 'text-(--brand)',
+        !followText && tech.dark && 'dark:text-current',
         className
       )}
       {...props}

@@ -46,6 +46,11 @@ const withLogos: Story['args'] = {
 
 export const Logos: Story = { args: withLogos };
 
+export const LogosInBrandColour: Story = {
+  name: 'Logos in the brand colour',
+  args: { ...withLogos, logoColor: 'brand' }
+};
+
 export const LogosInAStrongBand: Story = {
   name: 'Logos in a strong band',
   args: withLogos,

@@ -8,6 +8,7 @@ import type { TechBrand } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
 
 import { blockImages } from '../block-images';
+import { logoColorField } from '../logo-color-field';
 
 type PillRow = { icon?: TechBrand | null };
 
@@ -30,6 +31,7 @@ export const pillListBlock: Block = {
   },
   fields: [
     ...sectionHeaderFields(),
+    logoColorField(),
     {
       name: 'items',
       type: 'array',

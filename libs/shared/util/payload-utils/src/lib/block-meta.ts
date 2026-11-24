@@ -155,6 +155,19 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'markStyle',
+        type: 'select',
+        conditional: true,
+        label: {
+          en: 'Mark colour',
+          sv: 'Märkets färg'
+        },
+        description: {
+          en: 'Dimmed makes the mark smaller and quieter, so the heading leads. The colour only reaches an icon drawn in the text colour; an icon from an uploaded image, or with colours of its own, is only made smaller and lighter.',
+          sv: 'Nedtonad gör märket mindre och lugnare, så rubriken leder. Färgen når bara en ikon som är ritad i textfärgen; en ikon från en uppladdad bild, eller med egna färger, görs bara mindre och ljusare.'
+        }
+      },
+      {
         name: 'heading',
         type: 'text',
         required: true,
@@ -749,6 +762,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'logoColor',
+        type: 'select',
+        label: {
+          en: 'Logo colour',
+          sv: 'Logotypens färg'
+        },
+        description: {
+          en: 'With the brand colour, technology marks and SVG logos, fills and outlines alike, follow the site’s link colour. An uploaded image logo keeps its own colours.',
+          sv: 'Med varumärkesfärgen följer teknikmärken och SVG-logotyper, både ytor och konturer, webbplatsens länkfärg. En uppladdad bildlogotyp behåller sina egna färger.'
+        }
+      },
+      {
         name: 'items',
         type: 'array',
         label: {
@@ -792,8 +817,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
                   sv: 'Eller en teknik'
                 },
                 description: {
-                  en: 'Shows the technology’s own mark in its brand colour, in place of the icon. Leave it empty to add a logo of your own.',
-                  sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen. Lämna tomt för att lägga till en egen logotyp.'
+                  en: 'Shows the technology’s own mark, in place of the icon. Leave it empty to add a logo of your own.',
+                  sv: 'Visar teknikens eget märke, i stället för ikonen. Lämna tomt för att lägga till en egen logotyp.'
                 }
               },
               {
@@ -1565,6 +1590,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         }
       },
       {
+        name: 'logoColor',
+        type: 'select',
+        label: {
+          en: 'Logo colour',
+          sv: 'Logotypens färg'
+        },
+        description: {
+          en: 'With the brand colour, technology marks and SVG logos, fills and outlines alike, follow the site’s link colour. An uploaded image logo keeps its own colours.',
+          sv: 'Med varumärkesfärgen följer teknikmärken och SVG-logotyper, både ytor och konturer, webbplatsens länkfärg. En uppladdad bildlogotyp behåller sina egna färger.'
+        }
+      },
+      {
         name: 'items',
         type: 'array',
         label: {
@@ -1708,6 +1745,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         description: {
           en: 'Maximum number of posts to display',
           sv: 'Maximalt antal inlägg att visa'
+        }
+      },
+      {
+        name: 'categories',
+        type: 'relationship',
+        label: {
+          en: 'Categories',
+          sv: 'Kategorier'
+        },
+        description: {
+          en: 'Show only posts in at least one of these categories. Leave empty to show every post.',
+          sv: 'Visa bara inlägg i minst en av dessa kategorier. Lämna tomt för att visa alla inlägg.'
         }
       },
       {

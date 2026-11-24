@@ -40,6 +40,13 @@ export const WithImage: Story = {
   args: { ...args, image }
 };
 
+/** A dimmed, smaller mark, so the heading leads. */
+export const MutedMark: Story = {
+  name: 'Muted mark',
+  globals: { theme: 'codeware' },
+  args: { ...args, showMark: true, markStyle: 'muted' }
+};
+
 // A11y matrix — explicit export const declarations are required so the
 // Storybook CSF parser can statically discover each story. Each export
 // becomes an independent vitest test with axe running in 'error' mode.

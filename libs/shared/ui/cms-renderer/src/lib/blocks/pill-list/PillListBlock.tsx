@@ -2,18 +2,28 @@ import { TechIcon } from '@codeware/shared/ui/primitives';
 import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/payload-types';
 import { cn } from '@codeware/shared/util/ui';
 
+import { brandColourMark } from '../../utils/brand-colour-mark';
 import { interactiveSurface } from '../../utils/interactive-surface';
 import { OwnLogo } from '../../utils/OwnLogo';
 
 type Pill = NonNullable<PillListBlockProps['items']>[number];
 
 /** The mark from the platform's list, else the tenant's own, else nothing */
-function PillLogo({ pill }: { pill: Pill }) {
-  if (pill.icon) {
-    return <TechIcon brand={pill.icon} className="size-4" />;
-  }
+function PillLogo({ pill, brand }: { pill: Pill; brand: boolean }) {
+  const mark = pill.icon ? (
+    <TechIcon brand={pill.icon} followText={brand} className="size-4" />
+  ) : (
+    <OwnLogo logo={pill.logo} size={16} />
+  );
 
-  return <OwnLogo logo={pill.logo} size={16} />;
+  // The site's colour reaches a logo's own fills only by forcing them
+  return brand ? (
+    <span className={cn('text-core-link inline-flex', brandColourMark())}>
+      {mark}
+    </span>
+  ) : (
+    mark
+  );
 }
 
 /**
@@ -26,9 +36,12 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
   eyebrow,
   heading,
   intro,
+  logoColor,
   items
 }) => {
   if (!items?.length) return null;
+
+  const brand = logoColor === 'brand';
 
   return (
     <section>
@@ -66,7 +79,7 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
                 interactiveSurface({ shape: 'pill' })
               )}
             >
-              <PillLogo pill={item} />
+              <PillLogo pill={item} brand={brand} />
               {item.label}
             </a>
           ) : (
@@ -74,7 +87,7 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
               key={i}
               className="border-border bg-card text-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-sm shadow-xs"
             >
-              <PillLogo pill={item} />
+              <PillLogo pill={item} brand={brand} />
               {item.label}
             </span>
           )
