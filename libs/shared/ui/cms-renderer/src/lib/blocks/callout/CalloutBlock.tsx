@@ -14,6 +14,7 @@ import { ImageBlock } from '../image/ImageBlock';
  */
 export const CalloutBlock: React.FC<CalloutBlockProps> = ({
   showMark,
+  markStyle,
   heading,
   body,
   image,
@@ -48,8 +49,18 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
         )}
       >
         {showMark && iconConfig && (
-          <div className="text-core-link mb-6">
-            <TenantIcon config={iconConfig} size={48} />
+          <div
+            className={cn(
+              'mb-6',
+              markStyle === 'muted'
+                ? 'text-muted-foreground opacity-70'
+                : 'text-core-link'
+            )}
+          >
+            <TenantIcon
+              config={iconConfig}
+              size={markStyle === 'muted' ? 32 : 48}
+            />
           </div>
         )}
         <h2 className="text-core-headline max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">

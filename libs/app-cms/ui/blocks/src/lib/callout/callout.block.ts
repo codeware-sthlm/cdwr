@@ -3,6 +3,7 @@ import {
   linkGroupField,
   sectionBandField
 } from '@codeware/app-cms/ui/fields';
+import { enumName } from '@codeware/app-cms/util/db';
 import type { Block } from 'payload';
 
 import { blockImages } from '../block-images';
@@ -33,6 +34,29 @@ export const calloutBlock: Block = {
       type: 'checkbox',
       label: { en: 'Show brand mark', sv: 'Visa varumärke' },
       defaultValue: true
+    },
+    {
+      name: 'markStyle',
+      type: 'select',
+      label: { en: 'Mark colour', sv: 'Märkets färg' },
+      enumName: enumName('callout_mark_style'),
+      defaultValue: 'brand',
+      options: [
+        {
+          label: { en: 'In the brand colour', sv: 'I varumärkets färg' },
+          value: 'brand'
+        },
+        { label: { en: 'Dimmed', sv: 'Nedtonad' }, value: 'muted' }
+      ],
+      admin: {
+        description: {
+          en: 'Dimmed makes the mark smaller and quieter, so the heading leads. The colour only reaches an icon drawn in the text colour; an icon from an uploaded image, or with colours of its own, is only made smaller and lighter.',
+          sv: 'Nedtonad gör märket mindre och lugnare, så rubriken leder. Färgen når bara en ikon som är ritad i textfärgen; en ikon från en uppladdad bild, eller med egna färger, görs bara mindre och ljusare.'
+        },
+        // Hidden only when the mark is switched off; a row from before
+        // `showMark` has no value and still shows it
+        condition: (_, siblingData) => siblingData?.showMark !== false
+      }
     },
     {
       name: 'heading',

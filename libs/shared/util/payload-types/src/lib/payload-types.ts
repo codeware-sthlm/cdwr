@@ -390,6 +390,10 @@ export interface BlockGalleryBlock {
  */
 export interface CalloutBlock {
   showMark?: boolean | null;
+  /**
+   * Dimmed makes the mark smaller and quieter, so the heading leads. The colour only reaches an icon drawn in the text colour; an icon from an uploaded image, or with colours of its own, is only made smaller and lighter.
+   */
+  markStyle?: ('brand' | 'muted') | null;
   heading: string;
   body?: string | null;
   /**
@@ -1599,6 +1603,10 @@ export interface FeatureCardsBlock {
    * Desktop column count. Auto fits to the number of items.
    */
   columns?: ('auto' | '2' | '3' | '4') | null;
+  /**
+   * With the brand colour, technology marks and SVG logos, fills and outlines alike, follow the site’s link colour. An uploaded image logo keeps its own colours.
+   */
+  logoColor?: ('own' | 'brand') | null;
   items?:
     | {
         /**
@@ -1608,7 +1616,7 @@ export interface FeatureCardsBlock {
           icon?: string | null;
           color?: string | null;
           /**
-           * Shows the technology’s own mark in its brand colour, in place of the icon. Leave it empty to add a logo of your own.
+           * Shows the technology’s own mark, in place of the icon. Leave it empty to add a logo of your own.
            */
           tech?:
             | (
@@ -1815,6 +1823,10 @@ export interface PillListBlock {
    * Short paragraph below the heading
    */
   intro?: string | null;
+  /**
+   * With the brand colour, technology marks and SVG logos, fills and outlines alike, follow the site’s link colour. An uploaded image logo keeps its own colours.
+   */
+  logoColor?: ('own' | 'brand') | null;
   items?:
     | {
         /**

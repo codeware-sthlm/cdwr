@@ -11,6 +11,7 @@ import type { TechBrand } from '@codeware/shared/ui/primitives';
 import type { Block, Condition, TypeWithID } from 'payload';
 
 import { blockImages } from '../block-images';
+import { logoColorField } from '../logo-color-field';
 
 // An own logo is only asked for when no technology from the list is chosen
 const withoutTech: Condition<TypeWithID, { tech?: TechBrand | null }> = (
@@ -60,6 +61,7 @@ export const featureCardsBlock: Block = {
       ],
       defaultValue: 'auto'
     },
+    logoColorField(),
     {
       name: 'items',
       type: 'array',
@@ -100,8 +102,8 @@ export const featureCardsBlock: Block = {
                   admin: {
                     width: '50%',
                     description: {
-                      en: 'Shows the technology’s own mark in its brand colour, in place of the icon. Leave it empty to add a logo of your own.',
-                      sv: 'Visar teknikens eget märke i dess egen färg, i stället för ikonen. Lämna tomt för att lägga till en egen logotyp.'
+                      en: 'Shows the technology’s own mark, in place of the icon. Leave it empty to add a logo of your own.',
+                      sv: 'Visar teknikens eget märke, i stället för ikonen. Lämna tomt för att lägga till en egen logotyp.'
                     }
                   }
                 })

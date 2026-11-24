@@ -20,6 +20,38 @@ export const Default: Story = {
   args
 };
 
+// Technology marks and a fixed-colour SVG logo all take the site's colour
+export const LogosInBrandColour: Story = {
+  name: 'Logos in the brand colour',
+  args: {
+    ...args,
+    logoColor: 'brand',
+    items: [
+      {
+        brand: { tech: 'payload' },
+        title: 'Payload CMS',
+        description: 'A technology mark, following the site’s colour.'
+      },
+      {
+        brand: { tech: 'nextjs' },
+        title: 'Next.js',
+        description: 'Near-black in its own colour, in the brand colour here.'
+      },
+      {
+        brand: {
+          logo: {
+            source: 'svg',
+            svgCode:
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#7C3AED"/><circle cx="12" cy="12" r="4" fill="#E8D822"/></svg>'
+          }
+        },
+        title: 'Own logo',
+        description: 'An SVG with fixed fills, forced to the site’s colour.'
+      }
+    ]
+  }
+};
+
 export const FrostLight = a11yStory({ args }, 'frost', 'light');
 export const FrostDark = a11yStory({ args }, 'frost', 'dark');
 export const PayloadAdminLight = a11yStory({ args }, 'payload-admin', 'light');

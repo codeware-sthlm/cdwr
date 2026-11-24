@@ -13,6 +13,7 @@ import type { FeatureCardsBlock as FeatureCardsBlockProps } from '@codeware/shar
 import { type TailwindColor } from '@codeware/shared/util/tailwind';
 import { cn } from '@codeware/shared/util/ui';
 
+import { brandColourMark } from '../../utils/brand-colour-mark';
 import { OwnLogo, resolveOwnLogo } from '../../utils/OwnLogo';
 
 /**
@@ -24,10 +25,12 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
   heading,
   intro,
   columns,
+  logoColor,
   items
 }) => {
   if (!items?.length) return null;
 
+  const brand = logoColor === 'brand';
   const resolved =
     columns && columns !== 'auto' ? Number(columns) : Math.min(items.length, 4);
 
@@ -74,9 +77,19 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
                 {/* The most specific mark wins: a technology's own from the
                     list, then the tenant's own logo, then an icon */}
                 {(tech || ownLogo || icon) && (
-                  <span className="bg-core-link/10 text-core-link mb-4 flex size-11 items-center justify-center rounded-xl">
+                  <span
+                    className={cn(
+                      'bg-core-link/10 text-core-link mb-4 flex size-11 items-center justify-center rounded-xl',
+                      // Forced fills reach a logo's own colours, not an outline icon
+                      brand && (tech || ownLogo) && brandColourMark()
+                    )}
+                  >
                     {tech ? (
-                      <TechIcon brand={tech} className="size-5" />
+                      <TechIcon
+                        brand={tech}
+                        followText={brand}
+                        className="size-5"
+                      />
                     ) : (
                       ownLogo ||
                       (icon && (
