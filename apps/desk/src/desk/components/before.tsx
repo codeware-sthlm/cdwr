@@ -611,6 +611,8 @@ export const BeforeSheet = ({
       `[data-wake="${ticket}"]`,
       `[data-merge="${ticket}"]`,
       `[data-copilot="${ticket}"]`,
+      `[data-copy="${ticket}"]`,
+      `[data-tree="${ticket}"]`,
       '.snoozed-summary'
     ]) {
       const found = Array.from(

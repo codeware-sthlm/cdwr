@@ -59,7 +59,7 @@ export type WaitGap = {
   kind: string;
   what: string;
   fix: string;
-  tickets: { id: string; title: string; url: string }[];
+  tickets: { id: string; title: string }[];
 };
 
 /** The audit kind folded into one cleanup row: a closed ticket still carrying an agent label, a one-label fix each */
@@ -266,30 +266,30 @@ export const waitRows = (
   };
   const open = (id: string): readonly Blocker[] => m.blockers.get(id) ?? [];
   // A ticket outside the desk's index is a stub without a title; the gap carries its own
-  const ticketOf = (g: QueueGap) => {
-    const { title, url } = m.get(g.ticket);
-    return { id: g.ticket, title: title || g.title || '', url };
-  };
+  const ticketOf = (g: QueueGap) => ({
+    id: g.ticket,
+    title: m.get(g.ticket).title || g.title || ''
+  });
   const real = m.gaps.filter(isRealGap);
-  // A gap is fixed, not snoozed: its row never sleeps
-  const gaps = real
-    .filter((g) => g.kind !== CLEANUP_GAP)
-    .map((g): WaitRow => {
-      const t = ticketOf(g);
-      return {
-        ...row(g.ticket, 'gap'),
-        title: t.title,
-        snoozed: false,
-        gap: { kind: g.kind, what: g.what, fix: g.fix, tickets: [t] }
-      };
-    });
+  // A gap is fixed, not snoozed: its row never sleeps. Its age would be the ticket's gate
+  // event, not how long the gap has stood, so it shows none
+  const gapRow = (g: QueueGap): WaitRow => {
+    const t = ticketOf(g);
+    return {
+      ...row(g.ticket, 'gap'),
+      title: t.title,
+      age: null,
+      snoozed: false,
+      gap: { kind: g.kind, what: g.what, fix: g.fix, tickets: [t] }
+    };
+  };
   const closed = real.filter((g) => g.kind === CLEANUP_GAP);
   const cleanup: WaitRow[] = closed.length
     ? [
         {
           id: CLEANUP_ID,
           title: 'Closed tickets still carrying an agent label',
-          url: ticketOf(closed[0]).url,
+          url: '',
           kind: 'cleanup',
           pr: null,
           age: null,
@@ -313,8 +313,7 @@ export const waitRows = (
       .map((x) => row(x.ticket, kind, { blockers: open(x.ticket) }));
   const stall = (p: QueueParked | undefined) =>
     p ? copilotStall(p, now) : null;
-  return [
-    ...gaps,
+  const rest: WaitRow[] = [
     ...m.prs.map((x) =>
       row(x.ticket, 'review', {
         blockers: open(x.ticket),
@@ -359,6 +358,12 @@ export const waitRows = (
       row(h.ticket, 'approved', { blockers: h.blockers })
     )
   ];
+  // A ticket another row already lists keeps that row: a gap row beside it would count it twice
+  const listed = new Set(rest.map((r) => r.id));
+  const gaps = real
+    .filter((g) => g.kind !== CLEANUP_GAP && !listed.has(g.ticket))
+    .map(gapRow);
+  return [...gaps, ...rest];
 };
 
 /** The rows that count toward the card's badge; approved rows only wait on a blocker, snoozed ones on a change */

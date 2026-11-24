@@ -47,7 +47,14 @@ import {
   muteUntil
 } from './view/controls';
 import { canonicalId, isTicketId } from './view/ids';
-import { filterTree, treePath } from './view/tree';
+import {
+  closedRoot,
+  filterTree,
+  finishedInFull,
+  hasGap,
+  hasPosition,
+  treePath
+} from './view/tree';
 
 // This build, and whether it is the web desk the NUC serves rather than the Mac app: that
 // decides which workflow's build main is compared with
@@ -87,6 +94,8 @@ export const frame = {
 let closedSheet: SheetId | null = null;
 // What had focus when the Ticket sheet opened, which takes it back
 let ticketOpener: HTMLElement | null = null;
+// The tree row Show in tree asked for, revealed once the sheet has closed
+let pendingRow: string | null = null;
 
 /** Redraws the page after a change to the state */
 function render(): void {
@@ -205,6 +214,12 @@ export function openTicket(id: string, focus = true): void {
 export function focusOpener(): void {
   const sheet = closedSheet;
   closedSheet = null;
+  if (pendingRow !== null) {
+    const ticket = pendingRow;
+    pendingRow = null;
+    revealRow(ticket);
+    return;
+  }
   // Radix can report the close twice; the second has nothing left to focus
   if (sheet === null) return;
   if (sheet === 'ticket') {
@@ -271,27 +286,60 @@ function copyRow(raw: HTMLElement): void {
   copyText(raw.textContent ?? '', raw);
 }
 
-/** Closes the sheet and shows the ticket's row in the tree: its ancestors open, the root past the filters, the row in view and focused */
-function showInTree(ticket: string): void {
-  const path = treePath(modelAt(new Date()).tree, ticket);
-  if (!path) return;
-  if (state.ui.openSheet) {
-    hideSheet();
-    // Focus goes to the row, not back to the card that opened the sheet
-    closedSheet = null;
-  }
-  for (const id of path.slice(0, -1))
-    if (!state.ui.treeOpen[id]) setTreeOpen(id, true);
-  const root = modelAt(new Date()).tree.find((r) => r.ticket === path[0]);
-  if (root && !filterTree([root], state.ui.tree).length)
-    setTreeFilter({ closed: true, gaps: false, unqueued: false });
-  showView('tree', false);
+/** Scrolls to a tree row and focuses it, marked until it loses focus so a plain click on a row draws no outline */
+function revealRow(ticket: string): void {
   const row = document.getElementById(`tree-row-${ticket}`);
-  row?.scrollIntoView({
+  if (!row) return;
+  row.dataset.shown = '';
+  row.addEventListener('blur', () => delete row.dataset.shown, { once: true });
+  row.scrollIntoView({
     behavior: reducedMotion() ? 'auto' : 'smooth',
     block: 'center'
   });
-  row?.focus({ preventScroll: true });
+  row.focus({ preventScroll: true });
+}
+
+/** Closes the sheet and shows the ticket's row in the tree: its ancestors open, the root past the filters, the row in view and focused */
+function showInTree(ticket: string): void {
+  const tree = modelAt(new Date()).tree;
+  const path = treePath(tree, ticket);
+  if (!path) return;
+  // Open the closed ancestors, in one write; one open by default is left to its default
+  let level = tree;
+  const opened: Record<string, boolean> = {};
+  for (const id of path.slice(0, -1)) {
+    const node = level.find((n) => n.ticket === id);
+    if (!node) break;
+    if (!(state.ui.treeOpen[id] ?? !finishedInFull(node))) opened[id] = true;
+    level = node.children;
+  }
+  if (Object.keys(opened).length) {
+    state.ui.treeOpen = { ...state.ui.treeOpen, ...opened };
+    try {
+      localStorage.setItem(TREE_OPEN_KEY, JSON.stringify(state.ui.treeOpen));
+    } catch {
+      // Storage is unavailable: the choice lasts until the page closes
+    }
+  }
+  // Turn off only the filters that hide the root
+  const root = tree.find((r) => r.ticket === path[0]);
+  const f = state.ui.tree;
+  if (root && !filterTree([root], f).length)
+    setTreeFilter({
+      closed: f.closed || closedRoot(root),
+      gaps: f.gaps && hasGap(root),
+      unqueued: f.unqueued && !hasPosition(root)
+    });
+  if (state.ui.openSheet) {
+    // The sheet's close hands focus to the row instead of the card that opened it, and after
+    // its scroll lock has let go, so the scroll holds
+    pendingRow = ticket;
+    hideSheet();
+    showView('tree', false);
+    return;
+  }
+  showView('tree', false);
+  revealRow(ticket);
 }
 
 /** The controls as the model sees them now; null when the desk cannot send */
