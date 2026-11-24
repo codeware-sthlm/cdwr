@@ -265,6 +265,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'pill-list',
+            logoColor: 'brand',
             eyebrow: 'Built on',
             heading: 'What the platform runs on',
             intro:
@@ -334,6 +335,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             blockType: 'callout',
             showMark: true,
+            markStyle: 'muted',
             heading: 'Build on the same platform',
             body: 'The plugin, the preset and the deployment tooling behind this site are published. One command starts a workspace of your own.',
             link: { type: 'custom', url: '/start', label: 'Get started' }
@@ -525,6 +527,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             blockType: 'callout',
             showMark: true,
+            markStyle: 'muted',
             heading: 'Write a component on your own site',
             body: 'The component studio comes with a site on the platform, and we turn it on for the site’s developer. Signup is by invitation for now, and Get started says how to ask for one.',
             link: { type: 'custom', url: '/start', label: 'Get a site' }
@@ -627,6 +630,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Built on',
             heading: 'What it is built on, and why',
             columns: '3',
+            logoColor: 'brand',
             items: [
               {
                 brand: { tech: 'payload' },
@@ -817,6 +821,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Three packages, published',
             heading: 'Usable on their own, without adopting anything else here',
             columns: '3',
+            logoColor: 'brand',
             items: [
               {
                 brand: { tech: 'nx' },
@@ -841,6 +846,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             blockType: 'callout',
             showMark: true,
+            markStyle: 'muted',
             heading: 'The source is open',
             body: 'Read how it is built, follow along as it changes, or open an issue when something does not work the way this site says it does.',
             link: {
