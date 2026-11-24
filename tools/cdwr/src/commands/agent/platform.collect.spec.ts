@@ -2,7 +2,12 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { notifyEnv, readSentry, sendNotice } from './platform.collect';
+import {
+  notifyEnv,
+  readDeploy,
+  readSentry,
+  sendNotice
+} from './platform.collect';
 import { SHARED_KEY } from './platform.logic';
 
 const env = { PLATFORM_SENTRY_AUTH_TOKEN: 'tok', PLATFORM_SENTRY_ORG: 'cdwr' };
@@ -198,4 +203,50 @@ describe('sendNotice', () => {
       notifyEnv({ PATH: '/bin', FLY_API_TOKEN: 't', AGENT_QUEUE_HOME: '/q' })
     ).toEqual({ PATH: '/bin', AGENT_QUEUE_HOME: '/q' });
   });
+});
+
+describe('readDeploy', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const stub = () => {
+    const auth: Array<string | null> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init: RequestInit) => {
+        auth.push(new Headers(init.headers).get('Authorization'));
+        return url.includes('/jobs')
+          ? json({ jobs: [{ name: 'deploy', conclusion: 'success' }] })
+          : json({
+              workflow_runs: [
+                {
+                  id: 7,
+                  head_sha: 'a'.repeat(40),
+                  html_url: 'https://github.test/run/7',
+                  updated_at: '2026-11-24T10:00:00Z'
+                }
+              ]
+            });
+      })
+    );
+    return auth;
+  };
+
+  it('signs both reads with the token run.sh minted', async () => {
+    const auth = stub();
+    const read = await readDeploy({ PLATFORM_GITHUB_TOKEN: 'ghs_read' });
+    expect(read.ok).toBe(true);
+    expect(auth).toEqual(['Bearer ghs_read', 'Bearer ghs_read']);
+  });
+
+  it.each([{}, { PLATFORM_GITHUB_TOKEN: '' }])(
+    'reads anonymously without a token (%o)',
+    async (env) => {
+      const auth = stub();
+      const read = await readDeploy(env);
+      expect(read.ok).toBe(true);
+      expect(auth).toEqual([null, null]);
+    }
+  );
 });

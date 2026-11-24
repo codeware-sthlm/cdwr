@@ -446,11 +446,19 @@ const JobsSchema = z.object({
   )
 });
 
-async function githubGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+/** A read-only token run.sh mints for the step; without it the reads draw on the IP's anonymous 60 an hour */
+export const GITHUB_TOKEN_ENV = 'PLATFORM_GITHUB_TOKEN';
+
+async function githubGet<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  token: string | undefined
+): Promise<T> {
   const response = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
     headers: {
       Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28'
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
   });
@@ -464,20 +472,26 @@ async function githubGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
 }
 
 /**
- * The last completed deploy run of main (public repository, no token) and what its deploy job
- * concluded. A manual run on main counts as well as a push: it is how a production redeploy starts.
+ * The last completed deploy run of main (public repository, signed when run.sh gave a token) and
+ * what its deploy job concluded. A manual run on main counts as well as a push: it is how a
+ * production redeploy starts.
  */
-export async function readDeploy(): Promise<Reading<DeployRead>> {
+export async function readDeploy(
+  env: NodeJS.ProcessEnv
+): Promise<Reading<DeployRead>> {
+  const token = env[GITHUB_TOKEN_ENV] || undefined;
   try {
     const { workflow_runs } = await githubGet(
       '/actions/workflows/fly-deployment.yml/runs?branch=main&status=completed&per_page=1',
-      RunsSchema
+      RunsSchema,
+      token
     );
     const latest = workflow_runs[0];
     if (!latest) return failed('no completed deploy run of main');
     const { jobs } = await githubGet(
       `/actions/runs/${latest.id}/jobs?per_page=100`,
-      JobsSchema
+      JobsSchema,
+      token
     );
     return ok({
       runId: latest.id,

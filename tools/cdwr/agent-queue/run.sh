@@ -671,7 +671,16 @@ record_platform() {
   ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
     # The deadline and the 5-minute takeover of platform.lock count from the end of the move
     [[ "$move" == move ]] && { platform_move; touch "$lockdir"; }
+    # The deploy read's own token, read-only, so it draws on no IP's anonymous 60 an hour; it is
+    # minted in a subshell, never exported here, and without the app the read goes anonymous
+    gh_read="$( { app_env "$REPO/tools/cdwr/.env" && app_token '{"actions":"read","metadata":"read"}' &&
+      print -r -- "$GH_TOKEN"; } 2>"$LOGS/github-app.platform.err" )" || {
+      gh_read=""
+      note "warn: platform: the deploy read goes anonymous: $(tr '\n' ' ' < "$LOGS/github-app.platform.err" | sed 's/ *$//')"
+    }
+    rm -f "$LOGS/github-app.platform.err"
     FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_DATABASE_URL="$PLATFORM_DATABASE_URL" \
+      PLATFORM_GITHUB_TOKEN="$gh_read" \
       PLATFORM_INFISICAL_CLIENT_ID="${PLATFORM_INFISICAL_CLIENT_ID:-}" \
       PLATFORM_INFISICAL_CLIENT_SECRET="${PLATFORM_INFISICAL_CLIENT_SECRET:-}" \
       PLATFORM_INFISICAL_PROJECT_ID="${PLATFORM_INFISICAL_PROJECT_ID:-}" \
