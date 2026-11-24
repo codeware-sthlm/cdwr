@@ -3,6 +3,10 @@ import type { SpacingBlock as SpacingBlockProps } from '@codeware/shared/util/pa
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const spacingGallery: BlockGalleryDoc<SpacingBlockProps> = {
+  name: {
+    en: 'Space between two blocks',
+    sv: 'Utrymme mellan två block'
+  },
   summary: {
     en: 'Space between two blocks, with an optional line through it.',
     sv: 'Utrymme mellan två block, med en valfri linje igenom.'

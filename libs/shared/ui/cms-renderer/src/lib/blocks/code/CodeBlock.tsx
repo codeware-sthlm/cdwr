@@ -11,7 +11,7 @@ type Props = CodeBlockProps;
  * one in the browser, and React does not repair attributes on hydration. The
  * `dark:` variant also follows a strong band, which the page's scheme did not.
  *
- * As wide as its longest line, up to the column, where it starts to scroll.
+ * As wide as the column, scrolling when a line is longer.
  */
 export const CodeBlock: React.FC<Props> = ({ code, language }) => (
   <>
@@ -20,16 +20,11 @@ export const CodeBlock: React.FC<Props> = ({ code, language }) => (
         code={code}
         language={language}
         theme="vsLight"
-        className="w-fit max-w-full"
+        className="w-full"
       />
     </div>
     <div className="hidden dark:block">
-      <Code
-        code={code}
-        language={language}
-        theme="vsDark"
-        className="w-fit max-w-full"
-      />
+      <Code code={code} language={language} theme="vsDark" className="w-full" />
     </div>
   </>
 );

@@ -35,6 +35,10 @@ const prose = (text: string) =>
   >;
 
 export const contentGallery: BlockGalleryDoc<ContentBlockProps> = {
+  name: {
+    en: 'Text in columns',
+    sv: 'Text i kolumner'
+  },
   summary: {
     en: 'Rich text in one to four columns, with blocks allowed inside each.',
     sv: 'Redigerbar text i en till fyra spalter, där block får placeras i varje.'

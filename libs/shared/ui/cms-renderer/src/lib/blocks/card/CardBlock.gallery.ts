@@ -3,6 +3,10 @@ import type { CardBlock as CardBlockProps } from '@codeware/shared/util/payload-
 import type { BlockGalleryDoc } from '../gallery-doc';
 
 export const cardGallery: BlockGalleryDoc<CardBlockProps> = {
+  name: {
+    en: 'A grid of linked cards',
+    sv: 'Ett rutnät av länkade kort'
+  },
   summary: {
     en: 'A grid of cards with no heading of its own, usually linked.',
     sv: 'Ett rutnät med kort utan egen rubrik, oftast länkade.'

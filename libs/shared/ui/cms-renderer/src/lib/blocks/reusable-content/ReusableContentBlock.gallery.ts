@@ -75,6 +75,10 @@ const shared = {
 
 export const reusableContentGallery: BlockGalleryDoc<ReusableContentBlockProps> =
   {
+    name: {
+      en: 'A shared piece of content',
+      sv: 'Ett delat stycke innehåll'
+    },
     summary: {
       en: 'A fragment authored in one place and referenced from many.',
       sv: 'Ett avsnitt som skrivs på ett ställe och refereras från flera.'
