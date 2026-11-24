@@ -130,12 +130,84 @@ host to have applied the merge. A change under `nuc/` also triggers `agent-host-
 image is built and self-deployed too; that is harmless. A failed run is retried by the next merge that touches `nuc/`, or by removing
 `/opt/cdwr-agent/nuc-apply.json` on the NUC, so the next tick runs it again and records it.
 
+### GitHub reads and the read-only token
+
+The host reads GitHub's REST API: `self-deploy.sh` the image builds on main, `nuc-sync.sh` main's
+head and the newest commit under `nuc/`, `nuc-apply` the compare and contents calls. Anonymous,
+those draw on GitHub's 60 calls an hour per public IP, and the NUC shares its IP with the Mac, so
+anything anonymous on the Mac eats into it. On 2026-11-22 that stalled the self-deploy for four
+hours.
+
+So each script signs its REST reads with the read-only token in
+`/etc/cdwr-agent/github-read.token` (`root:cdwr`, 640; the folder `root:cdwr`, 750) when the file
+is there, and is then counted against the token's 5,000 an hour. Without the file it reads
+anonymously, as before. The token goes to curl through a file descriptor, never on its command
+line. A token GitHub refuses (401: expired or revoked) is dropped: the read goes again
+anonymously, `/opt/cdwr-agent/github-read.refused` notes the token file's mtime, one notice says
+so, and neither `self-deploy.sh` nor `nuc-sync.sh` signs with it again until the file is
+replaced. `nuc-apply` drops it for the rest of its run. The raw downloads from raw.githubusercontent.com stay anonymous; they don't count.
+
+Calls an hour, at the 5-minute ticks:
+
+| Reader                              | Calls an hour                                     | Signed with                      |
+| ----------------------------------- | ------------------------------------------------- | -------------------------------- |
+| `self-deploy.sh`                    | 12, up to 24 while checking a deploy that differs | the host token                   |
+| `nuc-sync.sh`                       | 24                                                | the host token                   |
+| `nuc-apply`                         | 2 per run, only after a merge that changed `nuc/` | the host token                   |
+| the platform step, in the container | 2 a collection, every 5–10 minutes: 12–24         | a read-only App token (`run.sh`) |
+
+Anonymous, the host and the platform step alone make 48–72 calls an hour of the IP's 60, before
+the Mac makes any. With the token the host's 36 count against the token, and the platform step's
+against the App's installation, so the IP's 60 are left to the Mac.
+
+A read that fails is logged each tick and tried again on the next. When GitHub says it is rate
+limited (403 or 429 with `x-ratelimit-remaining: 0` or `retry-after`), the log reads `rate limited
+until HH:MMZ`, and says so when the read was anonymous or the token was refused.
+
+- `self-deploy.sh`: the hourly limit used up sends one urgent notice at once, any other failed
+  read (a short `retry-after` limit included) once it has lasted 30 minutes, and `deploy.json`
+  reads `stuck` with the reason, which the desk's Agent health shows. Nothing more until a read
+  succeeds; that read puts back the record the stall replaced. A notice the container did not
+  take is sent again next tick. The bookkeeping is `readFailingSince` and `readNoticed` in
+  `/opt/cdwr-agent/self-deploy.json`. While main cannot be read, a deploy being checked keeps its
+  verdict open instead of rolling back at the deadline. A read that works but finds no green build
+  in the newest 20 runs is only logged: a failed image build is not a GitHub read failure.
+- `nuc-sync.sh`: one notice once the failed reads have lasted 30 minutes (the self-deploy has
+  already told a rate limit), kept in `/opt/cdwr-agent/nuc-sync-read.json`. It never touches
+  `nuc-apply.json`. A rate-limited `nuc-apply` exits 75, and `nuc-sync` tries the same commit
+  again next tick instead of recording it failed.
+
+#### Installing the token
+
+1. On GitHub, as Håkan: Settings → Developer settings → Personal access tokens → Fine-grained
+   tokens → Generate new token. Name `cdwr-nuc-read`, resource owner your own account, expiry 1
+   year, repository access "Public repositories", no permissions. It reads any public repository,
+   `codeware-sthlm/cdwr` included, and can write nothing.
+2. On the NUC, as an admin user (`ssh -t hakans@cdwr-nuc`). `read -rs` takes the token without
+   echoing it or putting it in the shell history:
+
+   ```sh
+   id cdwr
+   sudo install -d -m 750 -o root -g cdwr /etc/cdwr-agent
+   read -rs t && printf '%s\n' "$t" | sudo install -m 640 -o root -g cdwr /dev/stdin /etc/cdwr-agent/github-read.token; unset t
+   sudo -u cdwr bash -c 'curl -fsS -H @<(printf "Authorization: Bearer %s\n" "$(cat /etc/cdwr-agent/github-read.token)") https://api.github.com/rate_limit' | jq .resources.core.limit
+   sudo -u cdwr bash -c 'curl -fsS -o /dev/null -w "%{http_code}\n" -H @<(printf "Authorization: Bearer %s\n" "$(cat /etc/cdwr-agent/github-read.token)") "https://api.github.com/repos/codeware-sthlm/cdwr/actions/workflows/agent-host-image.yml/runs?branch=main&per_page=1"'
+   ```
+
+   The first check prints `5000`, the second `200`. `/rate_limit` itself is not counted.
+
+3. Within 5 minutes the self-deploy's journal (`journalctl -u cdwr-agent-deploy.service -n 20`)
+   no longer says `read anonymously`.
+
+When the token expires, the reads go anonymous again, and a rate limit's notice names the refused
+token. Make a new one the same way and replace the file with the `read -rs` line.
+
 ### Installing it once
 
 On the NUC, as an admin user (`ssh -t hakans@cdwr-nuc`), once this installer is on main. `sha` is
-main's head, read from GitHub. Run it only once the host's GitHub reads no longer share the
-anonymous rate limit (COD-891); before that `nuc-sync` stalls the way the self-deploy did on
-2026-11-22.
+main's head, read from GitHub. Install the read-only token first ("Installing the token" above):
+without it `nuc-sync` draws on the shared anonymous limit and stalls the way the self-deploy did
+on 2026-11-22.
 
 ```sh
 sha="$(curl -fsS -H 'Accept: application/vnd.github.sha' https://api.github.com/repos/codeware-sthlm/cdwr/commits/main)"
