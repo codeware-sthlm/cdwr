@@ -47,6 +47,7 @@ import {
   muteUntil
 } from './view/controls';
 import { canonicalId, isTicketId } from './view/ids';
+import { filterTree, treePath } from './view/tree';
 
 // This build, and whether it is the web desk the NUC serves rather than the Mac app: that
 // decides which workflow's build main is compared with
@@ -257,13 +258,40 @@ function selectText(node: Node): void {
   selection?.addRange(range);
 }
 
-function copyRow(raw: HTMLElement): void {
-  const text = raw.textContent ?? '';
+/** Copies text, or selects the node that shows it when the clipboard is blocked */
+function copyText(text: string, shown: HTMLElement): void {
   if (!navigator.clipboard) {
-    selectText(raw);
+    selectText(shown);
     return;
   }
-  navigator.clipboard.writeText(text).catch(() => selectText(raw));
+  navigator.clipboard.writeText(text).catch(() => selectText(shown));
+}
+
+function copyRow(raw: HTMLElement): void {
+  copyText(raw.textContent ?? '', raw);
+}
+
+/** Closes the sheet and shows the ticket's row in the tree: its ancestors open, the root past the filters, the row in view and focused */
+function showInTree(ticket: string): void {
+  const path = treePath(modelAt(new Date()).tree, ticket);
+  if (!path) return;
+  if (state.ui.openSheet) {
+    hideSheet();
+    // Focus goes to the row, not back to the card that opened the sheet
+    closedSheet = null;
+  }
+  for (const id of path.slice(0, -1))
+    if (!state.ui.treeOpen[id]) setTreeOpen(id, true);
+  const root = modelAt(new Date()).tree.find((r) => r.ticket === path[0]);
+  if (root && !filterTree([root], state.ui.tree).length)
+    setTreeFilter({ closed: true, gaps: false, unqueued: false });
+  showView('tree', false);
+  const row = document.getElementById(`tree-row-${ticket}`);
+  row?.scrollIntoView({
+    behavior: reducedMotion() ? 'auto' : 'smooth',
+    block: 'center'
+  });
+  row?.focus({ preventScroll: true });
 }
 
 /** The controls as the model sees them now; null when the desk cannot send */
@@ -485,7 +513,9 @@ const waitActions: WaitActions = {
   snooze: (r) => clickSnooze(r.id, { kind: r.kind, eventAt: r.gateAt }),
   wake: (ticket) => clickSnooze(ticket, null),
   label: clickLabel,
-  pr: clickPr
+  pr: clickPr,
+  copy: copyText,
+  showInTree
 };
 
 /** Opens or closes the fold of snoozed rows, on the card and in its sheet alike */

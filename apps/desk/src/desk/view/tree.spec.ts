@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { NO_TREE_FILTER, type TreeFilter } from '../state';
 import type { QueueTreeNode } from '../types';
 
-import { filterTree, hasGap, hasPosition, worstChild } from './tree';
+import { filterTree, hasGap, hasPosition, treePath, worstChild } from './tree';
 
 const node = (
   ticket: string,
@@ -116,6 +116,33 @@ describe('Not queued', () => {
         (n) => n.ticket
       )
     ).toEqual(['P']);
+  });
+});
+
+describe('treePath', () => {
+  const tree = [
+    node('R', 'started', {
+      children: [
+        node('M', 'started', { children: [node('L', 'started')] }),
+        node('N', 'started')
+      ]
+    }),
+    node('S', 'started')
+  ];
+
+  it('runs from the root down to a nested ticket', () => {
+    expect(treePath(tree, 'L')).toEqual(['R', 'M', 'L']);
+    expect(treePath(tree, 'N')).toEqual(['R', 'N']);
+  });
+
+  it('is the root alone for a root', () => {
+    expect(treePath(tree, 'S')).toEqual(['S']);
+    expect(treePath(tree, 'R')).toEqual(['R']);
+  });
+
+  it('is null when the tree does not hold the ticket', () => {
+    expect(treePath(tree, 'X')).toBeNull();
+    expect(treePath([], 'R')).toBeNull();
   });
 });
 

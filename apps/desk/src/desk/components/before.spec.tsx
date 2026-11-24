@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DeskCommandRow, SnoozeRow } from '../../supabase';
 import { model } from '../model';
 import { type DeskState, createState } from '../state';
-import { NOW, activity, filled, runs, view } from '../view/fixtures';
+import type { QueueGap, QueueTreeNode } from '../types';
+import { NOW, activity, filled, gap, runs, view } from '../view/fixtures';
 
 import { BeforeSheet, type WaitActions } from './before';
 
@@ -15,7 +16,9 @@ const fakeActions = () => ({
   snooze: vi.fn(),
   wake: vi.fn(),
   label: vi.fn(),
-  pr: vi.fn()
+  pr: vi.fn(),
+  copy: vi.fn(),
+  showInTree: vi.fn()
 });
 
 type Opts = {
@@ -100,7 +103,7 @@ const order = (acts: Element): string[] =>
   kids(acts).map((el) =>
     el.tagName === 'A'
       ? 'link'
-      : (['copilot', 'merge', 'label', 'snooze', 'wake'].find(
+      : (['copilot', 'merge', 'label', 'snooze', 'wake', 'copy', 'tree'].find(
           (k) => k in el.dataset
         ) ?? 'other')
   );
@@ -286,7 +289,7 @@ describe('BeforeSheet cards', () => {
     s.data.runs = runs(view({ table: { before: [], label: [], after: [] } }));
     const c = sheet(s);
     expect(c.querySelector('.empty')?.textContent).toBe(
-      'No PR, hand-off, plan, question, label or idea waits for you.'
+      'No gap, PR, hand-off, plan, question, label or idea waits for you.'
     );
     expect(c.querySelector('article')).toBeNull();
   });
@@ -900,6 +903,111 @@ describe('BeforeSheet actions', () => {
     expect(actions.snooze).not.toHaveBeenCalled();
     expect(actions.label).not.toHaveBeenCalled();
     expect(actions.pr).not.toHaveBeenCalled();
+  });
+});
+
+describe('BeforeSheet gap cards', () => {
+  const treeNode = (ticket: string): QueueTreeNode => ({
+    ticket,
+    title: null,
+    state: 'started',
+    label: null,
+    pr: null,
+    position: null,
+    waiting: false,
+    blockers: [],
+    gaps: [],
+    children: []
+  });
+  /** The filled state with the audit's gaps, and the tree holding the given tickets */
+  const gapped = (gaps: QueueGap[], inTree: string[] = []): DeskState => {
+    const s = filled();
+    s.data.runs = runs(
+      view({ audit: gaps, tree: inTree.map((t) => treeNode(t)) })
+    );
+    return s;
+  };
+
+  it('draws a ready-planned gap with what, the fix, Open ticket and Copy command', () => {
+    const actions = fakeActions();
+    const c = sheet(on(gapped([gap('COD-1', 'ready-planned')])), { actions });
+    const card = cardOf(c, 'COD-1');
+    expect(card.querySelector('.kind.k-gap')?.textContent).toBe(
+      'gap · ready-planned'
+    );
+    expect(card.querySelector('.wc-title')?.textContent).toBe('Title of COD-1');
+    expect(card.querySelector('.wc-note')?.textContent).toBe(
+      'COD-1 is ready-planned'
+    );
+    expect(card.querySelector('.fix')?.textContent).toContain(
+      'Start cdwr agent attend COD-1.'
+    );
+    const link = card.querySelector('a.act');
+    expect(link?.textContent).toBe('Open ticket');
+    expect(link?.getAttribute('href')).toBe(
+      'https://linear.app/codeware/issue/COD-1'
+    );
+    expect(order(actionsOf(card))).toEqual(['link', 'copy']);
+    expect(card.querySelector('[data-snooze]')).toBeNull();
+    expect(card.querySelector('[data-wake]')).toBeNull();
+    const copy = button(card, '[data-copy="COD-1"]');
+    expect(copy.textContent).toBe('Copy command');
+    fireEvent.click(copy);
+    expect(actions.copy).toHaveBeenCalledTimes(1);
+    expect(actions.copy).toHaveBeenCalledWith(
+      'cdwr agent attend COD-1',
+      expect.any(HTMLElement)
+    );
+  });
+
+  it('puts gap cards first', () => {
+    const c = sheet(gapped([gap('COD-1', 'ready-planned')]));
+    expect(ids(c)).toEqual(['COD-1', 'COD-3', 'COD-5', 'COD-4', 'COD-6']);
+  });
+
+  it('offers Show in tree only for a ticket the tree holds', () => {
+    const actions = fakeActions();
+    const held = sheet(gapped([gap('COD-1', 'ready-planned')], ['COD-1']), {
+      actions
+    });
+    fireEvent.click(button(held, '[data-tree="COD-1"]'));
+    expect(button(held, '[data-tree="COD-1"]').textContent).toBe(
+      'Show in tree'
+    );
+    expect(actions.showInTree).toHaveBeenCalledWith('COD-1');
+    const missing = sheet(gapped([gap('COD-1', 'ready-planned')], ['COD-7']));
+    expect(missing.querySelector('[data-tree]')).toBeNull();
+  });
+
+  it('draws no Copy button when the fix names no command', () => {
+    const c = sheet(gapped([gap('COD-1', 'stale-pr')]));
+    const card = cardOf(c, 'COD-1');
+    expect(card.querySelector('[data-copy]')).toBeNull();
+    expect(order(actionsOf(card))).toEqual(['link']);
+  });
+
+  it('folds the closed tickets with a label into one cleanup card after the ideas', () => {
+    const c = sheet(
+      gapped([gap('COD-1', 'label-on-closed'), gap('COD-2', 'label-on-closed')])
+    );
+    const cleanup = Array.from(c.querySelectorAll('article')).filter((a) =>
+      a.querySelector('.kind.k-cleanup')
+    );
+    expect(cleanup).toHaveLength(1);
+    expect(cleanup[0].querySelector('.kind')?.textContent).toBe('cleanup · 2');
+    expect(cleanup[0].querySelector('.wc-head .id')).toBeNull();
+    expect(
+      Array.from(cleanup[0].querySelectorAll('.cleanup-list .id')).map(
+        (x) => x.textContent
+      )
+    ).toEqual(['COD-1', 'COD-2']);
+    expect(cleanup[0].querySelector('[data-copy]')).toBeNull();
+    // Neither gap has a card of its own, and the cleanup card follows the idea
+    expect(c.querySelectorAll('.kind.k-gap')).toHaveLength(0);
+    const all = Array.from(c.querySelectorAll('article'));
+    expect(all.indexOf(cleanup[0])).toBeGreaterThan(
+      all.findIndex((a) => a.classList.contains('idea'))
+    );
   });
 });
 
