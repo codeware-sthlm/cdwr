@@ -182,6 +182,10 @@ describe('the cdwr.io definition', () => {
     ]);
   });
 
+  it('dims the site icon in the header and footer', () => {
+    expect(cdwrIo.siteSettings?.general?.iconStyle).toBe('muted');
+  });
+
   it('seeds no posts: entries are drafted elsewhere and published on approval', () => {
     expect(cdwrIo.posts ?? []).toEqual([]);
   });

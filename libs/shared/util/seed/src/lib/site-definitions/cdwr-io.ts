@@ -928,6 +928,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         landingPage: { lookupSlug: 'home' },
         chrome: 'flat',
         icon: { source: 'svg', svgCode: cdwrCloudSvg },
+        iconStyle: 'muted',
         // Every built-in beside its own: here the theme switch is the demo
         themes: [
           'frost',
