@@ -45,6 +45,7 @@ export function buildTenantConfig({
     appName: settings.appName,
     brandLabel: settings.brandLabel,
     icon: settings.icon,
+    iconStyle: settings.iconStyle,
     locale: settings.defaultLocale,
     fallbackLocale: null,
     landingPage: { collection: 'pages', id: settings.landingPage },

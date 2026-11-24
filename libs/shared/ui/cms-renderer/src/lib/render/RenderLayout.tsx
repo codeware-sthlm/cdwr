@@ -17,6 +17,7 @@ import { usePayload } from '../providers/PayloadProvider';
 import { ColorSchemeSwitch } from '../theme/ColorSchemeSwitch';
 import { ThemeSelect } from '../theme/ThemeSelect';
 import { handleAsRoute } from '../utils/internal-link';
+import { siteIconStyle } from '../utils/site-icon-style';
 import { TenantIcon } from '../utils/TenantIcon';
 
 type RenderLayoutProps = {
@@ -73,7 +74,7 @@ export function RenderLayout({
   navigationTree,
   session
 }: RenderLayoutProps) {
-  const { navigate, iconConfig, brandLabel } = usePayload();
+  const { navigate, iconConfig, iconStyle, brandLabel } = usePayload();
 
   const headerRow = useRef<HTMLDivElement>(null);
   const brand = useRef<HTMLDivElement>(null);
@@ -168,11 +169,13 @@ export function RenderLayout({
                       // A visible label names the link
                       aria-label={brandLabel ? undefined : 'Home'}
                     >
-                      {iconConfig ? (
-                        <TenantIcon config={iconConfig} size={40} />
-                      ) : (
-                        <House size={40} />
-                      )}
+                      <span className={siteIconStyle({ style: iconStyle })}>
+                        {iconConfig ? (
+                          <TenantIcon config={iconConfig} size={40} />
+                        ) : (
+                          <House size={40} />
+                        )}
+                      </span>
                       {brandLabel && (
                         <span className="text-core-headline max-w-[40vw] truncate font-semibold whitespace-nowrap sm:max-w-xs">
                           {brandLabel}

@@ -3,6 +3,7 @@ import { Toaster } from '@codeware/shared/ui/shadcn/components/sonner';
 import type { SignupPolicy } from '@codeware/shared/util/payload-api';
 import type {
   FormSubmission,
+  SiteSettingsGeneral,
   TenantIconConfig
 } from '@codeware/shared/util/payload-types';
 import { type ReactNode, createContext, use, useMemo, useRef } from 'react';
@@ -108,6 +109,12 @@ export type PayloadValue = {
    * Text shown next to the icon in the header. `null` shows the icon only.
    */
   brandLabel: string | null;
+
+  /**
+   * How the site icon is coloured in the header and footer: `own` takes the
+   * text colour around it, `brand` the link colour, `muted` the muted colour.
+   */
+  iconStyle: NonNullable<SiteSettingsGeneral['iconStyle']>;
 
   /**
    * Provide a function that returns the current URL path.

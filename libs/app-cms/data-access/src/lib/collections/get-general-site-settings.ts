@@ -23,6 +23,8 @@ type Response = {
   defaultTheme: string;
   defaultLocale: TypedLocale;
   icon: TenantIconConfig | null;
+  /** How the site icon is coloured in the header and footer */
+  iconStyle: NonNullable<SiteSettingsGeneral['iconStyle']>;
   landingPage: number;
   /**
    * Built-in themes this site offers, as stored. May be empty when the site
@@ -81,6 +83,7 @@ export async function getGeneralSiteSettings(
       defaultTheme,
       defaultLocale,
       icon,
+      iconStyle,
       landingPage,
       themes
     }
@@ -129,6 +132,7 @@ export async function getGeneralSiteSettings(
     defaultTheme,
     defaultLocale,
     icon: resolvedIcon,
+    iconStyle: iconStyle ?? 'own',
     landingPage: typeof landingPage === 'number' ? landingPage : landingPage.id,
     themes: themes ?? []
   };

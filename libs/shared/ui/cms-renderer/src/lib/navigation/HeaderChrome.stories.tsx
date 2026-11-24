@@ -14,6 +14,8 @@ import {
 import { type Chrome, segmentLimit } from '../theme/chrome';
 import { ColorSchemeSwitch } from '../theme/ColorSchemeSwitch';
 import { ThemeSelect } from '../theme/ThemeSelect';
+import { siteIconStyle } from '../utils/site-icon-style';
+import { TenantIcon } from '../utils/TenantIcon';
 
 import { DesktopNavigation } from './DesktopNavigation';
 import { MobileNavigation } from './MobileNavigation';
@@ -159,6 +161,28 @@ export const BothExpressions: StoryObj = {
       />
     </div>
   )
+};
+
+/** The site icon in each style, as the header draws it. */
+export const IconStyles: StoryObj = {
+  render: () => {
+    const { iconConfig } = usePayload();
+
+    return (
+      <div className="flex items-center gap-8">
+        {(['own', 'brand', 'muted'] as const).map((style) => (
+          <div key={style} className="flex items-center gap-3">
+            <span className={siteIconStyle({ style })}>
+              <TenantIcon config={iconConfig} size={40} />
+            </span>
+            <p className="text-muted-foreground text-xs tracking-[0.12em] uppercase">
+              {style}
+            </p>
+          </div>
+        ))}
+      </div>
+    );
+  }
 };
 
 const args = {};

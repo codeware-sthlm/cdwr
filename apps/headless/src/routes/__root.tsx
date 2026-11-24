@@ -174,6 +174,7 @@ function RootComponent() {
         getSearchParam: (name) => readSearchParam(location.searchStr, name),
         brandLabel: site.brandLabel,
         iconConfig: site.iconConfig,
+        iconStyle: site.iconStyle,
         locale: site.locale,
         lockedColorScheme: locked,
         navigate: (path, newTab) => {
