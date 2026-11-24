@@ -10,6 +10,7 @@ import { usePayload } from '../providers/PayloadProvider';
 import { SocialLinks } from '../social/SocialLinks';
 import { isActivePath } from '../utils/active-path';
 import { handleAsRoute } from '../utils/internal-link';
+import { siteIconStyle } from '../utils/site-icon-style';
 import { TenantIcon } from '../utils/TenantIcon';
 
 import { MemberSession, type MemberSessionData } from './MemberSession';
@@ -254,7 +255,7 @@ function ExpandedFooter({
   footer: FooterData;
   session?: MemberSessionData;
 }) {
-  const { iconConfig, locale } = usePayload();
+  const { iconConfig, iconStyle, locale } = usePayload();
   const {
     appName,
     contact,
@@ -277,7 +278,11 @@ function ExpandedFooter({
               {/* Brand column */}
               <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
                 <div className="flex items-center gap-3">
-                  {iconConfig && <TenantIcon config={iconConfig} size={32} />}
+                  {iconConfig && (
+                    <span className={siteIconStyle({ style: iconStyle })}>
+                      <TenantIcon config={iconConfig} size={32} />
+                    </span>
+                  )}
                   <span className="text-core-headline font-semibold">
                     {appName}
                   </span>

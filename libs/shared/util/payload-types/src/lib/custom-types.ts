@@ -190,6 +190,8 @@ export type TenantRuntimeConfig = {
   icon: TenantIconConfig | null;
   /** Text shown next to the icon in the header, if any */
   brandLabel: string | null;
+  /** How the site icon is coloured in the header and footer */
+  iconStyle: NonNullable<SiteSettingsGeneral['iconStyle']>;
   locale: TypedLocale;
   fallbackLocale: TypedFallbackLocale;
   landingPage: TypeWithID & {

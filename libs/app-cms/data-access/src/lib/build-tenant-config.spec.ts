@@ -19,6 +19,7 @@ const settings = (
   defaultTheme: 'spotlight',
   defaultLocale: 'en' as const,
   icon: null,
+  iconStyle: 'own' as const,
   landingPage: 1,
   themes: ['spotlight'],
   ...overrides

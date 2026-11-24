@@ -31,6 +31,7 @@ type ProvidersProps = {
   | 'brandLabel'
   | 'humanCheckSiteKey'
   | 'iconConfig'
+  | 'iconStyle'
   | 'locale'
   | 'payloadUrl'
   | 'signupPolicy'
@@ -50,6 +51,7 @@ export function Providers({
   colorScheme,
   humanCheckSiteKey,
   iconConfig,
+  iconStyle,
   locale,
   nonce,
   payloadUrl,
@@ -81,6 +83,7 @@ export function Providers({
         colorScheme={colorScheme}
         humanCheckSiteKey={humanCheckSiteKey}
         iconConfig={iconConfig}
+        iconStyle={iconStyle}
         locale={locale}
         payloadUrl={payloadUrl}
         signupPolicy={signupPolicy}
@@ -101,6 +104,7 @@ function PayloadProviderInner({
   colorScheme: colorSchemePolicy,
   humanCheckSiteKey,
   iconConfig,
+  iconStyle,
   locale,
   payloadUrl,
   signupPolicy,
@@ -125,6 +129,7 @@ function PayloadProviderInner({
         getSearchParam: (name) => searchParams.get(name),
         humanCheckSiteKey,
         iconConfig,
+        iconStyle,
         locale,
         navigate: (path, newTab) => {
           if (newTab || path.startsWith('http')) {

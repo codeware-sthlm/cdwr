@@ -34,6 +34,7 @@ export type SiteChrome = HeadSite & {
   /** `@font-face` rules for the licensed faces this deployment may embed */
   fontFaceCss: string;
   iconConfig: PayloadValue['iconConfig'];
+  iconStyle: PayloadValue['iconStyle'];
   /** Whether statistics are collected at all: Umami is configured */
   stats: boolean;
   /** The site's id in Umami, when it has one */
@@ -112,6 +113,7 @@ export async function loadSiteData(
           env.FONT_ASSETS_BASE_URL
         ),
         iconConfig: tenantConfig.icon,
+        iconStyle: tenantConfig.iconStyle,
         landingPageId: tenantConfig.landingPage.id,
         locale: tenantConfig.locale,
         payloadUrl: env.PAYLOAD_URL,

@@ -3,6 +3,11 @@ import { a11yStory } from '@codeware/shared/util/storybook';
 import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
 
 import { Container } from '../layout/Container';
+import {
+  PayloadProvider,
+  type PayloadValue,
+  usePayload
+} from '../providers/PayloadProvider';
 
 import { Footer } from './Footer';
 
@@ -83,6 +88,19 @@ const complete: FooterData = {
   variant: 'standard'
 };
 
+/** Colour the site icon the way site settings can: `own`, `brand` or `muted`. */
+const withIconStyle =
+  (iconStyle: PayloadValue['iconStyle']): Decorator =>
+  (Story) => {
+    const value = usePayload();
+
+    return (
+      <PayloadProvider value={{ ...value, iconStyle }}>
+        <Story />
+      </PayloadProvider>
+    );
+  };
+
 /** Links and contacts on one row, secondary line beneath. */
 export const Standard: Story = {
   args: { footer: complete }
@@ -91,6 +109,18 @@ export const Standard: Story = {
 /** One centered stack — for sites with only a few pages. */
 export const Compact: Story = {
   args: { footer: { ...complete, variant: 'compact' } }
+};
+
+/** The icon takes the link colour; only the expanded footer shows it. */
+export const IconBrand: Story = {
+  args: { footer: { ...complete, variant: 'expanded' } },
+  decorators: [withIconStyle('brand')]
+};
+
+/** The icon is dimmed to a quiet mark. */
+export const IconMuted: Story = {
+  args: { footer: { ...complete, variant: 'expanded' } },
+  decorators: [withIconStyle('muted')]
 };
 
 /** Brand and tagline beside the links, secondary line on its own bar. */
