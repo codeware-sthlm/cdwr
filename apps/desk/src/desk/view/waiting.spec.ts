@@ -98,6 +98,13 @@ describe('gaps on the waiting rows', () => {
     ).toHaveLength(2);
   });
 
+  it('adds no gap row for a ticket another row lists, so it counts once', () => {
+    const r = rows([gap('COD-6', 'unlabelled')]);
+    expect(r.filter((x) => x.id === 'COD-6').map((x) => x.kind)).toEqual([
+      'ready to label'
+    ]);
+  });
+
   it('leaves candidates out', () => {
     expect(
       rows([gap('COD-7', 'stale', { candidate: true })]).some(

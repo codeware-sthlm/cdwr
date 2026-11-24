@@ -105,8 +105,8 @@ const Node = ({
       <div
         id={`tree-row-${node.ticket}`}
         tabIndex={-1}
-        // Show in tree focuses the row from a click, so the outline shows on any focus, not only a keyboard one
-        className={`${done ? `${ROW} ${DIM}` : ROW} rounded-[var(--r-row)] focus:outline-2 focus:outline-offset-2 focus:outline-[color:var(--accent)]`}
+        // Show in tree marks the row it focuses until it loses focus; a plain click on a row draws no outline
+        className={`${done ? `${ROW} ${DIM}` : ROW} rounded-[var(--r-row)] outline-none data-shown:outline-2 data-shown:outline-offset-2 data-shown:outline-[color:var(--accent)]`}
       >
         {node.children.length ? (
           <button

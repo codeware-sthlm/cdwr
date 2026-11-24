@@ -106,8 +106,13 @@ export const headline = (
           ...(rows[0]
             ? [
                 ', starting with ',
-                ...(rows[0].kind === 'idea' ? ['the idea '] : []),
-                { id: rows[0].id }
+                // The cleanup row covers several tickets and has no id of its own
+                ...(rows[0].kind === 'cleanup'
+                  ? ['the closed tickets to clean up']
+                  : [
+                      ...(rows[0].kind === 'idea' ? ['the idea '] : []),
+                      { id: rows[0].id }
+                    ])
               ]
             : []),
           '.'
