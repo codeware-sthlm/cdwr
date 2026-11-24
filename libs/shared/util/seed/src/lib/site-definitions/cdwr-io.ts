@@ -13,7 +13,13 @@ import {
   startIllustration,
   themingIllustration
 } from './illustrations';
-import { infisicalLogo, playwrightLogo } from './tech-logos';
+import {
+  infisicalLogo,
+  nxLogo,
+  playwrightLogo,
+  tanstackLogo,
+  umamiLogo
+} from './tech-logos';
 
 /** The devlog's listing page, stated only while `devlog` is on */
 const devlogPage: PageDefinition = {
@@ -113,15 +119,15 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         meta: {
           title: 'Every site its own. One platform underneath.',
           description:
-            'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors.'
+            'Many sites hosted on one platform built on Payload. Each site gets its own domain, its own theme and its own editors.'
         },
         layout: [
           {
             blockType: 'hero',
-            badge: 'Themes you author in the admin',
+            badge: 'Multi-tenant hosting',
             heading: 'Every site its own. One platform underneath.',
             illustration: heroIllustration,
-            lede: 'A content platform built on Payload and Next.js. Each site gets its own domain, its own theme and its own editors — and this page is one of them.',
+            lede: 'Many sites hosted on one platform built on Payload. Each site gets its own domain, its own theme and its own editors — and this page is one of them.',
             actions: [
               {
                 link: {
@@ -223,23 +229,11 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             ]
           },
           {
-            blockType: 'content',
-            columns: [
-              {
-                size: 'full',
-                richText: {
-                  markdown:
-                    'Every site runs as its own app, apart from the others, and all of them are hosted in Stockholm, in the EU.'
-                }
-              }
-            ]
-          },
-          {
             blockType: 'feature-section',
             eyebrow: 'Custom components',
             heading: 'When no block fits, write one',
             intro:
-              'A developer writes a component in the admin, saving it builds it, and an editor places it on a page like any other block. This site runs one that reads the colours of the active theme.',
+              'A developer writes a component in the admin, and saving it starts a build. An editor then places it on a page like any other block. The one below is written that way: it reads the colours of the active theme.',
             enableLink: true,
             link: {
               type: 'custom',
@@ -278,11 +272,16 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             band: 'subtle',
             items: [
               {
-                label: 'Payload CMS',
+                label: 'Payload',
                 url: 'https://payloadcms.com',
                 icon: 'payload'
               },
               { label: 'Next.js', url: 'https://nextjs.org', icon: 'nextjs' },
+              {
+                label: 'TanStack Start',
+                url: 'https://tanstack.com/start',
+                logo: { source: 'svg', svgCode: tanstackLogo }
+              },
               {
                 label: 'Supabase',
                 url: 'https://supabase.com',
@@ -294,7 +293,11 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 url: 'https://infisical.com',
                 logo: { source: 'svg', svgCode: infisicalLogo }
               },
-              { label: 'Nx', url: 'https://nx.dev', icon: 'nx' },
+              {
+                label: 'Nx',
+                url: 'https://nx.dev',
+                logo: { source: 'svg', svgCode: nxLogo }
+              },
               {
                 label: 'Tailwind',
                 url: 'https://tailwindcss.com',
@@ -306,6 +309,11 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 logo: { source: 'svg', svgCode: playwrightLogo }
               },
               { label: 'Sentry', url: 'https://sentry.io', icon: 'sentry' },
+              {
+                label: 'Umami',
+                url: 'https://umami.is',
+                logo: { source: 'svg', svgCode: umamiLogo }
+              },
               {
                 label: 'GitHub',
                 url: 'https://github.com/codeware-sthlm/cdwr',
@@ -431,14 +439,14 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         meta: {
           title: 'A component written in the admin',
           description:
-            'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page.'
+            'When no block does what a page needs, a developer writes one in the component studio. Saving it starts a build, and an editor places it on a page.'
         },
         layout: [
           {
             blockType: 'hero',
             badge: 'Custom components',
             heading: 'A component written in the admin',
-            lede: 'When no block does what a page needs, a developer writes one in the component studio. Saving it builds it, and an editor places it on a page like any other block.'
+            lede: 'When no block does what a page needs, a developer writes one in the component studio. Saving it starts a build, and once the build is done an editor places it on a page like any other block.'
           },
           {
             blockType: 'feature-section',
@@ -453,7 +461,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               },
               {
                 title: 'Built on save',
-                body: 'Saving builds the component, and a page shows it once the build has finished.'
+                body: 'Saving starts a build of the component, and a page shows it once the build has finished.'
               },
               {
                 title: 'Placed by an editor',
@@ -470,6 +478,18 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             }
           },
           {
+            blockType: 'content',
+            columns: [
+              {
+                size: 'full',
+                richText: {
+                  markdown:
+                    '## The source of the component above\n\nThis is the code behind the colours shown above, as it was written in the component studio.'
+                }
+              }
+            ]
+          },
+          {
             blockType: 'code',
             language: 'tsx',
             code: cdwrIoThemeSwatchSource
@@ -478,31 +498,36 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-cards',
             eyebrow: 'Limits',
             heading: 'What a component can and cannot do',
-            columns: '3',
+            columns: '2',
             items: [
               {
-                title: 'Built in a sandbox',
+                title: 'A fixed set of packages',
                 description:
-                  "The source is built apart from the site that runs it, from a fixed set of packages and the site's own primitives."
+                  "It can import React, the site's own primitives, and lucide-react, class-variance-authority, react-hook-form, zod and recharts. Any other package fails the build."
+              },
+              {
+                title: 'Runs in the browser',
+                description:
+                  'It renders in the visitor’s browser, not on the server. It cannot read the database or a secret, only what the page and its props give it.'
+              },
+              {
+                title: 'Belongs to one site',
+                description:
+                  'A component lives in the site that wrote it. Another site does not see it, cannot place it, and cannot break it.'
               },
               {
                 title: 'Typed props',
                 description:
                   'Its fields are declared with it, so an editor fills in a form instead of writing props.'
-              },
-              {
-                title: 'Belongs to one site',
-                description:
-                  'A component lives in the site that wrote it. Another site does not see it, and cannot break it.'
               }
             ]
           },
           {
             blockType: 'callout',
             showMark: true,
-            heading: 'Start with the platform',
-            body: 'The component studio is part of what the setup scaffolds. Start from it and write the first component on your own site.',
-            link: { type: 'custom', url: '/start', label: 'Get started' }
+            heading: 'Write a component on your own site',
+            body: 'The component studio comes with a site on the platform, and we turn it on for the site’s developer. Signup is by invitation for now, and Get started says how to ask for one.',
+            link: { type: 'custom', url: '/start', label: 'Get a site' }
           }
         ]
       },
@@ -512,22 +537,22 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         meta: {
           title: 'Every site is its own deployment',
           description:
-            'A site is an app of its own, on its own domain, with its own certificate and its own secrets, built once and run many times.'
+            'A site is an app of its own, on its own domain, with its own certificate and its own secrets, hosted in Stockholm, in the EU.'
         },
         layout: [
           {
             blockType: 'hero',
             badge: 'Architecture',
             heading: 'Every site is its own deployment',
-            lede: 'Each site runs as an app of its own, on its own domain, with its own certificate and secrets. Every one of them is started from the same build.'
+            lede: 'Each site runs as an app of its own, on its own domain, with its own certificate and secrets. All of them are hosted in Stockholm, in the EU.'
           },
           {
             blockType: 'feature-section',
-            eyebrow: 'One build',
+            eyebrow: 'One build per app',
             heading: 'Built once, started for every site',
             illustration: oneBuildIllustration,
             intro:
-              'The platform is built once, when a change is merged. That one build is then started as many times as there are sites, and each start is told which site it is.',
+              'The platform has two apps. The cms serves a site’s pages and its admin, and cdwr.io and codeware.se run on it. The headless client, built on TanStack Start, serves a site that has a front end of its own and reads its content from the cms. Each app is built once when a change is merged, and that build is started for every site that runs on it.',
             subFeatures: [
               {
                 title: 'Told who it is at start',
@@ -539,7 +564,37 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               },
               {
                 title: 'The same software, twice',
-                body: 'codeware.se and cdwr.io run the same build. A third site would run it too, with its own domain, content and theme.'
+                body: 'codeware.se and cdwr.io run the same cms build. A third site would run it too, with its own domain, content and theme.'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-section',
+            eyebrow: 'Sign-in',
+            heading: 'Two-factor login for editors',
+            intro:
+              'Editors sign in with Payload’s own login, which locks an account for a day after five wrong passwords. On top of that comes a second step: a one-time code from an authenticator app (TOTP). It is required for the platform’s own administrators and for the admins who manage a site and its users, and any other editor can turn it on.'
+          },
+          {
+            blockType: 'feature-cards',
+            eyebrow: 'Deployment',
+            heading: 'A release takes traffic once it is healthy',
+            columns: '3',
+            items: [
+              {
+                title: 'Blue-green deploys',
+                description:
+                  'The cms and the headless client start a new release beside the running one. Traffic moves over only when the new release passes its health check, so a release that fails to start never takes traffic.'
+              },
+              {
+                title: 'A health check that asks the app',
+                description:
+                  'Fly.io keeps asking each app whether it is up. The cms answers yes only when Payload has started and the database answers a query.'
+              },
+              {
+                title: 'Migrations in two steps',
+                description:
+                  'A schema change adds first and removes in a later release. A migration that drops or renames a column must say why no running release still reads it, and a test enforces that.'
               }
             ]
           },
@@ -560,15 +615,14 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                   'A schema change that would fail on deploy fails on the pull request instead.'
               },
               {
-                title: 'A visual review too',
+                title: 'Screenshots of every component',
                 description:
-                  'Every component renders in every theme on every change, and the difference is a picture.'
+                  'Each pull request takes screenshots of every component in every theme and shows what changed.'
               }
             ]
           },
           {
-            // Infisical and Playwright are not in the icon set, and feature
-            // cards take no logo of their own yet, so they carry an icon
+            // The same tools in the same order as Home's list
             blockType: 'feature-cards',
             eyebrow: 'Built on',
             heading: 'What it is built on, and why',
@@ -576,14 +630,21 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             items: [
               {
                 brand: { tech: 'payload' },
-                title: 'Payload CMS',
+                title: 'Payload',
                 description:
                   'The editor and the content API. Open source, and the whole admin is code we can change.'
               },
               {
                 brand: { tech: 'nextjs' },
                 title: 'Next.js',
-                description: 'Serves the sites and the admin from one app.'
+                description:
+                  'Runs the cms, which serves a site’s pages and its admin from one app.'
+              },
+              {
+                brand: { logo: { source: 'svg', svgCode: tanstackLogo } },
+                title: 'TanStack Start',
+                description:
+                  'Runs the headless client, for a site with a front end of its own that reads its content from the cms.'
               },
               {
                 brand: { tech: 'supabase' },
@@ -604,7 +665,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                   'Holds every secret, one folder per site, so nothing lives in the repository.'
               },
               {
-                brand: { tech: 'nx' },
+                brand: { logo: { source: 'svg', svgCode: nxLogo } },
                 title: 'Nx',
                 description:
                   'One repository for the platform, its tools and its published packages.'
@@ -618,19 +679,50 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 brand: { logo: { source: 'svg', svgCode: playwrightLogo } },
                 title: 'Playwright',
                 description: 'The tests that open the running site and use it.'
+              },
+              {
+                brand: { tech: 'sentry' },
+                title: 'Sentry',
+                description:
+                  'Collects the errors every site and app runs into, so a fault is seen before a visitor reports it.'
+              },
+              {
+                brand: { logo: { source: 'svg', svgCode: umamiLogo } },
+                title: 'Umami',
+                description:
+                  'Site statistics without cookies. Each site has its own team, so its admins see only their own numbers.'
+              },
+              {
+                brand: { tech: 'github' },
+                title: 'GitHub',
+                description:
+                  'The source, the pull requests and the workflows that test, preview and deploy every change.'
               }
             ]
           },
           {
-            // How the list above fits together, run from one tool. The tool is
-            // drawn, not named: it is not published, and a name would invite
-            // the question of where to get it
+            // How the list above fits together, run from the platform's own
+            // command line. Named, but not offered: it is not published
             blockType: 'feature-section',
-            eyebrow: 'Connected',
-            heading: 'How the pieces fit together',
+            eyebrow: 'Operations',
+            heading: 'One tool runs the platform',
             intro:
-              'A merged change becomes a running site; secrets arrive when it starts; data lives in one database; errors are watched. All of it is operated from one tool, which shows what it will do before it does it.',
-            illustration: stackIllustration
+              'A merged change becomes a running site, secrets arrive when it starts, data lives in one database and errors are watched. All of it is operated from cdwr, the platform’s own command line, which shows what it will do before it does it.',
+            illustration: stackIllustration,
+            subFeatures: [
+              {
+                title: 'Deploys',
+                body: 'Deploys the apps to Fly.io, scales them and restarts them.'
+              },
+              {
+                title: 'Sites',
+                body: 'Creates a site’s workspace, sets up its secrets and its API key, and applies a site definition like the one behind this page.'
+              },
+              {
+                title: 'Statistics and errors',
+                body: 'Gives each site its own Umami team, checks who may read it, and reports the errors Sentry has collected.'
+              }
+            ]
           }
         ]
       },
@@ -641,14 +733,14 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         meta: {
           title: 'Get a site on the platform',
           description:
-            'The platform hosts sites now, by invitation. Sign up with an invite code, or start a workspace of your own from the published packages.'
+            'The platform hosts a small number of sites, by invitation. Ask for an invite code, or start a workspace of your own from the published packages.'
         },
         layout: [
           {
             blockType: 'hero',
             badge: 'Get started',
             heading: 'Get a site on the platform',
-            lede: 'The platform hosts sites now. Signup is by invitation: with an invite code you can create a workspace, choose a starter and have a site live without running anything yourself.',
+            lede: 'The platform hosts a small number of sites, so signup is limited and by invitation. With an invite code you create a workspace, choose a starter and have a site live without running anything yourself.',
             illustration: startIllustration
           },
           {
@@ -656,6 +748,8 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Hosted',
             band: 'subtle',
             heading: 'From invite code to live site',
+            intro:
+              'There is room for a few more sites, and an invite code is how each new site gets in.',
             columns: '2',
             items: [
               {
@@ -681,13 +775,16 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             ]
           },
           {
+            // On the same band, so it reads as the end of the Hosted section;
+            // feature cards take no links
             blockType: 'content',
+            band: 'subtle',
             columns: [
               {
                 size: 'full',
                 richText: {
                   markdown:
-                    'To ask for an invite code, write to [hello@codeware.se](mailto:hello@codeware.se).'
+                    'To ask for an invite code, write to [hello@codeware.se](mailto:hello@codeware.se) and say a little about the site you have in mind.'
                 }
               }
             ]
@@ -699,7 +796,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 size: 'full',
                 richText: {
                   markdown:
-                    '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected.'
+                    '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected, and the last line starts Payload and its database in Docker. `payload-admin` is the app name the setup suggests.'
                 },
                 blocks: [
                   {
@@ -707,7 +804,8 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                     language: 'shell',
                     code: [
                       'npx create-nx-payload@latest my-platform',
-                      'cd my-platform && nx dev cms'
+                      'cd my-platform',
+                      'npx nx dx:start payload-admin'
                     ].join('\n')
                   }
                 ]
@@ -730,7 +828,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 brand: { tech: 'payload' },
                 title: 'create-nx-payload',
                 description:
-                  'The preset behind the command above — a new workspace with Payload, Postgres and the deployment wiring already connected.'
+                  'The preset behind the command above — a new workspace with Payload, Postgres, a GraphQL schema target and the deployment wiring already connected.'
               },
               {
                 brand: { tech: 'flyio' },
