@@ -18,14 +18,14 @@ import { FindingChip } from './review';
 
 // The ticket tree view: each root with the sub-issues the scheduler's queue view carries
 
-/** A Linear state type: its name and the chip kind that colours it */
-const STATE: ReadonlyMap<string, readonly [string, string]> = new Map([
-  ['triage', ['triage', 'backlog']],
-  ['backlog', ['backlog', 'backlog']],
-  ['unstarted', ['todo', 'todo']],
-  ['started', ['in progress', 'in-progress']],
-  ['completed', ['done', 'done']],
-  ['canceled', ['canceled', 'canceled']]
+/** A Linear state type and the name the row shows for it */
+const STATE: ReadonlyMap<string, string> = new Map([
+  ['triage', 'triage'],
+  ['backlog', 'backlog'],
+  ['unstarted', 'todo'],
+  ['started', 'in progress'],
+  ['completed', 'done'],
+  ['canceled', 'canceled']
 ]);
 
 const ROW = 'flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 py-1';
@@ -97,12 +97,17 @@ const Node = ({
   const watched =
     entry && (pr === null || String(entry.pr) === String(pr)) ? entry : null;
   const blocker = watched ? mergeBlocker(watched) : null;
-  const state = node.state ? STATE.get(node.state) : undefined;
+  const state = node.state ? (STATE.get(node.state) ?? node.state) : null;
   const isOpen = expanded(node, open);
   const listId = `tree-${node.ticket}`;
   return (
     <li>
-      <div className={done ? `${ROW} ${DIM}` : ROW}>
+      <div
+        id={`tree-row-${node.ticket}`}
+        tabIndex={-1}
+        // Show in tree focuses the row from a click, so the outline shows on any focus, not only a keyboard one
+        className={`${done ? `${ROW} ${DIM}` : ROW} rounded-[var(--r-row)] focus:outline-2 focus:outline-offset-2 focus:outline-[color:var(--accent)]`}
+      >
         {node.children.length ? (
           <button
             type="button"
@@ -128,16 +133,16 @@ const Node = ({
         {node.position !== null ? (
           <span className={`pos ${META}`}>{`#${node.position}`}</span>
         ) : done ? null : node.waiting ? (
-          <Chip kind="backlog">waiting</Chip>
+          <span className={META}>waiting</span>
         ) : (
-          <Chip kind="backlog">not queued</Chip>
+          <span className={META}>not queued</span>
         )}
-        {state ? (
-          <Chip kind={state[1]}>{state[0]}</Chip>
-        ) : node.state ? (
-          <span className={META}>{node.state}</span>
+        {state ? <span className={META}>{state}</span> : null}
+        {label === 'needs-input' ? (
+          <Chip kind="needs-input">needs-input</Chip>
+        ) : label ? (
+          <span className={META}>{label}</span>
         ) : null}
-        {label ? <Chip kind={label}>{label}</Chip> : null}
         <Prn n={pr} />
         {node.blockers.map((b) => (
           <Chip key={b} kind="blocked">
@@ -145,9 +150,15 @@ const Node = ({
           </Chip>
         ))}
         {node.gaps.map((g) => (
-          <Chip key={g.kind} kind={g.candidate ? 'held' : 'conflict'}>
-            {g.kind}
-          </Chip>
+          <span
+            key={g.kind}
+            title={
+              m.gaps.find((a) => a.ticket === node.ticket && a.kind === g.kind)
+                ?.fix
+            }
+          >
+            <Chip kind={g.candidate ? 'held' : 'conflict'}>{g.kind}</Chip>
+          </span>
         ))}
         {(findings.get(node.ticket) ?? []).map((f) => (
           <FindingChip key={f.id} f={f} />
@@ -301,10 +312,12 @@ export const TreePage = ({
         Open tickets with their sub-issues, Done ones for 14 days, in the order
         the queue picks them: #n is the place, &quot;waiting&quot; an agent
         ticket the queue waits on, &quot;not queued&quot; one it would never
-        pick. An open blocker shows as a &quot;blocked by&quot; chip, a gap from
-        the audit as a chip of its kind, and a grey one is a candidate to check.
-        Closed adds the finished roots with no gap, Gaps keeps the roots with a
-        gap, Not queued those the queue would never pick.
+        pick. The state, the agent label and the place in the queue are plain
+        text; chips mark only what is out of the ordinary: an open blocker, a
+        gap from the audit (hover for its fix; grey is a candidate to check), a
+        review finding, a live session, the merge state, and needs-input. Closed
+        adds the finished roots with no gap, Gaps keeps the roots with a gap,
+        Not queued those the queue would never pick.
       </p>
     </>
   );

@@ -9,8 +9,8 @@ import {
   type TreeFilter,
   createState
 } from '../state';
-import type { QueueTreeNode, SessionState } from '../types';
-import { NOW, filled, runs, view } from '../view/fixtures';
+import type { QueueGap, QueueTreeNode, SessionState } from '../types';
+import { NOW, filled, gap, runs, view } from '../view/fixtures';
 
 import { TreePage } from './tree';
 
@@ -44,6 +44,7 @@ const mountWith = (
     open = {},
     onOpen = vi.fn(),
     session = { state: 'none' },
+    audit = [],
     prepare = () => undefined
   }: {
     onAgent?: () => void;
@@ -53,11 +54,12 @@ const mountWith = (
     open?: Record<string, boolean>;
     onOpen?: (ticket: string, open: boolean) => void;
     session?: SessionState;
+    audit?: QueueGap[];
     prepare?: (state: DeskState) => void;
   } = {}
 ): HTMLElement => {
   const state = filled();
-  state.data.runs = runs(view({ tree, session }));
+  state.data.runs = runs(view({ tree, session, audit }));
   prepare(state);
   return render(
     <TreePage
@@ -157,7 +159,7 @@ describe('TreePage', () => {
     expect(text(root)).toContain('Tree COD-11');
   });
 
-  it('shows the state as a chip coloured by its type, and an unknown one raw', () => {
+  it('shows the state as plain text by its type name, and an unknown one raw', () => {
     const c = mount([
       node('COD-10', { state: 'unstarted' }),
       node('COD-20', { state: 'started' }),
@@ -167,17 +169,25 @@ describe('TreePage', () => {
       node('COD-60', { state: 'backlog' }),
       node('COD-70', { state: 'triage' })
     ]);
-    const chip = (kind: string) =>
-      [...c.querySelectorAll(`.chip.${kind}`)].map(text);
-    expect(chip('todo')).toEqual(['todo']);
-    expect(chip('in-progress')).toEqual(['in progress']);
-    expect(chip('done')).toEqual(['done']);
-    expect(chip('canceled')).toEqual(['canceled']);
-    expect(chip('backlog').filter((t) => t !== 'not queued')).toEqual([
-      'backlog',
-      'triage'
-    ]);
-    expect(text(c)).toContain('weird');
+    const row = (id: string) =>
+      c.querySelector(`#tree-row-${id}`) as HTMLElement;
+    const states = [
+      ['COD-10', 'todo'],
+      ['COD-20', 'in progress'],
+      ['COD-30', 'weird'],
+      ['COD-40', 'done'],
+      ['COD-50', 'canceled'],
+      ['COD-60', 'backlog'],
+      ['COD-70', 'triage']
+    ] as const;
+    for (const [id, name] of states) {
+      const span = [...row(id).querySelectorAll('span')].find(
+        (s) => text(s) === name
+      );
+      expect(span).toBeDefined();
+      expect(span?.classList.contains('chip')).toBe(false);
+    }
+    expect(c.querySelector('.chip')).toBeNull();
   });
 
   it('shows the pick position, or not queued for an open ticket without one', () => {
@@ -187,27 +197,62 @@ describe('TreePage', () => {
       node('COD-30', { state: 'completed' })
     ]);
     expect([...c.querySelectorAll('.pos')].map(text)).toEqual(['#1']);
-    expect([...c.querySelectorAll('.chip.backlog')].map(text)).toEqual([
+    expect(c.querySelector('.chip')).toBeNull();
+    expect(text(c.querySelector('#tree-row-COD-20'))).toContain('not queued');
+    expect(text(c.querySelector('#tree-row-COD-30'))).not.toContain(
       'not queued'
-    ]);
+    );
   });
 
-  it('shows a waiting chip for an open agent ticket the queue waits on', () => {
+  it('shows waiting as plain text for an open agent ticket the queue waits on', () => {
     const c = mount([
       node('COD-10', { label: 'agent:review', waiting: true }),
       node('COD-20')
     ]);
-    expect([...c.querySelectorAll('.chip.backlog')].map(text)).toEqual([
-      'waiting',
-      'not queued'
-    ]);
+    expect(text(c.querySelector('#tree-row-COD-10'))).toContain('waiting');
+    expect(text(c.querySelector('#tree-row-COD-20'))).toContain('not queued');
+    expect(c.querySelector('.chip')).toBeNull();
   });
 
-  it('shows the agent label as a chip without its prefix', () => {
+  it('shows the agent label as plain text without its prefix', () => {
+    const c = mount([node('COD-10', { label: 'agent:review' })]);
+    expect(text(c.querySelector('#tree-row-COD-10'))).toContain('review');
+    expect(c.querySelector('.chip')).toBeNull();
+  });
+
+  it('keeps needs-input as a chip', () => {
     const c = mount([node('COD-10', { label: 'agent:needs-input' })]);
     expect(c.querySelector('.chip.needs-input')?.textContent).toBe(
       'needs-input'
     );
+  });
+
+  it('gives each row a focusable id', () => {
+    const c = mount([node('COD-10', { children: [node('COD-11')] })]);
+    const row = c.querySelector('#tree-row-COD-11') as HTMLElement;
+    expect(row.tagName).toBe('DIV');
+    expect(row.tabIndex).toBe(-1);
+    expect(text(row.querySelector('a.id'))).toBe('COD-11');
+  });
+
+  it('carries the audit’s fix as the title of a gap chip', () => {
+    const c = mountWith(
+      [
+        node('COD-10', {
+          gaps: [
+            { kind: 'stale', candidate: false },
+            { kind: 'untouched', candidate: true }
+          ]
+        })
+      ],
+      { audit: [gap('COD-10', 'stale'), gap('COD-99', 'untouched')] }
+    );
+    const chip = (kind: string) =>
+      c.querySelector(`.chip.${kind}`)?.closest('[title], li') as HTMLElement;
+    expect(chip('conflict').getAttribute('title')).toBe(
+      'An attended session cleans it up, or remove the label'
+    );
+    expect(chip('held').hasAttribute('title')).toBe(false);
   });
 
   it('links the PR, a blocker and a gap', () => {
@@ -332,7 +377,9 @@ describe('TreePage', () => {
     const ended = mountWith([node('COD-10')], {
       session: { state: 'ended', ticket: 'COD-10' }
     });
-    expect(text(ended)).not.toContain('session');
+    expect(text(ended.querySelector('#tree-row-COD-10'))).not.toContain(
+      'session'
+    );
   });
 
   it.each([
