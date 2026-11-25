@@ -492,7 +492,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               {
                 title: 'A fixed set of packages',
                 description:
-                  "It can import React, the site's own primitives, and lucide-react, class-variance-authority, react-hook-form, zod and recharts. Any other package fails the build."
+                  "It can import React, the site's own primitives, and `lucide-react`, `class-variance-authority`, `react-hook-form`, `zod` and `recharts`. Any other package fails the build."
               },
               {
                 title: 'Runs in the browser',
@@ -544,11 +544,11 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             band: 'subtle',
             illustration: oneBuildIllustration,
             intro:
-              'The platform has two apps. The cms serves a site’s pages and its admin, and cdwr.io and codeware.se run on it. The headless client, built on TanStack Start, serves a site that has a front end of its own and reads its content from the cms. Each app is built once when a change is merged, and that build is started for every site that runs on it.',
+              'The platform has two apps. The `cms` serves a site’s pages and its admin, and `cdwr.io` and `codeware.se` run on it. The `headless` client, built on TanStack Start, serves a site that has a front end of its own and reads its content from the `cms`. Each app is built once when a change is merged, and that build is started for every site that runs on it.',
             subFeatures: [
               {
-                title: 'Told who it is at start',
-                body: 'The domain, the certificate and the secrets arrive when a site starts, rather than being baked into the build.'
+                title: 'Told who it is when it is deployed',
+                body: 'Nothing about a site is in the build. Its app gets its tenant and its secrets from the deploy, and Fly.io holds the certificate for its domain.'
               },
               {
                 title: 'One database, kept apart',
@@ -556,7 +556,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               },
               {
                 title: 'The same software, twice',
-                body: 'codeware.se and cdwr.io run the same cms build. A third site would run it too, with its own domain, content and theme.'
+                body: '`codeware.se` and `cdwr.io` run the same `cms` build. A third site would run it too, with its own domain, content and theme.'
               }
             ]
           },
@@ -577,12 +577,12 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               {
                 title: 'Blue-green deploys',
                 description:
-                  'The cms and the headless client start a new release beside the running one. Traffic moves over only when the new release passes its health check, so a release that fails to start never takes traffic.'
+                  'The `cms` and the `headless` client start a new release beside the running one. Traffic moves over only when the new release passes its health check, so a release that fails to start never takes traffic.'
               },
               {
                 title: 'A health check that asks the app',
                 description:
-                  'Fly.io keeps asking each app whether it is up. The cms answers yes only when Payload has started and the database answers a query.'
+                  'Fly.io keeps asking each app whether it is up. The `cms` answers yes only when Payload has started and the database answers a query.'
               },
               {
                 title: 'Migrations in two steps',
@@ -608,9 +608,9 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                   'A schema change that would fail on deploy fails on the pull request instead.'
               },
               {
-                title: 'Screenshots of every component',
+                title: 'Screenshots of the components',
                 description:
-                  'Each pull request takes screenshots of every component in every theme and shows what changed.'
+                  'A pull request can take screenshots of every component in every theme and show what changed.'
               }
             ]
           },
@@ -633,13 +633,13 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 brand: { tech: 'nextjs' },
                 title: 'Next.js',
                 description:
-                  'Runs the cms, which serves a site’s pages and its admin from one app.'
+                  'Runs the `cms`, which serves a site’s pages and its admin from one app.'
               },
               {
                 brand: { logo: { source: 'svg', svgCode: tanstackLogo } },
                 title: 'TanStack Start',
                 description:
-                  'Runs the headless client, for a site with a front end of its own that reads its content from the cms.'
+                  'Runs the `headless` client, for a site with a front end of its own that reads its content from the `cms`.'
               },
               {
                 brand: { tech: 'supabase' },
@@ -702,7 +702,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Operations',
             heading: 'One tool runs the platform',
             intro:
-              'A merged change becomes a running site, secrets arrive when it starts, data lives in one database and errors are watched. All of it is operated from cdwr, the platform’s own command line, which shows what it will do before it does it.',
+              'A merged change becomes a running site with its own secrets, data lives in one database and errors are watched. All of it is operated from `cdwr`, the platform’s own command line, which shows what it will do before it does it.',
             illustration: stackIllustration,
             subFeatures: [
               {
@@ -802,19 +802,19 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             items: [
               {
                 brand: { tech: 'nx' },
-                title: '@cdwr/nx-payload',
+                title: '`@cdwr/nx-payload`',
                 description:
                   'An Nx plugin adding Payload generators and executors to any workspace. Scaffold an app, run migrations, build for deploy.'
               },
               {
                 brand: { tech: 'payload' },
-                title: 'create-nx-payload',
+                title: '`create-nx-payload`',
                 description:
                   'The preset behind the command above — a new workspace with Payload, Postgres, a GraphQL schema target and the deployment wiring already connected.'
               },
               {
                 brand: { tech: 'flyio' },
-                title: '@cdwr/fly-node',
+                title: '`@cdwr/fly-node`',
                 description:
                   'A programmatic Node wrapper around the Fly CLI. What the deployment tooling here is built on.'
               }
