@@ -42,6 +42,8 @@ const config: StorybookConfig = {
       files: '**/*.@(mdx|stories.@(ts|tsx))'
     }
   ],
+  // The admin's block images, which the block gallery's cards show
+  staticDirs: [{ from: '../../cms/public/blocks', to: '/blocks' }],
   addons: [
     '@chromatic-com/storybook',
     '@storybook/addon-a11y',

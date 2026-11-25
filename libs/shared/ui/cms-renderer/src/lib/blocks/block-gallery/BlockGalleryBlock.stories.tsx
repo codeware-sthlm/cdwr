@@ -41,6 +41,12 @@ export const Browser: Story = {
   args: { ...args, mode: 'browser' }
 };
 
+/** Each card drawn as its block, scaled down, in place of the illustration. */
+export const DrawnBlocks: Story = {
+  name: 'Index with drawn blocks',
+  args: { ...args, cardPicture: 'block' }
+};
+
 export const FrostLight = a11yStory({ args }, 'frost', 'light');
 export const FrostDark = a11yStory({ args }, 'frost', 'dark');
 export const SpotlightLight = a11yStory({ args }, 'spotlight', 'light');
