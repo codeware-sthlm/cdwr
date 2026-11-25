@@ -14,6 +14,7 @@ import { type TailwindColor } from '@codeware/shared/util/tailwind';
 import { cn } from '@codeware/shared/util/ui';
 
 import { brandColourMark } from '../../utils/brand-colour-mark';
+import { InlineText } from '../../utils/InlineText';
 import { OwnLogo, resolveOwnLogo } from '../../utils/OwnLogo';
 
 /**
@@ -49,7 +50,7 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
         )}
         {intro && (
           <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-            {intro}
+            <InlineText text={intro} />
           </p>
         )}
       </div>
@@ -107,11 +108,11 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
                   </span>
                 )}
                 <CardTitle className="text-core-headline text-lg font-semibold">
-                  {item.title}
+                  <InlineText text={item.title} />
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-muted-foreground text-sm leading-relaxed">
-                {item.description}
+                <InlineText text={item.description} />
               </CardContent>
             </Card>
           );

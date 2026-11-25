@@ -50,8 +50,8 @@ export const sectionHeaderFields = ({
     label: { en: 'Intro', sv: 'Ingress' },
     admin: {
       description: {
-        en: 'Short paragraph below the heading',
-        sv: 'Kort stycke under rubriken'
+        en: 'Short paragraph below the heading. Wrap code in `backticks`.',
+        sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
       }
     },
     localized: true

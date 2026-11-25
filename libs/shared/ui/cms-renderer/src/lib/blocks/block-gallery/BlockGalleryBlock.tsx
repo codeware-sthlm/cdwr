@@ -13,6 +13,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { useEffect, useRef, useState } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { InlineText } from '../../utils/InlineText';
 import { interactiveSurface } from '../../utils/interactive-surface';
 import { type AnyBlockGalleryDoc, hasExample, localized } from '../gallery-doc';
 import { galleryDocs } from '../gallery-docs';
@@ -346,7 +347,7 @@ export const BlockGalleryBlock: React.FC<
           )}
           {intro && (
             <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-              {intro}
+              <InlineText text={intro} />
             </p>
           )}
         </div>

@@ -3,6 +3,7 @@ import type { GalleryBlock as GalleryBlockProps } from '@codeware/shared/util/pa
 import { cn } from '@codeware/shared/util/ui';
 
 import { usePayload } from '../../providers/PayloadProvider';
+import { InlineText } from '../../utils/InlineText';
 import { resolveImageSources } from '../image/image-sources';
 
 /**
@@ -52,7 +53,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = ({
           )}
           {intro && (
             <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-              {intro}
+              <InlineText text={intro} />
             </p>
           )}
         </div>
