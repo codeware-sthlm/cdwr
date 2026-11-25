@@ -944,20 +944,14 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         customThemes: [{ lookupSlug: 'cdwr' }],
         defaultTheme: 'cdwr'
       },
-      // The legal pages are linked by the legal settings, not listed here
+      // The legal pages are linked by the legal settings, not listed here.
+      // The footer carries the navigation, which the header leaves out
       footer: {
         variant: 'expanded',
-        linkSource: 'custom',
-        links: [
-          {
-            link: {
-              type: 'custom',
-              newTab: true,
-              url: 'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md',
-              label: 'Source-available under FSL-1.1-MIT, MIT after two years'
-            }
-          }
-        ],
+        linkSource: 'navigation',
+        licence: 'Source-available under FSL-1.1-MIT, MIT after two years',
+        licenceUrl:
+          'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md',
         contact: [
           { platform: 'email', email: 'hello@codeware.se' },
           { platform: 'github', url: 'https://github.com/codeware-sthlm' },

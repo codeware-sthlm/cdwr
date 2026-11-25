@@ -2541,6 +2541,14 @@ export interface SiteSettingsFooter {
    */
   copyright?: string | null;
   /**
+   * A short licence line on the footer’s last row, beside the privacy and terms links. Leave it empty to show none.
+   */
+  licence?: string | null;
+  /**
+   * Optional. Where the licence line leads; an address starting with http opens in a new tab.
+   */
+  licenceUrl?: string | null;
+  /**
    * Display the running release, e.g. web@1.4.0+ab12cd3.
    */
   showVersion?: boolean | null;
@@ -3598,6 +3606,8 @@ export interface SiteSettingsFooterSelect<T extends boolean = true> {
       };
   showCopyright?: T;
   copyright?: T;
+  licence?: T;
+  licenceUrl?: T;
   showVersion?: T;
 }
 /**

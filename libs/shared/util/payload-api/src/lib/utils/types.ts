@@ -44,6 +44,12 @@ export type FooterData = {
   legalLinks: Array<FooterLink>;
 
   /**
+   * A licence line beside the legal links, linked when it has an address,
+   * or `null` when not set.
+   */
+  licence: { label: string; url: string | null; newTab: boolean } | null;
+
+  /**
    * Whether to display the running release of the app.
    */
   showVersion: boolean;

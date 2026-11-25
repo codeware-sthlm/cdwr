@@ -66,6 +66,7 @@ describe('resolveFooter', () => {
         { key: 'nav-2', label: 'News', newTab: false, url: '/posts/news' }
       ],
       legalLinks: [],
+      licence: null,
       showVersion: false,
       tagline: null,
       variant: 'standard'
@@ -107,6 +108,45 @@ describe('resolveFooter', () => {
         label: 'More',
         links: [
           { key: 'nav-3', label: 'Blog', newTab: false, url: '/posts/blog' }
+        ]
+      }
+    ]);
+  });
+
+  it('keeps loose links where they stand among the groups', () => {
+    const footer = resolveFooter(makeSettings(), [
+      {
+        kind: 'group',
+        key: 'group-1',
+        label: 'Platform',
+        children: [
+          {
+            kind: 'link',
+            appearance: 'link',
+            collection: 'pages',
+            key: 'nav-3',
+            label: 'Blocks',
+            url: '/blocks'
+          }
+        ]
+      },
+      ...navigationTree
+    ]);
+
+    expect(footer?.groups).toEqual([
+      {
+        key: 'group-1',
+        label: 'Platform',
+        links: [
+          { key: 'nav-3', label: 'Blocks', newTab: false, url: '/blocks' }
+        ]
+      },
+      {
+        key: 'links-nav-1',
+        label: null,
+        links: [
+          { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
+          { key: 'nav-2', label: 'News', newTab: false, url: '/posts/news' }
         ]
       }
     ]);
@@ -231,6 +271,23 @@ describe('resolveFooter', () => {
       showVersion: true,
       tagline: 'We build things'
     });
+  });
+
+  it.each([
+    [{ licence: '  ' }, null],
+    [{ licence: 'MIT' }, { label: 'MIT', url: null, newTab: false }],
+    [
+      { licence: 'MIT', licenceUrl: '/licence' },
+      { label: 'MIT', url: '/licence', newTab: false }
+    ],
+    [
+      { licence: 'MIT', licenceUrl: 'https://example.com/LICENSE' },
+      { label: 'MIT', url: 'https://example.com/LICENSE', newTab: true }
+    ]
+  ])('resolves the licence line from %o', (settings, expected) => {
+    expect(
+      resolveFooter(makeSettings(settings), navigationTree)?.licence
+    ).toEqual(expected);
   });
 
   it('links published privacy and terms pages whatever the link source', () => {

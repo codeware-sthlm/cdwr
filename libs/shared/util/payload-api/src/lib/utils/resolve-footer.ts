@@ -8,8 +8,7 @@ import type {
   FooterLink,
   FooterLinkGroup,
   NavigationChildLink,
-  NavigationItem,
-  NavigationLink
+  NavigationItem
 } from './types';
 
 /**
@@ -136,24 +135,29 @@ export const resolveFooter = (
               )
             }
           ]
-        : [
-            {
-              key: 'links',
-              label: null,
-              links: navigationTree.flatMap((item) =>
-                item.kind === 'link' ? toFooterLink(item) : []
-              )
-            },
-            ...navigationTree.flatMap((item) =>
-              item.kind === 'group'
-                ? {
-                    key: item.key,
-                    label: item.label,
-                    links: item.children.map(toFooterLink)
-                  }
-                : []
-            )
-          ];
+        : // In navigation order: loose links next to each other share an
+          // unlabelled column where they stand
+          navigationTree.reduce<Array<FooterLinkGroup>>((acc, item) => {
+            if (item.kind === 'group') {
+              acc.push({
+                key: item.key,
+                label: item.label,
+                links: item.children.map(toFooterLink)
+              });
+              return acc;
+            }
+            const previous = acc.at(-1);
+            if (previous && previous.label === null) {
+              previous.links.push(toFooterLink(item));
+            } else {
+              acc.push({
+                key: acc.length ? `links-${item.key}` : 'links',
+                label: null,
+                links: [toFooterLink(item)]
+              });
+            }
+            return acc;
+          }, []);
 
   const groups = linkGroups.filter(({ links }) => links.length > 0);
 
@@ -176,12 +180,23 @@ export const resolveFooter = (
       ? null
       : footer?.copyright?.trim() || `© {year} ${general.appName}`;
 
+  const licenceLabel = footer?.licence?.trim();
+  const licenceUrl = footer?.licenceUrl?.trim() || null;
+  const licence = licenceLabel
+    ? {
+        label: licenceLabel,
+        url: licenceUrl,
+        newTab: Boolean(licenceUrl && /^https?:\/\//.test(licenceUrl))
+      }
+    : null;
+
   return {
     appName: general.appName,
     contact: footer?.contact ?? [],
     copyright,
     groups,
     legalLinks,
+    licence,
     links,
     showVersion: footer?.showVersion ?? false,
     tagline: footer?.tagline ?? null,

@@ -133,12 +133,10 @@ describe('the cdwr.io definition', () => {
     expect(footer?.contact?.some(({ platform }) => platform === 'phone')).toBe(
       false
     );
-    expect(footer?.links).toContainEqual({
-      link: expect.objectContaining({
-        type: 'custom',
-        url: 'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md'
-      })
-    });
+    expect(footer?.linkSource).toBe('navigation');
+    expect(footer?.licenceUrl).toBe(
+      'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md'
+    );
   });
 
   it('wires the legal pages, which the footer links from the settings', () => {
