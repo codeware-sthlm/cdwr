@@ -265,7 +265,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'pill-list',
-            logoColor: 'brand',
+            logoColor: 'own',
             eyebrow: 'Built on',
             heading: 'What the platform runs on',
             intro:
@@ -630,7 +630,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Built on',
             heading: 'What it is built on, and why',
             columns: '3',
-            logoColor: 'brand',
+            logoColor: 'own',
             items: [
               {
                 brand: { tech: 'payload' },
@@ -821,7 +821,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Three packages, published',
             heading: 'Usable on their own, without adopting anything else here',
             columns: '3',
-            logoColor: 'brand',
+            logoColor: 'own',
             items: [
               {
                 brand: { tech: 'nx' },

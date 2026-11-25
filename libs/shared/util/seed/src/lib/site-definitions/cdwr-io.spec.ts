@@ -190,7 +190,7 @@ describe('the cdwr.io definition', () => {
     expect(cdwrIo.posts ?? []).toEqual([]);
   });
 
-  it('dims every callout mark and draws every tech logo in the brand colour', () => {
+  it('dims every callout mark and keeps every tech logo in its own colours', () => {
     const blocks = cdwrIo.pages.flatMap(({ layout }) => layout);
     const marks = blocks.flatMap((block) =>
       block.blockType === 'callout' ? [block.markStyle] : []
@@ -206,7 +206,7 @@ describe('the cdwr.io definition', () => {
     expect(marks).toHaveLength(3);
     expect(new Set(marks)).toEqual(new Set(['muted']));
     expect(logos).toHaveLength(3);
-    expect(new Set(logos)).toEqual(new Set(['brand']));
+    expect(new Set(logos)).toEqual(new Set(['own']));
   });
 });
 
