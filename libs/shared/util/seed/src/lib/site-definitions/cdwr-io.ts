@@ -233,7 +233,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             eyebrow: 'Custom components',
             heading: 'When no block fits, write one',
             intro:
-              'A developer writes a component in the admin, and saving it starts a build. An editor then places it on a page like any other block. The one below is written that way: it reads the colours of the active theme.',
+              'A developer writes a component in the admin, and saving it starts a build. An editor then places it on a page like any other block. The components page shows one written that way, beside its source.',
             enableLink: true,
             link: {
               type: 'custom',
@@ -242,17 +242,10 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             }
           },
           {
-            blockType: 'custom-component',
-            component: { lookupSlug: 'theme-swatch' },
-            props: {
-              title: 'The colours on this page',
-              description: 'Read from the active theme as it changes'
-            }
-          },
-          {
             blockType: 'feature-section',
             eyebrow: 'Content',
             heading: 'A gallery of every block',
+            band: 'subtle',
             illustration: blocksIllustration,
             intro:
               'Editors build pages from these blocks. The gallery shows each one with the same component a site uses, and says when to use it.',
@@ -270,7 +263,6 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             heading: 'What the platform runs on',
             intro:
               'Open-source tools and hosted services. Each name links to its own site.',
-            band: 'subtle',
             items: [
               {
                 label: 'Payload',
@@ -525,7 +517,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             markStyle: 'muted',
             heading: 'Write a component on your own site',
             band: 'subtle',
-            body: 'The component studio comes with a site on the platform, and we turn it on for the site’s developer. Signup is by invitation for now, and Get started says how to ask for one.',
+            body: 'The component studio comes with a site on the platform, and we turn it on for the site’s developer. Signup is by invitation for now.',
             link: { type: 'custom', url: '/start', label: 'Get a site' }
           }
         ]
@@ -736,7 +728,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         meta: {
           title: 'Get a site on the platform',
           description:
-            'The platform hosts a small number of sites, by invitation. Ask for an invite code, or start a workspace of your own from the published packages.'
+            'The platform hosts a small number of sites, by invitation. Or start a workspace of your own from the published packages.'
         },
         layout: [
           {
@@ -757,8 +749,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             items: [
               {
                 title: '1. Get an invite code',
-                description:
-                  'A code lets you create an account. Ask for one by email, below.'
+                description: 'A code lets you create an account.'
               },
               {
                 title: '2. Sign up',
@@ -778,22 +769,9 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             ]
           },
           {
-            // On the same band, so it reads as the end of the Hosted section;
-            // feature cards take no links
+            // On the band above, so hosted and self-built read as one choice
             blockType: 'content',
             band: 'subtle',
-            columns: [
-              {
-                size: 'full',
-                richText: {
-                  markdown:
-                    'To ask for an invite code, write to [hello@codeware.se](mailto:hello@codeware.se) and say a little about the site you have in mind.'
-                }
-              }
-            ]
-          },
-          {
-            blockType: 'content',
             columns: [
               {
                 size: 'full',
@@ -949,7 +927,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
       footer: {
         variant: 'expanded',
         linkSource: 'navigation',
-        licence: 'Source-available under FSL-1.1-MIT, MIT after two years',
+        licence: 'FSL-1.1-MIT',
         licenceUrl:
           'https://github.com/codeware-sthlm/cdwr/blob/main/LICENSING.md',
         contact: [
@@ -960,7 +938,8 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         showCopyright: true,
         copyright: '© {year} Codeware Sthlm AB',
         // The platform shows its own release line
-        showVersion: true
+        showVersion: true,
+        backToTop: true
       },
       legal: {
         privacyPage: { lookupSlug: 'privacy' }
