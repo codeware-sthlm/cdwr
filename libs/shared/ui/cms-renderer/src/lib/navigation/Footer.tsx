@@ -106,12 +106,13 @@ function LegalLinks({
 }
 
 /**
- * Copyright, legal links and release line.
+ * Copyright, legal links, release line and the link back to the top.
  *
  * Secondary to the content above it. Kept at full muted color — dimming it
  * further fails the contrast check at this size.
  */
 function SecondaryLine({
+  backToTop,
   className,
   copyright,
   layout = 'stack',
@@ -119,6 +120,7 @@ function SecondaryLine({
   licence,
   showVersion
 }: {
+  backToTop: boolean;
   className?: string;
   copyright: string | null;
   legalLinks: FooterData['legalLinks'];
@@ -127,9 +129,15 @@ function SecondaryLine({
   layout?: 'row' | 'stack';
   showVersion: boolean;
 }) {
-  const { appInfo } = usePayload();
+  const { appInfo, locale } = usePayload();
 
-  if (!copyright && !showVersion && !legalLinks.length && !licence) {
+  if (
+    !copyright &&
+    !showVersion &&
+    !backToTop &&
+    !legalLinks.length &&
+    !licence
+  ) {
     return null;
   }
 
@@ -155,10 +163,20 @@ function SecondaryLine({
         </div>
       )}
       {/* Stays right when the copyright line is turned off */}
-      {showVersion && (
-        <p className={cn(isRow && 'sm:ml-auto')}>
-          {formatReleaseName(appInfo)}
-        </p>
+      {(showVersion || backToTop) && (
+        <div className={cn('flex items-center gap-4', isRow && 'sm:ml-auto')}>
+          {showVersion && <p>{formatReleaseName(appInfo)}</p>}
+          {/* `#top` scrolls to the top of the page without an element of that
+              id, and needs no script */}
+          {backToTop && (
+            <a
+              href="#top"
+              className="hover:text-core-nav-link-hover transition hover:underline hover:underline-offset-4"
+            >
+              {t(locale, 'footer.backToTop')} <span aria-hidden="true">↑</span>
+            </a>
+          )}
+        </div>
       )}
     </div>
   );
@@ -176,6 +194,7 @@ function CompactFooter({
   session?: MemberSessionData;
 }) {
   const {
+    backToTop,
     contact,
     copyright,
     legalLinks,
@@ -200,6 +219,7 @@ function CompactFooter({
               <SocialLinks links={contact} />
               {session && <MemberSession session={session} />}
               <SecondaryLine
+                backToTop={backToTop}
                 copyright={copyright}
                 legalLinks={legalLinks}
                 licence={licence}
@@ -222,6 +242,7 @@ function StandardFooter({
   session?: MemberSessionData;
 }) {
   const {
+    backToTop,
     contact,
     copyright,
     legalLinks,
@@ -261,6 +282,7 @@ function StandardFooter({
                   />
                 )}
                 <SecondaryLine
+                  backToTop={backToTop}
                   copyright={copyright}
                   layout="row"
                   legalLinks={legalLinks}
@@ -287,9 +309,10 @@ function ExpandedFooter({
   footer: FooterData;
   session?: MemberSessionData;
 }) {
-  const { iconConfig, iconStyle, locale } = usePayload();
+  const { iconConfig, iconStyle, locale, navigate } = usePayload();
   const {
     appName,
+    backToTop,
     contact,
     copyright,
     groups,
@@ -310,7 +333,15 @@ function ExpandedFooter({
             <div className="grid gap-10 md:grid-cols-2">
               {/* Brand column */}
               <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
-                <div className="flex items-center gap-3">
+                {/* The name labels the link */}
+                <a
+                  href="/"
+                  onClick={(e) => {
+                    if (!handleAsRoute(e)) return;
+                    navigate('/');
+                  }}
+                  className="flex items-center gap-3"
+                >
                   {iconConfig && (
                     <span className={siteIconStyle({ style: iconStyle })}>
                       <TenantIcon config={iconConfig} size={24} />
@@ -319,7 +350,7 @@ function ExpandedFooter({
                   <span className="text-core-headline font-semibold">
                     {appName}
                   </span>
-                </div>
+                </a>
                 {tagline && (
                   <p className="text-muted-foreground max-w-sm text-sm whitespace-pre-line">
                     {tagline}
@@ -385,6 +416,7 @@ function ExpandedFooter({
             </div>
 
             <SecondaryLine
+              backToTop={backToTop}
               className="mt-10 border-t pt-6"
               copyright={copyright}
               layout="row"

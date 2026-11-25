@@ -2569,6 +2569,10 @@ export interface SiteSettingsFooter {
    * Display the running release, e.g. web@1.4.0+ab12cd3.
    */
   showVersion?: boolean | null;
+  /**
+   * A link on the last row that scrolls the page back to the top.
+   */
+  backToTop?: boolean | null;
 }
 /**
  * The privacy and terms pages, linked from the footer on every page and from the tour signup form and its emails.
@@ -3626,6 +3630,7 @@ export interface SiteSettingsFooterSelect<T extends boolean = true> {
   licence?: T;
   licenceUrl?: T;
   showVersion?: T;
+  backToTop?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

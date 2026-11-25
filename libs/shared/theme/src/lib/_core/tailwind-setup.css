@@ -180,4 +180,10 @@
   h6 {
     @apply font-heading;
   }
+  /* Tailwind 4 leaves buttons on the default cursor, so a link drawn as a
+     button pointed and a real one did not. Menu items keep shadcn's default */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
 }

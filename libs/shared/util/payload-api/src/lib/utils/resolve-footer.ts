@@ -192,6 +192,7 @@ export const resolveFooter = (
 
   return {
     appName: general.appName,
+    backToTop: footer?.backToTop ?? false,
     contact: footer?.contact ?? [],
     copyright,
     groups,

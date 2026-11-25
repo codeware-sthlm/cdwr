@@ -49,6 +49,7 @@ describe('resolveFooter', () => {
 
     expect(footer).toEqual({
       appName: 'Acme',
+      backToTop: false,
       contact: [],
       copyright: '© {year} Acme',
       groups: [
@@ -257,6 +258,7 @@ describe('resolveFooter', () => {
 
     const footer = resolveFooter(
       makeSettings({
+        backToTop: true,
         contact,
         copyright: '© {year} Acme AB',
         showVersion: true,
@@ -266,6 +268,7 @@ describe('resolveFooter', () => {
     );
 
     expect(footer).toMatchObject({
+      backToTop: true,
       contact,
       copyright: '© {year} Acme AB',
       showVersion: true,

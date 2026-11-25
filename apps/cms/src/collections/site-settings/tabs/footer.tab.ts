@@ -215,6 +215,20 @@ export const footerTab: Tab = {
           sv: 'Visa den körande utgåvan, t.ex. web@1.4.0+ab12cd3.'
         }
       }
+    },
+    {
+      name: 'backToTop',
+      type: 'checkbox',
+      label: {
+        en: 'Show a back to top link',
+        sv: 'Visa en länk tillbaka till toppen'
+      },
+      admin: {
+        description: {
+          en: 'A link on the last row that scrolls the page back to the top.',
+          sv: 'En länk på sista raden som skrollar sidan tillbaka till toppen.'
+        }
+      }
     }
   ]
 };
