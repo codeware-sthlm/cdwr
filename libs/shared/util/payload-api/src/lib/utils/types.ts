@@ -50,6 +50,11 @@ export type FooterData = {
   licence: { label: string; url: string | null; newTab: boolean } | null;
 
   /**
+   * Whether the last row ends with a link back to the top of the page.
+   */
+  backToTop: boolean;
+
+  /**
    * Whether to display the running release of the app.
    */
   showVersion: boolean;

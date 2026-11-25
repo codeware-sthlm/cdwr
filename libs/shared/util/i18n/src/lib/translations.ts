@@ -67,6 +67,7 @@ export type TranslationKey =
   | 'fileArea.typeVideo'
   | 'fileArea.viewGrid'
   | 'fileArea.viewList'
+  | 'footer.backToTop'
   | 'form.submitSuccess'
   | 'form.submitFailed'
   | 'form.submitFailedDescription'
@@ -396,6 +397,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'fileArea.typeVideo': 'Video',
     'fileArea.viewGrid': 'Grid view',
     'fileArea.viewList': 'List view',
+    'footer.backToTop': 'Back to top',
     'form.submitSuccess': 'Form submitted successfully',
     'form.submitFailed': 'Form submission failed',
     'form.submitFailedDescription': 'Please try again.',
@@ -786,6 +788,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'form.submitSuccess': 'Formuläret skickades in',
     'form.submitFailed': 'Formuläret kunde inte skickas in',
     'form.submitFailedDescription': 'Försök igen.',
+    'footer.backToTop': 'Till toppen',
     'humanCheck.unavailable':
       'Skräppostskyddet kunde inte laddas, så formuläret går inte att skicka. Orsaken är oftast en innehållsblockerare – tillåt challenges.cloudflare.com eller prova en annan webbläsare.',
     'gallery.accepts': 'Kan innehålla',

@@ -75,6 +75,7 @@ const contact = [
 /** Everything an editor can turn on, so the variants are comparable. */
 const complete: FooterData = {
   appName: 'Codeware Sthlm AB',
+  backToTop: false,
   contact,
   copyright: '© {year} Codeware Sthlm AB. All rights reserved.',
   groups: [{ key: 'links', label: null, links }],
@@ -158,12 +159,13 @@ export const ExpandedGrouped: Story = {
 
 /** A licence line beside the legal links, linked to the licence text. */
 export const ExpandedWithLicence: Story = {
-  name: 'Expanded with licence',
+  name: 'Expanded with licence and back to top',
   args: {
     footer: {
       ...complete,
+      backToTop: true,
       licence: {
-        label: 'Source-available under FSL-1.1-MIT',
+        label: 'FSL-1.1-MIT',
         url: 'https://example.com/LICENSE',
         newTab: true
       },

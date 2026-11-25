@@ -106,6 +106,10 @@ export const RichText = (props: Props) => {
           'prose md:prose-md dark:prose-invert': !disableProse,
           'not-prose': disableProse
         },
+        // Inline code on the theme's code background instead of the plugin's
+        // backticks; code blocks keep their own panel
+        !disableProse &&
+          'prose-code:font-normal prose-code:before:content-none prose-code:after:content-none [&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-[var(--code-bg,var(--muted))] [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5',
         className
       )}
       {...rest}
