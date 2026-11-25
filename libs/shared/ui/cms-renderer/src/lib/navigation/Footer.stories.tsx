@@ -82,6 +82,7 @@ const complete: FooterData = {
     { key: 'legal-privacy', label: 'Privacy', newTab: false, url: '/privacy' },
     { key: 'legal-terms', label: 'Terms', newTab: false, url: '/terms' }
   ],
+  licence: null,
   links,
   showVersion: true,
   tagline: 'We build digital products that outlive their launch date.',
@@ -150,6 +151,22 @@ export const ExpandedGrouped: Story = {
         { key: 'explore', label: 'Explore', links: links.slice(2, 4) },
         { key: 'company', label: 'Company', links: links.slice(4) }
       ],
+      variant: 'expanded'
+    }
+  }
+};
+
+/** A licence line beside the legal links, linked to the licence text. */
+export const ExpandedWithLicence: Story = {
+  name: 'Expanded with licence',
+  args: {
+    footer: {
+      ...complete,
+      licence: {
+        label: 'Source-available under FSL-1.1-MIT',
+        url: 'https://example.com/LICENSE',
+        newTab: true
+      },
       variant: 'expanded'
     }
   }
@@ -276,6 +293,13 @@ export const MobileStandard: Story = {
 export const MobileExpanded: Story = {
   name: 'Mobile (expanded)',
   args: Expanded.args,
+  globals: { viewport: { value: 'mobile1', isRotated: false } }
+};
+
+/** Short groups stay side by side on a phone. */
+export const MobileExpandedGrouped: Story = {
+  name: 'Mobile (expanded, grouped)',
+  args: ExpandedGrouped.args,
   globals: { viewport: { value: 'mobile1', isRotated: false } }
 };
 

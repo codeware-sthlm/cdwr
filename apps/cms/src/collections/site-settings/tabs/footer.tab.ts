@@ -9,6 +9,7 @@ import type { Condition, Tab, TypeWithID } from 'payload';
  */
 type FooterData = {
   enabled?: boolean | null;
+  licence?: string | null;
   linkSource?: ('navigation' | 'custom' | 'none') | null;
   showCopyright?: boolean | null;
   variant?: ('compact' | 'standard' | 'expanded') | null;
@@ -21,6 +22,9 @@ const isCustomLinks: Condition<TypeWithID, FooterData> = (_, siblingData) =>
 
 const hasCopyright: Condition<TypeWithID, FooterData> = (_, siblingData) =>
   siblingData?.showCopyright !== false;
+
+const hasLicence: Condition<TypeWithID, FooterData> = (_, siblingData) =>
+  Boolean(siblingData?.licence?.trim());
 
 /**
  * Footer tab for site settings.
@@ -171,6 +175,31 @@ export const footerTab: Tab = {
           sv: 'Använd {year} för innevarande år. Standard är "© {year} <applikationens namn>" när fältet är tomt.'
         },
         placeholder: '© {year} Acme AB'
+      }
+    },
+    {
+      name: 'licence',
+      type: 'text',
+      label: { en: 'Licence', sv: 'Licens' },
+      localized: true,
+      admin: {
+        description: {
+          en: 'A short licence line on the footer’s last row, beside the privacy and terms links. Leave it empty to show none.',
+          sv: 'En kort licensrad på sidfotens sista rad, bredvid länkarna till integritet och villkor. Lämna tomt för att inte visa någon.'
+        },
+        placeholder: 'MIT'
+      }
+    },
+    {
+      name: 'licenceUrl',
+      type: 'text',
+      label: { en: 'Licence link', sv: 'Länk till licensen' },
+      admin: {
+        condition: hasLicence,
+        description: {
+          en: 'Optional. Where the licence line leads; an address starting with http opens in a new tab.',
+          sv: 'Valfri. Vart licensraden leder; en adress som börjar med http öppnas i en ny flik.'
+        }
       }
     },
     {

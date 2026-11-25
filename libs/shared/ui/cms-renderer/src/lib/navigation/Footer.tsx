@@ -74,9 +74,15 @@ function LinkRow({ links }: { links: FooterData['links'] }) {
   );
 }
 
-/** Privacy and terms, beside the copyright on every variant. */
-function LegalLinks({ links }: { links: FooterData['legalLinks'] }) {
-  if (!links.length) {
+/** Privacy, terms and the licence, beside the copyright on every variant. */
+function LegalLinks({
+  licence,
+  links
+}: {
+  licence: FooterData['licence'];
+  links: FooterData['legalLinks'];
+}) {
+  if (!links.length && !licence) {
     return null;
   }
 
@@ -87,6 +93,14 @@ function LegalLinks({ links }: { links: FooterData['legalLinks'] }) {
           {label}
         </NavLink>
       ))}
+      {licence &&
+        (licence.url ? (
+          <NavLink href={licence.url} newTab={licence.newTab}>
+            {licence.label}
+          </NavLink>
+        ) : (
+          <span>{licence.label}</span>
+        ))}
     </span>
   );
 }
@@ -102,18 +116,20 @@ function SecondaryLine({
   copyright,
   layout = 'stack',
   legalLinks,
+  licence,
   showVersion
 }: {
   className?: string;
   copyright: string | null;
   legalLinks: FooterData['legalLinks'];
+  licence: FooterData['licence'];
   /** `row` splits the two texts across the full width from `sm` and up. */
   layout?: 'row' | 'stack';
   showVersion: boolean;
 }) {
   const { appInfo } = usePayload();
 
-  if (!copyright && !showVersion && !legalLinks.length) {
+  if (!copyright && !showVersion && !legalLinks.length && !licence) {
     return null;
   }
 
@@ -127,7 +143,7 @@ function SecondaryLine({
         className
       )}
     >
-      {(copyright || legalLinks.length > 0) && (
+      {(copyright || legalLinks.length > 0 || licence) && (
         <div
           className={cn(
             'flex flex-col items-center gap-1',
@@ -135,7 +151,7 @@ function SecondaryLine({
           )}
         >
           {copyright && <p>{withYear(copyright)}</p>}
-          <LegalLinks links={legalLinks} />
+          <LegalLinks licence={licence} links={legalLinks} />
         </div>
       )}
       {/* Stays right when the copyright line is turned off */}
@@ -159,8 +175,15 @@ function CompactFooter({
   footer: FooterData;
   session?: MemberSessionData;
 }) {
-  const { contact, copyright, legalLinks, links, showVersion, tagline } =
-    footer;
+  const {
+    contact,
+    copyright,
+    legalLinks,
+    licence,
+    links,
+    showVersion,
+    tagline
+  } = footer;
 
   return (
     <footer className="bg-core-background-body border-core-content-border mt-12 flex-none border-t">
@@ -179,6 +202,7 @@ function CompactFooter({
               <SecondaryLine
                 copyright={copyright}
                 legalLinks={legalLinks}
+                licence={licence}
                 showVersion={showVersion}
               />
             </div>
@@ -197,8 +221,15 @@ function StandardFooter({
   footer: FooterData;
   session?: MemberSessionData;
 }) {
-  const { contact, copyright, legalLinks, links, showVersion, tagline } =
-    footer;
+  const {
+    contact,
+    copyright,
+    legalLinks,
+    licence,
+    links,
+    showVersion,
+    tagline
+  } = footer;
 
   return (
     <footer className="bg-core-background-body border-core-content-border mt-16 flex-none border-t">
@@ -233,6 +264,7 @@ function StandardFooter({
                   copyright={copyright}
                   layout="row"
                   legalLinks={legalLinks}
+                  licence={licence}
                   showVersion={showVersion}
                 />
               </div>
@@ -262,6 +294,7 @@ function ExpandedFooter({
     copyright,
     groups,
     legalLinks,
+    licence,
     links,
     showVersion,
     tagline
@@ -280,7 +313,7 @@ function ExpandedFooter({
                 <div className="flex items-center gap-3">
                   {iconConfig && (
                     <span className={siteIconStyle({ style: iconStyle })}>
-                      <TenantIcon config={iconConfig} size={32} />
+                      <TenantIcon config={iconConfig} size={24} />
                     </span>
                   )}
                   <span className="text-core-headline font-semibold">
@@ -305,7 +338,7 @@ function ExpandedFooter({
                 (isGrouped ? (
                   <nav
                     aria-label={t(locale, 'navigation.footer')}
-                    className="text-core-nav-link grid gap-8 text-center text-sm font-medium sm:grid-cols-2 md:text-left lg:grid-cols-3"
+                    className="text-core-nav-link grid grid-cols-2 gap-8 text-center text-sm font-medium md:text-left lg:grid-cols-3"
                   >
                     {groups.map(({ key, label, links: groupLinks }) => (
                       <div key={key}>
@@ -356,6 +389,7 @@ function ExpandedFooter({
               copyright={copyright}
               layout="row"
               legalLinks={legalLinks}
+              licence={licence}
               showVersion={showVersion}
             />
           </ContainerInner>
@@ -409,8 +443,15 @@ export function Footer({
     return session ? <MemberOnlyFooter session={session} /> : null;
   }
 
-  const { contact, copyright, legalLinks, links, showVersion, tagline } =
-    footer;
+  const {
+    contact,
+    copyright,
+    legalLinks,
+    licence,
+    links,
+    showVersion,
+    tagline
+  } = footer;
 
   // Everything can be turned off, which leaves nothing but a border to render.
   // A member slot is reason enough to keep the footer: without it a signed-in
@@ -420,6 +461,7 @@ export function Footer({
     !tagline &&
     !links.length &&
     !legalLinks.length &&
+    !licence &&
     !contact.length &&
     !copyright &&
     !showVersion
