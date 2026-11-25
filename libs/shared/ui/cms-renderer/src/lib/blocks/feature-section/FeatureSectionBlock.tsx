@@ -4,6 +4,7 @@ import { cn } from '@codeware/shared/util/ui';
 import { usePayload } from '../../providers/PayloadProvider';
 import { ArrowLink } from '../../utils/ArrowLink';
 import { Illustration } from '../../utils/Illustration';
+import { InlineText } from '../../utils/InlineText';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { ImageBlock } from '../image/ImageBlock';
 
@@ -54,7 +55,7 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
           )}
           {intro && (
             <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-              {intro}
+              <InlineText text={intro} />
             </p>
           )}
           {resolvedLink && (
@@ -124,10 +125,10 @@ export const FeatureSectionBlock: React.FC<FeatureSectionBlockProps> = ({
                     `--core-interactive` is a border token that never has to
                     clear 4.5:1 as text */}
                 <p className="text-foreground text-sm font-semibold">
-                  {point.title}
+                  <InlineText text={point.title} />
                 </p>
                 <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">
-                  {point.body}
+                  <InlineText text={point.body} />
                 </p>
               </div>
             );

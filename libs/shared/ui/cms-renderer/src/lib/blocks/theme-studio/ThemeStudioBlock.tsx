@@ -3,6 +3,8 @@
 import type { ThemeStudioBlock as ThemeStudioBlockProps } from '@codeware/shared/util/payload-types';
 import { Suspense, lazy, useSyncExternalStore } from 'react';
 
+import { InlineText } from '../../utils/InlineText';
+
 /**
  * Theme studio — the real studio, in a page.
  *
@@ -69,7 +71,7 @@ export const ThemeStudioBlock: React.FC<ThemeStudioBlockProps> = ({
           )}
           {intro && (
             <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-              {intro}
+              <InlineText text={intro} />
             </p>
           )}
         </div>

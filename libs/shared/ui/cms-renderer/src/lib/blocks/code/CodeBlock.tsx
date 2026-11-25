@@ -1,6 +1,8 @@
 import { Code } from '@codeware/shared/ui/code';
 import type { CodeBlock as CodeBlockProps } from '@codeware/shared/util/payload-types';
 
+import { InlineText } from '../../utils/InlineText';
+
 import { CollapsibleCode } from './CollapsibleCode';
 
 type Props = CodeBlockProps;
@@ -39,7 +41,7 @@ export const CodeBlock: React.FC<Props> = ({
         )}
         {intro && (
           <p className="text-muted-foreground mt-3.5 text-base leading-relaxed first:mt-0">
-            {intro}
+            <InlineText text={intro} />
           </p>
         )}
       </div>

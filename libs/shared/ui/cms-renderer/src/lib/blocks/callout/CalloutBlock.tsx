@@ -4,6 +4,7 @@ import { cn } from '@codeware/shared/util/ui';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { Illustration } from '../../utils/Illustration';
+import { InlineText } from '../../utils/InlineText';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { TenantIcon } from '../../utils/TenantIcon';
 import { ImageBlock } from '../image/ImageBlock';
@@ -68,7 +69,7 @@ export const CalloutBlock: React.FC<CalloutBlockProps> = ({
         </h2>
         {body && (
           <p className="text-muted-foreground mt-4 max-w-md text-base leading-relaxed">
-            {body}
+            <InlineText text={body} />
           </p>
         )}
         {/* A row from before `showLink` existed has no value and keeps its button */}

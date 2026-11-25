@@ -4,6 +4,7 @@ import { cn } from '@codeware/shared/util/ui';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { ArrowLink } from '../../utils/ArrowLink';
+import { InlineText } from '../../utils/InlineText';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 
 /**
@@ -51,7 +52,7 @@ export const ShowcaseBlock: React.FC<ShowcaseBlockProps> = ({
         </div>
         {intro && (
           <p className="text-muted-foreground mt-3.5 max-w-xl text-base leading-relaxed">
-            {intro}
+            <InlineText text={intro} />
           </p>
         )}
       </div>

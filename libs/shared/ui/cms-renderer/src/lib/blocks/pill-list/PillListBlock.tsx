@@ -3,6 +3,7 @@ import type { PillListBlock as PillListBlockProps } from '@codeware/shared/util/
 import { cn } from '@codeware/shared/util/ui';
 
 import { brandColourMark } from '../../utils/brand-colour-mark';
+import { InlineText } from '../../utils/InlineText';
 import { interactiveSurface } from '../../utils/interactive-surface';
 import { OwnLogo } from '../../utils/OwnLogo';
 
@@ -58,7 +59,7 @@ export const PillListBlock: React.FC<PillListBlockProps> = ({
         )}
         {intro && (
           <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
-            {intro}
+            <InlineText text={intro} />
           </p>
         )}
       </div>
