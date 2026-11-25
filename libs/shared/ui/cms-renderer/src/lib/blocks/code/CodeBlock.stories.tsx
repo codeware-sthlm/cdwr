@@ -84,6 +84,18 @@ S3_REGION=eu-north-1`
   }
 };
 
+/** A header of its own, and long code cut off to six lines behind a fade. */
+export const WithHeaderCollapsed: Story = {
+  name: 'With header, collapsed',
+  args: {
+    ...TypeScript.args,
+    eyebrow: 'Example',
+    heading: 'A counter in React',
+    intro: 'The state lives in the component and starts from a prop.',
+    visibleLines: 6
+  }
+};
+
 // The same instance the gallery renders, so the two cannot drift
 const a11yArgs: Story['args'] = codeGallery.example;
 
