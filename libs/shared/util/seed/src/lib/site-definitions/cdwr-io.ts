@@ -337,6 +337,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             showMark: true,
             markStyle: 'muted',
             heading: 'Build on the same platform',
+            band: 'subtle',
             body: 'The plugin, the preset and the deployment tooling behind this site are published. One command starts a workspace of your own.',
             link: { type: 'custom', url: '/start', label: 'Get started' }
           }
@@ -385,6 +386,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-section',
             eyebrow: 'Readability',
             heading: 'How readability is checked',
+            band: 'subtle',
             illustration: contrastIllustration,
             intro:
               'The studio builds a theme from a few choices and measures the contrast between each colour and the colour behind it.',
@@ -454,6 +456,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-section',
             eyebrow: 'How it works',
             heading: 'From code to page',
+            band: 'subtle',
             intro:
               'A component is code written in the admin and needs no release. Only the site it belongs to can use it.',
             subFeatures: [
@@ -480,21 +483,13 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             }
           },
           {
-            blockType: 'content',
-            columns: [
-              {
-                size: 'full',
-                richText: {
-                  markdown:
-                    '## The source of the component above\n\nThis is the code behind the colours shown above, as it was written in the component studio.'
-                }
-              }
-            ]
-          },
-          {
             blockType: 'code',
+            heading: 'The source of the component above',
+            intro:
+              'This is the code behind the colours shown above, as it was written in the component studio.',
             language: 'tsx',
-            code: cdwrIoThemeSwatchSource
+            code: cdwrIoThemeSwatchSource,
+            visibleLines: 14
           },
           {
             blockType: 'feature-cards',
@@ -529,6 +524,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             showMark: true,
             markStyle: 'muted',
             heading: 'Write a component on your own site',
+            band: 'subtle',
             body: 'The component studio comes with a site on the platform, and we turn it on for the site’s developer. Signup is by invitation for now, and Get started says how to ask for one.',
             link: { type: 'custom', url: '/start', label: 'Get a site' }
           }
@@ -553,6 +549,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-section',
             eyebrow: 'One build per app',
             heading: 'Built once, started for every site',
+            band: 'subtle',
             illustration: oneBuildIllustration,
             intro:
               'The platform has two apps. The cms serves a site’s pages and its admin, and cdwr.io and codeware.se run on it. The headless client, built on TanStack Start, serves a site that has a front end of its own and reads its content from the cms. Each app is built once when a change is merged, and that build is started for every site that runs on it.',
@@ -582,6 +579,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-cards',
             eyebrow: 'Deployment',
             heading: 'A release takes traffic once it is healthy',
+            band: 'subtle',
             columns: '3',
             items: [
               {
@@ -629,6 +627,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             blockType: 'feature-cards',
             eyebrow: 'Built on',
             heading: 'What it is built on, and why',
+            band: 'subtle',
             columns: '3',
             logoColor: 'own',
             items: [
@@ -848,6 +847,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             showMark: true,
             markStyle: 'muted',
             heading: 'The source is open',
+            band: 'subtle',
             body: 'Read how it is built, follow along as it changes, or open an issue when something does not work the way this site says it does.',
             link: {
               type: 'custom',
