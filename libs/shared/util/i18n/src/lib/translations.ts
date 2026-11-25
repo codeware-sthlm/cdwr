@@ -6,6 +6,8 @@ export type TranslationKey =
   | 'about.environment'
   | 'about.release'
   | 'about.version'
+  | 'code.showAll'
+  | 'code.showLess'
   | 'colorScheme.currentClickFor'
   | 'colorScheme.dark'
   | 'colorScheme.light'
@@ -329,6 +331,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'about.environment': 'Environment',
     'about.release': 'Release',
     'about.version': 'Version',
+    'code.showAll': 'Show all {{count}} lines',
+    'code.showLess': 'Show fewer lines',
     'colorScheme.currentClickFor': 'Current: {{current}}, click for {{next}}',
     'colorScheme.dark': 'dark',
     'colorScheme.light': 'light',
@@ -713,6 +717,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     'about.environment': 'Miljö',
     'about.release': 'Utgåva',
     'about.version': 'Version',
+    'code.showAll': 'Visa alla {{count}} rader',
+    'code.showLess': 'Visa färre rader',
     'colorScheme.currentClickFor':
       'Nuvarande: {{current}}, klicka för {{next}}',
     'colorScheme.dark': 'mörkt',

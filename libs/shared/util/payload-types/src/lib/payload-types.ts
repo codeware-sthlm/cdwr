@@ -949,8 +949,21 @@ export interface Agent {
  * via the `definition` "CodeBlock".
  */
 export interface CodeBlock {
+  /**
+   * Small uppercase label shown above the heading
+   */
+  eyebrow?: string | null;
+  heading?: string | null;
+  /**
+   * Short paragraph below the heading
+   */
+  intro?: string | null;
   language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx' | 'shell';
   code: string;
+  /**
+   * Longer code is cut off here and fades out, with a button to show all of it. Leave it empty to always show every line.
+   */
+  visibleLines?: number | null;
   /**
    * Sets the block apart with a background across the page. Strong shows it in the site’s dark colours and Gradient in a deep run of its brand colour, both also in light mode.
    */

@@ -463,6 +463,41 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
     availableIn: ['pages', 'reusable-content', 'content'],
     fields: [
       {
+        name: 'eyebrow',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Eyebrow',
+          sv: 'Överrubrik'
+        },
+        description: {
+          en: 'Small uppercase label shown above the heading',
+          sv: 'Liten versal etikett som visas ovanför rubriken'
+        }
+      },
+      {
+        name: 'heading',
+        type: 'text',
+        localized: true,
+        label: {
+          en: 'Heading',
+          sv: 'Rubrik'
+        }
+      },
+      {
+        name: 'intro',
+        type: 'textarea',
+        localized: true,
+        label: {
+          en: 'Intro',
+          sv: 'Ingress'
+        },
+        description: {
+          en: 'Short paragraph below the heading',
+          sv: 'Kort stycke under rubriken'
+        }
+      },
+      {
         name: 'language',
         type: 'select',
         required: true,
@@ -475,6 +510,18 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
         name: 'code',
         type: 'code',
         required: true
+      },
+      {
+        name: 'visibleLines',
+        type: 'number',
+        label: {
+          en: 'Visible lines',
+          sv: 'Synliga rader'
+        },
+        description: {
+          en: 'Longer code is cut off here and fades out, with a button to show all of it. Leave it empty to always show every line.',
+          sv: 'Längre kod klipps här och tonas ut, med en knapp för att visa allt. Lämna tomt för att alltid visa alla rader.'
+        }
       },
       {
         name: 'band',
