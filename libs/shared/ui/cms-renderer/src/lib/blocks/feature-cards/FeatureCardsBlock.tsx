@@ -79,7 +79,11 @@ export const FeatureCardsBlock: React.FC<FeatureCardsBlockProps> = ({
                 {(tech || ownLogo || icon) && (
                   <span
                     className={cn(
-                      'bg-core-link/10 text-core-link mb-4 flex size-11 items-center justify-center rounded-xl',
+                      'bg-core-link/10 mb-4 flex size-11 items-center justify-center rounded-xl',
+                      // A logo in its own colours falls back to the text colour, not the link's
+                      (tech || ownLogo) && !brand
+                        ? 'text-foreground'
+                        : 'text-core-link',
                       // Forced fills reach a logo's own colours, not an outline icon
                       brand && (tech || ownLogo) && brandColourMark()
                     )}
