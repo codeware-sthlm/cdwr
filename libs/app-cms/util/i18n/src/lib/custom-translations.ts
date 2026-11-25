@@ -420,6 +420,11 @@ const customTranslationsSchema = z.object({
     waking: z.string(),
     week: z.string()
   }),
+  themeField: z.object({
+    edit: z.string(),
+    open: z.string(),
+    recipeSummary: z.string()
+  }),
   themeLibrary: z.object({
     cardDescription: z.string(),
     couldNotSave: z.string(),
@@ -1055,6 +1060,11 @@ You can assign multiple tags to a file.`,
       visits: 'Visits',
       waking: 'Statistics are waking up…',
       week: 'Last 7 days'
+    },
+    themeField: {
+      edit: 'Edit in theme studio',
+      open: 'Open theme studio',
+      recipeSummary: '{{brand}} on {{base}}, {{surface}}'
     },
     themeLibrary: {
       cardDescription: '{{brand}} on {{base}}, {{surface}}',
@@ -1732,6 +1742,11 @@ Du kan tilldela flera etiketter till en fil.`,
       visits: 'Besök',
       waking: 'Statistiktjänsten startar…',
       week: 'Senaste 7 dagarna'
+    },
+    themeField: {
+      edit: 'Redigera i temastudion',
+      open: 'Öppna temastudion',
+      recipeSummary: '{{brand}} på {{base}}, {{surface}}'
     },
     themeLibrary: {
       cardDescription: '{{brand}} på {{base}}, {{surface}}',

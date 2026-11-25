@@ -1,5 +1,9 @@
 'use client';
 
+import type {
+  TranslationsKeys,
+  TranslationsObject
+} from '@codeware/app-cms/util/i18n';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import {
   ThemeStudio,
@@ -7,7 +11,13 @@ import {
 } from '@codeware/shared/ui/theme-studio';
 import { type ThemeTokens, normaliseRecipe } from '@codeware/shared/util/color';
 import type { User } from '@codeware/shared/util/payload-types';
-import { Button, FieldLabel, useAuth, useField } from '@payloadcms/ui';
+import {
+  Button,
+  FieldLabel,
+  useAuth,
+  useField,
+  useTranslation
+} from '@payloadcms/ui';
 import type { JSONFieldClientProps } from 'payload';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -47,6 +57,7 @@ export const ThemeStudioField: React.FC<
   const { setValue: setDark } = useField<unknown>({ path: 'tokensDark' });
 
   const { user } = useAuth<User>();
+  const { t } = useTranslation<TranslationsObject, TranslationsKeys>();
   const [open, setOpen] = useState(false);
 
   // Exporting produces committed theme files that ship to every tenant, so it
@@ -85,12 +96,16 @@ export const ThemeStudioField: React.FC<
           onClick={() => setOpen(true)}
           disabled={readOnly}
         >
-          {stored ? 'Edit in theme studio' : 'Open theme studio'}
+          {stored ? t('themeField:edit') : t('themeField:open')}
         </Button>
 
         {stored && (
           <span className="twp text-muted-foreground text-xs">
-            {recipe.brandFamily} on {recipe.baseFamily}, {recipe.surface}
+            {t('themeField:recipeSummary', {
+              brand: recipe.brandFamily,
+              base: recipe.baseFamily,
+              surface: recipe.surface
+            })}
           </span>
         )}
       </div>
