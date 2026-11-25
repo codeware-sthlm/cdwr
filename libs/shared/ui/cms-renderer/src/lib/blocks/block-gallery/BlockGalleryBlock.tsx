@@ -73,6 +73,9 @@ function useNearViewport<T extends Element>(margin = '200px') {
   return [ref, near] as const;
 }
 
+/** What a card shows below its text; unset is the illustration */
+type CardPicture = NonNullable<BlockGalleryBlockProps['cardPicture']>;
+
 type Entry = {
   meta: BlockMeta;
   doc?: AnyBlockGalleryDoc;
@@ -88,12 +91,19 @@ type Entry = {
 function BlockCard({
   meta,
   doc,
+  picture,
   render: RenderExample,
   onOpen
-}: Entry & { render?: RenderExample; onOpen: () => void }) {
+}: Entry & {
+  picture: CardPicture;
+  render?: RenderExample;
+  onOpen: () => void;
+}) {
   const { locale } = usePayload();
   const example =
-    doc && hasExample(doc) && !noThumbnail.has(meta.slug) ? doc : null;
+    picture === 'block' && doc && hasExample(doc) && !noThumbnail.has(meta.slug)
+      ? doc
+      : null;
   const [frame, near] = useNearViewport<HTMLDivElement>();
 
   return (
@@ -133,6 +143,16 @@ function BlockCard({
               )}
         </p>
       </button>
+      {/* The admin picker's own image, so the two cannot drift apart. The cms
+          serves it from public/blocks */}
+      {picture === 'illustration' && (
+        <img
+          src={`/blocks/${meta.slug}.svg`}
+          alt=""
+          loading="lazy"
+          className="bg-core-background-content mt-auto h-40 w-full rounded-lg border object-contain p-4"
+        />
+      )}
       {/* A picture, not a control: inert and hidden from assistive tech, the
           button above carries the card. `zoom` shrinks the drawing and the
           room it takes, so the block lays out as on a wide page */}
@@ -164,12 +184,14 @@ function Section({
   title,
   note,
   entries,
+  picture,
   render,
   onOpen
 }: {
   title: string;
   note?: string;
   entries: Array<Entry>;
+  picture: CardPicture;
   render?: RenderExample;
   onOpen: (slug: BlockSlug) => void;
 }) {
@@ -192,6 +214,7 @@ function Section({
           <BlockCard
             key={entry.meta.slug}
             {...entry}
+            picture={picture}
             render={render}
             onOpen={() => onOpen(entry.meta.slug)}
           />
@@ -211,8 +234,9 @@ function Section({
  */
 export const BlockGalleryBlock: React.FC<
   BlockGalleryBlockProps & { render?: RenderExample }
-> = ({ eyebrow, heading, intro, mode, render }) => {
+> = ({ eyebrow, heading, intro, mode, cardPicture, render }) => {
   const { getSearchParam, locale } = usePayload();
+  const picture = cardPicture ?? 'illustration';
 
   // Sorted by the name actually shown, not the registered label — an
   // editorial name meant the cards read in one order and the stepper walked
@@ -355,6 +379,7 @@ export const BlockGalleryBlock: React.FC<
       <Section
         title={t(locale, 'gallery.contentBlocks')}
         entries={design}
+        picture={picture}
         render={render}
         onOpen={setSelected}
       />
@@ -362,6 +387,7 @@ export const BlockGalleryBlock: React.FC<
         title={t(locale, 'gallery.structural')}
         note={t(locale, 'gallery.structuralNote')}
         entries={plumbing}
+        picture={picture}
         render={render}
         onOpen={setSelected}
       />
@@ -369,6 +395,7 @@ export const BlockGalleryBlock: React.FC<
         title={t(locale, 'gallery.pending')}
         note={t(locale, 'gallery.pendingNote')}
         entries={pending}
+        picture={picture}
         render={render}
         onOpen={setSelected}
       />

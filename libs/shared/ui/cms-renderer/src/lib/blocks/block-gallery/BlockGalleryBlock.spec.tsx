@@ -1,4 +1,5 @@
 import { t } from '@codeware/shared/util/i18n';
+import type { BlockGalleryBlock as BlockGalleryBlockProps } from '@codeware/shared/util/payload-types';
 import { BLOCK_META } from '@codeware/shared/util/payload-utils';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,7 +131,9 @@ describe('BlockGalleryBlock full screen', () => {
 });
 
 describe('BlockGalleryBlock index', () => {
-  const renderIndex = () =>
+  const renderIndex = (
+    cardPicture: BlockGalleryBlockProps['cardPicture'] = 'block'
+  ) =>
     render(
       <PayloadProvider
         value={
@@ -145,6 +148,7 @@ describe('BlockGalleryBlock index', () => {
         <BlockGalleryBlock
           blockType="block-gallery"
           mode="index"
+          cardPicture={cardPicture}
           render={Example}
         />
       </PayloadProvider>
@@ -185,6 +189,23 @@ describe('BlockGalleryBlock index', () => {
       within(without as HTMLElement).queryByTestId('block-thumbnail')
     ).toBe(null);
   });
+
+  it.each([undefined, 'illustration' as const])(
+    'shows the block picker illustration on every card when set to %s',
+    (cardPicture) => {
+      const { container } = renderIndex(cardPicture ?? null);
+      scrollIntoView();
+
+      const card = screen.getByText('callout').closest('li') as HTMLElement;
+      expect(card.querySelector('img')?.getAttribute('src')).toBe(
+        '/blocks/callout.svg'
+      );
+      expect(screen.queryByTestId('block-thumbnail')).toBe(null);
+      expect(container.querySelectorAll('li img').length).toBe(
+        container.querySelectorAll('li').length
+      );
+    }
+  );
 
   it('draws no thumbnail until the card nears the viewport', () => {
     renderIndex();

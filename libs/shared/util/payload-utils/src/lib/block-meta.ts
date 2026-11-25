@@ -135,6 +135,19 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           en: 'The index lists everything registered. The browser shows one block with its fields and an example, and steps to the next.',
           sv: 'Indexet listar allt som är registrerat. Bläddraren visar ett block med dess fält och ett exempel, och stegar vidare till nästa.'
         }
+      },
+      {
+        name: 'cardPicture',
+        type: 'select',
+        conditional: true,
+        label: {
+          en: 'Card picture',
+          sv: 'Kortets bild'
+        },
+        description: {
+          en: 'What each card in the index shows below its text: the illustration from the block picker, or the block drawn small with its example.',
+          sv: 'Vad varje kort i indexet visar under texten: illustrationen från blockväljaren, eller blocket ritat i liten skala med sitt exempel.'
+        }
       }
     ]
   },

@@ -380,6 +380,10 @@ export interface BlockGalleryBlock {
    * The index lists everything registered. The browser shows one block with its fields and an example, and steps to the next.
    */
   mode: 'index' | 'browser';
+  /**
+   * What each card in the index shows below its text: the illustration from the block picker, or the block drawn small with its example.
+   */
+  cardPicture?: ('illustration' | 'block') | null;
   id?: string | null;
   blockName?: string | null;
   blockType: 'block-gallery';
