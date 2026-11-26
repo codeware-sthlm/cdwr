@@ -77,6 +77,7 @@ export const tenant = (
   visitors: {},
   deploy: {},
   backup: {},
+  drift: {},
   errors: {},
   ...over
 });
@@ -164,6 +165,7 @@ export const shared = (over: Partial<TenantStateRow> = {}): TenantStateRow => ({
   visitors: {},
   deploy: {},
   backup: {},
+  drift: {},
   errors: {},
   ...over
 });

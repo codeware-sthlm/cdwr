@@ -10,6 +10,9 @@ export const connectionsWarnAt = (limit: number): number =>
 /** Hours after which the newest database backup is stale: the NUC dumps nightly after 02:00, plus slack */
 export const BACKUP_STALE_HOURS = 26;
 
+/** Hours after which the last platform sweep is stale: the NUC sweeps daily after 03:00, plus slack */
+export const DRIFT_STALE_HOURS = 26;
+
 /** Fly's own word for a certificate that serves */
 export const certReady = (state: string): boolean =>
   state.toLowerCase() === 'ready';
