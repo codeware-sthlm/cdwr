@@ -139,12 +139,15 @@ export const resolveFooter = (
         : // In navigation order: loose links next to each other share an
           // unlabelled column where they stand
           navigationTree.reduce<Array<FooterLinkGroup>>((acc, item) => {
+            // An empty group leaves no column, so it never splits loose links
             if (item.kind === 'group') {
-              acc.push({
-                key: item.key,
-                label: item.label,
-                links: item.children.map(toFooterLink)
-              });
+              if (item.children.length) {
+                acc.push({
+                  key: item.key,
+                  label: item.label,
+                  links: item.children.map(toFooterLink)
+                });
+              }
               return acc;
             }
             const previous = acc.at(-1);
@@ -190,7 +193,7 @@ export const resolveFooter = (
     ? {
         label: licenceLabel,
         url: licenceUrl,
-        newTab: Boolean(licenceUrl && /^https?:\/\//.test(licenceUrl))
+        newTab: Boolean(licenceUrl && /^https?:\/\//i.test(licenceUrl))
       }
     : null;
 
