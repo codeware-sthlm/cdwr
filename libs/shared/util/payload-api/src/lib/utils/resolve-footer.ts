@@ -2,6 +2,7 @@ import type {
   SiteSetting,
   SiteSettingsFooterLink
 } from '@codeware/shared/util/payload-types';
+import { isSafeLinkHref } from '@codeware/shared/util/pure';
 
 import type {
   FooterData,
@@ -181,7 +182,10 @@ export const resolveFooter = (
       : footer?.copyright?.trim() || `© {year} ${general.appName}`;
 
   const licenceLabel = footer?.licence?.trim();
-  const licenceUrl = footer?.licenceUrl?.trim() || null;
+  // A value stored before the field validated loses its link, not the line
+  const licenceUrl = isSafeLinkHref(footer?.licenceUrl)
+    ? (footer?.licenceUrl?.trim() ?? null)
+    : null;
   const licence = licenceLabel
     ? {
         label: licenceLabel,

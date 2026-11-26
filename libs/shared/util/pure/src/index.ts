@@ -16,6 +16,7 @@ export * from './lib/is-blank';
 export * from './lib/is-catcher-host';
 export * from './lib/is-object';
 export * from './lib/is-regex-pattern';
+export * from './lib/is-safe-link-href';
 export * from './lib/postgres';
 export * from './lib/sanitize-svg';
 export * from './lib/site-icon';

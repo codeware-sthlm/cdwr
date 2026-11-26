@@ -286,6 +286,10 @@ describe('resolveFooter', () => {
     [
       { licence: 'MIT', licenceUrl: 'https://example.com/LICENSE' },
       { label: 'MIT', url: 'https://example.com/LICENSE', newTab: true }
+    ],
+    [
+      { licence: 'MIT', licenceUrl: 'javascript:alert(1)' },
+      { label: 'MIT', url: null, newTab: false }
     ]
   ])('resolves the licence line from %o', (settings, expected) => {
     expect(
