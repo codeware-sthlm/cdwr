@@ -9,21 +9,17 @@ def epoch:
   sub("\\.[0-9]+Z$"; "Z") | sub("T(?<hm>[0-9]{2}:[0-9]{2})Z$"; "T\(.hm):00Z") | fromdateiso8601;
 
 # --- Who wrote a Linear comment ---
-# The queue writes to Linear as its own app user. Before the cutover it wrote as Håkan, so an older
-# comment by him that carries the `**Agent` prefix is still the agent's. The prefix fallback can go
-# 14 days after the cutover.
+# The queue writes to Linear as its own app user.
 def agent_user_id: "bbbb4a33-e052-486e-8e0f-d3abb5c5c841";
-def agent_cutover: "2026-11-10T22:00:00Z";
 
 def agent_prefixed: (.body // "") | trim | startswith("**Agent");
 
-# True for a comment node the agent wrote: by the queue's app user, or prefixed and older than the
-# cutover. Another app user (a Linear integration) is not the agent. A node without a user (a query
-# that didn't ask, an older installed lib.sh) falls back to the prefix.
+# True for a comment node the agent wrote: by the queue's app user. Another app user (a Linear
+# integration) is not the agent. A node without a user (a query that didn't ask, an older installed
+# lib.sh) falls back to the prefix.
 def is_agent:
   if (.user | type) != "object" then agent_prefixed
-  elif .user.id == agent_user_id then true
-  else agent_prefixed and ((.createdAt | epoch) < (agent_cutover | epoch))
+  else .user.id == agent_user_id
   end;
 
 # True for the agent's comment of a kind, such as "**Agent: PR ready**": a person pasting the

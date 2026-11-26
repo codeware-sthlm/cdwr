@@ -11,9 +11,6 @@ export type Person =
 /** The queue's own Linear app user, `agent_user_id` in watch.jq */
 export const AGENT_USER_ID = 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841';
 
-/** Before this the agent wrote as Håkan, `agent_cutover` in watch.jq */
-export const AGENT_CUTOVER = '2026-11-10T22:00:00Z';
-
 export type BotActor =
   { name?: string | null; type?: string | null } | null | undefined;
 
@@ -72,28 +69,18 @@ const COMMENT_LENGTH = 80;
 /**
  * Who did it. The agent writes as the queue's own Linear app user, matched by
  * its id as `is_agent` in watch.jq does; another app is named like a person.
- * Before the cutover it wrote as Håkan, so an older comment marked `**Agent`
- * still reads as the agent's. A bot actor is named by its name, else its type.
+ * A bot actor is named by its name, else its type.
  */
 export const actorOf = ({
-  createdAt,
-  body,
   user,
   actor,
   botActor
 }: {
-  createdAt: string;
-  body?: string | null;
   user?: Person;
   actor?: Person;
   botActor?: BotActor;
 }): string => {
   if (user?.id === AGENT_USER_ID || actor?.id === AGENT_USER_ID) return 'agent';
-  if (
-    body?.trim().startsWith('**Agent') &&
-    Date.parse(createdAt) < Date.parse(AGENT_CUTOVER)
-  )
-    return 'agent';
   const bot = botActor?.name ?? botActor?.type;
   if (bot) return bot;
   return user?.name ?? actor?.name ?? 'unknown';

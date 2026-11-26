@@ -103,8 +103,7 @@ type Comment = {
   createdAt: string;
   user?: { id: string; app: boolean };
 };
-const BEFORE_CUTOVER = '2026-11-10T21:59:59Z';
-const AFTER_CUTOVER = '2026-11-10T22:00:01Z';
+const COMMENTED_AT = '2026-11-20T10:00:00Z';
 
 describe('is_agent', () => {
   const agentOf = (comment: Record<string, unknown>) =>
@@ -115,7 +114,7 @@ describe('is_agent', () => {
     expect(
       agentOf({
         body: 'no prefix',
-        createdAt: AFTER_CUTOVER,
+        createdAt: COMMENTED_AT,
         user: { id: PERSON_ID, app: true }
       })
     ).toBe(false);
@@ -125,51 +124,39 @@ describe('is_agent', () => {
     expect(
       agentOf({
         body: 'no prefix',
-        createdAt: AFTER_CUTOVER,
+        createdAt: COMMENTED_AT,
         user: { id: APP_ID }
       })
     ).toBe(true);
   });
 
-  it('is true for a person with the prefix before the cutover', () => {
-    expect(
-      agentOf({
-        body,
-        createdAt: BEFORE_CUTOVER,
-        user: { id: PERSON_ID, app: false }
-      })
-    ).toBe(true);
-  });
-
-  it('is false for a person with the prefix after the cutover', () => {
-    expect(
-      agentOf({
-        body,
-        createdAt: AFTER_CUTOVER,
-        user: { id: PERSON_ID, app: false }
-      })
-    ).toBe(false);
+  it('is false for a person with the prefix, however old', () => {
+    for (const createdAt of ['2026-10-01T00:00:00Z', COMMENTED_AT]) {
+      expect(
+        agentOf({ body, createdAt, user: { id: PERSON_ID, app: false } })
+      ).toBe(false);
+    }
   });
 
   it('is false for a person without the prefix', () => {
     expect(
       agentOf({
         body: 'plain',
-        createdAt: BEFORE_CUTOVER,
+        createdAt: COMMENTED_AT,
         user: { id: PERSON_ID, app: false }
       })
     ).toBe(false);
   });
 
   it('tests the prefix without a user field', () => {
-    expect(agentOf({ body, createdAt: AFTER_CUTOVER })).toBe(true);
-    expect(agentOf({ body: 'plain', createdAt: BEFORE_CUTOVER })).toBe(false);
+    expect(agentOf({ body, createdAt: COMMENTED_AT })).toBe(true);
+    expect(agentOf({ body: 'plain', createdAt: COMMENTED_AT })).toBe(false);
   });
 
   it('tests the prefix when user is null', () => {
-    expect(agentOf({ body, createdAt: AFTER_CUTOVER, user: null })).toBe(true);
+    expect(agentOf({ body, createdAt: COMMENTED_AT, user: null })).toBe(true);
     expect(
-      agentOf({ body: 'plain', createdAt: AFTER_CUTOVER, user: null })
+      agentOf({ body: 'plain', createdAt: COMMENTED_AT, user: null })
     ).toBe(false);
   });
 });
@@ -182,9 +169,9 @@ describe('handoffs', () => {
   });
   const h = (...comments: C[]) => run('handoffs', issue([], comments));
 
-  it('ignores a PR-ready comment a person wrote after the cutover', () => {
+  it('ignores a PR-ready comment a person wrote', () => {
     const c: C = {
-      ...ready('Hand-off checklist:\n- [ ] pasted', AFTER_CUTOVER),
+      ...ready('Hand-off checklist:\n- [ ] pasted', COMMENTED_AT),
       user: { id: PERSON_ID, app: false }
     };
     expect(h(c)).toEqual([]);
@@ -203,7 +190,7 @@ describe('handoffs', () => {
 
   it('takes a PR-ready comment by the app user', () => {
     const c: C = {
-      ...ready('Hand-off checklist:\n- [ ] real', AFTER_CUTOVER),
+      ...ready('Hand-off checklist:\n- [ ] real', COMMENTED_AT),
       user: { id: APP_ID, app: true }
     };
     expect(h(c)).toEqual(['real']);
@@ -2778,7 +2765,7 @@ describe('attended picks', () => {
       expect(attended([input()]).verdict).toBe('idle');
     });
 
-    it('a prefixed comment by a person after the cutover is answered', () => {
+    it('a prefixed comment by a person is answered', () => {
       const n = input();
       n.comments.nodes = [
         {
@@ -2830,7 +2817,7 @@ describe('attended picks', () => {
       });
     });
 
-    it('a human pasting the PR ready marker after the cutover is no PR ready', () => {
+    it('a human pasting the PR ready marker is no PR ready', () => {
       const pasted = {
         body: `**Agent: PR ready**: ${PR}/1`,
         createdAt: '2026-11-11T00:00:00Z',
@@ -3511,7 +3498,7 @@ describe('attended picks', () => {
         const n = part(app, 'A plain report.', [
           {
             body: '**Agent: labelled ready** pasted',
-            createdAt: AFTER_CUTOVER,
+            createdAt: COMMENTED_AT,
             user: person
           }
         ]);

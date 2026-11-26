@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
-  AGENT_CUTOVER,
   AGENT_USER_ID,
   type HistoryNode,
   type IssueNode,
@@ -117,75 +116,50 @@ describe('commentEvents', () => {
 });
 
 describe('actorOf', () => {
-  const before = '2026-11-10T21:59:59Z';
-  const after = '2026-11-10T22:00:01Z';
   const app = { id: AGENT_USER_ID, name: 'CDWR Agent', app: true };
 
-  it('keeps the cutover and app user id in step with watch.jq', () => {
+  it('keeps the app user id in step with watch.jq', () => {
     const jq = readFileSync(
       fileURLToPath(new URL('../../../agent-queue/watch.jq', import.meta.url)),
       'utf8'
     );
     expect(jq).toContain(`def agent_user_id: "${AGENT_USER_ID}";`);
-    expect(jq).toContain(`def agent_cutover: "${AGENT_CUTOVER}";`);
+  });
+
+  it('reads a person who writes the Agent marker as that person', () => {
+    const node = {
+      createdAt: '2026-10-10T10:00:00.000Z',
+      body: '**Agent plan**',
+      user: { name: 'Håkan' }
+    };
+    expect(actorOf(node)).toBe('Håkan');
   });
 
   it.each([
     [
-      'Agent marker before the cutover',
-      { createdAt: before, body: '  **Agent plan**', user: { name: 'Håkan' } },
-      'agent'
-    ],
-    [
-      'Agent marker by a person after the cutover',
-      { createdAt: after, body: '**Agent plan**', user: { name: 'Håkan' } },
-      'Håkan'
-    ],
-    [
-      'Agent marker beats a bot',
-      { createdAt: before, body: '**Agent', botActor: { name: 'Bot' } },
-      'agent'
-    ],
-    [
       'bot name',
-      {
-        createdAt: after,
-        botActor: { name: 'Bot', type: 'api' },
-        user: { name: 'H' }
-      },
+      { botActor: { name: 'Bot', type: 'api' }, user: { name: 'H' } },
       'Bot'
     ],
     [
       'bot type only',
-      { createdAt: after, botActor: { type: 'api' }, user: { name: 'H' } },
+      { botActor: { type: 'api' }, user: { name: 'H' } },
       'api'
     ],
-    [
-      'empty bot falls through',
-      { createdAt: after, botActor: {}, user: { name: 'H' } },
-      'H'
-    ],
-    ['user', { createdAt: after, user: { name: 'Håkan' } }, 'Håkan'],
-    ['actor', { createdAt: after, actor: { name: 'Håkan' } }, 'Håkan'],
-    ['unknown', { createdAt: after, user: null, botActor: null }, 'unknown'],
-    [
-      'not the marker',
-      { createdAt: before, body: 'Agent said', user: { name: 'H' } },
-      'H'
-    ],
-    ['app user', { createdAt: after, user: app }, 'agent'],
-    ['app actor', { createdAt: after, actor: app }, 'agent'],
+    ['empty bot falls through', { botActor: {}, user: { name: 'H' } }, 'H'],
+    ['user', { user: { name: 'Håkan' } }, 'Håkan'],
+    ['actor', { actor: { name: 'Håkan' } }, 'Håkan'],
+    ['unknown', { user: null, botActor: null }, 'unknown'],
+    ['app user', { user: app }, 'agent'],
+    ['app actor', { actor: app }, 'agent'],
     [
       'another app user',
-      {
-        createdAt: after,
-        user: { id: 'other', name: 'Some integration', app: true }
-      },
+      { user: { id: 'other', name: 'Some integration', app: true } },
       'Some integration'
     ],
     [
       'a person who is not an app',
-      { createdAt: after, user: { id: 'p', name: 'Håkan', app: false } },
+      { user: { id: 'p', name: 'Håkan', app: false } },
       'Håkan'
     ]
   ])('%s', (_name, args, expected) => {
