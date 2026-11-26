@@ -8,6 +8,7 @@ import {
   parseHostname,
   runCertificateAction
 } from '@codeware/app-cms/feature/domains';
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { hasRole } from '@codeware/app-cms/util/misc';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import {
@@ -39,6 +40,11 @@ export const platformDomainCertificateEndpoint: Endpoint = {
   handler: async (req: PayloadRequest): Promise<Response> => {
     if (!hasRole(req.user ?? null, 'system-user')) {
       return fail(StatusCodes.FORBIDDEN);
+    }
+
+    // The Fly token is the host's to read; a tenant app holds no credentials
+    if (getEnv().APP_MODE.type !== 'host') {
+      return fail(StatusCodes.NOT_FOUND);
     }
 
     await addDataAndFileToRequest(req);

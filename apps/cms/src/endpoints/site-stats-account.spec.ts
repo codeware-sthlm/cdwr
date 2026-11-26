@@ -103,7 +103,8 @@ const call = (user: unknown, data: unknown = { action: 'create' }) =>
 beforeEach(() => {
   jest.resetAllMocks();
   jest.mocked(getEnv).mockReturnValue({
-    UMAMI_URL: 'https://umami.example/'
+    UMAMI_URL: 'https://umami.example/',
+    APP_MODE: { type: 'host' }
   } as ReturnType<typeof getEnv>);
   jest.mocked(getSingleTenantIdFromHeaders).mockReturnValue(5);
   jest.mocked(getUmamiAdminApi).mockResolvedValue({
@@ -254,6 +255,16 @@ describe('siteStatsAccountEndpoint', () => {
     expect((await call(systemUser)).status).toBe(403);
     expect((await call(readerUser)).status).toBe(403);
     expect(admin.createUser).not.toHaveBeenCalled();
+  });
+
+  it('refuses an admin in tenant mode without calling Umami', async () => {
+    jest.mocked(getEnv).mockReturnValue({
+      UMAMI_URL: 'https://umami.example/',
+      APP_MODE: { type: 'tenant', tenantId: 'demo' }
+    } as ReturnType<typeof getEnv>);
+
+    expect((await call(adminUser)).status).toBe(403);
+    expect(getUmamiAdminApi).not.toHaveBeenCalled();
   });
 
   it('refuses an admin of another workspace', async () => {

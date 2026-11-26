@@ -1,4 +1,5 @@
 /** @jest-environment node */
+import { getEnv } from '@codeware/app-cms/feature/env-loader';
 import { getUmamiAdminApi } from '@codeware/app-cms/feature/site-stats';
 import type {
   CollectionAfterChangeHook,
@@ -20,7 +21,7 @@ jest.mock('@codeware/app-cms/feature/site-stats', () => ({
   getUmamiAdminApi: jest.fn()
 }));
 jest.mock('@codeware/app-cms/feature/env-loader', () => ({
-  getEnv: () => ({ UMAMI_URL: 'https://umami.example' })
+  getEnv: jest.fn()
 }));
 
 const admin = { removeTeamUser: jest.fn(), deleteUser: jest.fn() };
@@ -57,6 +58,10 @@ const change = (
 
 beforeEach(() => {
   jest.resetAllMocks();
+  jest.mocked(getEnv).mockReturnValue({
+    UMAMI_URL: 'https://umami.example',
+    APP_MODE: { type: 'host' }
+  } as ReturnType<typeof getEnv>);
   jest.mocked(getUmamiAdminApi).mockResolvedValue({
     status: 'ready',
     umami: admin as never
@@ -92,6 +97,18 @@ describe('removeStatsTeamMembershipHook', () => {
 
     await change([row(5, 'admin')], []);
 
+    expect(admin.removeTeamUser).not.toHaveBeenCalled();
+  });
+
+  it('does nothing in tenant mode', async () => {
+    jest.mocked(getEnv).mockReturnValue({
+      UMAMI_URL: 'https://umami.example',
+      APP_MODE: { type: 'tenant', tenantId: 'demo' }
+    } as ReturnType<typeof getEnv>);
+
+    await change([row(5, 'admin')], []);
+
+    expect(getUmamiAdminApi).not.toHaveBeenCalled();
     expect(admin.removeTeamUser).not.toHaveBeenCalled();
   });
 
@@ -171,6 +188,20 @@ describe('deleting a user', () => {
 
     expect(admin.deleteUser).toHaveBeenCalledTimes(1);
     expect(admin.deleteUser).toHaveBeenCalledWith('u-1');
+  });
+
+  it('leaves Umami alone in tenant mode', async () => {
+    jest.mocked(getEnv).mockReturnValue({
+      UMAMI_URL: 'https://umami.example',
+      APP_MODE: { type: 'tenant', tenantId: 'demo' }
+    } as ReturnType<typeof getEnv>);
+    const req = makeReq();
+
+    await remember(req);
+    await afterDelete(req);
+
+    expect(getUmamiAdminApi).not.toHaveBeenCalled();
+    expect(admin.deleteUser).not.toHaveBeenCalled();
   });
 
   it('leaves Umami alone for a user without an account', async () => {
