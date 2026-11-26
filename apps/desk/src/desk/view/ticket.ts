@@ -28,6 +28,8 @@ export type TicketLinear = {
   priority: number;
   url: string;
   updatedAt: string;
+  /** When Linear closed it, ISO; null while open */
+  completedAt: string | null;
 };
 
 /** Where the scheduler has the ticket; a field is empty when it does not apply */
@@ -126,7 +128,8 @@ const linearOf = (i: Issue | undefined): TicketLinear | null =>
         labels: i.labels,
         priority: i.priority.value,
         url: i.url,
-        updatedAt: i.updatedAt
+        updatedAt: i.updatedAt,
+        completedAt: i.completedAt
       }
     : null;
 

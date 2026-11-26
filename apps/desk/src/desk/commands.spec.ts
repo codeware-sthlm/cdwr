@@ -7,6 +7,8 @@ import {
   type Reported,
   checkToken,
   controlStates,
+  dropCommandKey,
+  dropCommandStates,
   platformCommandKey,
   platformCommandStates,
   prCommandStates,
@@ -115,6 +117,20 @@ describe('sendCommand', () => {
       host: 'nuc',
       kind: 'dismiss',
       args: { finding: 'stale:COD-1:0a1b2c3d', note: 'not a problem' }
+    });
+  });
+
+  it('sends a drop with its ticket, item and note, null when there is none', async () => {
+    const fetch = answering(202, { id: 10, status: 'pending', note: null });
+    await sendCommand(target(fetch), 'nuc', 'drop', {
+      ticket: 'COD-1',
+      item: 'agent-deploy · refused: x',
+      note: null
+    });
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({
+      host: 'nuc',
+      kind: 'drop',
+      args: { ticket: 'COD-1', item: 'agent-deploy · refused: x', note: null }
     });
   });
 
@@ -332,9 +348,70 @@ describe('controlStates', () => {
   it('ignores copilot and merge rows', () => {
     const all = states([
       row(1, 'copilot', 'pending', { args: { ticket: 'COD-1', pr: 7 } }),
-      row(2, 'merge', 'refused', { args: { ticket: 'COD-1', pr: 7 } })
+      row(2, 'merge', 'refused', { args: { ticket: 'COD-1', pr: 7 } }),
+      row(3, 'drop', 'pending', { args: { ticket: 'COD-1', item: 'x' } })
     ]);
     expect(Object.values(all).every((s) => s.state === 'idle')).toBe(true);
+  });
+});
+
+describe('dropCommandStates', () => {
+  const AT = '2026-11-02T20:00:00Z';
+  const NOW = Date.parse('2026-11-02T20:05:00Z');
+  const ITEM = 'agent-deploy · refused: no self-deploy within 3 hours';
+  const row = (
+    id: number,
+    status: string,
+    extra: Partial<{ note: string; args: unknown; kind: string }> = {}
+  ) => ({
+    id,
+    at: AT,
+    args: 'args' in extra ? extra.args : { ticket: 'COD-1', item: ITEM },
+    host: 'nuc',
+    kind: extra.kind ?? 'drop',
+    status,
+    applied_at: status === 'pending' ? null : AT,
+    note: extra.note ?? null
+  });
+
+  it('keys each line by ticket and item text, newest row first', () => {
+    const states = dropCommandStates(
+      [
+        row(1, 'refused', { note: 'old' }),
+        row(2, 'pending'),
+        row(3, 'applied', { args: { ticket: 'COD-1', item: 'restart a' } })
+      ],
+      NOW
+    );
+    expect(states.get(dropCommandKey('COD-1', ITEM))).toEqual({
+      state: 'pending'
+    });
+    expect(states.get('COD-1 restart a')?.state).toBe('applied');
+    expect(states.size).toBe(2);
+  });
+
+  it('shows a refusal with its note, then lets it lapse', () => {
+    const rows = [row(1, 'refused', { note: 'the ticket is not Done' })];
+    expect(dropCommandStates(rows, NOW).get(`COD-1 ${ITEM}`)).toEqual({
+      state: 'refused',
+      note: 'the ticket is not Done'
+    });
+    expect(
+      dropCommandStates(rows, Date.parse(AT) + REFUSED_SHOW_MS + 1000).size
+    ).toBe(0);
+  });
+
+  it('ignores other kinds and rows without a ticket or item', () => {
+    const states = dropCommandStates(
+      [
+        row(1, 'pending', { kind: 'merge' }),
+        row(2, 'pending', { args: { ticket: 'COD-1' } }),
+        row(3, 'pending', { args: { item: ITEM } }),
+        row(4, 'pending', { args: null })
+      ],
+      NOW
+    );
+    expect(states.size).toBe(0);
   });
 });
 
