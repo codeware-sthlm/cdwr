@@ -71,13 +71,13 @@ def pr_ready_comment:
   [ (.comments.nodes // [])[] | select(agent_kind("**Agent: PR ready**")) ]
   | sort_by(.createdAt) | last;
 
-# The indexes of the item lines of the Apply list block in $lines (a comment body split at newlines).
-# The header is the first line that, trimmed and without its leading and trailing `**`, reads
-# `apply list:` in any case. After it blank lines are skipped, a `- [ ]` / `- [x]` line is an item and
+# The indexes of the item lines of the block under the line $heading in $lines (a comment body split
+# at newlines), and of the Apply list block. The header is the first line that, trimmed and without
+# its leading and trailing `**`, reads $heading (`apply list:`) in any case. After it blank lines are skipped, a `- [ ]` / `- [x]` line is an item and
 # any other line ends the block. [] without a header.
-def apply_block_indexes($lines):
+def block_indexes($lines; $heading):
   ([ range(0; $lines | length)
-     | select($lines[.] | trim | gsub("^\\*\\*|\\*\\*$"; "") | ascii_downcase == "apply list:") ]
+     | select($lines[.] | trim | gsub("^\\*\\*|\\*\\*$"; "") | ascii_downcase == $heading) ]
    | first) as $i
   | if $i == null then []
     else
@@ -89,6 +89,8 @@ def apply_block_indexes($lines):
         end)
       | .idx
     end;
+
+def apply_block_indexes($lines): block_indexes($lines; "apply list:");
 
 # One Apply list item line as { text, spec, kind, args, afterDeploy, checked, dropped, outcome }.
 # text is what follows the box, trimmed; spec and outcome are its parts around the first " · "
@@ -163,6 +165,68 @@ def merge_checks:
 # list item whatever its outcome (the NUC applies it, or refused it and left it unchecked)
 def handoffs:
   checklist_handoffs + [ apply_items[] | select(.checked or .dropped | not) | .spec ];
+
+# --- Dropping an item (README, "Dropping an item") ---
+# The open lines a person may drop in a PR-ready comment body: the unchecked, unstruck items of the
+# hand-off checklist, then of the Apply list, as the desk lists them. Each is { index, text, spec },
+# text being what follows the box, trimmed, and spec an Apply list item's spec (the text without its
+# ` · <outcome>`, as handoffs lists it), a hand-off's text.
+def drop_lines:
+  split("\n") as $lines
+  | block_indexes($lines; "hand-off checklist:") as $h
+  | [ ($h + block_indexes($lines; "apply list:"))[]
+      | . as $n
+      | $lines[$n]
+      | select(test("^\\s*[-*] \\[ \\] ") and (test("^\\s*[-*] \\[ \\] ~~") | not))
+      | (capture("^\\s*[-*] \\[ \\] (?<t>.*)$").t | trim) as $t
+      | { index: $n, text: $t, spec: (if $n | IN($h[]) then $t else apply_parse($lines[$n]).spec end) } ];
+
+# The text of the open item $sel names in the node's newest PR-ready comment: a 1-based number
+# over drop_lines, or the item's exact text or spec. null when none matches.
+def drop_target($sel):
+  ((pr_ready_comment // {}).body // "" | drop_lines) as $items
+  | if ($sel | test("^[0-9]+$")) then
+      ($sel | tonumber) as $n
+      | if $n >= 1 and $n <= ($items | length) then $items[$n - 1].text else null end
+    else ($sel | trim) as $s | [ $items[] | select(.text == $s or .spec == $s) ][0].text
+    end;
+
+# A PR-ready comment body with the first open line whose text or spec is $text struck through,
+# `<indent and bullet> [ ] ~~<text>~~ dropped: <reason>` (no `: <reason>` when it is empty; the
+# reason is made one line of at most 200 characters). Every other byte stays; unchanged when no
+# open line reads $text.
+def drop_mark($text; $reason):
+  . as $body
+  | ($body | split("\n")) as $lines
+  | ($reason | gsub("[\\r\\n]+"; " ") | trim | .[0:200]) as $why
+  | ([ $body | drop_lines[] | select(.text == $text or .spec == $text) ][0]) as $d
+  | if $d == null then $body
+    else
+      ($lines[$d.index] | capture("^(?<p>\\s*[-*]) \\[ \\] ")) as $m
+      | $lines
+      | .[$d.index] = "\($m.p) [ ] ~~\($d.text)~~ dropped\(if $why == "" then "" else ": \($why)" end)"
+      | join("\n")
+    end;
+
+# The `drop:` replies to act on in the thread of the node's newest PR-ready comment: by a person
+# (not the agent, not starting `**Agent`), first line `drop: <number or text>`, the rest the reason;
+# not in $handled (ids this host acted on) and with no agent comment in the thread newer than it
+# (another host answered it). Each is { id, sel, reason }, oldest first.
+def drop_replies($handled):
+  pr_ready_comment as $c
+  | if $c == null then []
+    else
+      [ (.comments.nodes // [])[] | select((.parent // {}).id == $c.id) ] as $thread
+      | [ $thread | sort_by(.createdAt)[]
+          | select((is_agent or agent_prefixed) | not)
+          | select(.id | IN($handled[]) | not)
+          | . as $r
+          | select(any($thread[]; is_agent and .createdAt > $r.createdAt) | not)
+          | ((.body // "") | trim | split("\n")) as $l
+          | (($l[0] | trim | capture("^drop:\\s*(?<s>.*\\S)\\s*$"; "i")) // null) as $m
+          | select($m != null)
+          | { id, sel: $m.s, reason: ($l[1:] | map(trim) | map(select(. != "")) | join(" ")) } ]
+    end;
 
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
 # copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, review,

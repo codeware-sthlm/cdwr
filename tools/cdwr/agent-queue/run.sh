@@ -476,7 +476,8 @@ apply_commands() {
   setopt local_options no_err_exit
   local host rows line id kind actor at ticket pr args value verdict why change effect body acked stamp now target ranat level mute
   host="$(telemetry_host)"
-  rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor")"
+  # A drop waits for drop_pass, after the watch: Linear is not reachable yet here
+  rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=not.in.(abandon,drop)&order=id.asc&select=id,at,kind,args,actor")"
   if $check; then say "commands: $(jq 'length' <<<"$rows" 2>/dev/null || print 0) pending"; return 0; fi
   now="$(date +%s)"
   # One line per row: id, kind, actor, at in epoch seconds (0 when unreadable, so expired), ticket
@@ -1267,7 +1268,8 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 
 # PR watch: only reads (gh pr list, gh api graphql with a query), as the app or else Håkan.
 # The decisions live in watch.jq, installed next to this file. It watches every ticket an agent
-# label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write. The
+# label still claims, since Håkan may merge from a gate; RELABEL is its one Linear write, besides
+# the drops after it (drop_pass: the PR-ready comment edit, its thread answer, agent:review out). The
 # scheduler's other write is the parent close after it (CLOSE_PARENT, CLOSE_COMMENT). Its only
 # GitHub writes are the desk's copilot and merge commands (desk_pr_act), the watch's own Copilot
 # request for a ticket parked on Copilot (copilot_request), since the ruleset's automatic review
@@ -1288,9 +1290,10 @@ query($after: String) {
       id
       identifier
       description
+      state { type }
       labels { nodes { id name } }
       attachments { nodes { url createdAt } }
-      comments(last: 50, orderBy: createdAt) { nodes { id body createdAt user { id app } } }
+      comments(last: 50, orderBy: createdAt) { nodes { id body createdAt user { id app } parent { id } } }
     }
   }
 }
@@ -1562,6 +1565,8 @@ watch_prs() {
   done
 
   print -r -- "$state" > "$file.tmp" && mv "$file.tmp" "$file"
+  # After the state is saved, which drop_write reads for the deploy hold
+  drop_pass "$nodes"
 }
 
 # The apply list (README, "Apply list"): the items of the agent's PR-ready comment that step stored
@@ -1918,6 +1923,154 @@ apply_lists() {
     entry="$(apply_list "$id" "$(jq -c --arg id "$id" '.[$id]' "$file")")"
     apply_save "$id" "$entry"
   done
+  return 0
+}
+
+# Dropping an item (README, "Dropping an item"): a person drops an open hand-off or Apply list item
+# of a merged ticket from the desk (the drop command) or with a `drop:` reply in the PR-ready
+# comment's thread. The scheduler strikes the line through as the app, which wrote the comment and
+# alone may edit it (watch.jq drop_mark), and clears agent:review once nothing waits, unless the
+# deploy hold keeps it. A drop changes nothing that is applied: the list was snapshotted at merge.
+read -r -d '' UNLABEL <<'GQL' || true
+mutation($id: String!, $remove: [String!]) {
+  issueUpdate(id: $id, input: { removedLabelIds: $remove }) { success }
+}
+GQL
+read -r -d '' DROP_REPLY <<'GQL' || true
+mutation($id: String!, $parent: String!, $body: String!) {
+  commentCreate(input: { issueId: $id, parentId: $parent, body: $body }) { success }
+}
+GQL
+# The drop: replies this host acted on, one comment id a line, the newest 500 kept
+DROP_HANDLED="$HOME_DIR/drop-replies"
+
+# drop_edit <node> <text> <reason>: prints the COMMENT_UPDATE variables, the ticket's PR-ready
+# comment read again as the app with the open item whose text is <text> struck through; else prints
+# why not and returns 1. Run it in a command substitution.
+drop_edit() {
+  setopt local_options no_err_exit
+  local node=$1 text=$2 reason=$3 cid out
+  [[ "$(jq -r '.state.type // ""' <<<"$node")" == completed ]] || { print -r -- "the ticket is not Done"; return 1; }
+  cid="$(watch -r 'include "watch"; pr_ready_comment.id // empty' <<<"$node")"
+  [[ -n "$cid" ]] || { print -r -- "no PR-ready comment"; return 1; }
+  out="$(linear "$COMMENT_READ" "$(jq -nc --arg id "$cid" '{id: $id}')" |
+    watch -c --arg id "$cid" --arg t "$text" --arg r "$reason" 'include "watch";
+      (.data.comment.body // error("no comment")) as $b
+      | ($b | drop_mark($t; $r)) as $n
+      | if $n == $b then "no open item reads that any more" else {id: $id, body: $n} end')"
+  [[ -n "$out" ]] || { print -r -- "the comment was not read"; return 1; }
+  [[ "$out" == \{* ]] || { jq -r '.' <<<"$out"; return 1; }
+  print -r -- "$out"
+}
+
+# drop_write <node> <edit>: the edit drop_edit made, then agent:review out when nothing waits on the
+# ticket any more and deploy_hold doesn't keep it. Prints why and returns 1 when Linear did not
+# take the edit; a relabel that fails is a warn only, since clean-up clears the label too.
+drop_write() {
+  setopt local_options no_err_exit
+  local node=$1 edit=$2 id resp w vars
+  id="$(jq -r '.identifier' <<<"$node")"
+  resp="$(linear "$COMMENT_UPDATE" "$edit")"
+  jq -e '.data.commentUpdate.success == true' >/dev/null 2>&1 <<<"$resp" ||
+    { print -r -- "Linear did not take the edit"; return 1; }
+  # This host's own file, which watch_prs just wrote: the deploy hold is about its own merges
+  w='{}'
+  [[ -r "$HOME_DIR/watch.json" ]] && w="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null)"
+  [[ -n "$w" ]] || w='{}'
+  vars="$(watch -c --argjson e "$edit" --argjson w "$w" --argjson now "$(date +%s)" 'include "watch";
+    .comments.nodes |= map(if .id == $e.id then .body = $e.body else . end)
+    | if agent_label == "agent:review" and (handoffs | length) == 0 and (deploy_hold($now; $w) | not)
+      then {id, remove: [ .labels.nodes[] | select(.name == "agent:review") | .id ]} else empty end' <<<"$node")" ||
+    { note "warn: drop: $id: watch.jq failed after the edit$(watch_err)"; return 0; }
+  [[ -n "$vars" ]] || return 0
+  resp="$(linear "$UNLABEL" "$vars")"
+  if jq -e '.data.issueUpdate.success == true' >/dev/null 2>&1 <<<"$resp"; then
+    note "drop: $id has nothing left, agent:review cleared"
+  else
+    note "warn: drop: $id: agent:review not cleared ($(jq -c '.errors[0].message // "no answer"' <<<"$resp" 2>/dev/null))"
+    record warn "$id" "drop: agent:review not cleared"
+  fi
+  return 0
+}
+
+# drop_pass <nodes json>: this tick's drops, against the nodes the watch read. First this host's
+# pending desk drop commands (apply_commands leaves them here, where Linear is reachable), each
+# checked before its ack and written after it, as apply_commands does. Then the drop: replies
+# (watch.jq drop_replies), numbered as the comment read when Håkan wrote them, each answered in its
+# thread so the merged-ticket pick doesn't take it.
+drop_pass() {
+  setopt local_options no_err_exit
+  local nodes=$1 now host rows line id actor at ticket item reason node edit why verdict change stamp acked handled parent issue sel text body resp
+  now="$(date +%s)"
+  if telemetry_on; then
+    host="$(telemetry_host)"
+    rows="$(supabase_select desk_commands "host=eq.$(jq -nr --arg h "$host" '$h | @uri')&status=eq.pending&kind=eq.drop&order=id.asc&select=id,at,args,actor")"
+    for line in ${(f)"$(jq -c '.[] | {id, actor: (.actor // "unknown"), ticket: (.args.ticket // ""),
+        item: (.args.item // ""), note: (.args.note // ""),
+        at: (.at | tostring | sub("\\.[0-9]+"; "") | sub("\\+00(:00)?$"; "Z") | fromdateiso8601? // 0)}' <<<"$rows" 2>/dev/null)"}; do
+      id="$(jq -r '.id' <<<"$line")"
+      [[ "$id" == <-> ]] || continue
+      actor="$(jq -r '.actor' <<<"$line")" at="$(jq -r '.at' <<<"$line")"
+      ticket="$(jq -r '.ticket' <<<"$line")" item="$(jq -r '.item' <<<"$line")" reason="$(jq -r '.note' <<<"$line")"
+      verdict=refused why="" edit=""
+      if [[ "$at" != <-> ]] || (( now - at > DESK_STALE_SECS )); then why=expired
+      elif [[ "$ticket" != COD-<-> ]]; then why="bad ticket"
+      else
+        node="$(jq -c --arg t "$ticket" '.[] | select(.identifier == $t)' <<<"$nodes")"
+        if [[ -z "$node" ]]; then why="$ticket is not watched"
+        elif edit="$(drop_edit "$node" "$item" "$reason")"; then verdict=applied
+        else why="$edit"; fi
+      fi
+      stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      acked="$(supabase_patch desk_commands "id=eq.$id&status=eq.pending" "$(jq -nc --arg s "$verdict" --arg n "$why" --arg at "$stamp" \
+        '{status: $s, applied_at: $at, note: (if $n == "" then null else $n end)}')")"
+      if [[ "$(jq 'length' <<<"$acked" 2>/dev/null)" != 1 ]]; then
+        note "desk command $id (drop): not acked here, left to the tick that did or the next one"
+        continue
+      fi
+      if [[ "$verdict" == applied ]] && ! why="$(drop_write "$node" "$edit")"; then
+        verdict=refused
+        supabase_patch desk_commands "id=eq.$id" "$(jq -nc --arg n "$why" '{status: "refused", note: $n}')" >/dev/null
+      fi
+      if [[ "$verdict" == applied ]]; then change="dropped \"${item[1,120]}\" on $ticket from the desk ($actor)"
+      else change="drop refused from the desk ($actor): $why"; fi
+      note "desk command $id (drop): $verdict${why:+ ($why)}"
+      [[ "$ticket" == COD-<-> ]] || ticket=""
+      supabase_upsert activity event_id "$(jq -nc --arg id "desk:$id" --arg at "$stamp" --arg change "$change" --arg host "$host" \
+        --arg ticket "$ticket" \
+        '{event_id: $id, at: $at, ticket: (if $ticket == "" then null else $ticket end), actor: "human", change: $change, host: $host}')" merge
+    done
+  fi
+
+  # jq on a missing file still prints its slurped input, so the file is checked first
+  handled='[]'
+  [[ -r "$DROP_HANDLED" ]] && handled="$(jq -Rsc 'split("\n") | map(select(. != ""))' "$DROP_HANDLED" 2>/dev/null)"
+  [[ -n "$handled" ]] || handled='[]'
+  for line in ${(f)"$(watch -c --argjson h "$handled" 'include "watch";
+      .[] | select(.state.type == "completed") | . as $n
+      | drop_replies($h)[] | .sel as $s
+      | . + {ticket: $n.identifier, issue: $n.id, parent: ($n | pr_ready_comment.id), text: ($n | drop_target($s))}' <<<"$nodes")"}; do
+    id="$(jq -r '.id' <<<"$line")"
+    [[ -n "$id" && "$id" != null ]] || continue
+    ticket="$(jq -r '.ticket' <<<"$line")" issue="$(jq -r '.issue' <<<"$line")" parent="$(jq -r '.parent' <<<"$line")"
+    sel="$(jq -r '.sel' <<<"$line")" text="$(jq -r '.text // ""' <<<"$line")" reason="$(jq -r '.reason' <<<"$line")"
+    node="$(jq -c --arg t "$ticket" '.[] | select(.identifier == $t)' <<<"$nodes")"
+    why=""
+    if [[ -z "$text" ]]; then why="no open item is number or reads: ${sel[1,120]}"
+    elif edit="$(drop_edit "$node" "$text" "$reason")"; then why="$(drop_write "$node" "$edit")" || true
+    else why="$edit"; fi
+    # Kept before the answer, so an answer Linear refuses never drops the item twice
+    print -r -- "$id" >> "$DROP_HANDLED"
+    if [[ -z "$why" ]]; then body="**Agent: dropped** $text"
+    else body="**Agent: not dropped** $why"; fi
+    note "drop: $ticket reply $id: ${body#\*\*Agent: }"
+    resp="$(linear "$DROP_REPLY" "$(jq -nc --arg id "$issue" --arg p "$parent" --arg b "$body" '{id: $id, parent: $p, body: $b}')")"
+    jq -e '.data.commentCreate.success == true' >/dev/null 2>&1 <<<"$resp" ||
+      { note "warn: drop: $ticket: the answer to reply $id was not posted"; record warn "$ticket" "drop: answer not posted"; }
+  done
+  if [[ -s "$DROP_HANDLED" ]]; then
+    tail -n 500 "$DROP_HANDLED" > "$DROP_HANDLED.tmp" && mv "$DROP_HANDLED.tmp" "$DROP_HANDLED"
+  fi
   return 0
 }
 

@@ -2275,6 +2275,259 @@ describe('step', () => {
   });
 });
 
+describe('dropping an item', () => {
+  const READY_ID = 'c-ready';
+  const BODY = [
+    `**Agent: PR ready**: ${PR}/1`,
+    '',
+    'Hand-off checklist:',
+    '- [ ] set the DNS',
+    '- [x] ticked one',
+    '- [ ] ~~struck one~~ dropped',
+    '  * [ ] rotate key',
+    '',
+    'Apply list:',
+    '- [ ] restart cdwr-cms',
+    '- [ ] scale cdwr-cms 2 · refused: no machines',
+    '- [x] agent-deploy · applied',
+    '',
+    'Notes',
+    '- [ ] not in a block'
+  ].join('\n');
+  const readyNode = (body = BODY) => ({
+    id: READY_ID,
+    body,
+    createdAt: '2026-11-20T10:00:00Z',
+    user: { id: APP_ID }
+  });
+  const node = (...comments: Array<Record<string, unknown>>) => ({
+    ...issue(),
+    comments: { nodes: comments }
+  });
+
+  describe('drop_lines', () => {
+    it('lists open hand-offs, then open apply items, with their index', () => {
+      expect(run('drop_lines', BODY)).toEqual([
+        { index: 3, text: 'set the DNS', spec: 'set the DNS' },
+        { index: 6, text: 'rotate key', spec: 'rotate key' },
+        { index: 9, text: 'restart cdwr-cms', spec: 'restart cdwr-cms' },
+        {
+          index: 10,
+          text: 'scale cdwr-cms 2 · refused: no machines',
+          spec: 'scale cdwr-cms 2'
+        }
+      ]);
+    });
+
+    it('is empty without blocks', () => {
+      expect(run('drop_lines', 'nothing\n- [ ] here')).toEqual([]);
+    });
+  });
+
+  describe('drop_target', () => {
+    const target = (sel: string, ...comments: Array<Record<string, unknown>>) =>
+      run(`drop_target(${JSON.stringify(sel)})`, node(...comments));
+
+    it('reads a 1-based number over the listed items', () => {
+      expect(target('1', readyNode())).toBe('set the DNS');
+      expect(target('3', readyNode())).toBe('restart cdwr-cms');
+      expect(target('4', readyNode())).toBe(
+        'scale cdwr-cms 2 · refused: no machines'
+      );
+    });
+
+    it('is null for a number out of range', () => {
+      expect(target('0', readyNode())).toBeNull();
+      expect(target('5', readyNode())).toBeNull();
+    });
+
+    it('reads the exact text, trimmed', () => {
+      expect(target('  rotate key ', readyNode())).toBe('rotate key');
+    });
+
+    it('reads an apply item by its spec, as the queue view lists it', () => {
+      expect(target('scale cdwr-cms 2', readyNode())).toBe(
+        'scale cdwr-cms 2 · refused: no machines'
+      );
+    });
+
+    it('is null for text that matches nothing', () => {
+      expect(target('rotate', readyNode())).toBeNull();
+      expect(target('struck one', readyNode())).toBeNull();
+    });
+
+    it('is null without a PR-ready comment', () => {
+      expect(target('1')).toBeNull();
+    });
+  });
+
+  describe('drop_mark', () => {
+    const mark = (text: string, reason = '', body = BODY) =>
+      run(
+        `drop_mark(${JSON.stringify(text)}; ${JSON.stringify(reason)})`,
+        body
+      ) as string;
+    const replaceLine = (from: string, to: string) =>
+      BODY.split('\n')
+        .map((l) => (l === from ? to : l))
+        .join('\n');
+
+    it('strikes a hand-off with a reason and keeps every other byte', () => {
+      expect(mark('set the DNS', 'not needed')).toBe(
+        replaceLine(
+          '- [ ] set the DNS',
+          '- [ ] ~~set the DNS~~ dropped: not needed'
+        )
+      );
+    });
+
+    it('strikes a refused apply item named by its spec, outcome and all', () => {
+      expect(mark('scale cdwr-cms 2')).toBe(
+        replaceLine(
+          '- [ ] scale cdwr-cms 2 · refused: no machines',
+          '- [ ] ~~scale cdwr-cms 2 · refused: no machines~~ dropped'
+        )
+      );
+    });
+
+    it('keeps indent and bullet', () => {
+      expect(mark('rotate key')).toBe(
+        replaceLine('  * [ ] rotate key', '  * [ ] ~~rotate key~~ dropped')
+      );
+    });
+
+    it('strikes an apply item', () => {
+      expect(mark('restart cdwr-cms', 'done by hand')).toBe(
+        replaceLine(
+          '- [ ] restart cdwr-cms',
+          '- [ ] ~~restart cdwr-cms~~ dropped: done by hand'
+        )
+      );
+    });
+
+    it('strikes an apply item with an outcome whole', () => {
+      expect(mark('scale cdwr-cms 2 · refused: no machines', 'gone')).toBe(
+        replaceLine(
+          '- [ ] scale cdwr-cms 2 · refused: no machines',
+          '- [ ] ~~scale cdwr-cms 2 · refused: no machines~~ dropped: gone'
+        )
+      );
+    });
+
+    it('makes a multi-line reason one line', () => {
+      expect(mark('set the DNS', 'one\r\ntwo\n\nthree')).toContain(
+        '- [ ] ~~set the DNS~~ dropped: one two three\n'
+      );
+    });
+
+    it('cuts the reason at 200 characters', () => {
+      const out = mark('set the DNS', 'x'.repeat(300));
+      expect(out).toContain(`dropped: ${'x'.repeat(200)}\n`);
+      expect(out).not.toContain('x'.repeat(201));
+    });
+
+    it.each([
+      ['no open line reads the text', 'unknown item'],
+      ['the line is already struck', 'struck one'],
+      ['the line is ticked', 'ticked one'],
+      ['the line is outside both blocks', 'not in a block']
+    ])('is unchanged when %s', (_name, text) => {
+      expect(mark(text, 'why')).toBe(BODY);
+    });
+
+    it('takes the item out of handoffs and apply_input', () => {
+      const struck = mark('restart cdwr-cms');
+      const after = node(readyNode(struck));
+      expect(run('handoffs', after)).toEqual([
+        'set the DNS',
+        'rotate key',
+        'scale cdwr-cms 2'
+      ]);
+      const before = run('apply_input', node(readyNode())) as {
+        items: Array<{ spec: string }>;
+      };
+      expect(before.items.map((i) => i.spec)).toEqual(['restart cdwr-cms']);
+      expect(run('apply_input', after)).toBeNull();
+    });
+  });
+
+  describe('drop_replies', () => {
+    const reply = (
+      id: string,
+      body: string,
+      over: Record<string, unknown> = {}
+    ) => ({
+      id,
+      body,
+      createdAt: '2026-11-21T10:00:00Z',
+      user: { id: PERSON_ID },
+      parent: { id: READY_ID },
+      ...over
+    });
+    const replies = (
+      comments: Array<Record<string, unknown>>,
+      handled: string[] = []
+    ) => run(`drop_replies(${JSON.stringify(handled)})`, node(...comments));
+
+    it('reads the selector and the rest as the reason', () => {
+      expect(
+        replies([readyNode(), reply('r1', 'drop: 2\nnot needed\nany more')])
+      ).toEqual([{ id: 'r1', sel: '2', reason: 'not needed any more' }]);
+    });
+
+    it('reads text, any case, with an empty reason', () => {
+      expect(
+        replies([readyNode(), reply('r1', ' Drop:  rotate key ')])
+      ).toEqual([{ id: 'r1', sel: 'rotate key', reason: '' }]);
+    });
+
+    it('lists the oldest first', () => {
+      expect(
+        (
+          replies([
+            readyNode(),
+            reply('r2', 'drop: 2', { createdAt: '2026-11-21T11:00:00Z' }),
+            reply('r1', 'drop: 1')
+          ]) as Array<{ id: string }>
+        ).map((r) => r.id)
+      ).toEqual(['r1', 'r2']);
+    });
+
+    it.each([
+      ['in another thread', { parent: { id: 'other' } }],
+      ['without a parent', { parent: null }],
+      ['by the agent user', { user: { id: APP_ID } }],
+      ['starting **Agent', { body: '**Agent: note** drop: 1', user: null }],
+      ['not starting drop:', { body: 'please drop: 1' }]
+    ])('ignores a reply %s', (_name, over) => {
+      expect(replies([readyNode(), reply('r1', 'drop: 1', over)])).toEqual([]);
+    });
+
+    it('ignores an id already handled', () => {
+      expect(replies([readyNode(), reply('r1', 'drop: 1')], ['r1'])).toEqual(
+        []
+      );
+    });
+
+    it('ignores a reply with a newer agent comment in the thread', () => {
+      expect(
+        replies([
+          readyNode(),
+          reply('r1', 'drop: 1'),
+          reply('a1', '**Agent: dropped** x', {
+            user: { id: APP_ID },
+            createdAt: '2026-11-21T10:05:00Z'
+          })
+        ])
+      ).toEqual([]);
+    });
+
+    it('is empty without a PR-ready comment', () => {
+      expect(replies([reply('r1', 'drop: 1')])).toEqual([]);
+    });
+  });
+});
+
 describe('merged_next', () => {
   const next = (
     description: string | null,
