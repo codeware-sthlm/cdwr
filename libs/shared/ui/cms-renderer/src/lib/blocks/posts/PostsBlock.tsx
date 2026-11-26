@@ -36,13 +36,15 @@ export function PostsBlock({ title, description, posts }: Props) {
   return (
     <div>
       {/* A section under the page's hero, which holds its one h1 */}
-      {title && (
+      {(title || description) && (
         <header className="mb-9 max-w-xl">
-          <h2 className="text-core-headline text-3xl font-semibold tracking-tight">
-            {title}
-          </h2>
+          {title && (
+            <h2 className="text-core-headline text-3xl font-semibold tracking-tight">
+              {title}
+            </h2>
+          )}
           {description && (
-            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
+            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed first:mt-0">
               {description}
             </p>
           )}

@@ -107,11 +107,11 @@ export function buildStarterDefinition(
       draft: true,
       layout: [
         {
-          blockType: 'posts',
-          title: copy.news.heading,
-          description: copy.news.intro,
-          limit: 6
-        }
+          blockType: 'hero',
+          heading: copy.news.heading,
+          lede: copy.news.intro
+        },
+        { blockType: 'posts', limit: 6 }
       ]
     });
   }
