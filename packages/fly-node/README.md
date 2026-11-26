@@ -220,6 +220,15 @@ This will destroy the application completely.
 await fly.apps.destroy('foo-app');
 ```
 
+A failed detach throws and leaves the application in place. Pass `allowDetachFailure` to destroy it anyway. Each failed detach is logged and returned, and a failed destroy still throws.
+
+```ts
+const { detachFailures } = await fly.apps.destroy('foo-app', {
+  allowDetachFailure: true
+});
+// [{ cluster: 'pg-cluster', error: '...' }]
+```
+
 #### Deploy an application
 
 > [!IMPORTANT]

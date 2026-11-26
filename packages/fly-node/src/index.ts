@@ -8,6 +8,8 @@ export type {
   Config,
   DeployAppOptions,
   DeployResponse,
+  DestroyAppOptions,
+  DestroyAppResponse,
   ListIpResponse,
   MachineOperationOptions,
   SaveConfigOptions,

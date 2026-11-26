@@ -183,6 +183,33 @@ export type CreateAppOptions = {
 };
 
 /**
+ * Options for destroying an application
+ */
+export type DestroyAppOptions = {
+  /**
+   * Destroy the application even when detaching it from a Postgres cluster fails.
+   *
+   * Each failed detach is logged and returned in `detachFailures`.
+   * A failed destroy still throws.
+   *
+   * @default false
+   */
+  allowDetachFailure?: boolean;
+};
+
+/**
+ * Result of destroying an application
+ */
+export type DestroyAppResponse = {
+  /**
+   * Postgres clusters that could not be detached before the application was destroyed.
+   *
+   * Always empty unless `allowDetachFailure` is set, since a failed detach throws.
+   */
+  detachFailures: Array<{ cluster: string; error: string }>;
+};
+
+/**
  * Options for deploying an application
  */
 export type DeployAppOptions = {
