@@ -476,6 +476,7 @@ export function Footer({
   }
 
   const {
+    backToTop,
     contact,
     copyright,
     legalLinks,
@@ -496,7 +497,8 @@ export function Footer({
     !licence &&
     !contact.length &&
     !copyright &&
-    !showVersion
+    !showVersion &&
+    !backToTop
   ) {
     return null;
   }
