@@ -320,6 +320,7 @@ export type Database = {
           visitors: Json;
           deploy: Json;
           backup: Json;
+          drift: Json;
         };
         Insert: {
           key: string;
@@ -336,6 +337,7 @@ export type Database = {
           visitors?: Json;
           deploy?: Json;
           backup?: Json;
+          drift?: Json;
         };
         Update: {
           key?: string;
@@ -352,6 +354,7 @@ export type Database = {
           visitors?: Json;
           deploy?: Json;
           backup?: Json;
+          drift?: Json;
         };
         Relationships: [];
       };
