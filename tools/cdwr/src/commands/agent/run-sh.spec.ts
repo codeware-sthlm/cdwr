@@ -7826,6 +7826,177 @@ describe('run.sh backup step', () => {
   });
 });
 
+describe('run.sh sweep step', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  requireTools('zsh', 'jq');
+  const TOKEN = 'fly-secret-token';
+  const today = () => new Date().toLocaleDateString('sv');
+  let root: string;
+  let bin: string;
+
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const calls = () => read('node.calls').split('\n').filter(Boolean).length;
+
+  // A stub node standing in for the cdwr command
+  const stubNode = (body: string) => {
+    writeFileSync(
+      join(bin, 'node'),
+      `#!/bin/sh\necho "$@" >> "${root}/node.calls"\nenv > "${root}/node.env"\n${body}\n`
+    );
+    chmodSync(join(bin, 'node'), 0o755);
+  };
+  // A stub node that writes the sweep's result file
+  const stubSweep = (json: string) =>
+    stubNode(`printf '%s' '${json}' > "${root}/sweep.json"`);
+
+  const TOKENLESS = 'app_env() { return 1; }; app_token() { return 1; }';
+  const MINTED =
+    'app_env() { return 0; }; app_token() { GH_TOKEN=gh-read-token; }';
+
+  // One tick's record_sweep, run with the given environment; the detached part is waited for
+  const tick = async (env: Record<string, string>, app = TOKENLESS) => {
+    const script = [
+      `exec 2>>"${root}/err"`,
+      'set -euo pipefail',
+      `HOME_DIR="${root}"; REPO="${root}"; LOGS="${root}"; check=false`,
+      `note() { print -r -- "$*" >> "${root}/notes"; }`,
+      `record() { print -r -- "$*" >> "${root}/records"; }`,
+      `notice() { print -r -- "$*" >> "${root}/notices"; }`,
+      app,
+      // The script's own list, so a name missing from it shows here
+      SCRIPT.match(/^PLATFORM_VARS=\(.*\)$/m)?.[0] ?? '',
+      fn('unexported_env'),
+      'platform_env() { unexported_env $PLATFORM_VARS; }',
+      fn('sweep_warn'),
+      fn('record_sweep'),
+      'platform_env',
+      'record_sweep',
+      `env > "${root}/sibling.env"`
+    ].join('\n');
+    const res = spawnSync('zsh', ['-c', script], {
+      env: { ...process.env, PATH: `${bin}:${process.env['PATH']}`, ...env },
+      stdio: 'ignore'
+    });
+    expect(res.status).toBe(0);
+    for (let i = 0; i < 100 && existsSync(join(root, 'sweep.lock')); i++)
+      await sleep(50);
+    expect(read('err')).toBe('');
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'sweep-'));
+    bin = join(root, 'bin');
+    mkdirSync(bin);
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('runs every tick, right after the backup step', () => {
+    const at = SCRIPT.indexOf('\nrecord_sweep\n');
+    expect(at).toBeGreaterThan(SCRIPT.indexOf('\nrecord_backup\n'));
+    expect(at).toBeLessThan(SCRIPT.indexOf('\nCHECKIN_ID=""\n'));
+    expect(SCRIPT).not.toMatch(/export [^\n]*PLATFORM_GITHUB_TOKEN/);
+  });
+
+  it('runs once a day, from 03:00', async () => {
+    stubNode('exit 0');
+    const env = { FLY_API_TOKEN: TOKEN };
+    await tick({ ...env, AGENT_QUEUE_SWEEP_HOUR: '02' });
+    expect(calls()).toBe(0);
+    expect(read('sweep-ran-on')).toBe('');
+    // a leading zero is not octal
+    await tick({ ...env, AGENT_QUEUE_SWEEP_HOUR: '08' });
+    expect(read('node.calls')).toBe(
+      'tools/cdwr/bin/cdwr.mjs agent sweep --yes --json\n'
+    );
+    expect(read('sweep-ran-on')).toBe(`${today()}\n`);
+    expect(read('notes')).toContain('sweep: started');
+    await tick({ ...env, AGENT_QUEUE_SWEEP_HOUR: '09' });
+    expect(calls()).toBe(1);
+    // another day
+    writeFileSync(join(root, 'sweep-ran-on'), '2000-01-01\n');
+    await tick({ ...env, AGENT_QUEUE_SWEEP_HOUR: '23' });
+    expect(calls()).toBe(2);
+  });
+
+  it('does nothing without FLY_API_TOKEN', async () => {
+    stubNode('exit 0');
+    await tick({ AGENT_QUEUE_SWEEP_HOUR: '05', FLY_API_TOKEN: '' });
+    await sleep(200);
+    expect(calls()).toBe(0);
+    expect(read('notes')).toBe('');
+    expect(read('sweep-ran-on')).toBe('');
+  });
+
+  it('passes the token to the command alone, never to other children', async () => {
+    stubNode('exit 0');
+    await tick({ FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' });
+    expect(read('node.env')).toContain(`FLY_API_TOKEN=${TOKEN}`);
+    expect(read('node.env')).toContain(`AGENT_QUEUE_HOME=${root}`);
+    expect(read('sibling.env')).not.toMatch(/FLY_API_TOKEN|fly-secret-token/);
+  });
+
+  it('signs the pull request reads with a read-only app token, else none', async () => {
+    stubNode('exit 0');
+    await tick({ FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' }, MINTED);
+    expect(read('node.env')).toContain('PLATFORM_GITHUB_TOKEN=gh-read-token');
+    expect(read('sibling.env')).not.toContain('gh-read-token');
+    expect(read('notes')).not.toContain('anonymous');
+    writeFileSync(join(root, 'sweep-ran-on'), '2000-01-01\n');
+    await tick({ FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' });
+    expect(read('node.env')).toContain('PLATFORM_GITHUB_TOKEN=\n');
+    expect(read('node.env')).not.toContain('gh-read-token');
+    expect(read('notes')).toContain(
+      'warn: sweep: the pull request reads go anonymous'
+    );
+    expect(existsSync(join(root, 'github-app.sweep.err'))).toBe(false);
+  });
+
+  it('warns about a failed run once, and clears it', async () => {
+    stubNode('exit 3');
+    const env = { FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' };
+    await tick(env);
+    expect(read('sweep-failed')).toBe('cdwr agent sweep failed (3)\n');
+    expect(read('records')).toBe('');
+    // the same day: no new run, the failure is warned and removed
+    await tick(env);
+    expect(read('records')).toBe('warn  sweep: cdwr agent sweep failed (3)\n');
+    expect(read('notes')).toContain('warn: sweep: cdwr agent sweep failed (3)');
+    expect(read('notices')).toBe(
+      'action sweep Sweep: cdwr agent sweep failed (3)\n'
+    );
+    expect(existsSync(join(root, 'sweep-failed'))).toBe(false);
+    expect(calls()).toBe(1);
+  });
+
+  it('sends one action notice for the new keys', async () => {
+    stubSweep('{"new":["orphan-app:cdwr-cms-pr-7","pending-app:x"]}');
+    await tick({ FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' });
+    expect(read('notices')).toBe(
+      'action sweep Sweep: 2 new: orphan-app:cdwr-cms-pr-7, pending-app:x\n'
+    );
+  });
+
+  it('sends no notice when nothing is new', async () => {
+    stubSweep('{"new":[]}');
+    await tick({ FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' });
+    expect(calls()).toBe(1);
+    expect(read('notices')).toBe('');
+  });
+
+  it('lists the first five new keys, then an ellipsis', async () => {
+    stubSweep('{"new":["k1","k2","k3","k4","k5","k6","k7"]}');
+    await tick({ FLY_API_TOKEN: TOKEN, AGENT_QUEUE_SWEEP_HOUR: '05' });
+    expect(read('notices')).toBe(
+      'action sweep Sweep: 7 new: k1, k2, k3, k4, k5, …\n'
+    );
+  });
+});
+
 describe('run.sh notice', () => {
   let root: string;
   let repo: string;
