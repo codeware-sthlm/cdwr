@@ -373,7 +373,7 @@ export interface BlockGalleryBlock {
   eyebrow?: string | null;
   heading: string;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   /**
@@ -959,7 +959,7 @@ export interface CodeBlock {
   eyebrow?: string | null;
   heading?: string | null;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   language: 'ts' | 'plaintext' | 'tsx' | 'js' | 'jsx' | 'shell';
@@ -1516,7 +1516,7 @@ export interface GalleryBlock {
   eyebrow?: string | null;
   heading?: string | null;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   /**
@@ -1613,7 +1613,7 @@ export interface FeatureCardsBlock {
   eyebrow?: string | null;
   heading: string;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   /**
@@ -1702,7 +1702,7 @@ export interface FeatureSectionBlock {
   eyebrow?: string | null;
   heading: string;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   enableLink?: boolean | null;
@@ -1770,7 +1770,7 @@ export interface HeroBlock {
   badge?: string | null;
   heading: string;
   /**
-   * The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).
+   * The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why). Wrap code in `backticks`.
    */
   lede: string;
   /**
@@ -1837,7 +1837,7 @@ export interface PillListBlock {
   eyebrow?: string | null;
   heading: string;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   /**
@@ -1915,7 +1915,10 @@ export interface PillListBlock {
  * via the `definition` "PostsBlock".
  */
 export interface PostsBlock {
-  title: string;
+  /**
+   * A section heading. Leave empty when the listing needs none, such as under a hero.
+   */
+  title?: string | null;
   description?: string | null;
   /**
    * Maximum number of posts to display
@@ -1944,7 +1947,7 @@ export interface ShowcaseBlock {
   eyebrow?: string | null;
   heading: string;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   enableHeaderLink?: boolean | null;
@@ -2078,7 +2081,7 @@ export interface ThemeStudioBlock {
   eyebrow?: string | null;
   heading?: string | null;
   /**
-   * Short paragraph below the heading
+   * Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.
    */
   intro?: string | null;
   /**

@@ -42,8 +42,6 @@ const devlogPage: PageDefinition = {
     {
       blockType: 'posts',
       blockName: 'All entries',
-      title: 'Entries',
-      description: 'Newest first.',
       limit: 10
     }
   ]

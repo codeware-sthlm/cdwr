@@ -1778,11 +1778,14 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
       {
         name: 'title',
         type: 'text',
-        required: true,
         localized: true,
         label: {
           en: 'Title',
           sv: 'Titel'
+        },
+        description: {
+          en: 'A section heading. Leave empty when the listing needs none, such as under a hero.',
+          sv: 'En rubrik för avsnittet. Lämna tomt när listan inte behöver någon, till exempel under en hero.'
         }
       },
       {
