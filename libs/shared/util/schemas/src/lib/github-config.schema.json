@@ -35,9 +35,10 @@
       "examples": ["cdwr_cms_shared", "app_shared_db", "${APP_NAME}_shared"]
     },
     "sharedSecrets": {
-      "description": "Whether the deploy passes the workflow's shared secrets (Infisical credentials, Sentry token) to this app. Set false for an app that runs third-party code and must not hold them.",
-      "type": "boolean",
-      "default": true
+      "description": "Which deploys of this app get the workflow's shared secrets (the read-everything Infisical identity). `host`: the host deploy does, a tenant deploy never does, since it gets its config pushed. `none`: no deploy does, for an app that runs third-party code.",
+      "type": "string",
+      "enum": ["host", "none"],
+      "default": "host"
     },
     "previewWith": {
       "description": "Nx projects whose host app deploys beside this app in preview, at their last released version when nothing bumped them.",

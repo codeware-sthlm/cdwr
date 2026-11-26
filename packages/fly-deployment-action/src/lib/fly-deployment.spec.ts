@@ -1617,13 +1617,55 @@ describe('flyDeployment', () => {
       );
     });
 
-    it('should withhold the shared secrets from an app with sharedSecrets false', async () => {
+    it('should pass the shared secrets to a host deployment with sharedSecrets host', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      const config = setupTest({
+        apps: getDefaultApps().map((app) =>
+          app.name === 'app-one'
+            ? { ...app, githubConfig: { sharedSecrets: 'host' } }
+            : app
+        ),
+        secrets: ['INFISICAL_CLIENT_ID=client-id']
+      });
+      await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app: 'app-one-config',
+          secrets: { INFISICAL_CLIENT_ID: 'client-id' }
+        })
+      );
+    });
+
+    it('should withhold the shared secrets from every tenant deployment', async () => {
+      setContext('push-main-branch');
+      setupMocks();
+      const config = setupTest({
+        apps: [getDefaultApps()[0]],
+        appDetails: { 'app-one': [{}, { tenant: 'demo' }] },
+        secrets: ['INFISICAL_CLIENT_ID=client-id']
+      });
+      await flyDeployment(config, true);
+
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app: 'app-one-config',
+          secrets: { INFISICAL_CLIENT_ID: 'client-id' }
+        })
+      );
+      expect(getMockFly().deploy).toHaveBeenCalledWith(
+        expect.objectContaining({ app: 'app-one-config-demo', secrets: {} })
+      );
+    });
+
+    it('should withhold the shared secrets from an app with sharedSecrets none', async () => {
       setContext('push-main-branch');
       setupMocks();
       const config = setupTest({
         apps: getDefaultApps().map((app) =>
           app.name === 'app-two'
-            ? { ...app, githubConfig: { sharedSecrets: false } }
+            ? { ...app, githubConfig: { sharedSecrets: 'none' } }
             : app
         ),
         secrets: ['INFISICAL_CLIENT_ID=client-id']
