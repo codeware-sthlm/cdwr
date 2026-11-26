@@ -206,14 +206,20 @@ describe('sweep rules', () => {
       expect(found.map(({ subject }) => subject)).toEqual(['line-1', 'line-2']);
     });
 
-    it('finds a cost that is not a number on any day, and accepts a missing one', async () => {
+    it('finds a cost that is not a number on any day, a missing one included', async () => {
       const found = await check([
         JSON.stringify({ day: TODAY, cost: '1.5' }),
         JSON.stringify({ day: '2026-11-25', cost: '1.5' }),
         JSON.stringify({ day: TODAY, kind: 'reserve' }),
-        JSON.stringify({ day: TODAY, cost: null })
+        JSON.stringify({ day: TODAY, cost: null }),
+        JSON.stringify({ day: TODAY, cost: 2 })
       ]);
-      expect(found.map(({ subject }) => subject)).toEqual(['line-1', 'line-2']);
+      expect(found.map(({ subject }) => subject)).toEqual([
+        'line-1',
+        'line-2',
+        'line-3',
+        'line-4'
+      ]);
     });
   });
 
