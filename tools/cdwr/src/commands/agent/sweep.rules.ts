@@ -119,9 +119,9 @@ export const SWEEP_RULES: SweepRule[] = [
       const lines = await ctx.ledger();
       if (!lines) return [];
       const found: Omit<Finding, 'key' | 'rule'>[] = [];
-      // Any line that isn't an object fails spent_today's `jq -s`, and a cost that is neither a
-      // number nor missing fails its sum: either leaves the day's spend unreadable and stops
-      // implement launches. Every day counts, since the sweep runs before most of today's rows.
+      // The contract of spendForDay (agent.logic.ts), the stricter of the two readers beside
+      // run.sh's spent_today: every line an object with a numeric cost, on any day. A line that
+      // breaks it leaves the spend unreadable and stops implement launches.
       lines.forEach((line, index) => {
         if (!line.trim()) return;
         let row: unknown;
@@ -139,10 +139,10 @@ export const SWEEP_RULES: SweepRule[] = [
           return;
         }
         const { cost } = row as { cost?: unknown };
-        if (cost !== undefined && cost !== null && typeof cost !== 'number') {
+        if (typeof cost !== 'number' || !Number.isFinite(cost)) {
           found.push({
             subject: `line-${index + 1}`,
-            message: `implement-spend.jsonl line ${index + 1} has a cost that is not a number`,
+            message: `implement-spend.jsonl line ${index + 1} has no numeric cost`,
             fix: `fix or remove line ${index + 1} of implement-spend.jsonl`
           });
         }
