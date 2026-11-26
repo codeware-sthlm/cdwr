@@ -179,7 +179,10 @@ def drop_lines:
       | $lines[$n]
       | select(test("^\\s*[-*] \\[ \\] ") and (test("^\\s*[-*] \\[ \\] ~~") | not))
       | (capture("^\\s*[-*] \\[ \\] (?<t>.*)$").t | trim) as $t
-      | { index: $n, text: $t, spec: (if $n | IN($h[]) then $t else apply_parse($lines[$n]).spec end) } ];
+      | ($n | IN($h[])) as $hand
+      # A pending Apply item (no outcome yet) is still applied from the merge snapshot: not droppable
+      | select($hand or apply_parse($lines[$n]).outcome != null)
+      | { index: $n, text: $t, spec: (if $hand then $t else apply_parse($lines[$n]).spec end) } ];
 
 # The text of the open item $sel names in the node's newest PR-ready comment: a 1-based number
 # over drop_lines, or the item's exact text or spec. null when none matches.
@@ -209,23 +212,25 @@ def drop_mark($text; $reason):
     end;
 
 # The `drop:` replies to act on in the thread of the node's newest PR-ready comment: by a person
-# (not the agent, not starting `**Agent`), first line `drop: <number or text>`, the rest the reason;
-# not in $handled (ids this host acted on) and with no agent comment in the thread newer than it
-# (another host answered it). Each is { id, sel, reason }, oldest first.
+# (not the agent, not starting `**Agent`), first line `drop: <number or text>`, the rest the reason.
+# Each gets one answer, oldest first, so as many replies as the thread has agent answers
+# (`**Agent: dropped**` / `**Agent: not dropped**`) are answered already, whichever host answered;
+# and none in $handled (ids this host acted on). Each is { id, sel, reason }, oldest first.
 def drop_replies($handled):
   pr_ready_comment as $c
   | if $c == null then []
     else
       [ (.comments.nodes // [])[] | select((.parent // {}).id == $c.id) ] as $thread
+      | ([ $thread[] | select(agent_kind("**Agent: dropped**") or agent_kind("**Agent: not dropped**")) ]
+         | length) as $answered
       | [ $thread | sort_by(.createdAt)[]
           | select((is_agent or agent_prefixed) | not)
-          | select(.id | IN($handled[]) | not)
-          | . as $r
-          | select(any($thread[]; is_agent and .createdAt > $r.createdAt) | not)
           | ((.body // "") | trim | split("\n")) as $l
           | (($l[0] | trim | capture("^drop:\\s*(?<s>.*\\S)\\s*$"; "i")) // null) as $m
           | select($m != null)
           | { id, sel: $m.s, reason: ($l[1:] | map(trim) | map(select(. != "")) | join(" ")) } ]
+      | .[$answered:]
+      | map(select(.id | IN($handled[]) | not))
     end;
 
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,

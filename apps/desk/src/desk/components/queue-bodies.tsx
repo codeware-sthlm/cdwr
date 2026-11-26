@@ -456,7 +456,7 @@ const HandoffCard = ({
             <span>
               <Inline text={t} />
             </span>
-            <DropControl ctx={drop} ticket={x.ticket} item={t} />
+            <DropControl key={t} ctx={drop} ticket={x.ticket} item={t} />
           </li>
         ))}
         {openApply(apply).map((a, n) => (
