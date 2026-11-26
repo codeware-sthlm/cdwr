@@ -16,6 +16,7 @@ const collect = vi.hoisted(() => ({
   readDeploy: vi.fn(),
   readReleases: vi.fn(),
   readBackup: vi.fn(),
+  readSweep: vi.fn(),
   readDbPeak: vi.fn(),
   writeDbPeak: vi.fn(),
   readPlatformAlerts: vi.fn(),
@@ -113,6 +114,7 @@ describe('agent platform-record', () => {
       .mockReset()
       .mockResolvedValue({ fetchError: null, projects: {} });
     collect.readBackup.mockReset().mockReturnValue(null);
+    collect.readSweep.mockReset().mockReturnValue(null);
     collect.readDbPeak.mockReset().mockReturnValue(lastPeak);
     collect.writeDbPeak.mockReset();
     collect.readPlatformAlerts.mockReset().mockReturnValue({});

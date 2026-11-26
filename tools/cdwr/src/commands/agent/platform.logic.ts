@@ -550,6 +550,26 @@ export type BackupRead = {
   lastRun: Reading<BackupRun | null>;
 };
 
+// --- the sweep read ---
+
+/** `sweep.json` in the queue home, as far as the desk needs it; `cdwr agent sweep` writes it */
+export const SweepFileSchema = z.object({
+  at: z.string(),
+  findings: z.array(
+    z.object({
+      key: z.string(),
+      rule: z.string(),
+      subject: z.string(),
+      message: z.string(),
+      fix: z.string()
+    })
+  ),
+  unchecked: z.array(z.object({ rule: z.string(), reason: z.string() }))
+});
+
+/** What the last `cdwr agent sweep` found, and the rules it could not check */
+export type SweepRead = z.infer<typeof SweepFileSchema>;
+
 // --- the day's connection peak ---
 
 /** `db-peak.json` in the queue home, as the last tick left it */
@@ -619,6 +639,8 @@ export interface PlatformReadings {
   releases: ReleasesRead;
   /** null: no backups folder and no status file, or no queue home */
   backup: BackupRead | null;
+  /** null: no `sweep.json` (the sweep never ran) or no queue home; a file that doesn't parse is a failed reading */
+  sweep: Reading<SweepRead> | null;
   /** `mergePeak` of this tick; null when the database wasn't read */
   dbPeak: { peak: DbPeak; opened: number | null } | null;
 }
@@ -642,6 +664,25 @@ const backupSignal = (read: BackupRead) => {
       : null
   };
 };
+
+/** The most findings the `drift` column holds; the sweep finds a handful at most */
+const DRIFT_FINDINGS = 50;
+
+/** The `drift` column of the shared row; the desk parses exactly these fields */
+const driftSignal = (read: SweepRead) => ({
+  at: plainText(read.at, 40),
+  findings: read.findings.slice(0, DRIFT_FINDINGS).map((f) => ({
+    key: plainText(f.key, 200),
+    rule: plainText(f.rule, 80),
+    subject: plainText(f.subject, 120),
+    message: plainText(f.message, 200),
+    fix: plainText(f.fix, 300)
+  })),
+  unchecked: read.unchecked.map((u) => ({
+    rule: plainText(u.rule, 80),
+    reason: plainText(u.reason, 200)
+  }))
+});
 
 const note = (errors: Errors, source: string, reason: string): void => {
   errors[source] = errors[source] ? `${errors[source]}; ${reason}` : reason;
@@ -730,6 +771,7 @@ export const buildRows = (
     deploy,
     releases,
     backup,
+    sweep,
     dbPeak
   } = readings;
   const known = tenants.ok ? tenants.value : null;
@@ -790,6 +832,7 @@ export const buildRows = (
   if (backup && !backup.lastRun.ok) {
     note(errorsOf(SHARED_KEY), 'backup', backup.lastRun.reason);
   }
+  if (sweep && !sweep.ok) note(errorsOf(SHARED_KEY), 'sweep', sweep.reason);
 
   // Whether each tenant's app holds the gate password, by tenant slug and app kind
   const gated = new Map<string, boolean>();
@@ -907,6 +950,7 @@ export const buildRows = (
         visitors: seen?.ok ? visitorsSignal(seen.value, visitorDays) : {},
         deploy: {},
         backup: {},
+        drift: {},
         errors: errorsOf(t.slug)
       };
     });
@@ -957,6 +1001,7 @@ export const buildRows = (
         }
       : {},
     backup: backup ? backupSignal(backup) : {},
+    drift: sweep?.ok ? driftSignal(sweep.value) : {},
     errors: errorsOf(SHARED_KEY)
   });
 
