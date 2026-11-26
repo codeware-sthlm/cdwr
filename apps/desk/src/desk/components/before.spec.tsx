@@ -3,6 +3,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DeskCommandRow, SnoozeRow } from '../../supabase';
+import { GH_PR } from '../constants';
 import { model } from '../model';
 import { type DeskState, createState } from '../state';
 import type { QueueGap, QueueTreeNode } from '../types';
@@ -136,19 +137,81 @@ const planReady = (s: DeskState): DeskState => {
 describe('BeforeSheet held merge', () => {
   const wcNotes = (el: Element): string[] =>
     Array.from(el.querySelectorAll('.wc-note')).map((n) => n.textContent ?? '');
-  const withHeld = (held: string): DeskState => {
+  const RULESET = "the ruleset requires Håkan's review";
+  const withHeld = (
+    held: string,
+    extra: {
+      approved?: boolean;
+      reviewRequired?: boolean;
+      reviewPaths?: string[] | null;
+    } = {}
+  ): DeskState => {
     const s = filled();
     s.data.runs = runs(
       view({
         table: {
           before: [],
           label: [],
-          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7, held }]
+          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7, held, ...extra }]
         }
       })
     );
     return s;
   };
+  const links = (el: Element): HTMLAnchorElement[] =>
+    Array.from(el.querySelectorAll('a.act'));
+  const required = { reviewRequired: true };
+
+  it('lists the protected paths under a ruleset hold, named once', () => {
+    const c = sheet(
+      withHeld(RULESET, { ...required, reviewPaths: ['a.ts', 'b.ts'] })
+    );
+    const n = wcNotes(cardOf(c, 'COD-3'));
+    expect(n).toContain('Protected paths: a.ts, b.ts');
+    expect(
+      n.filter((x) => x.startsWith('Needs your approval on GitHub'))
+    ).toHaveLength(1);
+  });
+
+  it('names the review while checks still hold the merge', () => {
+    const n = wcNotes(
+      cardOf(sheet(withHeld('checks pending', required)), 'COD-3')
+    );
+    expect(n).toContain(
+      "Needs your approval on GitHub: main's ruleset requires your review"
+    );
+    expect(n).toContain('Merge held: checks pending');
+  });
+
+  it('says the protected paths could not be read when there are none', () => {
+    const c = sheet(withHeld(RULESET, required));
+    expect(wcNotes(cardOf(c, 'COD-3'))).toContain(
+      'Protected paths could not be read'
+    );
+  });
+
+  it('links a ruleset hold to the PR files after the review link', () => {
+    const a = links(cardOf(sheet(withHeld(RULESET, required)), 'COD-3'));
+    expect(a[1].textContent).toBe('Files on GitHub');
+    expect(a[1].getAttribute('href')).toBe(GH_PR + 7 + '/files');
+    expect(a[1].getAttribute('target')).toBe('_blank');
+    expect(a[1].getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('shows no paths line or files link for another verdict', () => {
+    const card = cardOf(sheet(withHeld('a hold')), 'COD-3');
+    expect(wcNotes(card).join('\n')).not.toContain('Protected paths');
+    expect(links(card).map((a) => a.textContent)).not.toContain(
+      'Files on GitHub'
+    );
+  });
+
+  it('tells to press Merge when approved and another verdict holds', () => {
+    const c = sheet(withHeld('a hold', { approved: true }));
+    expect(wcNotes(cardOf(c, 'COD-3'))).toContain(
+      'Approved on GitHub, press Merge. Held: a hold'
+    );
+  });
 
   it('says the ruleset blocks a review row waiting on your approval', () => {
     const c = sheet(withHeld("the ruleset requires Håkan's review"));

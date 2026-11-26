@@ -180,6 +180,12 @@ export type QueueAfter = {
   items?: string[];
   /** Why the watch's own merge holds, on a PR row; older views have none */
   held?: string | null;
+  /** The PR's GitHub review decision is APPROVED; older views have none */
+  approved?: boolean;
+  /** The PR's GitHub review decision is REVIEW_REQUIRED: main's ruleset wants Håkan's review */
+  reviewRequired?: boolean;
+  /** The changed files main's ruleset requires a review for; null when unread or not needed */
+  reviewPaths?: string[] | null;
 };
 
 /**

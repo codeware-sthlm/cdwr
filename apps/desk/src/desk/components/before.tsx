@@ -19,6 +19,7 @@ import type { DeskState, Detail } from '../state';
 import { treePath } from '../view/tree';
 import {
   type PrUi,
+  REVIEW_NEEDED,
   type SnoozeUi,
   type WaitGap,
   type WaitRow,
@@ -26,8 +27,10 @@ import {
   copilotView,
   fixCommand,
   heldText,
+  isRulesetHeld,
   labelState,
   mergeBlocker,
+  reviewPathsText,
   rowLabel,
   snoozeUi,
   waitRows,
@@ -312,6 +315,8 @@ const WaitCard = ({
                 }
               : { text: 'Answer in Linear', href: r.url };
   const secondary = r.kind === 'ready to label' || r.kind === 'approved';
+  // Read from the review decision, so it shows while the checks still run too
+  const rulesetHeld = r.kind === 'review' && r.reviewRequired;
   const note = [
     // An approved card already names its blockers in its kind
     r.blockers && r.kind !== 'approved' ? 'After ' + r.blockers : '',
@@ -330,6 +335,7 @@ const WaitCard = ({
     prCtl.note !== null ||
     note !== '' ||
     r.held !== null ||
+    rulesetHeld ||
     label.note !== null ||
     snooze.note !== null;
   return (
@@ -364,9 +370,15 @@ const WaitCard = ({
               <LinkIds text={note} />
             </div>
           ) : null}
-          {r.held === null ? null : (
-            <div className={WC_NOTE}>{heldText(r.held)}</div>
+          {r.held === null || (rulesetHeld && isRulesetHeld(r.held)) ? null : (
+            <div className={WC_NOTE}>{heldText(r.held, r.approved)}</div>
           )}
+          {rulesetHeld ? (
+            <>
+              <div className={WC_NOTE}>{REVIEW_NEEDED}</div>
+              <div className={WC_NOTE}>{reviewPathsText(r.reviewPaths)}</div>
+            </>
+          ) : null}
           {label.note}
           {snooze.note}
         </div>
@@ -380,6 +392,16 @@ const WaitCard = ({
         >
           {act.text}
         </a>
+        {rulesetHeld && r.pr ? (
+          <a
+            className={ACT_SECONDARY}
+            href={GH_PR + r.pr + '/files'}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Files on GitHub
+          </a>
+        ) : null}
         {prCtl.button}
         {label.button}
         {snooze.button}

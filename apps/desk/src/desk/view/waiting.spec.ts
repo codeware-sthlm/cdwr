@@ -13,9 +13,11 @@ import {
   fixCommand,
   forgetLabelled,
   heldText,
+  isRulesetHeld,
   isSnoozed,
   labelState,
   mergeBlocker,
+  reviewPathsText,
   rowLabel,
   waitRows
 } from './waiting';
@@ -144,14 +146,17 @@ describe('gaps on the waiting rows', () => {
 });
 
 describe('a review row held by the merge', () => {
-  const rows = (held: string | null) => {
+  const rows = (
+    held: string | null,
+    extra: { approved?: boolean; reviewPaths?: string[] | null } = {}
+  ) => {
     const state = filled();
     state.data.runs = runs(
       view({
         table: {
           before: [],
           label: [],
-          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7, held }]
+          after: [{ ticket: 'COD-3', kind: 'pr', pr: 7, held, ...extra }]
         }
       })
     );
@@ -166,6 +171,48 @@ describe('a review row held by the merge', () => {
   it('has none without one', () => {
     expect(rows(null)).toMatchObject([{ id: 'COD-3', held: null }]);
   });
+
+  it('carries the approval and the protected paths', () => {
+    expect(
+      rows('a hold', { approved: true, reviewPaths: ['a.ts'] })
+    ).toMatchObject([{ approved: true, reviewPaths: ['a.ts'] }]);
+  });
+
+  it('is not approved and has no paths without them', () => {
+    expect(rows('a hold')).toMatchObject([
+      { approved: false, reviewPaths: null }
+    ]);
+  });
+});
+
+describe('isRulesetHeld', () => {
+  it('is true for the ruleset verdict only', () => {
+    expect(isRulesetHeld("the ruleset requires Håkan's review")).toBe(true);
+    expect(isRulesetHeld('a hold')).toBe(false);
+    expect(isRulesetHeld(null)).toBe(false);
+  });
+});
+
+describe('reviewPathsText', () => {
+  it('lists up to 3 paths', () => {
+    expect(reviewPathsText(['a', 'b', 'c'])).toBe('Protected paths: a, b, c');
+  });
+
+  it('lists the first 3 and counts the rest', () => {
+    expect(reviewPathsText(['a', 'b', 'c', 'd', 'e'])).toBe(
+      'Protected paths: a, b, c, +2 more'
+    );
+  });
+
+  it('says they could not be read when null', () => {
+    expect(reviewPathsText(null)).toBe('Protected paths could not be read');
+  });
+
+  it('says no file matched when the rules were read', () => {
+    expect(reviewPathsText([])).toBe(
+      'No changed file matches the protected paths'
+    );
+  });
 });
 
 describe('heldText', () => {
@@ -177,6 +224,18 @@ describe('heldText', () => {
 
   it('gives any other verdict as it is', () => {
     expect(heldText('a hold')).toBe('Merge held: a hold');
+  });
+
+  it('tells to press Merge when the PR is approved and another verdict holds', () => {
+    expect(heldText('a hold', true)).toBe(
+      'Approved on GitHub, press Merge. Held: a hold'
+    );
+  });
+
+  it('keeps naming the ruleset when approved', () => {
+    expect(heldText("the ruleset requires Håkan's review", true)).toBe(
+      "Needs your approval on GitHub: main's ruleset requires your review"
+    );
   });
 });
 
