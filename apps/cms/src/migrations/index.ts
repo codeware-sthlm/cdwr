@@ -98,6 +98,7 @@ import * as migration_20261122_195349_cod_889_posts_listing_categories from './2
 import * as migration_20261122_221236_cod_892_trust_epoch from './20261122_221236_cod_892_trust_epoch';
 import * as migration_20261124_213755_cod_902_block_options from './20261124_213755_cod_902_block_options';
 import * as migration_20261124_234550_cod_904_site_icon_style from './20261124_234550_cod_904_site_icon_style';
+import * as migration_20261126_170000_cod_736_short_identifiers from './20261126_170000_cod_736_short_identifiers';
 
 export const migrations = [
   {
@@ -599,5 +600,10 @@ export const migrations = [
     up: migration_20261124_234550_cod_904_site_icon_style.up,
     down: migration_20261124_234550_cod_904_site_icon_style.down,
     name: '20261124_234550_cod_904_site_icon_style'
+  },
+  {
+    up: migration_20261126_170000_cod_736_short_identifiers.up,
+    down: migration_20261126_170000_cod_736_short_identifiers.down,
+    name: '20261126_170000_cod_736_short_identifiers'
   }
 ];
