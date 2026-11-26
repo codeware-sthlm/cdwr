@@ -8,6 +8,12 @@ def trim: gsub("^\\s+|\\s+$"; "");
 def epoch:
   sub("\\.[0-9]+Z$"; "Z") | sub("T(?<hm>[0-9]{2}:[0-9]{2})Z$"; "T\(.hm):00Z") | fromdateiso8601;
 
+# The top-level connections of a Linear answer that filled their page (`pageInfo.hasNextPage`), by
+# alias, so run.sh `page_check` warns without repeating each query's page size. [] for an error answer.
+def full_pages:
+  [ (.data // {}) | objects | to_entries[]
+    | select((.value | type) == "object" and .value.pageInfo.hasNextPage == true) | .key ];
+
 # --- Who wrote a Linear comment ---
 # The queue writes to Linear as its own app user. Before the cutover it wrote as Håkan, so an older
 # comment by him that carries the `**Agent` prefix is still the agent's. The prefix fallback can go

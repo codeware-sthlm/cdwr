@@ -326,6 +326,7 @@ query {
     parent: { null: false }
     state: { type: { nin: ["completed", "canceled"] } }
   }) {
+    pageInfo { hasNextPage }
     nodes {
       identifier title priority createdAt description
       parent { identifier title state { type } }
@@ -339,6 +340,8 @@ query {
   }
 }
 fragment queued on IssueConnection {
+  # A full page warns (run.sh `page_check`)
+  pageInfo { hasNextPage }
   nodes {
     identifier title priority createdAt completedAt updatedAt description
     parent {
