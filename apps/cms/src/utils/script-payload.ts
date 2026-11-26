@@ -28,8 +28,10 @@ export async function getScriptPayload(databaseUrl: string): Promise<Payload> {
   // - the deployment's own DATABASE_URL host is not reachable from here
   // - a script must never seed or push schema to the target database
   // - nor run the deployment's queued jobs
+  // - with the seed off, a preview's TOTP exemption no longer validates
   process.env['DATABASE_URL'] = databaseUrl;
   process.env['SEED_SOURCE'] = 'off';
+  process.env['TOTP_EXEMPT_SEEDED_USERS'] = 'false';
   process.env['DISABLE_DB_PUSH'] = 'true';
   process.env['PAYLOAD_SCRIPT'] = 'true';
 
