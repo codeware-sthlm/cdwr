@@ -116,7 +116,7 @@ const tech = (
 export const techIconsMap: Record<TechBrand, Tech> = {
   cloudflare: tech('Cloudflare', SiCloudflare, SiCloudflareHex),
   docker: tech('Docker', SiDocker, SiDockerHex),
-  // The icon set's near-black, not the violet Fly.io itself uses
+  // The violet Fly.io itself uses, not the icon set's near-black
   flyio: tech('Fly.io', SiFlydotio, '#7C3AED'),
   github: tech('GitHub', SiGithub, SiGithubHex),
   'github-actions': tech('GitHub Actions', SiGithubactions, SiGithubactionsHex),

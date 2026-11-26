@@ -71,8 +71,8 @@ const devlogPage: PageDefinition = {
  * The gallery's own index and browser pages are route chrome built from the
  * block registry, so they are not authored here — `/blocks` is.
  *
- * `devlog` puts the Devlog page, its nav item and the home page's recent
- * posts back in place. The definition seeds no posts of its own: entries are
+ * `devlog` puts the Devlog page and its nav item back in place. The
+ * definition seeds no posts of its own: entries are
  * drafted elsewhere and published on approval (COD-776).
  */
 export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
