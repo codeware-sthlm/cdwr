@@ -352,6 +352,45 @@ describe('problems', () => {
     expect(all('.tn-needs h2')[0].textContent).toBe('NEEDS YOU');
   });
 
+  it('shows a sweep finding as a drift card under Needs you, with its fix', () => {
+    media(false);
+    const { all } = mount(
+      payload([
+        shared({
+          drift: {
+            at: '2026-11-15T03:10:00.000Z',
+            findings: [
+              {
+                key: 'orphan-app:cdwr-cms-pr-12',
+                rule: 'orphan-app',
+                subject: 'cdwr-cms-pr-12',
+                message: 'Preview app cdwr-cms-pr-12 outlived its pull request',
+                fix: 'fly apps destroy cdwr-cms-pr-12 --yes'
+              }
+            ],
+            unchecked: [
+              { rule: 'orphan-database', reason: 'no pg-preview access' }
+            ]
+          }
+        }),
+        tenant('acme')
+      ])
+    );
+    const cards = all('.tn-problem');
+    expect(cards.map((c) => c.dataset['problemKey'])).toEqual([
+      '_shared:drift:orphan-app:cdwr-cms-pr-12'
+    ]);
+    expect(cards[0].dataset['severity']).toBe('warn');
+    expect(cards[0].textContent).toContain(
+      'Preview app cdwr-cms-pr-12 outlived its pull request'
+    );
+    fireEvent.click(cards[0]);
+    const text = screen.getByRole('dialog').textContent ?? '';
+    expect(text).toContain('Rule orphan-app on cdwr-cms-pr-12');
+    expect(text).toContain('fly apps destroy cdwr-cms-pr-12 --yes');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  });
+
   it('opens a sheet with the threshold, the evidence and what can be done', () => {
     media(false);
     const { all } = mount(sick());
