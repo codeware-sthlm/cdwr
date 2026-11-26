@@ -110,6 +110,12 @@ export const domainsField = ({ override }: Props = {}): ArrayField => {
               // so an expiry only held in a response would vanish on reload
               name: 'issuedCertificates',
               type: 'array',
+              // The default table name made its indexes and foreign key longer
+              // than Postgres's 63 characters. A function, not a string: the
+              // field is shared, and a string would name one table for both
+              // collections. `tableName` is the domains array's table with the
+              // group's prefix, `<collection>_domains_certificate`.
+              dbName: ({ tableName }) => `${tableName}_certs`,
               fields: [
                 { name: 'type', type: 'text' },
                 { name: 'expiresAt', type: 'date' }

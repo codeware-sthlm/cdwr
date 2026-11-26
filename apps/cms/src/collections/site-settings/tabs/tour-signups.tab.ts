@@ -26,6 +26,9 @@ export const tourSignupsTab: Tab = {
     {
       name: 'notificationRecipients',
       type: 'array',
+      // The default table name made its parent index longer than Postgres's
+      // 63 characters
+      dbName: 'site_settings_tour_signups_recipients',
       label: { en: 'Notify these addresses', sv: 'Meddela dessa adresser' },
       labels: {
         singular: { en: 'Address', sv: 'Adress' },
