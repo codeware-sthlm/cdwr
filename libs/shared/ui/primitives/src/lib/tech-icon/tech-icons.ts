@@ -5,7 +5,6 @@ import {
   SiDocker,
   SiDockerHex,
   SiFlydotio,
-  SiFlydotioHex,
   SiGithub,
   SiGithubHex,
   SiGithubactions,
@@ -117,7 +116,8 @@ const tech = (
 export const techIconsMap: Record<TechBrand, Tech> = {
   cloudflare: tech('Cloudflare', SiCloudflare, SiCloudflareHex),
   docker: tech('Docker', SiDocker, SiDockerHex),
-  flyio: tech('Fly.io', SiFlydotio, SiFlydotioHex),
+  // The icon set's near-black, not the violet Fly.io itself uses
+  flyio: tech('Fly.io', SiFlydotio, '#7C3AED'),
   github: tech('GitHub', SiGithub, SiGithubHex),
   'github-actions': tech('GitHub Actions', SiGithubactions, SiGithubactionsHex),
   graphql: tech('GraphQL', SiGraphql, SiGraphqlHex),

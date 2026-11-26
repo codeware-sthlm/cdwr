@@ -17,6 +17,7 @@ import {
   infisicalLogo,
   nxLogo,
   playwrightLogo,
+  shadcnLogo,
   tanstackLogo,
   umamiLogo
 } from './tech-logos';
@@ -306,11 +307,26 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 icon: 'tailwind'
               },
               {
+                label: 'shadcn/ui',
+                url: 'https://ui.shadcn.com',
+                logo: { source: 'svg', svgCode: shadcnLogo }
+              },
+              {
                 label: 'Playwright',
                 url: 'https://playwright.dev',
                 logo: { source: 'svg', svgCode: playwrightLogo }
               },
+              {
+                label: 'Storybook',
+                url: 'https://storybook.js.org',
+                icon: 'storybook'
+              },
               { label: 'Sentry', url: 'https://sentry.io', icon: 'sentry' },
+              {
+                label: 'Turnstile',
+                url: 'https://www.cloudflare.com/products/turnstile/',
+                icon: 'cloudflare'
+              },
               {
                 label: 'Umami',
                 url: 'https://umami.is',
@@ -562,13 +578,35 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
+            blockName: 'Two blueprints',
+            eyebrow: 'Two kinds of app',
+            heading: 'Two blueprints, one renderer',
+            band: 'subtle',
+            intro:
+              'Every site runs as an app started from one of two blueprints, each for its own purpose. Both draw their pages with the same content renderer, which is plain React and knows nothing of the framework around it.',
+            subFeatures: [
+              {
+                title: 'The `cms` app',
+                body: 'A classic Payload deployment on Next.js: a site and its own admin in one app. Run as a host instead, it serves the content for every `headless` site, and their editors work in its admin. Ours is `cms.cdwr.io`.'
+              },
+              {
+                title: 'The `headless` app',
+                body: 'The platform’s own addition, built on TanStack Start. A site’s app serves only the site, and reads its content from the host over its REST API.'
+              },
+              {
+                title: 'Room for more',
+                body: 'Since the renderer is not tied to a framework, another React framework can become a third blueprint without changing how content is drawn.'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-section',
             blockName: 'One build per app',
             eyebrow: 'One build per app',
             heading: 'Built once, started for every site',
-            band: 'subtle',
             illustration: oneBuildIllustration,
             intro:
-              'The platform has two apps. The `cms` serves a site’s pages and its admin, and `cdwr.io` and `codeware.se` run on it. The `headless` client, built on TanStack Start, serves a site that has a front end of its own and reads its content from the `cms`. Each app is built once when a change is merged, and that build is started for every site that runs on it.',
+              'Each blueprint is built once when a change is merged, and that build is started for every site that runs on it.',
             subFeatures: [
               {
                 title: 'Told who it is when it is deployed',
@@ -586,29 +624,74 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
-            blockName: 'Two-factor login',
-            eyebrow: 'Sign-in',
-            heading: 'Two-factor login for editors',
+            blockName: 'Security',
+            band: 'subtle',
+            eyebrow: 'Security',
+            heading: 'Who gets in, and what they can reach',
             intro:
-              'Editors sign in with Payload’s own login, which locks an account for a day after five wrong passwords. On top of that comes a second step: a one-time code from an authenticator app (TOTP). It is required for the platform’s own administrators and for the admins who manage a site and its users, and any other editor can turn it on.'
+              'Editors sign in with Payload’s own login, which locks an account for a day after five wrong passwords, and then with a one-time code from an authenticator app (TOTP). The code is required for the platform’s administrators and for each site’s admins, and any other editor can turn it on.',
+            subFeatures: [
+              {
+                title: 'Each site sees its own content',
+                body: 'A site’s app reads with its own API key, and the `cms` app answers with that site’s content only. A `headless` app’s requests must be signed as well.'
+              },
+              {
+                title: 'A member area',
+                body: 'Pages can be for the site’s members only. The `cms` app holds them back, so a visitor who is not signed in, and a search engine, never gets them.'
+              },
+              {
+                title: 'A policy for the browser',
+                body: 'Every page sends a Content Security Policy, so the browser runs only the scripts the page was sent with and loads only from the sources the site lists.'
+              },
+              {
+                title: 'Limits on every way in',
+                body: 'Sign-in, signup and the password gate a site can keep until launch are limited per address, and forms can ask Cloudflare Turnstile whether a person sent them.'
+              }
+            ]
+          },
+          {
+            blockType: 'feature-section',
+            blockName: 'Privacy',
+            eyebrow: 'Privacy',
+            heading: 'Built with the GDPR in mind',
+            intro:
+              'Sites are hosted in the EU, visitors are not tracked, and each site’s privacy page starts from what its deployment actually runs.',
+            subFeatures: [
+              {
+                title: 'Hosted in the EU',
+                body: 'Sites, and the details visitors send through them, are stored with hosting providers in the EU.'
+              },
+              {
+                title: 'No cookie banner',
+                body: 'Visitor statistics set no cookies and store no IP address. The only cookies keep the theme and mode a visitor picks.'
+              },
+              {
+                title: 'Errors without the person',
+                body: 'Error reports go to Sentry in the EU, without the visitor’s IP address or anything they typed.'
+              },
+              {
+                title: 'A privacy page that matches',
+                body: 'An editor starts the privacy page from a template filled in from the services the site’s deployment runs, in English or Swedish.'
+              }
+            ]
           },
           {
             blockType: 'feature-cards',
             blockName: 'Deploys',
+            band: 'subtle',
             eyebrow: 'Deployment',
             heading: 'A release takes traffic once it is healthy',
-            band: 'subtle',
             columns: '3',
             items: [
               {
                 title: 'Blue-green deploys',
                 description:
-                  'The `cms` and the `headless` client start a new release beside the running one. Traffic moves over only when the new release passes its health check, so a release that fails to start never takes traffic.'
+                  'The `cms` and `headless` apps start a new release beside the running one. Traffic moves over only when the new release passes its health check, so a release that fails to start never takes traffic.'
               },
               {
                 title: 'A health check that asks the app',
                 description:
-                  'Fly.io keeps asking each app whether it is up. The `cms` answers yes only when Payload has started and the database answers a query.'
+                  'Fly.io keeps asking each app whether it is up. The `cms` app answers yes only when Payload has started and the database answers a query.'
               },
               {
                 title: 'Migrations in two steps',
@@ -645,9 +728,9 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             // The same tools in the same order as Home's list
             blockType: 'feature-cards',
             blockName: 'Stack',
+            band: 'subtle',
             eyebrow: 'Built on',
             heading: 'What it is built on, and why',
-            band: 'subtle',
             columns: '3',
             logoColor: 'own',
             items: [
@@ -661,13 +744,13 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 brand: { tech: 'nextjs' },
                 title: 'Next.js',
                 description:
-                  'Runs the `cms`, which serves a site’s pages and its admin from one app.'
+                  'Runs the `cms` app, which serves a site’s pages and its admin from one app.'
               },
               {
                 brand: { logo: { source: 'svg', svgCode: tanstackLogo } },
                 title: 'TanStack Start',
                 description:
-                  'Runs the `headless` client, for a site with a front end of its own that reads its content from the `cms`.'
+                  'Runs the `headless` app, which serves only the site and reads its content from the `cms` host.'
               },
               {
                 brand: { tech: 'supabase' },
@@ -699,15 +782,33 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 description: 'The styling the themes compile down to.'
               },
               {
+                brand: { logo: { source: 'svg', svgCode: shadcnLogo } },
+                title: 'shadcn/ui',
+                description:
+                  'The components the blocks and the admin start from. They take their colours from the theme, so one theme reaches both.'
+              },
+              {
                 brand: { logo: { source: 'svg', svgCode: playwrightLogo } },
                 title: 'Playwright',
                 description: 'The tests that open the running site and use it.'
+              },
+              {
+                brand: { tech: 'storybook' },
+                title: 'Storybook',
+                description:
+                  'Every component in every theme, in one place. The screenshots a pull request takes come from here.'
               },
               {
                 brand: { tech: 'sentry' },
                 title: 'Sentry',
                 description:
                   'Collects the errors every site and app runs into, so a fault is seen before a visitor reports it.'
+              },
+              {
+                brand: { tech: 'cloudflare' },
+                title: 'Turnstile',
+                description:
+                  'Tells a person from a script on signup and forms, without a puzzle to solve.'
               },
               {
                 brand: { logo: { source: 'svg', svgCode: umamiLogo } },
@@ -834,7 +935,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             logoColor: 'own',
             items: [
               {
-                brand: { tech: 'nx' },
+                brand: { logo: { source: 'svg', svgCode: nxLogo } },
                 title: '`@cdwr/nx-payload`',
                 description:
                   'An Nx plugin adding Payload generators and executors to any workspace. Scaffold an app, run migrations, build for deploy.'
