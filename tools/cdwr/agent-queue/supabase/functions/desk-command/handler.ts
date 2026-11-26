@@ -17,7 +17,8 @@ export const KINDS = [
   'dismiss',
   'restart',
   'gate',
-  'notify'
+  'notify',
+  'drop'
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -71,7 +72,8 @@ export type Command = {
   /**
    * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
    * snooze and wake, with the row's `kind` and newest gate event `eventAt` for snooze; `ticket`
-   * and `pr` for copilot and merge; `finding` and an optional `note` for dismiss; `tenant`, `app`
+   * and `pr` for copilot and merge; `finding` and an optional `note` for dismiss; `ticket`, `item`
+   * and an optional `note` for drop; `tenant`, `app`
    * and a `sha` or null for restart; `tenant` and `action` for gate; `level` and a future
    * `muteUntil` or null for notify
    */
@@ -81,6 +83,7 @@ export type Command = {
     sha?: string | null;
     action?: 'open' | 'close';
     finding?: string;
+    item?: string;
     note?: string | null;
     value?: number;
     session?: string;
@@ -261,6 +264,29 @@ export const parseCommand = (payload: unknown): Command | string => {
       args: { finding, note: text === '' ? null : text }
     };
   }
+  if (kind === 'drop') {
+    const message = `drop takes a ticket, an item's text and a note of at most ${NOTE_MAX} characters`;
+    if (!isRecord(args)) return message;
+    const { ticket, item, note } = args;
+    if (
+      Object.keys(args).some((k) => !['ticket', 'item', 'note'].includes(k)) ||
+      typeof ticket !== 'string' ||
+      !TICKET.test(ticket) ||
+      typeof item !== 'string' ||
+      (note !== undefined && note !== null && typeof note !== 'string')
+    )
+      return message;
+    const itemText = item.trim();
+    if (itemText === '' || itemText.length > 500 || /[\r\n]/.test(itemText))
+      return message;
+    const text = typeof note === 'string' ? note.trim() : '';
+    if (text.length > NOTE_MAX) return message;
+    return {
+      host,
+      kind,
+      args: { ticket, item: itemText, note: text === '' ? null : text }
+    };
+  }
   if (kind === 'snooze') {
     const message = 'snooze takes a ticket, a row kind and a gate time or null';
     if (!isRecord(args)) return message;
@@ -365,7 +391,9 @@ export const changeText = (
                   ? `notify dial set to ${command.args.level}${command.args.muteUntil ? `, muted until ${command.args.muteUntil}` : ''} from the desk (${device})`
                   : command.kind === 'dismiss'
                     ? `dismissed ${command.args.finding} from the desk (${device})`
-                    : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
+                    : command.kind === 'drop'
+                      ? `drop of an item on ${ticket} asked from the desk (${device})`
+                      : `abandoned ${ticket ?? 'the open session'} on ${command.host} from the desk (${device})`;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -540,7 +568,11 @@ export const createHandler = ({
           command.host,
           command.kind === 'abandon'
         );
-        if (command.kind === 'copilot' || command.kind === 'merge')
+        if (
+          command.kind === 'copilot' ||
+          command.kind === 'merge' ||
+          command.kind === 'drop'
+        )
           ticket = command.args.ticket ?? null;
         if (!known) {
           status = 'refused';
