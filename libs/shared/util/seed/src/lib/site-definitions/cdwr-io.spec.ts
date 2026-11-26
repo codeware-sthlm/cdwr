@@ -180,6 +180,16 @@ describe('the cdwr.io definition', () => {
     ]);
   });
 
+  it('names every block, so the admin lists them by what they hold', () => {
+    const unnamed = cdwrIo.pages.flatMap(({ slug, layout }) =>
+      layout.flatMap((block) =>
+        block.blockName ? [] : [`${slug}: ${block.blockType}`]
+      )
+    );
+
+    expect(unnamed).toEqual([]);
+  });
+
   it('dims the site icon in the header and footer', () => {
     expect(cdwrIo.siteSettings?.general?.iconStyle).toBe('muted');
   });

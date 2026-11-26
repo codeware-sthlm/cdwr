@@ -47,14 +47,15 @@ import type { BundledMediaFile } from './bundled-media';
  */
 
 /**
- * Payload's own per-row bookkeeping, which a definition never states.
+ * Payload's own per-row id, which a definition never states. The block name an
+ * editor sees in the admin's layout list stays: it is content.
  *
  * Distributive on purpose. `Omit` over a union keeps only the keys every member
  * shares, which quietly collapsed twelve block types into their common fields —
  * a definition could then state a `hero` but not its `eyebrow`. The
  * `T extends unknown` clause maps each member separately.
  */
-type Authored<T> = T extends unknown ? Omit<T, 'id' | 'blockName'> : never;
+type Authored<T> = T extends unknown ? Omit<T, 'id'> : never;
 
 type LayoutBlock = Page['layout'][number];
 
