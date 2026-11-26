@@ -308,6 +308,12 @@ export const ENTRIES: Entry[] = [
     load: () => import('./agent/backup').then((m) => m.default)
   },
   {
+    path: ['agent', 'sweep'],
+    summary: 'Check the platform for silent drift',
+    danger: 'mutate',
+    load: () => import('./agent/sweep').then((m) => m.default)
+  },
+  {
     path: ['agent', 'listen'],
     summary: 'Wake the scheduler when issue or GitHub events arrive',
     danger: 'read',
