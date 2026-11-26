@@ -1,3 +1,9 @@
+## 0.3.7 (2026-11-26)
+
+### ✨ Features
+
+- **fly-node:** apps.destroy can allow a failed postgres detach ([1ff50a98](https://github.com/codeware-sthlm/codeware/commit/1ff50a98))
+
 ## 0.3.6 (2026-11-23)
 
 ### 🐞 Bug Fixes
