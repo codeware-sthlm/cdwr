@@ -425,7 +425,7 @@ GQL
 # Linear answers an error.
 tree_nodes() {
   local resp after=null page pages="${TMPDIR:-/tmp}/tree-pages.$$" truncated=false max="${AGENT_QUEUE_TREE_PAGES:-10}"
-  [[ "$max" == <-> ]] && (( max >= 1 )) || max=10
+  [[ "$max" == <-> ]] && (( 10#$max >= 1 )) && max=$(( 10#$max )) || max=10
   : > "$pages"
   for (( page = 1; page <= max; page++ )); do
     resp="$(linear "$TREE_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")" || { rm -f "$pages"; return 1; }
