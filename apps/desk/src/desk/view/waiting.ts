@@ -48,6 +48,12 @@ export type WaitRow = {
   wait: string;
   /** Why the watch's own merge holds, as the queue view says it; null when it does not */
   held: string | null;
+  /** Approved on GitHub while the watch's own hold lasts, so Merge is Håkan's to press; false for every other row */
+  approved: boolean;
+  /** main's ruleset wants Håkan's review on GitHub; false for every other row */
+  reviewRequired: boolean;
+  /** The changed files main's ruleset requires a review for; null when unread or not a review row */
+  reviewPaths: readonly string[] | null;
   /** ISO time of the activity event the wait counts from; null without activity */
   gateAt: string | null;
   /** Snoozed until something changes; such a row leaves every count */
@@ -233,11 +239,33 @@ export const rowLabel = (r: WaitRow): string =>
 /** The merge verdict the watch gives while a ruleset review is missing */
 const RULESET_HELD = "the ruleset requires Håkan's review";
 
-/** The held line under a review row: the ruleset named as the blocker, any other verdict as it is */
-export const heldText = (held: string): string =>
-  held === RULESET_HELD
-    ? "Needs your approval on GitHub: main's ruleset requires your review"
-    : `Merge held: ${held}`;
+/** Whether the watch's verdict is the ruleset's missing review */
+export const isRulesetHeld = (held: string | null): boolean =>
+  held === RULESET_HELD;
+
+/** What a row needing Håkan's review on GitHub says */
+export const REVIEW_NEEDED =
+  "Needs your approval on GitHub: main's ruleset requires your review";
+
+/**
+ * The held line under a review row: the ruleset named as the blocker, any other verdict as it is.
+ * An approval never releases the watch's own hold, so it only changes what the line tells to do;
+ * the watch sends `approved` only for a hold that lasts
+ */
+export const heldText = (held: string, approved = false): string =>
+  isRulesetHeld(held)
+    ? REVIEW_NEEDED
+    : approved
+      ? `Approved on GitHub, press Merge. Held: ${held}`
+      : `Merge held: ${held}`;
+
+/** The protected paths line under a row needing the review: the first 3 files, none matched, or not read */
+export const reviewPathsText = (paths: readonly string[] | null): string =>
+  paths === null
+    ? 'Protected paths could not be read'
+    : paths.length === 0
+      ? 'No changed file matches the protected paths'
+      : `Protected paths: ${paths.slice(0, 3).join(', ')}${paths.length > 3 ? `, +${paths.length - 3} more` : ''}`;
 
 /**
  * What waits on you, furthest along first: gaps that stop work, PRs to review, hand-offs,
@@ -257,6 +285,9 @@ export const waitRows = (
       count?: number;
       stall?: string | null;
       held?: string | null;
+      approved?: boolean;
+      reviewRequired?: boolean;
+      reviewPaths?: readonly string[] | null;
     } = {}
   ): WaitRow => {
     const { title, url } = m.get(id);
@@ -272,6 +303,9 @@ export const waitRows = (
       blockers: blockerText(opts.blockers ?? []),
       wait: [prWaitPlain(m, id), opts.stall].filter(Boolean).join('. '),
       held: opts.held ?? null,
+      approved: opts.approved ?? false,
+      reviewRequired: opts.reviewRequired ?? false,
+      reviewPaths: opts.reviewPaths ?? null,
       gateAt,
       snoozed: isSnoozed({ id, kind }, gateAt, m.snoozes),
       gap: null
@@ -309,6 +343,10 @@ export const waitRows = (
           count: closed.length,
           blockers: '',
           wait: '',
+          held: null,
+          approved: false,
+          reviewRequired: false,
+          reviewPaths: null,
           gateAt: null,
           snoozed: false,
           gap: {
@@ -331,7 +369,10 @@ export const waitRows = (
       row(x.ticket, 'review', {
         blockers: open(x.ticket),
         stall: stall(m.prWaits.get(x.ticket)),
-        held: x.held ?? null
+        held: x.held ?? null,
+        approved: x.approved ?? false,
+        reviewRequired: x.reviewRequired ?? false,
+        reviewPaths: x.reviewPaths ?? null
       })
     ),
     // A stalled wait on Copilot whose PR is not among the open ones still wants the Copilot button
@@ -363,6 +404,9 @@ export const waitRows = (
         blockers: '',
         wait: '',
         held: null,
+        approved: false,
+        reviewRequired: false,
+        reviewPaths: null,
         gateAt,
         snoozed: isSnoozed({ id: i.id, kind: 'idea' }, gateAt, m.snoozes),
         gap: null

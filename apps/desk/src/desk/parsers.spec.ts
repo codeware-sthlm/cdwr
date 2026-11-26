@@ -849,7 +849,17 @@ describe('validateQueueView', () => {
       table: {
         before: [{ ticket: 'COD-5', kind: 'plan' }],
         label: [{ ticket: 'COD-7', parent: 'COD-1', blockers: [] }],
-        after: [{ ticket: 'COD-6', kind: 'handoffs', items: ['a'], held: null }]
+        after: [
+          {
+            ticket: 'COD-6',
+            kind: 'handoffs',
+            items: ['a'],
+            held: null,
+            approved: false,
+            reviewRequired: false,
+            reviewPaths: null
+          }
+        ]
       }
     };
     expect(validateQueueView(view)).toEqual(view);
@@ -904,8 +914,71 @@ describe('validateQueueView', () => {
       { ticket: 'COD-8', kind: 'plan' }
     ]);
     expect(view?.table.after).toEqual([
-      { ticket: 'COD-9', kind: undefined, items: undefined, held: null },
-      { ticket: 'COD-10', kind: 'handoffs', items: ['a'], held: null }
+      {
+        ticket: 'COD-9',
+        kind: undefined,
+        items: undefined,
+        held: null,
+        approved: false,
+        reviewRequired: false,
+        reviewPaths: null
+      },
+      {
+        ticket: 'COD-10',
+        kind: 'handoffs',
+        items: ['a'],
+        held: null,
+        approved: false,
+        reviewRequired: false,
+        reviewPaths: null
+      }
+    ]);
+  });
+
+  it('reads whether a PR is approved and its protected paths, false and null on an older view or a mistyped one', () => {
+    const view = validateQueueView({
+      limit,
+      table: {
+        after: [
+          { ticket: 'COD-1', kind: 'pr', pr: 5 },
+          {
+            ticket: 'COD-2',
+            kind: 'pr',
+            pr: 6,
+            approved: true,
+            reviewPaths: ['a.ts', 'b.ts']
+          },
+          {
+            ticket: 'COD-3',
+            kind: 'pr',
+            pr: 7,
+            approved: 'yes',
+            reviewPaths: 'a'
+          },
+          {
+            ticket: 'COD-4',
+            kind: 'pr',
+            pr: 8,
+            approved: null,
+            reviewPaths: null
+          },
+          { ticket: 'COD-5', kind: 'pr', pr: 9, reviewPaths: ['a.ts', 3, null] }
+        ]
+      }
+    });
+    expect(view?.table.after.map((x) => x.approved)).toEqual([
+      false,
+      true,
+      false,
+      false,
+      false
+    ]);
+    expect(view?.table.after.map((x) => x.reviewPaths)).toEqual([
+      null,
+      ['a.ts', 'b.ts'],
+      null,
+      null,
+      ['a.ts']
     ]);
   });
 

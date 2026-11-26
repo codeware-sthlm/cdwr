@@ -621,7 +621,24 @@ const queueViewSchema = z
             .string()
             .nullish()
             .catch(null)
-            .transform((v) => v ?? null)
+            .transform((v) => v ?? null),
+          approved: z
+            .boolean()
+            .nullish()
+            .catch(false)
+            .transform((v) => v ?? false),
+          reviewRequired: z
+            .boolean()
+            .nullish()
+            .catch(false)
+            .transform((v) => v ?? false),
+          reviewPaths: z
+            .array(z.unknown())
+            .nullish()
+            .catch(null)
+            .transform((v) =>
+              v ? v.filter((x): x is string => typeof x === 'string') : null
+            )
         })
       )
     })
