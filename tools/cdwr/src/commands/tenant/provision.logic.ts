@@ -188,6 +188,28 @@ export const flagActionOf = (stored: string | undefined): FlagAction =>
 /** Shared values arrive by reference, the signature through `/apps/headless`'s own import */
 export const HEADLESS_IMPORTS = ['/apps/headless'] as const;
 
+/**
+ * The cms folder imports the tenant's own shallow folder and `/apps/cms`, which
+ * the cms loader reads today, the tenant folder beating `/apps/cms`.
+ *
+ * Order matters: the SDK's `listSecretsWithImports` keeps a folder's own
+ * secrets, then takes the first import in the API's order that holds a key and
+ * skips the same key in later ones (`secrets.find` before `push`). So the
+ * tenant folder goes first, and is created first, as `/apps/cms` is written
+ * after it.
+ */
+export const cmsImports = (deployment: string): string[] => [
+  `/tenants/${deployment}`,
+  '/apps/cms'
+];
+
+/** The folders an app's tenant folder imports; the headless ones do not depend on the deployment */
+export const importsFor = (
+  app: AppKind,
+  deployment: string
+): ReadonlyArray<string> =>
+  app === 'headless' ? HEADLESS_IMPORTS : cmsImports(deployment);
+
 export interface ImportPlan {
   app: AppKind;
   importPath: string;
@@ -195,20 +217,101 @@ export interface ImportPlan {
 }
 
 /**
- * The imports a tenant folder needs, given what the headless folder already
- * imports. Only the headless app has any; the cms gets none.
+ * The imports each app's tenant folder needs, given what it already imports
+ * (`imported`, by app).
  */
 export function planImports(
   apps: ReadonlyArray<AppKind>,
-  imported: ReadonlyArray<string>
+  deployment: string,
+  imported: Partial<Record<AppKind, ReadonlyArray<string>>>
 ): ImportPlan[] {
-  return apps.includes('headless')
-    ? HEADLESS_IMPORTS.map((importPath) => ({
-        app: 'headless',
-        importPath,
-        action: imported.includes(importPath) ? 'present' : 'create'
-      }))
-    : [];
+  return apps.flatMap((app) =>
+    importsFor(app, deployment).map((importPath) => ({
+      app,
+      importPath,
+      action: (imported[app] ?? []).includes(importPath)
+        ? ('present' as const)
+        : ('create' as const)
+    }))
+  );
+}
+
+/** Where the cms reads the Umami key from, and the key it is set as on the app */
+export const UMAMI_SOURCE = { path: '/integrations/umami', key: 'API_KEY' };
+
+export type ReferenceKey = 'CORS_URLS' | 'UMAMI_API_KEY';
+
+/** A reference secret of the cms folder: `create` when the key is absent from its own secrets */
+export interface ReferencePlan {
+  key: ReferenceKey;
+  action: 'create' | 'present';
+  /** The reference to write, or the value already stored */
+  value: string;
+}
+
+/** A secret named by its folder and key */
+export interface SecretSource {
+  path: string;
+  key: string;
+}
+
+/**
+ * Infisical's cross-folder reference: `${<environment slug>.<folder>.<subfolder>.<KEY>}`.
+ * The environment is the slug (`production`), the folders have no leading slash.
+ */
+export const secretReference = (
+  environment: Environment,
+  { path, key }: SecretSource
+): string =>
+  `\${${[environment, ...path.split('/').filter(Boolean), key].join('.')}}`;
+
+/**
+ * The references the cms folder gets, created only for keys absent from its
+ * own secrets (`own`; imported ones do not count, and nothing is overwritten).
+ * `cors` are the tenant's own secrets tagged `cors`; without any, nothing is
+ * planned and the warning says so. The Umami key is referenced only when its
+ * source exists.
+ */
+export function planReferences(
+  environment: Environment,
+  deployment: string,
+  own: Readonly<Record<string, string>>,
+  cors: ReadonlyArray<SecretSource>,
+  umamiExists: boolean
+): { references: ReferencePlan[]; warnings: string[] } {
+  const references: ReferencePlan[] = [];
+  const warnings: string[] = [];
+
+  const stored = own['CORS_URLS'];
+  if (stored !== undefined) {
+    references.push({ key: 'CORS_URLS', action: 'present', value: stored });
+  } else if (cors.length) {
+    const unique = [
+      ...new Set(cors.map((source) => secretReference(environment, source)))
+    ].sort();
+    references.push({
+      key: 'CORS_URLS',
+      action: 'create',
+      value: unique.join(',')
+    });
+  } else {
+    warnings.push(
+      `No secret tagged 'cors' under /tenants/${deployment}, so CORS_URLS is not set for the cms. Tag the workspace's origin secret 'cors' and run provision again.`
+    );
+  }
+
+  const umami = own['UMAMI_API_KEY'];
+  if (umami !== undefined) {
+    references.push({ key: 'UMAMI_API_KEY', action: 'present', value: umami });
+  } else if (umamiExists) {
+    references.push({
+      key: 'UMAMI_API_KEY',
+      action: 'create',
+      value: secretReference(environment, UMAMI_SOURCE)
+    });
+  }
+
+  return { references, warnings };
 }
 
 /** A domain as Umami and the workspace's domains list it: lowercase, no scheme, path or trailing dot */
@@ -305,7 +408,8 @@ export function provisionSteps(
   stats?: StatsPlan,
   flip = false,
   team: ReadonlyArray<TeamStep> = [],
-  imports: ReadonlyArray<ImportPlan> = []
+  imports: ReadonlyArray<ImportPlan> = [],
+  references: ReadonlyArray<ReferencePlan> = []
 ): string[] {
   return [
     ...folders.map((folder) => `Create folder ${folderPath(folder)}`),
@@ -320,6 +424,12 @@ export function provisionSteps(
       return action === 'create'
         ? `Import ${importPath} into ${path}`
         : `Keep import of ${importPath} in ${path} (already there)`;
+    }),
+    ...references.map(({ key, action, value }) => {
+      const path = `/tenants/${deployment}/apps/cms`;
+      return action === 'create'
+        ? `Set ${key} in ${path} to ${value}`
+        : `Keep ${key} in ${path} (already there)`;
     }),
     ...flags.map(({ app, action, value }) => {
       const path = `/tenants/${deployment}/apps/${app}`;
