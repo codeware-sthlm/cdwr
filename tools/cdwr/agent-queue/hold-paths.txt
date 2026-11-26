@@ -13,6 +13,7 @@ libs/shared/util/csp/**  # the cms CSP
 libs/app-headless/feature/security/**  # headless CSP and the site gate
 .github/workflows/fly-deployment.yml  # production deploy
 packages/fly-deployment-action/**  # production deploy
+.github/workflows/agent-host-image.yml  # the agent image build
 apps/agent-host/**  # the agent image, its secrets and the NUC's root installer and units
 tools/cdwr/agent-queue/**  # the queue's own scripts: the merge verdict, guardrails and this list
 .claude/**  # the sessions' skills, agents and permissions
