@@ -37,6 +37,12 @@ const READS = [
   /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/
 ];
 
+// page_warn and page_check as written in run.sh, for the steps that call them
+const PAGE_CHECK = SCRIPT.slice(
+  SCRIPT.indexOf('page_warn() {'),
+  SCRIPT.indexOf('\n}\n', SCRIPT.indexOf('page_check() {')) + 3
+);
+
 // The Copilot request and the merge command (the desk's, and the watch's own) are run.sh's only
 // GitHub writes, in copilot_request and desk_pr_act
 const COPILOT_REQUEST =
@@ -1895,6 +1901,150 @@ describe('run.sh queue lock', () => {
   });
 });
 
+describe('run.sh page_check', () => {
+  const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  const LIB = readFileSync(
+    fileURLToPath(new URL('../../../agent-queue/lib.sh', import.meta.url)),
+    'utf8'
+  );
+  requireTools('zsh', 'jq');
+  let root: string;
+
+  const answer = (full: Record<string, boolean>) => ({
+    data: Object.fromEntries(
+      Object.entries(full).map(([alias, hasNextPage]) => [
+        alias,
+        { pageInfo: { hasNextPage }, nodes: [] }
+      ])
+    )
+  });
+
+  // Runs page_check on `input` as the step `step`; `check` runs it as --check does
+  const run = (input: unknown, step = 'plan', check = false) => {
+    writeFileSync(join(root, 'answer.json'), JSON.stringify(input));
+    const script = [
+      `ROOT="${root}"; HOME_DIR="${root}"; check=${check}`,
+      `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
+      `record() { print -r -- "$*" >> "$ROOT/records"; }`,
+      `watch() { jq -L "${DIR}" "$@"; }`,
+      PAGE_CHECK,
+      `page_check ${step} "the tickets" < "$ROOT/answer.json"; print -r -- "rc=$?"`
+    ].join('\n');
+    return spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
+  };
+  const read = (name: string) =>
+    existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'page-check-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    expect(PAGE_CHECK).toContain('page_warn() {');
+    expect(PAGE_CHECK).toContain('page_check() {');
+  });
+
+  it('notes and records a full page', () => {
+    const result = run(answer({ issues: true }));
+    expect(result.stdout).toContain('rc=0');
+    expect(read('notes')).toBe(
+      'warn: plan: the tickets filled a page, the rest not read\n'
+    );
+    expect(read('records')).toBe('warn  plan: page limit reached\n');
+    expect(read('page-warned-plan')).toMatch(/^\d+\n$/);
+  });
+
+  it('names an alias other than issues', () => {
+    run(answer({ issues: false, merged: true }), 'attended');
+    expect(read('notes')).toBe(
+      'warn: attended: the tickets (merged) filled a page, the rest not read\n'
+    );
+    expect(read('records')).toBe('warn  attended: page limit reached\n');
+  });
+
+  it('records a step at most once an hour, and notes it every time', () => {
+    run(answer({ issues: true }));
+    run(answer({ issues: true }));
+    expect(read('notes').trim().split('\n')).toHaveLength(2);
+    expect(read('records')).toBe('warn  plan: page limit reached\n');
+  });
+
+  it('records again after an hour', () => {
+    writeFileSync(
+      join(root, 'page-warned-plan'),
+      `${Math.floor(Date.now() / 1000) - 3601}\n`
+    );
+    run(answer({ issues: true }));
+    expect(read('records')).toBe('warn  plan: page limit reached\n');
+  });
+
+  it('keeps each step to its own hour', () => {
+    run(answer({ issues: true }), 'plan');
+    run(answer({ issues: true }), 'suggest');
+    expect(read('records')).toBe(
+      'warn  plan: page limit reached\nwarn  suggest: page limit reached\n'
+    );
+  });
+
+  it.each([
+    ['below the cap', answer({ issues: false, merged: false })],
+    ['without pageInfo', { data: { issues: { nodes: [] } } }],
+    ['an error answer', { errors: [{ message: 'nope' }] }]
+  ])('is quiet %s', (_, input) => {
+    const result = run(input);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('notes')).toBe('');
+    expect(read('records')).toBe('');
+  });
+
+  it('only notes on --check, with no stamp', () => {
+    run(answer({ issues: true }), 'plan', true);
+    expect(read('notes')).toContain('warn: plan:');
+    expect(existsSync(join(root, 'page-warned-plan'))).toBe(false);
+  });
+
+  it('asks every alias of the attended query for its page', () => {
+    const query = LIB.slice(
+      LIB.indexOf("read -r -d '' ATTENDED_QUERY"),
+      LIB.indexOf('\nGQL\n', LIB.indexOf("read -r -d '' ATTENDED_QUERY"))
+    );
+    // issues, merged and canceled through the fragment, subissues on its own
+    expect(query).toMatch(
+      /fragment queued on IssueConnection \{\n(\s*#.*\n)?\s*pageInfo \{ hasNextPage \}/
+    );
+    expect(query).toMatch(
+      /subissues: issues\([\s\S]*?\}\) \{\n\s*pageInfo \{ hasNextPage \}/
+    );
+  });
+
+  it.each([
+    ['QUERY', 'page_check plan '],
+    ['IDEAS', 'page_check suggest '],
+    ['PLANNED', 'page_check planned '],
+    ['PARENTS', 'page_check close '],
+    ['PARTS', 'page_check label ']
+  ])('%s asks for its page and its answer is checked', (name, call) => {
+    const start = SCRIPT.indexOf(`read -r -d '' ${name} <<'GQL'`);
+    const query = SCRIPT.slice(start, SCRIPT.indexOf('\nGQL\n', start));
+    expect(query).toContain('pageInfo { hasNextPage }');
+    // The variable the answer is read into, then the check of that variable after the read
+    const read = SCRIPT.match(new RegExp(`(\\w+)="\\$\\(linear "\\$${name}"`));
+    expect(read).not.toBeNull();
+    const at = SCRIPT.indexOf(read?.[0] ?? '');
+    const line = SCRIPT.slice(SCRIPT.indexOf(call, at)).split('\n')[0];
+    expect(SCRIPT.indexOf(call, at)).toBeGreaterThan(at);
+    expect(line).toContain(`<<<"$${read?.[1]}"`);
+  });
+
+  it('checks the attended answer before its aliases merge', () => {
+    const body = SCRIPT.slice(SCRIPT.indexOf('\nattended() {'));
+    const check = body.indexOf('page_check attended ');
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(body.indexOf('attended_nodes <<<'));
+  });
+});
+
 describe('run.sh close_parents', () => {
   const DIR = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
   // The queries and the function as written in run.sh
@@ -1945,16 +2095,17 @@ describe('run.sh close_parents', () => {
   };
 
   // Runs close_parents with a fake Linear; `update` is what the close answers
-  const run = (update: unknown) => {
-    writeFileSync(join(root, 'parents.json'), JSON.stringify(PARENTS));
+  const run = (update: unknown, parents: unknown = PARENTS) => {
+    writeFileSync(join(root, 'parents.json'), JSON.stringify(parents));
     writeFileSync(join(root, 'update.json'), JSON.stringify(update));
     const script = [
-      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `ROOT="${root}"; HOME_DIR="${root}"; check=false`,
       `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
       `record() { print -r -- "$*" >> "$ROOT/records"; }`,
       `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
       `watch() { jq -L "${DIR}" "$@"; }`,
       'watch_err() { :; }',
+      PAGE_CHECK,
       'linear() {',
       '  case "$1" in',
       '    *issueUpdate*) print -r -- "close $2" >> "$ROOT/calls"; cat "$ROOT/update.json" ;;',
@@ -2016,6 +2167,28 @@ describe('run.sh close_parents', () => {
     expect(read('notes')).toContain('warn: close: COD-100 failed ("nope")');
     expect(read('notices')).toBe('');
     expect(read('closed-parents')).toBe('');
+  });
+
+  it('warns on a full page and still closes what it read', () => {
+    const full = {
+      data: {
+        ...PARENTS.data,
+        issues: { ...PARENTS.data.issues, pageInfo: { hasNextPage: true } }
+      }
+    };
+    const result = run({ data: { issueUpdate: { success: true } } }, full);
+    expect(result.stdout).toContain('rc=0');
+    expect(read('notes')).toContain(
+      'warn: close: the closed sub-issues of open parents filled a page, the rest not read'
+    );
+    expect(read('records')).toBe(
+      'warn  close: page limit reached\nclosed COD-100 all sub-issues are closed\n'
+    );
+  });
+
+  it('asks Linear whether the page is full', () => {
+    expect(source).toContain('pageInfo { hasNextPage }\n    nodes {');
+    expect(source).toContain('page_check close ');
   });
 });
 
@@ -2080,12 +2253,13 @@ describe('run.sh label_parts', () => {
     );
     writeFileSync(join(root, 'update.json'), JSON.stringify(update));
     const script = [
-      `ROOT="${root}"; HOME_DIR="${root}"`,
+      `ROOT="${root}"; HOME_DIR="${root}"; check=false`,
       `note() { print -r -- "$*" >> "$ROOT/notes"; }`,
       `record() { print -r -- "$*" >> "$ROOT/records"; }`,
       `notice() { print -r -- "$*" >> "$ROOT/notices"; }`,
       `watch() { jq -L "${DIR}" "$@"; }`,
       'watch_err() { :; }',
+      PAGE_CHECK,
       'linear() {',
       '  case "$1" in',
       '    *issueUpdate*) print -r -- "label $2" >> "$ROOT/calls"; cat "$ROOT/update.json" ;;',

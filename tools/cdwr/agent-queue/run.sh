@@ -1291,6 +1291,29 @@ deploy_warn() {
   date +%s > "$stamp"
   record warn "$1" "watch: could not read the deploy"
 }
+# page_warn <step> <what>: a Linear read that filled its page leaves the rest unread. Noted each
+# time, one warn row an hour per step, as hold_list_warn, so a lasting full page can't push real
+# rows out of runs.jsonl
+page_warn() {
+  local stamp="$HOME_DIR/page-warned-$1" last
+  note "warn: $1: $2 filled a page, the rest not read"
+  $check && return 0
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "" "$1: page limit reached"
+}
+# page_check <step> <what>: page_warn for each connection of the Linear answer on stdin that has a
+# next page (watch.jq full_pages); an alias other than `issues` is named after <what>
+page_check() {
+  setopt local_options no_err_exit
+  local key
+  for key in ${(f)"$(watch -r 'include "watch"; full_pages[]' 2>/dev/null)"}; do
+    if [[ "$key" == issues ]]; then page_warn "$1" "$2"; else page_warn "$1" "$2 ($key)"; fi
+  done
+  return 0
+}
 read_deploy() {
   setopt local_options no_err_exit
   local entry="$1" id="${2:-}" sha runs allruns newest rid jobs job notes="$HOME_DIR/watch-notes.jsonl" state
@@ -1831,6 +1854,7 @@ query {
     state: { type: { in: ["completed", "canceled"] } }
     updatedAt: { gt: "-P14D" }
   }) {
+    pageInfo { hasNextPage }
     nodes {
       parent {
         id identifier
@@ -1869,8 +1893,7 @@ close_parents() {
   resp="$(linear "$PARENTS")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
-  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 50 ]] ||
-    { note "warn: close: 50 closed sub-issues of open parents, the page limit; older ones are not read"; record warn "" "close: page limit reached"; }
+  page_check close "the closed sub-issues of open parents" <<<"$resp"
   closed='[]'
   [[ -r "$file" ]] && closed="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
   todo="$(watch -c --argjson closed "$closed" 'include "watch"; parents_to_close($closed)' <<<"$resp")" ||
@@ -1910,6 +1933,7 @@ query {
     parent: { null: false }
     state: { type: { nin: ["completed", "canceled"] } }
   }) {
+    pageInfo { hasNextPage }
     nodes {
       id identifier description
       team { key }
@@ -1943,8 +1967,7 @@ label_parts() {
   resp="$(linear "$PARTS")" || { print -r -- "Linear did not answer"; return 1; }
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null ||
     { print -r -- "Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 1; }
-  [[ "$(jq '.data.issues.nodes | length' <<<"$resp")" -lt 100 ]] ||
-    { note "warn: label: 100 open sub-issues, the page limit; later ones are not read"; record warn "" "label: page limit reached"; }
+  page_check label "the open sub-issues" <<<"$resp"
   labelled='[]'
   [[ -r "$file" ]] && labelled="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
   todo="$(watch -c --argjson labelled "$labelled" 'include "watch"; parts_to_label_list($labelled)' <<<"$resp")" ||
@@ -2162,7 +2185,10 @@ attended() {
     print -r -- "watch-source: $WATCH_SOURCE"
     print -r -- "watch-state: $state"
   fi
-  resp="$(linear "$ATTENDED_QUERY" | attended_nodes)"
+  # Checked raw: attended_nodes merges the aliases and drops their pageInfo
+  resp="$(linear "$ATTENDED_QUERY")"
+  page_check attended "the attended query" <<<"$resp"
+  resp="$(attended_nodes <<<"$resp")"
   if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then
     note "warn: attended: Linear error $(jq -c '.errors[0].message' <<<"$resp" 2>/dev/null)"; return 0
   fi
@@ -2351,6 +2377,7 @@ query {
     state: { type: { nin: ["completed", "canceled"] } }
     labels: { some: { name: { eq: "agent:ready" } } }
   }) {
+    pageInfo { hasNextPage }
     nodes {
       identifier
       description
@@ -2368,6 +2395,7 @@ if [[ -z "$resp" ]] || jq -e '.errors' >/dev/null <<<"$resp"; then
   say "skip: Linear error $(jq -c '.errors[0].message' <<<"$resp")"
   record skip "" "Linear error $(jq -c '.errors[0].message' <<<"$resp")"; exit 0
 fi
+page_check plan "the agent:ready tickets" <<<"$resp"
 
 # Plan-only: an agent:ready ticket for this repo, not blocked by an open ticket, with no plan yet.
 ready="$(watch -r --argjson other "$OTHER_REPOS" 'include "watch";
@@ -2387,6 +2415,7 @@ query {
     state: { type: { nin: ["completed", "canceled"] } }
     labels: { some: { name: { eq: "agent-idea" } } }
   }) {
+    pageInfo { hasNextPage }
     nodes { identifier labels { nodes { name } } }
   }
 }
@@ -2405,6 +2434,8 @@ suggest_gate() {
   if (( hour < SUGGEST_HOUR )); then printf 'not before %02d:00\n' "$SUGGEST_HOUR"; return 0; fi
   ideas="$(linear "$IDEAS" 2>/dev/null)" && jq -e '.data.issues.nodes' >/dev/null 2>&1 <<<"$ideas" ||
     { print "unavailable, Linear did not answer"; return 0; }
+  # Away from stdout: the gate is read through $(...), which record's detached telemetry would hold open
+  page_check suggest "the agent-idea tickets" <<<"$ideas" >/dev/null
   open="$(jq -r '
     [.data.issues.nodes[]
      | select([.labels.nodes[].name | IN("agent:ready","agent:working","agent:needs-input","agent:review")] | any | not)
@@ -2829,10 +2860,11 @@ query {
   issues(first: 100, filter: {
     team: { key: { eq: "COD" } }
     labels: { some: { name: { in: ["agent:needs-input", "agent:ready"] } } }
-  }) { nodes { identifier description labels(first: 20) { nodes { name } } } }
+  }) { pageInfo { hasNextPage } nodes { identifier description labels(first: 20) { nodes { name } } } }
 }
 GQL
 if after="$(linear "$PLANNED")" && [[ -n "$after" ]] && ! jq -e '.errors' >/dev/null <<<"$after"; then
+  page_check planned "the agent:ready and agent:needs-input tickets" <<<"$after"
   planned=0
   for row in $(jq -r --arg ready "$ready" '
       ($ready | split("\n")) as $offered

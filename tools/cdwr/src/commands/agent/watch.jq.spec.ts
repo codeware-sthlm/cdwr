@@ -33,6 +33,44 @@ const issue = (
   ...(description === undefined ? {} : { description })
 });
 
+describe('full_pages', () => {
+  it('names each top-level connection with a next page', () => {
+    expect(
+      run('full_pages', {
+        data: {
+          issues: { pageInfo: { hasNextPage: true }, nodes: [] },
+          merged: { pageInfo: { hasNextPage: false }, nodes: [] },
+          subissues: { pageInfo: { hasNextPage: true }, nodes: [] },
+          canceled: { nodes: [] },
+          teams: { nodes: [] }
+        }
+      })
+    ).toEqual(['issues', 'subissues']);
+  });
+
+  it('ignores a nested next page', () => {
+    expect(
+      run('full_pages', {
+        data: {
+          issues: {
+            pageInfo: { hasNextPage: false },
+            nodes: [{ children: { pageInfo: { hasNextPage: true } } }]
+          }
+        }
+      })
+    ).toEqual([]);
+  });
+
+  it.each([
+    ['an error answer', { errors: [{ message: 'x' }] }],
+    ['null data', { data: null }],
+    ['a null alias', { data: { issues: null } }],
+    ['no answer', null]
+  ])('is empty for %s', (_, input) => {
+    expect(run('full_pages', input)).toEqual([]);
+  });
+});
+
 describe('pr_number', () => {
   it.each([
     [
