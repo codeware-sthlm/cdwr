@@ -51,7 +51,7 @@ export const ShowcaseBlock: React.FC<ShowcaseBlockProps> = ({
           )}
         </div>
         {intro && (
-          <p className="text-muted-foreground mt-3.5 max-w-xl text-base leading-relaxed">
+          <p className="text-muted-foreground mt-3.5 max-w-xl text-base leading-relaxed whitespace-pre-line">
             <InlineText text={intro} />
           </p>
         )}

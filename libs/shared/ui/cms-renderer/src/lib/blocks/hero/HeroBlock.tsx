@@ -5,6 +5,7 @@ import { useId } from 'react';
 
 import { usePayload } from '../../providers/PayloadProvider';
 import { Illustration } from '../../utils/Illustration';
+import { InlineText } from '../../utils/InlineText';
 import { resolveLinkGroup } from '../../utils/resolve-link-group';
 import { TenantIcon } from '../../utils/TenantIcon';
 import { ImageBlock } from '../image/ImageBlock';
@@ -127,8 +128,8 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
         <h1 className="text-core-headline mt-5 max-w-4xl text-5xl font-semibold tracking-tight text-balance md:text-7xl lg:text-8xl">
           {heading}
         </h1>
-        <p className="text-muted-foreground mt-6 max-w-xl text-lg leading-relaxed md:text-xl">
-          {lede}
+        <p className="text-muted-foreground mt-6 max-w-xl text-lg leading-relaxed whitespace-pre-line md:text-xl">
+          <InlineText text={lede} />
         </p>
         {buttons}
         {linesDrawing}
@@ -156,8 +157,8 @@ export const HeroBlock: React.FC<HeroBlockProps> = ({
           <h1 className="text-core-headline max-w-3xl text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
             {heading}
           </h1>
-          <p className="text-muted-foreground mt-6 max-w-xl text-lg leading-relaxed">
-            {lede}
+          <p className="text-muted-foreground mt-6 max-w-xl text-lg leading-relaxed whitespace-pre-line">
+            <InlineText text={lede} />
           </p>
           {buttons}
         </div>

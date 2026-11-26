@@ -119,8 +119,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -506,8 +506,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -805,8 +805,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -1004,8 +1004,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -1319,8 +1319,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -1432,8 +1432,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Introduktion'
         },
         description: {
-          en: 'The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).',
-          sv: 'Den del som fångar läsaren och förmedlar den mest väsentliga informationen (ofta svar på vem, vad, när, var, varför).'
+          en: 'The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why). Wrap code in `backticks`.',
+          sv: 'Den del som fångar läsaren och förmedlar den mest väsentliga informationen (ofta svar på vem, vad, när, var, varför). Omge kod med `backticks`.'
         }
       },
       {
@@ -1645,8 +1645,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -1900,8 +1900,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {
@@ -2419,8 +2419,8 @@ export const BLOCK_META: Record<BlockSlug, BlockMeta> = {
           sv: 'Ingress'
         },
         description: {
-          en: 'Short paragraph below the heading. Wrap code in `backticks`.',
-          sv: 'Kort stycke under rubriken. Omge kod med `backticks`.'
+          en: 'Short paragraph below the heading. Wrap code in `backticks`, and leave an empty line to start a new paragraph.',
+          sv: 'Kort stycke under rubriken. Omge kod med `backticks` och lämna en tom rad för att börja ett nytt stycke.'
         }
       },
       {

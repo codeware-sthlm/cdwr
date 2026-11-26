@@ -58,8 +58,8 @@ export const heroBlock: Block = {
       label: { en: 'Introduction', sv: 'Introduktion' },
       admin: {
         description: {
-          en: 'The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why).',
-          sv: 'Den del som fångar läsaren och förmedlar den mest väsentliga informationen (ofta svar på vem, vad, när, var, varför).'
+          en: 'The part that hooks the reader and conveys the most essential information (often answering who, what, when, where, why). Wrap code in `backticks`.',
+          sv: 'Den del som fångar läsaren och förmedlar den mest väsentliga informationen (ofta svar på vem, vad, när, var, varför). Omge kod med `backticks`.'
         }
       },
       localized: true,

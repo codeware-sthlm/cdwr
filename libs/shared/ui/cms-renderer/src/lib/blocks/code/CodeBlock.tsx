@@ -40,7 +40,7 @@ export const CodeBlock: React.FC<Props> = ({
           </h2>
         )}
         {intro && (
-          <p className="text-muted-foreground mt-3.5 text-base leading-relaxed first:mt-0">
+          <p className="text-muted-foreground mt-3.5 text-base leading-relaxed whitespace-pre-line first:mt-0">
             <InlineText text={intro} />
           </p>
         )}
