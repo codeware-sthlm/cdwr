@@ -420,18 +420,20 @@ query($after: String) {
 }
 GQL
 
-# tree_nodes: reads the TREE_QUERY pages (up to 4 of 50) and prints { nodes, truncated }, truncated
-# when tickets are left past the last page. Fails when Linear answers an error.
+# tree_nodes: reads the TREE_QUERY pages (up to AGENT_QUEUE_TREE_PAGES of 50, 10 by default) and
+# prints { nodes, truncated }, truncated when tickets are left past the last page. Fails when
+# Linear answers an error.
 tree_nodes() {
-  local resp after=null page pages="${TMPDIR:-/tmp}/tree-pages.$$" truncated=false
+  local resp after=null page pages="${TMPDIR:-/tmp}/tree-pages.$$" truncated=false max="${AGENT_QUEUE_TREE_PAGES:-10}"
+  [[ "$max" == <-> ]] && (( max >= 1 )) || max=10
   : > "$pages"
-  for page in {1..4}; do
+  for (( page = 1; page <= max; page++ )); do
     resp="$(linear "$TREE_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")" || { rm -f "$pages"; return 1; }
     jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || { rm -f "$pages"; return 1; }
     jq -c '.data.issues.nodes' <<<"$resp" >> "$pages"
     [[ "$(jq -r '.data.issues.pageInfo.hasNextPage' <<<"$resp")" == true ]] || break
     after="$(jq -c '.data.issues.pageInfo.endCursor' <<<"$resp")"
-    (( page == 4 )) && truncated=true
+    (( page == max )) && truncated=true
   done
   jq -cs --argjson t "$truncated" '{ nodes: add, truncated: $t }' "$pages"
   rm -f "$pages"

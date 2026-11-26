@@ -3625,12 +3625,26 @@ describe('run.sh audit', () => {
       nodes: [{ identifier: 'COD-2' }],
       truncated: false
     });
-    // tree_nodes records each call; `ttl` is AGENT_QUEUE_TREE_TTL_MIN
+    const truncated = JSON.stringify({
+      nodes: [{ identifier: 'COD-2' }, { identifier: 'COD-3' }],
+      truncated: true
+    });
+    const lines = (name: string) => {
+      try {
+        return readFileSync(join(home, name), 'utf8')
+          .split('\n')
+          .filter(Boolean);
+      } catch {
+        return [];
+      }
+    };
+    // tree_nodes records each call and note each line; `ttl` is AGENT_QUEUE_TREE_TTL_MIN
     const run = (opts: {
       file?: string;
       ageMin?: number;
       read: 'ok' | 'fail';
       ttl?: string;
+      answer?: string;
     }) => {
       const f = join(home, 'tree-nodes.json');
       if (opts.file) {
@@ -3642,20 +3656,17 @@ describe('run.sh audit', () => {
         'set -uo pipefail',
         `HOME_DIR="${home}"`,
         ...(opts.ttl ? [`AGENT_QUEUE_TREE_TTL_MIN=${opts.ttl}`] : []),
-        `tree_nodes() { print x >> "${home}/calls"; ${opts.read === 'ok' ? `print -r -- '${fresh}'` : 'return 1'}; }`,
+        `note() { print -r -- "$*" >> "${home}/notes"; }`,
+        `tree_nodes() { print x >> "${home}/calls"; ${opts.read === 'ok' ? `print -r -- '${opts.answer ?? fresh}'` : 'return 1'}; }`,
         fn('tree_wide'),
         'tree_wide'
       ].join('\n');
       const res = spawnSync('zsh', ['-c', script], { encoding: 'utf8' });
-      let calls = 0;
-      try {
-        calls = readFileSync(join(home, 'calls'), 'utf8')
-          .split('\n')
-          .filter(Boolean).length;
-      } catch {
-        /* no read */
-      }
-      return { status: res.status, out: res.stdout.trim(), calls };
+      return {
+        status: res.status,
+        out: res.stdout.trim(),
+        calls: lines('calls').length
+      };
     };
 
     it('reuses a file younger than the TTL without reading Linear', () => {
@@ -3690,6 +3701,32 @@ describe('run.sh audit', () => {
 
     it('fails when the read fails and there is no file', () => {
       expect(run({ read: 'fail' }).status).toBe(1);
+    });
+
+    it('warns once on a fresh read that left tickets out, naming the count', () => {
+      expect(run({ read: 'ok', answer: truncated }).out).toBe(truncated);
+      expect(lines('notes')).toEqual([
+        'warn: tree: more than 2 tickets, the rest left out'
+      ]);
+    });
+
+    it('stays quiet on a cached or fallback read of a truncated file', () => {
+      expect(run({ file: truncated, ageMin: 5, read: 'ok' })).toEqual({
+        status: 0,
+        out: truncated,
+        calls: 0
+      });
+      expect(run({ file: truncated, ageMin: 600, read: 'fail' })).toEqual({
+        status: 0,
+        out: truncated,
+        calls: 1
+      });
+      expect(lines('notes')).toEqual([]);
+    });
+
+    it('stays quiet on a fresh read that took every ticket', () => {
+      run({ read: 'ok' });
+      expect(lines('notes')).toEqual([]);
     });
   });
 

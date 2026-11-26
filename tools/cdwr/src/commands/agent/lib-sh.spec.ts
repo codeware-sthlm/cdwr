@@ -1169,4 +1169,93 @@ describe('lib.sh', () => {
       });
     });
   });
+
+  describe('tree_nodes', () => {
+    requireTools('zsh', 'jq');
+
+    let dir: string;
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'lib-sh-'));
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    // Linear holds `total` pages of one ticket each; the cursor names the next page
+    const read = (total: number, pages?: string) => {
+      for (let n = 1; n <= total; n++) {
+        writeFileSync(
+          join(dir, `page-${n}.json`),
+          JSON.stringify({
+            data: {
+              issues: {
+                pageInfo: { hasNextPage: n < total, endCursor: String(n + 1) },
+                nodes: [{ identifier: `COD-${n}` }]
+              }
+            }
+          })
+        );
+      }
+      const result = spawnSync(
+        'zsh',
+        [
+          '-c',
+          [
+            `source "${LIB}"`,
+            `linear() { print x >> "${dir}/calls"; cat "${dir}/page-$(jq -r '.after // "1"' <<<"$2").json"; }`,
+            'tree_nodes'
+          ].join('\n')
+        ],
+        {
+          encoding: 'utf8',
+          env: {
+            PATH: process.env['PATH'] ?? '',
+            HOME: dir,
+            TMPDIR: dir,
+            ...(pages === undefined ? {} : { AGENT_QUEUE_TREE_PAGES: pages })
+          }
+        }
+      );
+      expect({ status: result.status, stderr: result.stderr }).toEqual({
+        status: 0,
+        stderr: ''
+      });
+      const out = JSON.parse(result.stdout) as {
+        nodes: { identifier: string }[];
+        truncated: boolean;
+      };
+      return {
+        count: out.nodes.length,
+        truncated: out.truncated,
+        calls: readFileSync(join(dir, 'calls'), 'utf8').trim().split('\n')
+          .length
+      };
+    };
+
+    it('follows the pages to the last one', () => {
+      expect(read(7)).toEqual({ count: 7, truncated: false, calls: 7 });
+    });
+
+    it('stops at 10 pages by default and marks the rest left out', () => {
+      expect(read(12)).toEqual({ count: 10, truncated: true, calls: 10 });
+    });
+
+    it('is not truncated when the last allowed page is the last one', () => {
+      expect(read(10)).toEqual({ count: 10, truncated: false, calls: 10 });
+    });
+
+    it('takes AGENT_QUEUE_TREE_PAGES as the cap', () => {
+      expect(read(5, '3')).toEqual({ count: 3, truncated: true, calls: 3 });
+    });
+
+    it.each(['0', 'x', '-2'])('falls back on 10 for %s', (pages) => {
+      expect(read(12, pages)).toEqual({
+        count: 10,
+        truncated: true,
+        calls: 10
+      });
+    });
+  });
 });
