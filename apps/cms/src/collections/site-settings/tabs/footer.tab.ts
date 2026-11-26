@@ -1,5 +1,7 @@
 import { linkGroupField, socialLinksField } from '@codeware/app-cms/ui/fields';
 import { enumName } from '@codeware/app-cms/util/db';
+import { customT } from '@codeware/app-cms/util/i18n';
+import { isBlank, isSafeLinkHref } from '@codeware/shared/util/pure';
 import type { Condition, Tab, TypeWithID } from 'payload';
 
 /**
@@ -200,7 +202,13 @@ export const footerTab: Tab = {
           en: 'Optional. Where the licence line leads; an address starting with http opens in a new tab.',
           sv: 'Valfri. Vart licensraden leder; en adress som börjar med http öppnas i en ny flik.'
         }
-      }
+      },
+      // The value lands in an `href`, so any other scheme is refused
+      validate: (value, { req }) =>
+        isBlank(value) || isSafeLinkHref(value)
+          ? true
+          : customT(req.t)('validation:linkHrefInvalid'),
+      hasMany: false // infer correct validate type
     },
     {
       name: 'showVersion',

@@ -549,6 +549,7 @@ const customTranslationsSchema = z.object({
     labelNameTaken: z.string(),
     labelNotFound: z.string(),
     labelWrongType: z.string(),
+    linkHrefInvalid: z.string(),
     mustBelongToWorkspace: z.string(),
     notSupportedLocale: z.string(),
     phoneNumber: z.string(),
@@ -1219,6 +1220,8 @@ You can assign multiple tags to a file.`,
       labelNameTaken: 'A "{{type}}" label named "{{name}}" already exists.',
       labelNotFound: 'The selected label no longer exists.',
       labelWrongType: 'Expected a "{{expected}}" label but got "{{actual}}".',
+      linkHrefInvalid:
+        'Enter a path starting with / or an address starting with http:// or https://.',
       mustBelongToWorkspace: 'User must belong to a workspace.',
       notSupportedLocale: `Selected locale "{{locale}}" is not supported by the current tenant.
 Supported locales: {{locales}}`,
@@ -1903,6 +1906,8 @@ Du kan tilldela flera etiketter till en fil.`,
       labelNotFound: 'Den valda etiketten finns inte längre.',
       labelWrongType:
         'Förväntade en etikett av typen "{{expected}}" men fick "{{actual}}".',
+      linkHrefInvalid:
+        'Ange en sökväg som börjar med / eller en adress som börjar med http:// eller https://.',
       mustBelongToWorkspace: 'Användaren måste tillhöra en arbetsyta.',
       notSupportedLocale: `Valt språk "{{locale}}" stöds inte av den aktuella arbetsytan.
 Språk som stöds: {{locales}}`,
