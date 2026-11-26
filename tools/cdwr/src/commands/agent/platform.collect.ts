@@ -36,6 +36,8 @@ import {
   type SentryFresh,
   type SentryRead,
   type SentryTop,
+  SweepFileSchema,
+  type SweepRead,
   type SwitchRecord,
   type TenantRecord,
   VISITOR_DAYS,
@@ -54,6 +56,7 @@ import {
   stockholmDay,
   switchRecords
 } from './platform.logic';
+import { SWEEP_FILE } from './sweep';
 
 export const DATABASE_URL_ENV = 'PLATFORM_DATABASE_URL';
 export const INFISICAL_ENVS = [
@@ -686,6 +689,31 @@ export function readBackup(env: NodeJS.ProcessEnv): BackupRead | null {
     count: dumps.length,
     lastRun
   };
+}
+
+// --- sweep ---
+
+/**
+ * What the last `cdwr agent sweep` left under AGENT_QUEUE_HOME. Null when the
+ * home is unset or the sweep never ran; a file that doesn't parse is a failed
+ * reading, never "no findings".
+ */
+export function readSweep(env: NodeJS.ProcessEnv): Reading<SweepRead> | null {
+  const home = env['AGENT_QUEUE_HOME'];
+  if (!home) return null;
+  const file = join(home, SWEEP_FILE);
+  if (!existsSync(file)) return null;
+  try {
+    const parsed = SweepFileSchema.safeParse(
+      JSON.parse(readFileSync(file, 'utf8'))
+    );
+    return parsed.success
+      ? ok(parsed.data)
+      : failed(`${SWEEP_FILE} has an unexpected shape`);
+  } catch {
+    // The parse error would quote the file
+    return failed(`${SWEEP_FILE} could not be read`);
+  }
 }
 
 // --- the day's connection peak ---

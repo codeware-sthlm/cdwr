@@ -18,6 +18,7 @@ import {
   readPlatformAlerts,
   readReleases,
   readSentry,
+  readSweep,
   readSwitches,
   readVisitors,
   sendNotice,
@@ -65,7 +66,7 @@ const none = (): Data => ({
 
 export default defineCommand({
   summary: 'Send the platform state to the telemetry database',
-  description: `Reads the tenants and database figures (psql, read-only), the Fly apps with their machines, certificates and health, and the deploy switches (Infisical), and upserts one row per tenant plus a shared row into the tenant_state table of the agent-queue Supabase project, through PostgREST with the service key. A source that fails is named in that row's errors and never recorded as empty; rows of tenants that no longer exist are deleted only when the tenants were read. Needs ${URL_ENV}, ${KEY_ENV} and ${DATABASE_URL_ENV}; without them it does nothing. The Fly CLI reads FLY_API_TOKEN, the switches PLATFORM_INFISICAL_CLIENT_ID, PLATFORM_INFISICAL_CLIENT_SECRET and PLATFORM_INFISICAL_PROJECT_ID. A tenant going down, and a new Sentry issue on production, each send one urgent notice (notify.sh in the queue home, source platform) the first time the problem is seen (a down app on the second tick in a row) and again only after it has cleared; the keys already told are kept in platform-alerts.json there, and the first run seeds it without sending. Without AGENT_QUEUE_HOME no notice is sent. It also reads the errors per tenant from Sentry (PLATFORM_SENTRY_AUTH_TOKEN, PLATFORM_SENTRY_ORG), the visitors per tenant from Umami (PLATFORM_UMAMI_URL, PLATFORM_UMAMI_API_KEY), the last deploy of main from GitHub (public, signed with PLATFORM_GITHUB_TOKEN when run.sh minted one), and the release each app's machines run: the newest \`<project>-<version>\` tag their commit holds in this checkout (tags fetched first). An app is behind when some machine's commit doesn't hold the project's newest release tag on main, the rule that decides a deploy. The backups \`cdwr agent backup\` left there (the newest, how many, its size and how the last run went) go on the shared row, and so do the client connections against the usable limit, the day's peak and the sessions opened since the last run, kept in db-peak.json there. Only states, names and counts leave the machine, never a secret value.`,
+  description: `Reads the tenants and database figures (psql, read-only), the Fly apps with their machines, certificates and health, and the deploy switches (Infisical), and upserts one row per tenant plus a shared row into the tenant_state table of the agent-queue Supabase project, through PostgREST with the service key. A source that fails is named in that row's errors and never recorded as empty; rows of tenants that no longer exist are deleted only when the tenants were read. Needs ${URL_ENV}, ${KEY_ENV} and ${DATABASE_URL_ENV}; without them it does nothing. The Fly CLI reads FLY_API_TOKEN, the switches PLATFORM_INFISICAL_CLIENT_ID, PLATFORM_INFISICAL_CLIENT_SECRET and PLATFORM_INFISICAL_PROJECT_ID. A tenant going down, and a new Sentry issue on production, each send one urgent notice (notify.sh in the queue home, source platform) the first time the problem is seen (a down app on the second tick in a row) and again only after it has cleared; the keys already told are kept in platform-alerts.json there, and the first run seeds it without sending. Without AGENT_QUEUE_HOME no notice is sent. It also reads the errors per tenant from Sentry (PLATFORM_SENTRY_AUTH_TOKEN, PLATFORM_SENTRY_ORG), the visitors per tenant from Umami (PLATFORM_UMAMI_URL, PLATFORM_UMAMI_API_KEY), the last deploy of main from GitHub (public, signed with PLATFORM_GITHUB_TOKEN when run.sh minted one), and the release each app's machines run: the newest \`<project>-<version>\` tag their commit holds in this checkout (tags fetched first). An app is behind when some machine's commit doesn't hold the project's newest release tag on main, the rule that decides a deploy. The backups \`cdwr agent backup\` left there (the newest, how many, its size and how the last run went) go on the shared row, and so do the findings of the last \`cdwr agent sweep\` (sweep.json there, with the rules it could not check), the client connections against the usable limit, the day's peak and the sessions opened since the last run, kept in db-peak.json there. Only states, names and counts leave the machine, never a secret value.`,
   danger: 'mutate',
   // The scheduler runs it every run
   history: false,
@@ -124,6 +125,7 @@ export default defineCommand({
       deploy,
       releases,
       backup: readBackup(ctx.env),
+      sweep: readSweep(ctx.env),
       dbPeak
     });
     clearTimeout(guard);

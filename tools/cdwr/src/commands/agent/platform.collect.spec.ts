@@ -6,6 +6,7 @@ import {
   notifyEnv,
   readDeploy,
   readSentry,
+  readSweep,
   sendNotice
 } from './platform.collect';
 import { SHARED_KEY } from './platform.logic';
@@ -161,6 +162,61 @@ describe('readSentry', () => {
       reason: 'Sentry answered 500'
     });
     expect(read.value.tops['acme']?.ok).toBe(true);
+  });
+});
+
+describe('readSweep', () => {
+  const home = () => mkdtempSync(join(tmpdir(), 'sweep-'));
+  const finding = {
+    key: 'orphan-app:cdwr-cms-pr-12',
+    rule: 'orphan-app',
+    subject: 'cdwr-cms-pr-12',
+    message: 'Preview app cdwr-cms-pr-12 outlived its pull request',
+    fix: 'fly apps destroy cdwr-cms-pr-12 --yes'
+  };
+
+  it('is null without a queue home or a sweep.json', () => {
+    expect(readSweep({})).toBeNull();
+    expect(readSweep({ AGENT_QUEUE_HOME: home() })).toBeNull();
+  });
+
+  it('reads the findings and unchecked rules of the file the sweep writes', () => {
+    const dir = home();
+    writeFileSync(
+      join(dir, 'sweep.json'),
+      JSON.stringify({
+        at: '2026-11-15T03:10:00.000Z',
+        findings: [finding],
+        unchecked: [
+          { rule: 'orphan-database', reason: 'no pg-preview access' }
+        ],
+        new: [finding.key],
+        known: [finding.key],
+        apps: { 'cdwr-cms-pr-12': 'deployed' }
+      })
+    );
+    expect(readSweep({ AGENT_QUEUE_HOME: dir })).toEqual({
+      ok: true,
+      value: {
+        at: '2026-11-15T03:10:00.000Z',
+        findings: [finding],
+        unchecked: [{ rule: 'orphan-database', reason: 'no pg-preview access' }]
+      }
+    });
+  });
+
+  it('fails a file that does not parse or has another shape, never quoting it', () => {
+    const dir = home();
+    writeFileSync(join(dir, 'sweep.json'), '{"at": "secret');
+    expect(readSweep({ AGENT_QUEUE_HOME: dir })).toEqual({
+      ok: false,
+      reason: 'sweep.json could not be read'
+    });
+    writeFileSync(join(dir, 'sweep.json'), JSON.stringify({ at: 1 }));
+    expect(readSweep({ AGENT_QUEUE_HOME: dir })).toEqual({
+      ok: false,
+      reason: 'sweep.json has an unexpected shape'
+    });
   });
 });
 

@@ -9,6 +9,7 @@ import {
   type PlatformReadings,
   type ReleaseRead,
   SHARED_KEY,
+  type SweepRead,
   type TenantRecord,
   appOwner,
   behindFlag,
@@ -195,6 +196,7 @@ const readings = (over: Partial<PlatformReadings> = {}): PlatformReadings => ({
     )
   },
   backup: null,
+  sweep: null,
   dbPeak: {
     peak: {
       day: '2026-11-18',
@@ -1089,6 +1091,76 @@ describe('the backup column', () => {
       lastRun: null
     });
     expect(row(rows, 'acme').errors).toEqual({});
+  });
+});
+
+describe('the drift column', () => {
+  const read: SweepRead = {
+    at: '2026-11-15T03:10:00.000Z',
+    findings: [
+      {
+        key: 'orphan-app:cdwr-cms-pr-12',
+        rule: 'orphan-app',
+        subject: 'cdwr-cms-pr-12',
+        message: 'Preview app cdwr-cms-pr-12 outlived its closed pull request',
+        fix: 'fly apps destroy cdwr-cms-pr-12 --yes'
+      }
+    ],
+    unchecked: [{ rule: 'orphan-database', reason: 'no pg-preview access' }]
+  };
+
+  it('goes to the shared row only, with exactly the contract fields', () => {
+    const { rows } = buildRows(readings({ sweep: ok(read) }));
+    expect(row(rows, SHARED_KEY).drift).toEqual(read);
+    expect(row(rows, 'acme').drift).toEqual({});
+    expect(row(rows, 'beta').drift).toEqual({});
+    expect(row(rows, SHARED_KEY).errors).toEqual({});
+  });
+
+  it('is empty when the sweep never ran, with no error', () => {
+    const { rows } = buildRows(readings({ sweep: null }));
+    expect(row(rows, SHARED_KEY).drift).toEqual({});
+    expect(row(rows, SHARED_KEY).errors).toEqual({});
+  });
+
+  it('names a file that does not parse under sweep, never as no findings', () => {
+    const { rows } = buildRows(
+      readings({ sweep: failed('sweep.json has an unexpected shape') })
+    );
+    expect(row(rows, SHARED_KEY).drift).toEqual({});
+    expect(row(rows, SHARED_KEY).errors).toEqual({
+      sweep: 'sweep.json has an unexpected shape'
+    });
+    expect(row(rows, 'acme').errors).toEqual({});
+  });
+
+  it('keeps only the contract fields, cleaned and cut', () => {
+    const { rows } = buildRows(
+      readings({
+        sweep: ok({
+          ...read,
+          findings: [
+            {
+              ...read.findings[0],
+              message: `reach postgres://u:pw@h/db ${'z'.repeat(300)}`,
+              extra: 'dropped'
+            } as SweepRead['findings'][number]
+          ]
+        })
+      })
+    );
+    const { findings } = row(rows, SHARED_KEY).drift as {
+      findings: SweepRead['findings'];
+    };
+    expect(Object.keys(findings[0]).sort()).toEqual([
+      'fix',
+      'key',
+      'message',
+      'rule',
+      'subject'
+    ]);
+    expect(findings[0].message).toHaveLength(200);
+    expect(findings[0].message.startsWith('reach [url] zzz')).toBe(true);
   });
 });
 
