@@ -456,6 +456,68 @@ describe('parseCommand', () => {
     );
   });
 
+  it('accepts drop with a ticket and an item, trimming both and the note', () => {
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'drop',
+        args: { ticket: 'COD-9', item: '  Rotate the key  ', note: '  done  ' }
+      })
+    ).toEqual({
+      host: 'nuc',
+      kind: 'drop',
+      args: { ticket: 'COD-9', item: 'Rotate the key', note: 'done' }
+    });
+  });
+
+  it.each([
+    ['no note', {}],
+    ['a null note', { note: null }],
+    ['a blank note', { note: '   ' }]
+  ])('accepts drop with %s', (_name, extra) => {
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'drop',
+        args: { ticket: 'COD-9', item: 'Rotate the key', ...extra }
+      })
+    ).toEqual({
+      host: 'nuc',
+      kind: 'drop',
+      args: { ticket: 'COD-9', item: 'Rotate the key', note: null }
+    });
+  });
+
+  it('accepts a drop item of 500 characters', () => {
+    const item = 'a'.repeat(500);
+    expect(
+      parseCommand({
+        host: 'nuc',
+        kind: 'drop',
+        args: { ticket: 'COD-9', item }
+      })
+    ).toMatchObject({ args: { item } });
+  });
+
+  it.each([
+    ['no args', undefined],
+    ['no ticket', { item: 'x' }],
+    ['a bad ticket', { ticket: 'cod-9', item: 'x' }],
+    ['no item', { ticket: 'COD-9' }],
+    ['an item that is not text', { ticket: 'COD-9', item: 5 }],
+    ['an empty item', { ticket: 'COD-9', item: '   ' }],
+    ['an item with a newline', { ticket: 'COD-9', item: 'a\nb' }],
+    ['an item with a carriage return', { ticket: 'COD-9', item: 'a\rb' }],
+    ['an item too long', { ticket: 'COD-9', item: 'a'.repeat(501) }],
+    ['a note too long', { ticket: 'COD-9', item: 'x', note: 'a'.repeat(201) }],
+    ['a note that is not text', { ticket: 'COD-9', item: 'x', note: 5 }],
+    ['another key', { ticket: 'COD-9', item: 'x', pr: 1 }]
+  ])('refuses drop with %s', (_name, args) => {
+    expect(parseCommand({ host: 'nuc', kind: 'drop', args })).toBe(
+      "drop takes a ticket, an item's text and a note of at most 200 characters"
+    );
+  });
+
   it('refuses args on a kind that takes none', () => {
     expect(
       parseCommand({ host: 'nuc', kind: 'pause', args: { value: 1 } })
@@ -933,6 +995,31 @@ describe('createHandler', () => {
       host: 'nuc',
       kind: 'merge',
       args: { ticket: 'COD-9', pr: 812 },
+      at: AT,
+      actor: 'mac',
+      status: 'pending',
+      applied_at: null,
+      note: null
+    });
+    expect(callsTo(fetch, 'activity')).toHaveLength(0);
+  });
+
+  it('stores a drop pending for a known host, with no RPC and no activity', async () => {
+    const { handle, fetch } = await setup();
+    const res = await handle(
+      post({
+        host: 'nuc',
+        kind: 'drop',
+        args: { ticket: 'COD-9', item: 'Rotate the key', note: null }
+      })
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ id: 7, status: 'pending', note: null });
+    expect(callsTo(fetch, 'rpc/')).toHaveLength(0);
+    expect(bodyOf(callsTo(fetch, 'desk_commands', 'POST')[0])).toEqual({
+      host: 'nuc',
+      kind: 'drop',
+      args: { ticket: 'COD-9', item: 'Rotate the key', note: null },
       at: AT,
       actor: 'mac',
       status: 'pending',
