@@ -106,7 +106,7 @@ Postgres has no pooler.
 `apps/umami` wraps the upstream Umami image; bump the pinned tag in its Dockerfile, via PR, to upgrade.
 It runs as `cdwr-umami` on Fly, production only: only `/apps/umami` in production has `DEPLOY_ENABLED`.
 Its `DATABASE_URL` (Supabase, `?schema=umami`) and `APP_SECRET` are Fly secrets set by hand, since the
-image cannot read Infisical, and the app receives no shared secrets (`sharedSecrets: false` in its
+image cannot read Infisical, and the app receives no shared secrets (`"sharedSecrets": "none"` in its
 `github.json`). The first deploy needs the app and secrets to exist first, in this order:
 
 ```sh
@@ -151,6 +151,28 @@ also live in `/apps/headless`, where the deploy reads them for every tenant app;
 `PAYLOAD_URL` is the host cms; in preview `https://cdwr-cms-pr-{PR_NUMBER}.fly.dev`, with braces and
 no `$`, since Infisical expands `${…}` itself. A headless preview deploys the cms preview beside it
 (`previewWith` in `apps/headless/github.json`).
+
+### Tenant cms config
+
+A deployed tenant cms (`cdwr-cms-<tenant>`) holds no Infisical credentials either: the deploy pushes
+`/tenants/<tenant>/apps/cms` to it, with that folder's imports and references resolved. When the
+pushed values fail the env schema, the app logs the missing key names at boot and stops. The host
+cms keeps reading Infisical itself, for what only it does: the Fly and Umami admin integrations
+(a tenant app answers 404 on the Fly endpoints), the signature, provisioning and migrations.
+
+| Where                                 | What                                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `/tenants/<tenant>/apps/cms`          | `PAYLOAD_API_KEY`, `DEPLOY_ENABLED`, the tenant's own overrides                    |
+| `CORS_URLS`, `UMAMI_API_KEY` in there | references to the tenant's `cors`-tagged secrets and `/integrations/umami`         |
+| `/tenants/<tenant>`, imported         | the tenant's shared values, as the host-read loader took them                      |
+| `/apps/cms`, imported                 | everything the cms shares; not `/apps/cms/signature`, which only the host verifies |
+| the deploy                            | `TENANT_ID`, `DEPLOY_ENV`, Sentry                                                  |
+
+`cdwr tenant provision` creates the imports and references, and `cdwr infisical analysis` names
+what a cms tenant still lacks. The folder's own secrets win over its imports, and the first import
+wins over the next, so provision imports `/tenants/<tenant>` before `/apps/cms`. A changed `/apps/cms` value reaches tenant apps on their next
+deploy, not on a restart. Local development in tenant mode is unchanged: `.env.local` keeps its
+Infisical credentials, so the loader reads the folders as before.
 
 ### CMS admin components + import map
 
