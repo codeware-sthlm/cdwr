@@ -76,6 +76,7 @@ export const tenant = (
   visitors: {},
   deploy: {},
   backup: {},
+  drift: {},
   errors: {},
   ...over
 });
@@ -139,6 +140,27 @@ export const backupState = (
   ...over
 });
 
+/** One finding of the shared row's `drift` column */
+export const driftFinding = (over: Record<string, Json> = {}): Json => ({
+  key: 'orphan-app:cdwr-cms-pr-12',
+  rule: 'orphan-app',
+  subject: 'cdwr-cms-pr-12',
+  message: 'Preview app cdwr-cms-pr-12 outlived its closed pull request 12',
+  fix: 'fly apps destroy cdwr-cms-pr-12 --yes',
+  ...over
+});
+
+/** The shared row's `drift` column: a sweep this morning */
+export const driftState = (
+  findings: Json[] = [driftFinding()],
+  over: Record<string, Json> = {}
+): Json => ({
+  at: '2026-11-15T03:10:00.000Z',
+  findings,
+  unchecked: [],
+  ...over
+});
+
 /** The shared row: the host apps and the database */
 export const shared = (
   over: Partial<TenantStateInput> = {}
@@ -165,6 +187,7 @@ export const shared = (
   visitors: {},
   deploy: {},
   backup: {},
+  drift: {},
   errors: {},
   ...over
 });

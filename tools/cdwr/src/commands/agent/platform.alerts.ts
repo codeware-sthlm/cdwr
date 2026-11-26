@@ -47,6 +47,7 @@ export const parseRows = (rows: readonly TenantStateRow[]): TenantRow[] =>
       visitors: r.visitors,
       deploy: r.deploy,
       backup: r.backup,
+      drift: r.drift,
       errors: r.errors
     })
   );

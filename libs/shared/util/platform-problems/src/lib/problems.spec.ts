@@ -10,6 +10,8 @@ import {
   backupState,
   deployRun,
   domain,
+  driftFinding,
+  driftState,
   flyApp,
   freshIssue,
   machine,
@@ -482,6 +484,94 @@ describe('backup', () => {
     expect(
       problemsOf(
         parseTenantRow(tenant('acme', { backup: backupState(40) })),
+        null,
+        NOW.getTime()
+      )
+    ).toEqual([]);
+  });
+});
+
+describe('drift', () => {
+  const at = (drift: Json) =>
+    problemsOf(parseTenantRow(shared({ drift })), null, NOW.getTime());
+
+  it('is not raised when the sweep never ran or found nothing', () => {
+    expect(at({})).toEqual([]);
+    expect(at(driftState([]))).toEqual([]);
+  });
+
+  it('raises one warn card per finding on the shared row', () => {
+    const found = at(
+      driftState([
+        driftFinding(),
+        driftFinding({
+          key: 'pending-app:cdwr-headless-moon',
+          rule: 'pending-app',
+          subject: 'cdwr-headless-moon',
+          message: 'cdwr-headless-moon was pending in two sweeps in a row',
+          fix: 'fly status --app cdwr-headless-moon'
+        })
+      ])
+    );
+    expect(found.map((p) => [p.key, p.kind, p.severity])).toEqual([
+      ['_shared:drift:orphan-app:cdwr-cms-pr-12', 'drift', 'warn'],
+      ['_shared:drift:pending-app:cdwr-headless-moon', 'drift', 'warn']
+    ]);
+    expect(found[0].title).toBe(
+      'Preview app cdwr-cms-pr-12 outlived its closed pull request 12'
+    );
+    expect(found[0].evidence).toEqual([
+      'Rule orphan-app on cdwr-cms-pr-12, swept 2026-11-15T03:10:00.000Z'
+    ]);
+    expect(found[0].actions).toEqual(['fly apps destroy cdwr-cms-pr-12 --yes']);
+  });
+
+  it('shows a fix that is a sentence as written', () => {
+    const [p] = at(
+      driftState([
+        driftFinding({
+          key: 'spend-ledger:3',
+          rule: 'spend-ledger',
+          subject: 'line 3',
+          message: 'Line 3 of the spend ledger does not parse',
+          fix: 'fix or remove line 3 of implement-spend.jsonl'
+        })
+      ])
+    );
+    expect(p.actions).toEqual([
+      'fix or remove line 3 of implement-spend.jsonl'
+    ]);
+  });
+
+  it('raises no card for a rule it could not check', () => {
+    expect(
+      at(
+        driftState([], {
+          unchecked: [
+            { rule: 'orphan-database', reason: 'no pg-preview access' }
+          ]
+        })
+      )
+    ).toEqual([]);
+  });
+
+  it('adds a stale card once the last sweep is over 26 hours old, keeping its findings', () => {
+    const found = at(driftState([driftFinding()], { at: minutesAgo(27 * 60) }));
+    expect(found.map((p) => p.key)).toEqual([
+      '_shared:drift:stale',
+      '_shared:drift:orphan-app:cdwr-cms-pr-12'
+    ]);
+    expect(found[0].title).toBe('The last platform sweep is 27 h old');
+    expect(at(driftState([], { at: minutesAgo(26 * 60) }))).toEqual([]);
+    expect(at(driftState([], { at: 'x' }))[0].title).toBe(
+      'The last platform sweep has no time'
+    );
+  });
+
+  it('is never raised on a tenant row', () => {
+    expect(
+      problemsOf(
+        parseTenantRow(tenant('acme', { drift: driftState() })),
         null,
         NOW.getTime()
       )

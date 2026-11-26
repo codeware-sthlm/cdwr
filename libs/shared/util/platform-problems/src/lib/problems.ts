@@ -3,6 +3,7 @@ import { SHARED_KEY, type TenantRow, utcClock } from './model';
 import {
   BACKUP_STALE_HOURS,
   DB_CONNECTIONS_WARN_SHARE,
+  DRIFT_STALE_HOURS,
   certPending,
   connectionsWarnAt
 } from './thresholds';
@@ -18,6 +19,7 @@ export type ProblemKind =
   | 'connections'
   | 'deploy'
   | 'down'
+  | 'drift'
   | 'errors'
   | 'new-issue';
 
@@ -295,6 +297,54 @@ const backup = (row: TenantRow, now: number): Problem[] => {
   ];
 };
 
+/**
+ * One problem per finding of the last daily sweep, and one more when that sweep is stale, so old
+ * findings never pass for current ones; the rules it could not check raise none
+ */
+const drift = (row: TenantRow, now: number): Problem[] => {
+  const d = row.drift;
+  if (row.key !== SHARED_KEY || d === null) return [];
+  const ageH = (now - Date.parse(d.at)) / 36e5;
+  // A time that does not parse counts as stale
+  const stale: Problem[] =
+    Number.isFinite(ageH) && ageH <= DRIFT_STALE_HOURS
+      ? []
+      : [
+          {
+            key: `${row.key}:drift:stale`,
+            row: row.key,
+            kind: 'drift',
+            severity: 'warn',
+            title: Number.isFinite(ageH)
+              ? `The last platform sweep is ${shortAge(ageH * 60)} old`
+              : 'The last platform sweep has no time',
+            evidence: [`Swept ${d.at}, ${d.findings.length} finding(s)`],
+            threshold: `The newest sweep is more than ${DRIFT_STALE_HOURS} hours old; the NUC sweeps once a day after 03:00, so its findings may no longer hold.`,
+            actions: [
+              'Read the scheduler log on the NUC (sweep-failed in the queue home)',
+              'Run `cdwr agent sweep` on the NUC by hand'
+            ]
+          }
+        ];
+  return [
+    ...stale,
+    ...d.findings.map((f) => ({
+      key: `${row.key}:drift:${f.key}`,
+      row: row.key,
+      kind: 'drift' as const,
+      severity: 'warn' as const,
+      title: f.message,
+      evidence: [
+        `Rule ${f.rule || 'unknown'}${f.subject ? ` on ${f.subject}` : ''}, swept ${d.at}`
+      ],
+      threshold:
+        'The daily sweep (`cdwr agent sweep`) checks outcomes against what should hold, and this one does not. It clears once a sweep no longer finds it.',
+      // A fix is a command or, for the spend ledger, a sentence: shown as written
+      actions: [f.fix || 'Read sweep.json in the queue home']
+    }))
+  ];
+};
+
 const KIND_ORDER: Record<ProblemKind, number> = {
   backup: 0,
   behind: 1,
@@ -302,8 +352,9 @@ const KIND_ORDER: Record<ProblemKind, number> = {
   connections: 3,
   deploy: 4,
   down: 5,
-  errors: 6,
-  'new-issue': 7
+  drift: 6,
+  errors: 7,
+  'new-issue': 8
 };
 /** The problems of one row; `deploySha` is the commit the newest deploy run of main carries, for the behind evidence; `now` is ms */
 export const problemsOf = (
@@ -318,7 +369,8 @@ export const problemsOf = (
   ...errors(row),
   ...newIssue(row),
   ...deploy(row),
-  ...backup(row, now)
+  ...backup(row, now),
+  ...drift(row, now)
 ];
 
 /** Worst first (down before warn), then by row with `_shared` first, then by kind and key */

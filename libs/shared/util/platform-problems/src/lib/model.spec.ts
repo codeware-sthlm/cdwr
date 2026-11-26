@@ -8,6 +8,8 @@ import {
   backupState,
   deployRun,
   domain,
+  driftFinding,
+  driftState,
   flag,
   flyApp,
   freshIssue,
@@ -332,6 +334,54 @@ describe('parseTenantRow', () => {
       parseTenantRow(shared({ backup: { count: 'x' } })).backup
     ).toBeNull();
     expect(parseTenantRow(shared({ backup: [1] })).backup).toBeNull();
+  });
+
+  it('parses the drift column; empty or malformed reads as absent', () => {
+    expect(parseTenantRow(tenant('acme')).drift).toBeNull();
+    expect(parseTenantRow(shared()).drift).toBeNull();
+    expect(
+      parseTenantRow(
+        shared({
+          drift: driftState([driftFinding()], {
+            unchecked: [
+              { rule: 'orphan-database', reason: 'no pg-preview access' }
+            ]
+          })
+        })
+      ).drift
+    ).toEqual({
+      at: '2026-11-15T03:10:00.000Z',
+      findings: [
+        {
+          key: 'orphan-app:cdwr-cms-pr-12',
+          rule: 'orphan-app',
+          subject: 'cdwr-cms-pr-12',
+          message:
+            'Preview app cdwr-cms-pr-12 outlived its closed pull request 12',
+          fix: 'fly apps destroy cdwr-cms-pr-12 --yes'
+        }
+      ],
+      unchecked: [{ rule: 'orphan-database', reason: 'no pg-preview access' }]
+    });
+    // A finding without a key or a message is dropped, the rest of the column stays
+    expect(
+      parseTenantRow(
+        shared({
+          drift: driftState([
+            { key: 'a:b' },
+            { message: 'no key' },
+            'x',
+            { key: 'c:d', message: 'kept' }
+          ])
+        })
+      ).drift?.findings
+    ).toEqual([
+      { key: 'c:d', rule: '', subject: '', message: 'kept', fix: '' }
+    ]);
+    expect(
+      parseTenantRow(shared({ drift: { findings: [] } })).drift
+    ).toBeNull();
+    expect(parseTenantRow(shared({ drift: [1] })).drift).toBeNull();
   });
 
   it('reads json that is not a list or a record as empty', () => {

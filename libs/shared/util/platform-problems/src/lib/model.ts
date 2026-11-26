@@ -13,6 +13,7 @@ export type TenantStateInput = {
   visitors: unknown;
   deploy: unknown;
   backup: unknown;
+  drift: unknown;
   errors: unknown;
 };
 
@@ -143,6 +144,26 @@ export type TenantBackup = {
   lastRun: { at: string; ok: boolean; error: string | null } | null;
 };
 
+/** One thing the daily sweep found that doesn't hold */
+export type DriftFinding = {
+  /** `<rule>:<subject>`, stable across runs */
+  key: string;
+  rule: string;
+  subject: string;
+  message: string;
+  /** The command that fixes it */
+  fix: string;
+};
+
+/** What the last `cdwr agent sweep` found, on the shared row; null when it never ran */
+export type TenantDrift = {
+  /** When the sweep ran, ISO */
+  at: string;
+  findings: DriftFinding[];
+  /** The rules it could not check, kept for a later view */
+  unchecked: { rule: string; reason: string }[];
+};
+
 export type TenantRow = {
   /** The tenant's slug, or `_shared` */
   key: string;
@@ -159,6 +180,7 @@ export type TenantRow = {
   visitors: TenantVisitors | null;
   deploy: TenantDeploy | null;
   backup: TenantBackup | null;
+  drift: TenantDrift | null;
   /** Source -> the one line a failed read left */
   errors: Record<string, string>;
 };
@@ -324,6 +346,34 @@ const backupOf = (value: unknown): TenantBackup | null => {
   };
 };
 
+const driftOf = (value: unknown): TenantDrift | null => {
+  if (!isRecord(value)) return null;
+  const at = str(value['at']);
+  if (!at) return null;
+  return {
+    at,
+    findings: records(value['findings']).flatMap((f) => {
+      const key = str(f['key']);
+      const message = str(f['message']);
+      return key && message
+        ? [
+            {
+              key,
+              rule: str(f['rule']) ?? '',
+              subject: str(f['subject']) ?? '',
+              message,
+              fix: str(f['fix']) ?? ''
+            }
+          ]
+        : [];
+    }),
+    unchecked: records(value['unchecked']).flatMap((u) => {
+      const rule = str(u['rule']);
+      return rule ? [{ rule, reason: str(u['reason']) ?? '' }] : [];
+    })
+  };
+};
+
 const database = (value: unknown): TenantDb | null => {
   if (!isRecord(value)) return null;
   const sessions = num(value['sessions']);
@@ -394,6 +444,7 @@ export const parseTenantRow = (row: TenantStateInput): TenantRow => ({
   visitors: visitors(row.visitors),
   deploy: deployRun(row.deploy),
   backup: backupOf(row.backup),
+  drift: driftOf(row.drift),
   errors: isRecord(row.errors)
     ? Object.fromEntries(
         Object.entries(row.errors).flatMap(([k, v]) => {
