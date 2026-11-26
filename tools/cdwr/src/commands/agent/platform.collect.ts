@@ -449,7 +449,7 @@ const JobsSchema = z.object({
 /** A read-only token run.sh mints for the step; without it the reads draw on the IP's anonymous 60 an hour */
 export const GITHUB_TOKEN_ENV = 'PLATFORM_GITHUB_TOKEN';
 
-async function githubGet<T>(
+export async function githubGet<T>(
   path: string,
   schema: z.ZodType<T>,
   token: string | undefined
