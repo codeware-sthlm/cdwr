@@ -3,6 +3,8 @@ import { Fly } from '@cdwr/fly-node';
 import { getPullRequest } from '@codeware/shared/util/github';
 import { dropRoleStatement, dropStatement } from '@codeware/shared/util/pure';
 
+import { warn } from './warn';
+
 const PR_PLACEHOLDER = '${PR_NUMBER}';
 
 /** Roles Fly creates on attach: the app name in snake case, e.g. `cdwr_cms_pr_575_moon` */
@@ -54,7 +56,7 @@ const prStates = (token: string) => {
       const state = await getPullRequest(token, prNumber).then(
         (pullRequest) => pullRequest?.state ?? null,
         (error) => {
-          core.warning(`Pull request #${prNumber}: ${errorMessage(error)}`);
+          warn(`Pull request #${prNumber}: ${errorMessage(error)}`);
           return null;
         }
       );
@@ -78,7 +80,7 @@ const closedOnly = async (
     }
     const state = await prState(Number(prNumber));
     if (!state) {
-      core.warning(`Pull request #${prNumber} not found, keep '${name}'`);
+      warn(`Pull request #${prNumber} not found, keep '${name}'`);
     } else if (state === 'closed') {
       closed.push(name);
     }
@@ -117,9 +119,7 @@ export const runDestroyDatabases = async (
     try {
       return lines(await exec(sql));
     } catch (error) {
-      core.warning(
-        `Could not list ${what} on '${cluster}': ${errorMessage(error)}`
-      );
+      warn(`Could not list ${what} on '${cluster}': ${errorMessage(error)}`);
       return [];
     }
   };
@@ -144,9 +144,7 @@ export const runDestroyDatabases = async (
       core.info(`[${name}] 🗑️ Database dropped`);
       dropped.push(name);
     } catch (error) {
-      core.warning(
-        `[${name}] ❌ Failed to drop database: ${errorMessage(error)}`
-      );
+      warn(`[${name}] ❌ Failed to drop database: ${errorMessage(error)}`);
       skipped.push(name);
     }
   }
@@ -171,7 +169,7 @@ export const runDestroyDatabases = async (
       core.info(`[${role}] 🗑️ Role dropped`);
     } catch (error) {
       // Still granted on an open PR's database; the next sweep retries it
-      core.warning(`[${role}] Failed to drop role: ${errorMessage(error)}`);
+      warn(`[${role}] Failed to drop role: ${errorMessage(error)}`);
     }
   }
 
@@ -194,12 +192,12 @@ export const reportVolumeUsage = async (
     const row = lines(output).at(-1)?.split(/\s+/);
     const used = Number(row?.[4]?.replace('%', ''));
     if (!row || Number.isNaN(used)) {
-      core.warning(`Could not read volume usage on '${cluster}'`);
+      warn(`Could not read volume usage on '${cluster}'`);
       return null;
     }
     const message = `Volume on '${cluster}' is ${used}% used (${row[2]} of ${row[1]} KiB blocks)`;
     if (used >= 80) {
-      core.warning(`${message}; databases turn read-only when it fills`);
+      warn(`${message}; databases turn read-only when it fills`);
     } else {
       core.info(message);
     }
@@ -209,9 +207,7 @@ export const reportVolumeUsage = async (
       .write();
     return used;
   } catch (error) {
-    core.warning(
-      `Could not read volume usage on '${cluster}': ${errorMessage(error)}`
-    );
+    warn(`Could not read volume usage on '${cluster}': ${errorMessage(error)}`);
     return null;
   }
 };
