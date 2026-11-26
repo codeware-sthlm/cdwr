@@ -3,6 +3,7 @@ import { maskSecretsIn, redactConfig } from '@codeware/shared/util/github';
 
 import { flyDestroy } from './fly-destroy';
 import { ActionInputsSchema } from './schemas/action-inputs.schema';
+import { writeWarningsSummary } from './utils/warn';
 
 /**
  * Main action function
@@ -33,5 +34,7 @@ export async function run(): Promise<void> {
     if (error instanceof Error) {
       core.setFailed(error.message);
     }
+  } finally {
+    await writeWarningsSummary();
   }
 }

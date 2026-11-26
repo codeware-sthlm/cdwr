@@ -2,6 +2,8 @@ import * as core from '@actions/core';
 import { Fly } from '@cdwr/fly-node';
 import { getPullRequest } from '@codeware/shared/util/github';
 
+import { warn } from './warn';
+
 /**
  * Destroy deprecated apps, which means apps that are associated with a closed pull request.
  *
@@ -31,7 +33,7 @@ export const runDestroyApps = async (
 
     const pullRequest = await getPullRequest(token, Number(prNumber));
     if (!pullRequest) {
-      core.warning(`Pull request #${prNumber} not found, skip destroy`);
+      warn(`Pull request #${prNumber} not found, skip destroy`);
       return null;
     }
 
@@ -52,12 +54,19 @@ export const runDestroyApps = async (
     core.info(`[${name}] About to destroy app...`);
 
     try {
-      await fly.apps.destroy(name);
+      const { detachFailures } = await fly.apps.destroy(name, {
+        allowDetachFailure: true
+      });
+      for (const { cluster, error } of detachFailures) {
+        warn(
+          `[${name}] Postgres detach from '${cluster}' failed, app destroyed anyway: ${error}`
+        );
+      }
       core.info(`[${name}] 🗑️ App destroyed`);
       destroyed.push(name);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      core.warning(`[${name}] ❌ Failed to destroy app: ${msg}`);
+      warn(`[${name}] ❌ Failed to destroy app: ${msg}`);
       skipped.push(name);
     }
   }
