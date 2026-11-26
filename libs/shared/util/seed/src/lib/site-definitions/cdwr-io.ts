@@ -345,7 +345,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             markStyle: 'muted',
             heading: 'Build on the same platform',
             band: 'subtle',
-            body: 'The plugin, the preset and the deployment tooling behind this site are published. One command starts a workspace of your own.',
+            body: 'The Nx plugin this platform started from is published, with a preset that starts a Payload workspace of your own.',
             link: { type: 'custom', url: '/start', label: 'Get started' }
           }
         ]
@@ -898,7 +898,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 size: 'full',
                 richText: {
                   markdown:
-                    '## Or build your own\n\nThe plugin, the preset and the deployment tooling this platform runs on are all published. One command scaffolds a workspace with Payload, Postgres and the deployment wiring already connected, and the last line starts Payload and its database in Docker. `payload-admin` is the app name the setup suggests.'
+                    '## Or build your own\n\nThe Nx plugin this platform started from is published, with a preset for a new workspace. The command below creates an Nx workspace with one Payload app, and the last line starts it with its database in Docker. That is a starting point, far from what the platform does. `payload-admin` is the app name the setup suggests.'
                 },
                 blocks: [
                   {
@@ -932,7 +932,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
                 brand: { tech: 'payload' },
                 title: '`create-nx-payload`',
                 description:
-                  'The preset behind the command above — a new workspace with Payload, Postgres, a GraphQL schema target and the deployment wiring already connected.'
+                  'The preset behind the command above: a new Nx workspace with one Payload app, ready to run locally.'
               },
               {
                 brand: { tech: 'flyio' },
