@@ -8130,6 +8130,13 @@ describe('review_paths', () => {
     expect(paths(node(null, ['tools/cdwr/agent-queue/run.sh']))).toBeNull();
   });
 
+  it('is null when GitHub gave only the first page of files', () => {
+    const n = node('REVIEW_REQUIRED', ['tools/cdwr/agent-queue/run.sh']);
+    expect(
+      paths({ ...n, files: { ...n.files, pageInfo: { hasNextPage: true } } })
+    ).toBeNull();
+  });
+
   it('is null when the rules were not read or name no pattern', () => {
     const n = node('REVIEW_REQUIRED', ['tools/cdwr/agent-queue/run.sh']);
     expect(paths(n, null)).toBeNull();
