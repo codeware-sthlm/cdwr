@@ -35,15 +35,20 @@ export function PostsBlock({ title, description, posts }: Props) {
 
   return (
     <div>
-      <header className="max-w-2xl">
-        <h1 className="text-core-headline text-4xl font-bold tracking-tight sm:text-5xl">
-          {title}
-        </h1>
-        {description && (
-          <p className="text-muted-foreground mt-6 text-base">{description}</p>
-        )}
-      </header>
-      <div className="mt-16 sm:mt-20">
+      {/* A section under the page's hero, which holds its one h1 */}
+      {title && (
+        <header className="mb-9 max-w-xl">
+          <h2 className="text-core-headline text-3xl font-semibold tracking-tight">
+            {title}
+          </h2>
+          {description && (
+            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
+              {description}
+            </p>
+          )}
+        </header>
+      )}
+      <div>
         <div className="md:border-border/40 space-y-16 md:border-l md:pl-6">
           {posts.map((post) => (
             <article key={post.id} className="md:grid md:grid-cols-4 md:gap-8">

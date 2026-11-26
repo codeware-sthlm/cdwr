@@ -26,8 +26,13 @@ export const postsBlock: Block = {
       name: 'title',
       type: 'text',
       label: { en: 'Title', sv: 'Titel' },
-      localized: true,
-      required: true
+      admin: {
+        description: {
+          en: 'A section heading. Leave empty when the listing needs none, such as under a hero.',
+          sv: 'En rubrik för avsnittet. Lämna tomt när listan inte behöver någon, till exempel under en hero.'
+        }
+      },
+      localized: true
     },
     {
       name: 'description',

@@ -504,9 +504,12 @@ export const moon: SiteDefinition = {
       slug: 'posts',
       layout: [
         {
+          blockType: 'hero',
+          heading: 'Articles',
+          lede: 'Thoughts on programming, product design, and more.'
+        },
+        {
           blockType: 'posts',
-          title: 'Articles',
-          description: 'Thoughts on programming, product design, and more.',
           limit: 10
         }
       ]
