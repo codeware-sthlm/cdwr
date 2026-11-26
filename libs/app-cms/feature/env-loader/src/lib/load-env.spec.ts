@@ -17,7 +17,11 @@ vi.mock('@codeware/app-cms/util/env-schema', () => ({
         ? { success: true, data: { ...env } }
         : {
             success: false,
-            error: { flatten: () => ({ fieldErrors: {} }) }
+            error: {
+              flatten: () => ({
+                fieldErrors: { PAYLOAD_SECRET_KEY: ['Required'] }
+              })
+            }
           }
   }
 }));
@@ -127,11 +131,65 @@ describe('loadEnv', () => {
       });
       expect(console.log).toHaveBeenCalledWith('[ENV] Turnstile pair not set');
     });
+
+    it("reads every tenant's CORS urls", async () => {
+      serve({ '/apps/cms': { PAYLOAD_SECRET_KEY: 'x' } });
+
+      await loadEnv();
+
+      expect(withInfisical).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filter: { path: '/tenants', recurse: true, tags: ['cors'] }
+        })
+      );
+    });
+  });
+
+  describe('on a tenant app with pushed config', () => {
+    beforeEach(() => {
+      process.env['TENANT_ID'] = 'moon';
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+
+    it('boots on what the deploy pushed, without Infisical', async () => {
+      process.env['PAYLOAD_SECRET_KEY'] = 'x';
+
+      expect(await loadEnv()).toBeDefined();
+      expect(withInfisical).not.toHaveBeenCalled();
+    });
+
+    it('names the missing keys, never their values, and reads nothing', async () => {
+      process.env['DATABASE_URL'] = 'postgres://secret';
+
+      expect(await loadEnv()).toBeUndefined();
+      expect(withInfisical).not.toHaveBeenCalled();
+      expect(console.error).toHaveBeenCalledWith(
+        '[ENV] Pushed config for tenant moon is incomplete, missing: PAYLOAD_SECRET_KEY'
+      );
+    });
   });
 
   describe('on a tenant app', () => {
     beforeEach(() => {
       process.env['TENANT_ID'] = 'moon';
+      process.env['INFISICAL_CLIENT_ID'] = 'client-id';
+    });
+
+    it('reads only its own CORS urls', async () => {
+      serve({ '/apps/cms': { PAYLOAD_SECRET_KEY: 'x' } });
+
+      await loadEnv();
+
+      expect(withInfisical).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filter: { path: '/tenants/moon', recurse: true, tags: ['cors'] }
+        })
+      );
+      expect(withInfisical).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          filter: expect.objectContaining({ path: '/tenants' })
+        })
+      );
     });
 
     it('takes the tenant pair over the shared one', async () => {
@@ -263,6 +321,7 @@ describe('loadEnv', () => {
 
   it('keeps the folder of a pair an earlier load resolved', async () => {
     process.env['TENANT_ID'] = 'moon';
+    process.env['INFISICAL_CLIENT_ID'] = 'client-id';
     serve({
       '/apps/cms': { PAYLOAD_SECRET_KEY: 'x', ...pair('shared') },
       '/tenants/moon': pair('tenant')

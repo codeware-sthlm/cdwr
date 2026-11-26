@@ -122,6 +122,18 @@ export const loadEnv = async (): Promise<Env | undefined> => {
     return preResponse.data;
   }
 
+  const tenantId = process.env['TENANT_ID'];
+
+  // A deployed tenant app holds no Infisical credentials: its config is pushed
+  // at deploy, so what fails the check above is missing from its folder
+  if (tenantId && !process.env['INFISICAL_CLIENT_ID']) {
+    const missing = Object.keys(preResponse.error.flatten().fieldErrors);
+    console.error(
+      `[ENV] Pushed config for tenant ${tenantId} is incomplete, missing: ${missing.join(', ')}`
+    );
+    return;
+  }
+
   // Load secrets for the cms app
   const cmsSecrets = await withInfisical({
     environment: process.env['DEPLOY_ENV'],
@@ -141,8 +153,7 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   const turnstileSources: Array<TurnstileSource> = [];
 
   // If TENANT_ID is set (tenant deployment), load tenant-specific secrets
-  if (process.env['TENANT_ID']) {
-    const tenantId = process.env['TENANT_ID'];
+  if (tenantId) {
     console.log(`[ENV] Loading tenant secrets for tenant: ${tenantId}`);
 
     const tenantAppPath = `/tenants/${tenantId}/apps/cms`;
@@ -168,10 +179,14 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   applyTurnstilePair(turnstilePair);
   logTurnstilePair(turnstilePair);
 
-  // Load CORS urls for the tenants
+  // Load CORS urls: every tenant's for the host, only its own for a tenant app
   const corsSecrets = await withInfisical({
     environment: process.env['DEPLOY_ENV'],
-    filter: { path: '/tenants', recurse: true, tags: ['cors'] },
+    filter: {
+      path: tenantId ? `/tenants/${tenantId}` : '/tenants',
+      recurse: true,
+      tags: ['cors']
+    },
     silent: true
   });
   // Inject CORS urls into process.env manually
