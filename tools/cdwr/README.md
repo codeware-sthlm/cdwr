@@ -616,8 +616,10 @@ checks or conflicts with main (`action`, `agent:review` only, since a working ti
 hand-offs still unticked (`action`), and a plain merge or a close (`info`, which follows the
 level). The hand-offs come from the agent's `**Agent: PR ready**` comment, or from the Status
 table's `Hand-off` rows when none was posted. A hand-off you won't do is dropped, not ticked:
-strike it through and leave it unticked (`- [ ] ~~item~~`, Cmd+Shift+X in Linear), or set its
-Status row to `Dropped`. A dropped item no longer waits, in the merge notice, on the Desk or in
+use Drop on the open item on the desk, or reply to the PR-ready comment with `drop: <number or text>`
+on the first line and the reason after it (the scheduler strikes it through, `- [ ] ~~item~~ dropped:
+<reason>`; see "Dropping an item" in `tools/cdwr/agent-queue/README.md`), or set its Status row to
+`Dropped`. A dropped item no longer waits, in the merge notice, on the Desk or in
 "Queue waiting on you". Outside review only the PR attached in Linear
 counts. A ticket whose PR merged outside review, as when you merge from a gate, gets the watch's
 one Linear write: `agent:review` replaces its agent label and its **Next:** line says when it
