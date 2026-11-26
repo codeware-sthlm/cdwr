@@ -52,7 +52,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = ({
             </h2>
           )}
           {intro && (
-            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed">
+            <p className="text-muted-foreground mt-3.5 text-base leading-relaxed whitespace-pre-line">
               <InlineText text={intro} />
             </p>
           )}
