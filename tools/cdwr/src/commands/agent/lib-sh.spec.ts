@@ -1250,6 +1250,10 @@ describe('lib.sh', () => {
       expect(read(5, '3')).toEqual({ count: 3, truncated: true, calls: 3 });
     });
 
+    it('reads a zero-padded AGENT_QUEUE_TREE_PAGES in base 10', () => {
+      expect(read(12, '08')).toEqual({ count: 8, truncated: true, calls: 8 });
+    });
+
     it.each(['0', 'x', '-2'])('falls back on 10 for %s', (pages) => {
       expect(read(12, pages)).toEqual({
         count: 10,
