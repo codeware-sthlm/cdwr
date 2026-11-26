@@ -2058,10 +2058,12 @@ drop_pass() {
   handled='[]'
   [[ -r "$DROP_HANDLED" ]] && handled="$(jq -Rsc 'split("\n") | map(select(. != ""))' "$DROP_HANDLED" 2>/dev/null)"
   [[ -n "$handled" ]] || handled='[]'
-  for line in ${(f)"$(watch -c --argjson h "$handled" 'include "watch";
+  rows="$(watch -c --argjson h "$handled" 'include "watch";
       .[] | select(.state.type == "completed") | . as $n
       | drop_replies($h)[] | .sel as $s
-      | . + {ticket: $n.identifier, issue: $n.id, parent: ($n | pr_ready_comment.id), text: ($n | drop_target($s))}' <<<"$nodes")"}; do
+      | . + {ticket: $n.identifier, issue: $n.id, parent: ($n | pr_ready_comment.id), text: ($n | drop_target($s))}' <<<"$nodes")" ||
+    { note "warn: drop: watch.jq failed reading the replies$(watch_err)"; record warn "" "drop: replies not read"; rows=""; }
+  for line in ${(f)rows}; do
     id="$(jq -r '.id' <<<"$line")"
     [[ -n "$id" && "$id" != null ]] || continue
     ticket="$(jq -r '.ticket' <<<"$line")" issue="$(jq -r '.issue' <<<"$line")" parent="$(jq -r '.parent' <<<"$line")"
@@ -2071,6 +2073,10 @@ drop_pass() {
     if [[ -z "$text" ]]; then why="no open item is number or reads: ${sel[1,120]}"
     elif edit="$(drop_edit "$node" "$text" "$reason")"; then why="$(drop_write "$node" "$edit")" || true
     else why="$edit"; fi
+    # Linear failing is no answer: the reply is tried again next tick
+    if [[ "$why" == ("the comment was not read"|"Linear did not take the edit") ]]; then
+      note "warn: drop: $ticket reply $id: $why, tried again next tick"; continue
+    fi
     # Kept before the answer, so an answer Linear refuses never drops the item twice
     print -r -- "$id" >> "$DROP_HANDLED"
     if [[ -z "$why" ]]; then body="**Agent: dropped** $text"

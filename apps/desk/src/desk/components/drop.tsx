@@ -160,8 +160,9 @@ export const ApplyExtras = ({
           {dayTime(Date.parse(since.at), ctx.now.getTime())}, safe to drop
         </span>
       ) : null}
-      {droppable ? (
-        <DropControl ctx={ctx} ticket={ticket} item={a.text} />
+      {/* A pending item is still applied from the merge snapshot, so only one with an outcome drops */}
+      {droppable && a.outcome ? (
+        <DropControl key={a.text} ctx={ctx} ticket={ticket} item={a.text} />
       ) : null}
     </>
   );

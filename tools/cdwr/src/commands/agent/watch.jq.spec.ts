@@ -2316,7 +2316,6 @@ describe('dropping an item', () => {
       expect(run('drop_lines', BODY)).toEqual([
         { index: 3, text: 'set the DNS', spec: 'set the DNS' },
         { index: 6, text: 'rotate key', spec: 'rotate key' },
-        { index: 9, text: 'restart cdwr-cms', spec: 'restart cdwr-cms' },
         {
           index: 10,
           text: 'scale cdwr-cms 2 · refused: no machines',
@@ -2336,10 +2335,11 @@ describe('dropping an item', () => {
 
     it('reads a 1-based number over the listed items', () => {
       expect(target('1', readyNode())).toBe('set the DNS');
-      expect(target('3', readyNode())).toBe('restart cdwr-cms');
-      expect(target('4', readyNode())).toBe(
+      // restart cdwr-cms is pending, still applied from the snapshot: not listed
+      expect(target('3', readyNode())).toBe(
         'scale cdwr-cms 2 · refused: no machines'
       );
+      expect(target('4', readyNode())).toBeNull();
     });
 
     it('is null for a number out of range', () => {
@@ -2402,13 +2402,8 @@ describe('dropping an item', () => {
       );
     });
 
-    it('strikes an apply item', () => {
-      expect(mark('restart cdwr-cms', 'done by hand')).toBe(
-        replaceLine(
-          '- [ ] restart cdwr-cms',
-          '- [ ] ~~restart cdwr-cms~~ dropped: done by hand'
-        )
-      );
+    it('leaves a pending apply item alone: the snapshot still applies it', () => {
+      expect(mark('restart cdwr-cms', 'done by hand')).toBe(BODY);
     });
 
     it('strikes an apply item with an outcome whole', () => {
@@ -2441,19 +2436,16 @@ describe('dropping an item', () => {
       expect(mark(text, 'why')).toBe(BODY);
     });
 
-    it('takes the item out of handoffs and apply_input', () => {
-      const struck = mark('restart cdwr-cms');
-      const after = node(readyNode(struck));
+    it('takes the item out of handoffs and leaves apply_input as it was', () => {
+      const after = node(readyNode(mark('scale cdwr-cms 2')));
       expect(run('handoffs', after)).toEqual([
         'set the DNS',
         'rotate key',
-        'scale cdwr-cms 2'
+        'restart cdwr-cms'
       ]);
-      const before = run('apply_input', node(readyNode())) as {
-        items: Array<{ spec: string }>;
-      };
-      expect(before.items.map((i) => i.spec)).toEqual(['restart cdwr-cms']);
-      expect(run('apply_input', after)).toBeNull();
+      expect(run('apply_input', after)).toEqual(
+        run('apply_input', node(readyNode()))
+      );
     });
   });
 
@@ -2515,7 +2507,7 @@ describe('dropping an item', () => {
       );
     });
 
-    it('ignores a reply with a newer agent comment in the thread', () => {
+    it('counts the answers in the thread, oldest reply first', () => {
       expect(
         replies([
           readyNode(),
@@ -2526,6 +2518,20 @@ describe('dropping an item', () => {
           })
         ])
       ).toEqual([]);
+      // r2 came before the answer to r1 was posted: still unanswered
+      expect(
+        (
+          replies([
+            readyNode(),
+            reply('r1', 'drop: 1'),
+            reply('r2', 'drop: 2', { createdAt: '2026-11-21T10:01:00Z' }),
+            reply('a1', '**Agent: dropped** x', {
+              user: { id: APP_ID },
+              createdAt: '2026-11-21T10:05:00Z'
+            })
+          ]) as Array<{ id: string }>
+        ).map((r) => r.id)
+      ).toEqual(['r2']);
     });
 
     it('is empty without a PR-ready comment', () => {

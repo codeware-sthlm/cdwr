@@ -168,9 +168,10 @@ describe('TicketBody', () => {
       ...c.querySelectorAll<HTMLElement>('[data-drop]')
     ];
 
-    it('sends the item text and the reason to the host, once per open item', () => {
+    it('sends the item text and the reason to the host, only for an item with an outcome', () => {
       const c = body(desk(true), 'COD-5');
-      expect(drops(c)).toHaveLength(2);
+      // The pending item is still applied from the merge snapshot: no Drop
+      expect(drops(c)).toHaveLength(1);
       const reason = c.querySelector(
         `[aria-label="Reason for dropping ${REFUSED}"]`
       ) as HTMLElement;
