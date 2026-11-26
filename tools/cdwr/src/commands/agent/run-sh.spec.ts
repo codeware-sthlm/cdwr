@@ -969,13 +969,21 @@ describe('run.sh without Linear documents', () => {
 
   // The scheduler's Linear writes: the watch relabels a ticket whose PR merged outside review,
   // a parent whose agent split finished is closed with a comment, a split's next part is labelled
-  // agent:ready with a comment, and the apply list ticks its items in the PR-ready comment. Nothing
-  // else. The last mutation is GitHub's, the desk's merge (ENQUEUE).
-  it('holds exactly five Linear mutations, each in its named query', () => {
-    expect(code.match(/mutation\b/gi)).toHaveLength(6);
+  // agent:ready with a comment, the apply list ticks its items in the PR-ready comment, and a drop
+  // strikes an item there, answers a reply and clears agent:review. Nothing else. The last mutation
+  // is GitHub's, the desk's merge (ENQUEUE).
+  it('holds exactly seven Linear mutations, each in its named query', () => {
+    expect(code.match(/mutation\b/gi)).toHaveLength(8);
     expect(gql('COMMENT_UPDATE')).toMatch(/^mutation\(/);
     expect(gql('COMMENT_UPDATE')).toContain('commentUpdate(');
-    expect(code.match(/commentUpdate\b/g)).toHaveLength(2);
+    expect(code.match(/commentUpdate\b/g)).toHaveLength(3);
+    expect(gql('UNLABEL')).toMatch(/^mutation\(/);
+    expect(gql('UNLABEL')).toContain(
+      'issueUpdate(id: $id, input: { removedLabelIds: $remove })'
+    );
+    expect(gql('DROP_REPLY')).toMatch(/^mutation\(/);
+    expect(gql('DROP_REPLY')).toContain('commentCreate(');
+    expect(gql('DROP_REPLY')).toContain('parentId: $parent');
     expect(gql('ENQUEUE')).toMatch(/^mutation\([\s\S]*enqueuePullRequest\(/);
     expect(code.match(/"\$ENQUEUE"/g)).toHaveLength(1);
     expect(gql('RELABEL')).toMatch(/^mutation\(/);
@@ -989,20 +997,41 @@ describe('run.sh without Linear documents', () => {
     // Each in its mutation and in the check of its answer
     expect(gql('LABEL_PART')).toMatch(/^mutation\(/);
     expect(gql('LABEL_PART')).toContain('addedLabelIds: [$label]');
-    expect(code.match(/issueUpdate\b/g)).toHaveLength(6);
-    expect(code.match(/commentCreate\b/g)).toHaveLength(4);
+    expect(code.match(/issueUpdate\b/g)).toHaveLength(8);
+    expect(code.match(/commentCreate\b/g)).toHaveLength(6);
   });
 
   it.each([
     ['RELABEL', 'relabel_merged'],
     ['CLOSE_PARENT', 'close_parents'],
-    ['LABEL_PART', 'label_parts'],
-    ['COMMENT_UPDATE', 'apply_tick']
+    ['LABEL_PART', 'label_parts']
   ])('uses "$%s" only inside %s', (name, owner) => {
     const body = fn(owner);
     expect(body).toContain(`linear "$${name}" "$vars"`);
     expect(code.split(`"$${name}"`)).toHaveLength(2);
     expect(code.replace(body, '')).not.toContain(`$${name}`);
+  });
+
+  // drop_write holds comments, which `code` leaves out, so only the count is compared
+  it('uses "$UNLABEL" only inside drop_write', () => {
+    expect(fn('drop_write')).toContain('linear "$UNLABEL" "$vars"');
+    expect(code.split('"$UNLABEL"')).toHaveLength(2);
+  });
+
+  it('uses "$COMMENT_UPDATE" only inside apply_tick and drop_write', () => {
+    expect(fn('apply_tick')).toContain('linear "$COMMENT_UPDATE" "$vars"');
+    expect(fn('drop_write')).toContain('linear "$COMMENT_UPDATE" "$edit"');
+    expect(code.split('"$COMMENT_UPDATE"')).toHaveLength(3);
+  });
+
+  it('uses "$DROP_REPLY" only inside drop_pass', () => {
+    expect(fn('drop_pass')).toContain('linear "$DROP_REPLY"');
+    expect(code.split('"$DROP_REPLY"')).toHaveLength(2);
+  });
+
+  it('runs drop_pass at the end of watch_prs, after the state is saved', () => {
+    expect(fn('watch_prs')).toMatch(/\n {2}drop_pass "\$nodes"\n/);
+    expect(code.match(/\bdrop_pass "/g)).toHaveLength(1);
   });
 
   it('uses "$CLOSE_COMMENT" only inside close_parents and label_parts', () => {
@@ -1033,7 +1062,11 @@ describe('run.sh without Linear documents', () => {
     expect(watched).toContain('labels { nodes { id name } }');
     // is_agent tells the agent's comments by their author
     // and the apply list ticks its items in the comment by id
-    expect(watched).toContain('nodes { id body createdAt user { id app } }');
+    // and a drop: reply names the thread it answers; the drop needs the ticket's state
+    expect(watched).toContain(
+      'nodes { id body createdAt user { id app } parent { id } }'
+    );
+    expect(watched).toContain('state { type }');
     expect(watched).toContain('after: $after');
     expect(watched).toContain('pageInfo { hasNextPage endCursor }');
     expect(watched).not.toContain('issueLabels(');
@@ -2507,6 +2540,8 @@ describe('run.sh watch_prs', () => {
       // Main's branch rules from rules.json, one line per read; every other read is the PR
       'gh_read() { if [[ "$*" == *rules/branches/main* ]]; then print read >> "$ROOT/rules-reads"; cat "$ROOT/rules.json"; else cat "$ROOT/pr.json"; fi; }',
       'relabel_merged() { print -r -- "$*" >> "$ROOT/relabels"; }',
+      // The drops have their own spec
+      'drop_pass() { :; }',
       // The request: one line per call; it fails with a reason while copilot-fail exists
       'copilot_request() { print -r -- "$1" >> "$ROOT/copilot"; [[ -f "$ROOT/copilot-fail" ]] || return 0; print -r -- "no Copilot seat"; return 1; }',
       `linear() { [[ "$1" == l ]] && { print -r -- '{"data":{"issueLabels":{"nodes":[]}}}'; return 0; }; cat "$ROOT/page-$(jq -r '.after // "1"' <<<"$2").json"; }`,
@@ -4162,6 +4197,298 @@ describe('run.sh audit', () => {
   });
 });
 
+// Dropping an item (README, "Dropping an item"): the desk's drop commands and the `drop:` replies
+describe('run.sh drop_pass', () => {
+  const fn = (name: string) =>
+    SCRIPT.match(
+      new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, 'm')
+    )?.[0] ?? '';
+  const AQ_DIR = fileURLToPath(
+    new URL('../../../agent-queue', import.meta.url)
+  );
+  const APP = 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841';
+  const PERSON = 'c467d1e2-0000-4000-8000-000000000001';
+  const READY = 'c-ready';
+  requireTools('zsh', 'jq');
+  let home: string;
+
+  const body = (...items: string[]) =>
+    [
+      '**Agent: PR ready**: https://github.com/codeware-sthlm/cdwr/pull/1',
+      '',
+      'Hand-off checklist:',
+      ...items.map((i) => `- [ ] ${i}`)
+    ].join('\n');
+  const TWO = body('set the DNS', 'rotate key');
+  const ONE = body('set the DNS');
+
+  type Reply = { id: string; body: string; parent?: string; by?: string };
+  const node = (
+    text: string,
+    over: Record<string, unknown> = {},
+    replies: Reply[] = []
+  ) => ({
+    id: 'uuid-7',
+    identifier: 'COD-7',
+    state: { type: 'completed' },
+    labels: { nodes: [{ id: 'l-review', name: 'agent:review' }] },
+    comments: {
+      nodes: [
+        {
+          id: READY,
+          body: text,
+          createdAt: '2026-11-20T10:00:00Z',
+          user: { id: APP }
+        },
+        ...replies.map((r) => ({
+          id: r.id,
+          body: r.body,
+          createdAt: '2026-11-21T10:00:00Z',
+          user: { id: r.by ?? PERSON },
+          parent: { id: r.parent ?? READY }
+        }))
+      ]
+    },
+    ...over
+  });
+
+  // Runs drop_pass over the nodes; `live` is the PR-ready comment's body as Linear answers a read
+  const drop = (
+    nodes: unknown[],
+    opts: {
+      rows?: Array<{ id: number; args: Record<string, unknown> }>;
+      live?: string;
+      handled?: string[];
+    } = {}
+  ) => {
+    writeFileSync(
+      join(home, 'rows.json'),
+      JSON.stringify(
+        (opts.rows ?? []).map((r) => ({
+          id: r.id,
+          at: new Date(Date.now() - 60_000)
+            .toISOString()
+            .replace('Z', '+00:00'),
+          args: r.args,
+          actor: 'mac'
+        }))
+      )
+    );
+    writeFileSync(
+      join(home, 'read.json'),
+      JSON.stringify({ data: { comment: { body: opts.live ?? TWO } } })
+    );
+    if (opts.handled) {
+      writeFileSync(join(home, 'drop-replies'), opts.handled.join('\n') + '\n');
+    }
+    const script = [
+      `HOME_DIR="${home}"; DESK_STALE_SECS=7200; DROP_HANDLED="${home}/drop-replies"`,
+      'COMMENT_READ=READ; COMMENT_UPDATE=UPDATE; UNLABEL=UNLABEL; DROP_REPLY=REPLY',
+      'telemetry_on() { return 0; }',
+      'telemetry_host() { print nuc; }',
+      `supabase_select() { cat "${home}/rows.json"; }`,
+      'supabase_patch() {',
+      '  local id="${2#id=eq.}"; id="${id%%&*}"',
+      `  print -r -- "$1|$2|$3" >> "${home}/patches"`,
+      '  print -r -- "[{\\"id\\":$id}]"',
+      '}',
+      `supabase_upsert() { print -r -- "$1|$2|$3|$4" >> "${home}/upserts"; }`,
+      `note() { print -r -- "$*" >> "${home}/notes"; }`,
+      `record() { print -r -- "$*" >> "${home}/records"; }`,
+      `watch() { jq -L "${AQ_DIR}" "$@"; }`,
+      'watch_err() { :; }',
+      'linear() {',
+      '  case "$1" in',
+      `    READ) cat "${home}/read.json" ;;`,
+      `    UPDATE) print -r -- "update $2" >> "${home}/calls"; print -r -- '{"data":{"commentUpdate":{"success":true}}}' ;;`,
+      `    UNLABEL) print -r -- "unlabel $2" >> "${home}/calls"; print -r -- '{"data":{"issueUpdate":{"success":true}}}' ;;`,
+      `    REPLY) print -r -- "reply $2" >> "${home}/calls"; print -r -- '{"data":{"commentCreate":{"success":true}}}' ;;`,
+      '  esac',
+      '}',
+      fn('drop_edit'),
+      fn('drop_write'),
+      fn('drop_pass'),
+      `drop_pass '${JSON.stringify(nodes).replace(/'/g, "'\\''")}'`
+    ].join('\n');
+    const result = spawnSync('zsh', ['-c', script], {
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'] ?? '', HOME: home }
+    });
+    const lines = (name: string) =>
+      existsSync(join(home, name))
+        ? readFileSync(join(home, name), 'utf8').trim().split('\n')
+        : [];
+    const calls = lines('calls').map((l) => {
+      const at = l.indexOf(' ');
+      return {
+        kind: l.slice(0, at),
+        vars: JSON.parse(l.slice(at + 1)) as Record<string, unknown>
+      };
+    });
+    return {
+      stderr: result.stderr,
+      calls,
+      updates: calls.filter((c) => c.kind === 'update').map((c) => c.vars),
+      patches: lines('patches').map((l) => {
+        const [table, query, ...b] = l.split('|');
+        return {
+          table,
+          query,
+          body: JSON.parse(b.join('|')) as Record<string, unknown>
+        };
+      }),
+      upserts: lines('upserts').map(
+        (l) =>
+          JSON.parse(l.split('|').slice(2, -1).join('|')) as Record<
+            string,
+            unknown
+          >
+      ),
+      notes: lines('notes'),
+      handled: lines('drop-replies')
+    };
+  };
+  const struck = (text: string, item: string, reason: string) =>
+    text.replace(
+      `- [ ] ${item}`,
+      `- [ ] ~~${item}~~ dropped${reason ? `: ${reason}` : ''}`
+    );
+  const row = (item: string, ticket = 'COD-7', note = '') => ({
+    id: 5,
+    args: { ticket, item, note }
+  });
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'drop-pass-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  it('is found in run.sh', () => {
+    for (const name of ['drop_edit', 'drop_write', 'drop_pass']) {
+      expect(fn(name)).toContain(`${name}()`);
+    }
+  });
+
+  describe('a desk drop', () => {
+    it('edits the comment, acks it applied and writes an activity row', () => {
+      const r = drop([node(TWO)], {
+        rows: [row('set the DNS', 'COD-7', 'not needed')]
+      });
+      expect(r.updates).toEqual([
+        { id: READY, body: struck(TWO, 'set the DNS', 'not needed') }
+      ]);
+      expect(r.patches).toHaveLength(1);
+      expect(r.patches[0]).toMatchObject({
+        table: 'desk_commands',
+        query: 'id=eq.5&status=eq.pending',
+        body: { status: 'applied', note: null }
+      });
+      expect(r.upserts).toHaveLength(1);
+      expect(r.upserts[0]).toMatchObject({
+        event_id: 'desk:5',
+        ticket: 'COD-7',
+        actor: 'human',
+        host: 'nuc',
+        change: 'dropped "set the DNS" on COD-7 from the desk (mac)'
+      });
+    });
+
+    it.each([
+      [
+        'the ticket is not Done',
+        node(TWO, { state: { type: 'started' } }),
+        'the ticket is not Done'
+      ],
+      [
+        'the ticket is not watched',
+        node(TWO, { identifier: 'COD-8' }),
+        'COD-7 is not watched'
+      ],
+      [
+        'it has no PR-ready comment',
+        node(TWO, { comments: { nodes: [] } }),
+        'no PR-ready comment'
+      ]
+    ])('is refused when %s', (_name, n, why) => {
+      const r = drop([n], { rows: [row('set the DNS')] });
+      expect(r.updates).toEqual([]);
+      expect(r.patches[0]?.body).toMatchObject({
+        status: 'refused',
+        note: why
+      });
+      expect(r.upserts[0]?.['change']).toBe(
+        `drop refused from the desk (mac): ${why}`
+      );
+    });
+
+    it('is refused when the text no longer matches', () => {
+      const r = drop([node(TWO)], {
+        rows: [row('set the DNS')],
+        live: body('rotate key')
+      });
+      expect(r.updates).toEqual([]);
+      expect(r.patches[0]?.body).toMatchObject({
+        status: 'refused',
+        note: 'no open item reads that any more'
+      });
+    });
+
+    it('takes agent:review out when nothing is left', () => {
+      const r = drop([node(ONE)], { rows: [row('set the DNS')], live: ONE });
+      expect(r.calls.map((c) => c.kind)).toEqual(['update', 'unlabel']);
+      expect(r.calls[1]?.vars).toEqual({ id: 'uuid-7', remove: ['l-review'] });
+    });
+
+    it('keeps agent:review while an item is left', () => {
+      const r = drop([node(TWO)], { rows: [row('set the DNS')] });
+      expect(r.calls.map((c) => c.kind)).toEqual(['update']);
+    });
+  });
+
+  describe('a drop: reply', () => {
+    const reply = (text: string, over: Partial<Reply> = {}): Reply => ({
+      id: 'r1',
+      body: text,
+      ...over
+    });
+
+    it('edits the comment, remembers the reply and answers in the thread', () => {
+      const r = drop([node(TWO, {}, [reply('drop: 1\nnot needed')])]);
+      expect(r.updates).toEqual([
+        { id: READY, body: struck(TWO, 'set the DNS', 'not needed') }
+      ]);
+      expect(r.handled).toEqual(['r1']);
+      const answer = r.calls.find((c) => c.kind === 'reply');
+      expect(answer?.vars).toMatchObject({ id: 'uuid-7', parent: READY });
+      expect(String(answer?.vars['body'])).toMatch(/^\*\*Agent: dropped\*\* /);
+    });
+
+    it('answers a reply that matches nothing and edits nothing', () => {
+      const r = drop([node(TWO, {}, [reply('drop: 9')])]);
+      expect(r.updates).toEqual([]);
+      expect(r.handled).toEqual(['r1']);
+      const answer = r.calls.find((c) => c.kind === 'reply');
+      expect(answer?.vars).toMatchObject({ parent: READY });
+      expect(String(answer?.vars['body'])).toMatch(
+        /^\*\*Agent: not dropped\*\* /
+      );
+    });
+
+    it('skips an id already in the file', () => {
+      const r = drop([node(TWO, {}, [reply('drop: 1')])], { handled: ['r1'] });
+      expect(r.calls).toEqual([]);
+    });
+
+    it('ignores a reply on a ticket that is not Done', () => {
+      const r = drop([
+        node(TWO, { state: { type: 'started' } }, [reply('drop: 1')])
+      ]);
+      expect(r.calls).toEqual([]);
+      expect(r.handled).toEqual([]);
+    });
+  });
+});
+
 // Desk commands are read and applied before the pause is, so a resume lifts it in the same tick
 describe('run.sh apply_commands', () => {
   const fn = (name: string) =>
@@ -4293,7 +4620,7 @@ describe('run.sh apply_commands', () => {
   it('reads this host pending commands in id order', () => {
     const r = apply([]);
     expect(r.selects).toEqual([
-      'desk_commands host=eq.nuc&status=eq.pending&kind=neq.abandon&order=id.asc&select=id,at,kind,args,actor'
+      'desk_commands host=eq.nuc&status=eq.pending&kind=not.in.(abandon,drop)&order=id.asc&select=id,at,kind,args,actor'
     ]);
     expect(r.patches).toEqual([]);
   });
