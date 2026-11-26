@@ -2129,7 +2129,7 @@ audit_notices() {
 
 # tree_wide: the TREE_QUERY result as { nodes, truncated }, read again only when tree-nodes.json is
 # older than AGENT_QUEUE_TREE_TTL_MIN minutes (15; 0 reads every run). A failed read falls back on
-# the file however old it is; no file either fails.
+# the file however old it is; no file either fails. A fresh read past the tree_nodes cap notes a warn.
 tree_wide() {
   setopt local_options no_err_exit
   local f="$HOME_DIR/tree-nodes.json" ttl="${AGENT_QUEUE_TREE_TTL_MIN:-15}" out
@@ -2140,6 +2140,9 @@ tree_wide() {
   fi
   if out="$(tree_nodes)" && jq -e '.nodes | type == "array"' >/dev/null 2>&1 <<<"$out"; then
     print -r -- "$out" > "$f.tmp" && mv "$f.tmp" "$f"
+    # Only on a fresh read: a cached file would repeat it every run
+    jq -e '.truncated == true' >/dev/null 2>&1 <<<"$out" &&
+      note "warn: tree: more than $(jq '.nodes | length' <<<"$out") tickets, the rest left out"
     print -r -- "$out"; return 0
   fi
   if [[ -s "$f" ]] && jq -e '.nodes | type == "array"' "$f" >/dev/null 2>&1; then cat "$f"; return 0; fi
@@ -2235,7 +2238,6 @@ attended() {
     echo '[]' > "$ax.wide"
     if wide="$(tree_wide)"; then
       jq -c '.nodes' <<<"$wide" > "$ax.wide"
-      [[ "$(jq -r '.truncated' <<<"$wide")" == true ]] && note "warn: tree: more than 200 open tickets, the rest left out"
     else
       note "warn: tree: Linear read failed, the tree keeps to the agent tickets"
     fi
