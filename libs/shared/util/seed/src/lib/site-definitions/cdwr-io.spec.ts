@@ -246,6 +246,24 @@ describe('the cdwr.io devlog switch', () => {
     }
   );
 
+  it('on: one listing, on the Devlog page, of devlog entries only', () => {
+    const listings = defineCdwrIo({ devlog: true }).pages.flatMap(
+      ({ slug, layout }) =>
+        layout.flatMap((block) =>
+          block.blockType === 'posts' ? [{ slug, block }] : []
+        )
+    );
+
+    expect(listings).toEqual([
+      {
+        slug: 'devlog',
+        block: expect.objectContaining({
+          categories: [{ lookupSlug: 'devlog' }]
+        })
+      }
+    ]);
+  });
+
   it('off: no Devlog page, no posts block and no nav item', () => {
     const definition = defineCdwrIo({ devlog: false });
 
@@ -254,7 +272,7 @@ describe('the cdwr.io devlog switch', () => {
     expect(navSlugsOf(definition)).not.toContain('devlog');
   });
 
-  it('on: all three are back, the page between Architecture and Get started', () => {
+  it('on: the page and its nav item are back, between Architecture and Get started', () => {
     const definition = defineCdwrIo({ devlog: true });
 
     expect(slugsOf(definition)).toEqual([
@@ -267,11 +285,6 @@ describe('the cdwr.io devlog switch', () => {
       'start',
       'privacy'
     ]);
-    expect(
-      definition.pages
-        .find(({ slug }) => slug === 'home')
-        ?.layout.some((block) => block.blockType === 'posts')
-    ).toBe(true);
     expect(navSlugsOf(definition)).toEqual([
       'blocks',
       'studio',

@@ -42,6 +42,7 @@ const devlogPage: PageDefinition = {
     {
       blockType: 'posts',
       blockName: 'All entries',
+      categories: [{ lookupSlug: 'devlog' }],
       limit: 10
     }
   ]
@@ -337,17 +338,6 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
               }
             ]
           },
-          ...(devlog
-            ? [
-                {
-                  blockType: 'posts' as const,
-                  blockName: 'Latest devlog',
-                  title: 'What shipped recently',
-                  description: 'Short dated notes on changes to the platform.',
-                  limit: 3
-                }
-              ]
-            : []),
           {
             blockType: 'callout',
             blockName: 'Get started',
