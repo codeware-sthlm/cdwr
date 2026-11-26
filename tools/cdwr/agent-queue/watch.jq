@@ -163,8 +163,9 @@ def handoffs:
   checklist_handoffs + [ apply_items[] | select(.checked or .dropped | not) | .spec ];
 
 # Reduce a GitHub pullRequest node to { state, removedAt, removedReason, unresolved,
-# copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, ci,
-# mergeCommit, copilot }. mergeCommit is the merge commit's oid, null while unmerged.
+# copilotThreads, threads, threadsTruncated, conflicting, draft, mergeable, mergeStateStatus, review,
+# ci, mergeCommit, copilot }. mergeCommit is the merge commit's oid, null while unmerged. review is
+# GitHub's reviewDecision (APPROVED, REVIEW_REQUIRED, CHANGES_REQUESTED or null).
 # ci is the checks rollup state of the last commit (string or null). copilot is "reviewed" once
 # Copilot has a review on the PR, "requested" while it is a requested reviewer, else "none".
 # threads counts every unresolved review thread, whoever spoke last: main's ruleset needs them all
@@ -205,6 +206,7 @@ def pr_state:
       draft: (.isDraft == true),
       mergeable: (.mergeable // null),
       mergeStateStatus: (.mergeStateStatus // null),
+      review: (.reviewDecision // null),
       oid: (.headRefOid // null),
       mergedAt: (.mergedAt // null),
       mergeCommit: (.mergeCommit.oid // null),
@@ -233,6 +235,7 @@ def pr_state:
 # commit, and sends no merge notice: run.sh sends one when the list has run (apply_summary). Once
 # stored, entry.apply is kept while the PR stays the same, as copilotAsked is.
 # $in.title is the PR's title, carried only into own: the events run.sh keeps in own.jsonl.
+# $in.reviewPaths is review_paths (the files main's ruleset wants Håkan's review for), stored as is.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr
@@ -324,7 +327,9 @@ def step:
                 mergeStateStatus: ($now.mergeStateStatus // null), oid: ($now.oid // null),
                 mergedAt: ($now.mergedAt // $prev.mergedAt // null),
                 mergeCommit: ($now.mergeCommit // $prev.mergeCommit // null), at: $in.at,
-                mergeWhy: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.verdict else null end) }
+                mergeWhy: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.verdict else null end),
+                mergeTransient: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.transient == true else null end),
+                review: ($now.review // null), reviewPaths: ($in.reviewPaths // null) }
               + (if $prev.relabelled == true then { relabelled: true } else {} end)
               + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end)
               + (if $snap then
@@ -775,6 +780,18 @@ def hold_matches($files; $holds):
   [ ($files | unique)[] as $p | $holds[] as $h | select($p | test($h.glob | glob_re))
     | { path: $p, glob: $h.glob, reason: $h.reason } ];
 
+# The PR's changed files that need Håkan's review, from a pullRequest node and main's branch rules
+# (GET rules/branches/main): those the pull_request rule's required_reviewers file patterns match.
+# null when the PR does not read REVIEW_REQUIRED, the rules were not read or name no pattern
+def review_paths($rules):
+  if .reviewDecision != "REVIEW_REQUIRED" or ($rules | type) != "array" then null
+  else [ $rules[] | select(.type == "pull_request") | (.parameters.required_reviewers // [])[]
+         | (.file_patterns // [])[] | select(type == "string") | glob_re ] as $res
+    | if ($res | length) == 0 then null
+      else [ (.files.nodes // [])[] | .path | select(type == "string")
+             | select(. as $p | any($res[]; . as $re | $p | test($re))) ] | unique end
+  end;
+
 # The PR-ready comment's Merge line for the matches: the first one named, the rest counted
 def merge_line($m):
   if ($m | length) == 0 then "Merge: merging on its own: no hold path"
@@ -822,13 +839,13 @@ def merge_verdict($node; $holds):
   | ([ (.files.nodes // [])[] | .path | select(type == "string") ]) as $files
   | (($c != null) and ($c | body_line("merge: merging on its own"))) as $claimed
   | (if ($d | startswith("ok ") | not) then $d
-     elif .reviewDecision == "REVIEW_REQUIRED" then "the ruleset requires Håkan's review"
      elif ($node | agent_label) != "agent:review" then "the ticket is not agent:review"
      elif $c == null then "no PR-ready comment"
      elif ($c | body_line("code review:") | not) then "the PR-ready comment has no Code review line"
      elif ($claimed | not) then "the PR-ready comment does not say it merges on its own"
      # A parked wait is a session mid-round: a push is coming, or CI runs on the head it just pushed
      elif ($node | parked) != null then "the ticket is parked on a wait"
+     elif .reviewDecision == "REVIEW_REQUIRED" then "the ruleset requires Håkan's review"
      elif any(($node.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($c.createdAt | epoch))
        then "Håkan commented after the PR-ready comment"
      elif ($node | asks_before_merging) then "the report says Ask me before merging"
@@ -1212,7 +1229,11 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
         before: $before,
         label: ([ $all[] | select(to_label) ] | sort_by(queue_order)
                 | map({ ticket: .identifier, parent: .parent.identifier, blockers: (blockers | map(.identifier)) })),
-        after: (($lu.open | map({ ticket: ., kind: "pr", pr: ($watch[.].pr // null), held: ($watch[.].mergeWhy // null) }))
+        # approved: Håkan approved on GitHub and the watch's own hold lasts, so the merge is his button
+        after: (($lu.open | map(($watch[.] // {}) as $w
+                                | { ticket: ., kind: "pr", pr: ($w.pr // null), held: ($w.mergeWhy // null),
+                                    approved: ($w.review == "APPROVED" and $w.mergeWhy != null and $w.mergeTransient != true),
+                                    reviewRequired: ($w.review == "REVIEW_REQUIRED"), reviewPaths: ($w.reviewPaths // null) }))
                 + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
       }
     };

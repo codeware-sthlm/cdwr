@@ -34,7 +34,9 @@ const READS = [
   /^gh api "repos\/codeware-sthlm\/cdwr\/actions\/workflows\/fly-deployment\.yml\/runs\?head_sha=\$1&per_page=5" /,
   /^gh api --paginate "repos\/codeware-sthlm\/cdwr\/pulls\/\$pr\/files" /,
   // read_deploy: the push runs of a merge commit (one list), the deploy's jobs and annotations
-  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/
+  /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/,
+  // watch_prs: main's branch rules, for the paths a PR needs Håkan's review on
+  /^gh api repos\/codeware-sthlm\/cdwr\/rules\/branches\/main\)/
 ];
 
 // The Copilot request and the merge command (the desk's, and the watch's own) are run.sh's only
@@ -2292,7 +2294,8 @@ describe('run.sh watch_prs', () => {
       `watch() { jq -L "${DIR}" "$@"; }`,
       'watch_err() { :; }',
       'gh_identity_or_note() { :; }',
-      'gh_read() { cat "$ROOT/pr.json"; }',
+      // Main's branch rules from rules.json, one line per read; every other read is the PR
+      'gh_read() { if [[ "$*" == *rules/branches/main* ]]; then print read >> "$ROOT/rules-reads"; cat "$ROOT/rules.json"; else cat "$ROOT/pr.json"; fi; }',
       'relabel_merged() { print -r -- "$*" >> "$ROOT/relabels"; }',
       // The request: one line per call; it fails with a reason while copilot-fail exists
       'copilot_request() { print -r -- "$1" >> "$ROOT/copilot"; [[ -f "$ROOT/copilot-fail" ]] || return 0; print -r -- "no Copilot seat"; return 1; }',
@@ -2341,6 +2344,58 @@ describe('run.sh watch_prs', () => {
 
   const tickets = (...ids: number[]) =>
     ids.map((n) => ({ ...ticket, identifier: `COD-${n}` }));
+
+  describe('the paths that need Håkan’s review', () => {
+    const rules = [
+      {
+        type: 'pull_request',
+        parameters: {
+          required_reviewers: [{ file_patterns: ['apps/agent-host/**'] }]
+        }
+      }
+    ];
+    const files = {
+      nodes: [{ path: 'apps/agent-host/entrypoint.sh' }, { path: 'README.md' }]
+    };
+    const entries = () =>
+      Object.values(JSON.parse(read('watch.json'))) as {
+        reviewPaths: unknown;
+      }[];
+
+    it('reads main’s rules once a run and stores the matched paths', () => {
+      writeFileSync(join(root, 'rules.json'), JSON.stringify(rules));
+      const result = run('feature/cod-5', [tickets(5, 6)], false, {
+        pr: { reviewDecision: 'REVIEW_REQUIRED', files }
+      });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('rules-reads').split('\n').filter(Boolean)).toHaveLength(1);
+      expect(entries().map((e) => e.reviewPaths)).toEqual([
+        ['apps/agent-host/entrypoint.sh'],
+        ['apps/agent-host/entrypoint.sh']
+      ]);
+    });
+
+    it('reads no rules for a PR that needs no review', () => {
+      writeFileSync(join(root, 'rules.json'), JSON.stringify(rules));
+      run('feature/cod-5', [[ticket]], false, {
+        pr: { reviewDecision: 'APPROVED', files }
+      });
+      expect(read('rules-reads')).toBe('');
+      expect(entries().map((e) => e.reviewPaths)).toEqual([null]);
+    });
+
+    it('notes rules it could not read and stores no paths', () => {
+      // An error page instead of JSON: kept out of --argjson, which would fail every PR after it
+      writeFileSync(join(root, 'rules.json'), '<html>busy</html>');
+      const result = run('feature/cod-5', [tickets(5, 6)], false, {
+        pr: { reviewDecision: 'REVIEW_REQUIRED', files }
+      });
+      expect(result.stdout).toContain('rc=0');
+      expect(read('notes')).toContain("main's branch rules were not read");
+      expect(read('notes')).not.toContain('watch.jq failed');
+      expect(entries().map((e) => e.reviewPaths)).toEqual([null, null]);
+    });
+  });
 
   it('watches the tickets of every page, with no warn', () => {
     const result = run('feature/cod-5', [tickets(5), tickets(6)]);

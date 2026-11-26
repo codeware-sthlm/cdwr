@@ -1217,6 +1217,13 @@ describe('pr_state', () => {
   });
   const state = (p: unknown) => (run('pr_state', p) as { state: string }).state;
 
+  it('carries the review decision, null when GitHub gives none', () => {
+    const review = (p: unknown) =>
+      (run('pr_state', p) as { review: string | null }).review;
+    expect(review(pr({ reviewDecision: 'APPROVED' }))).toBe('APPROVED');
+    expect(review(pr())).toBeNull();
+  });
+
   it.each([
     ['merged', pr({ state: 'MERGED' }, 'SUCCESS'), 'merged'],
     ['merged beats failing', pr({ state: 'MERGED' }, 'FAILURE'), 'merged'],
@@ -1267,6 +1274,7 @@ describe('pr_state', () => {
       draft: false,
       mergeable: null,
       mergeStateStatus: null,
+      review: null,
       oid: null,
       mergedAt: null,
       mergeCommit: null,
@@ -1296,6 +1304,7 @@ describe('pr_state', () => {
       draft: false,
       mergeable: null,
       mergeStateStatus: null,
+      review: null,
       oid: null,
       mergedAt: null,
       mergeCommit: null,
@@ -2012,6 +2021,9 @@ describe('step', () => {
         threads: 0,
         mergeStateStatus: null,
         mergeWhy: null,
+        mergeTransient: null,
+        review: null,
+        reviewPaths: null,
         oid: null,
         mergedAt: null,
         mergeCommit: null,
@@ -2050,6 +2062,9 @@ describe('step', () => {
         threads: 0,
         mergeStateStatus: null,
         mergeWhy: null,
+        mergeTransient: null,
+        review: null,
+        reviewPaths: null,
         oid: null,
         mergedAt: null,
         mergeCommit: null,
@@ -4735,7 +4750,15 @@ describe('attended picks', () => {
         'COD-2': { pr: 7 }
       });
       expect(r.table.after).toEqual([
-        { ticket: 'COD-2', kind: 'pr', pr: 7, held: null },
+        {
+          ticket: 'COD-2',
+          kind: 'pr',
+          pr: 7,
+          held: null,
+          approved: false,
+          reviewRequired: false,
+          reviewPaths: null
+        },
         { ticket: 'COD-3', kind: 'handoffs', items: ['check'] }
       ]);
     });
@@ -4749,8 +4772,50 @@ describe('attended picks', () => {
           ticket: 'COD-2',
           kind: 'pr',
           pr: 7,
-          held: "the ruleset requires Håkan's review"
+          held: "the ruleset requires Håkan's review",
+          approved: false,
+          reviewRequired: false,
+          reviewPaths: null
         }
+      ]);
+    });
+
+    it('carries the approval and the paths needing review on a pr row', () => {
+      const r = view(
+        [review('COD-2'), review('COD-4'), review('COD-6'), review('COD-8')],
+        5,
+        {
+          'COD-2': { pr: 7, review: 'APPROVED', mergeWhy: 'a hold' },
+          'COD-4': {
+            pr: 8,
+            review: 'REVIEW_REQUIRED',
+            mergeWhy: 'checks pending',
+            mergeTransient: true,
+            reviewPaths: ['apps/agent-host/x.sh']
+          },
+          // Approved, but the hold settles by itself or nothing holds: no Merge to press yet
+          'COD-6': {
+            pr: 9,
+            review: 'APPROVED',
+            mergeWhy: 'checks pending',
+            mergeTransient: true
+          },
+          'COD-8': { pr: 10, review: 'APPROVED', mergeWhy: null }
+        }
+      );
+      expect(
+        (
+          r.table.after as {
+            approved: boolean;
+            reviewRequired: boolean;
+            reviewPaths: unknown;
+          }[]
+        ).map((x) => [x.approved, x.reviewRequired, x.reviewPaths])
+      ).toEqual([
+        [true, false, null],
+        [false, true, ['apps/agent-host/x.sh']],
+        [false, false, null],
+        [false, false, null]
       ]);
     });
 
@@ -7841,8 +7906,8 @@ describe('hold list', () => {
     matches([path], [{ glob, reason: '' }]).length === 1;
 
   describe('hold_globs', () => {
-    it('parses the real hold-paths.txt into 13 globs with reasons', () => {
-      expect(holds).toHaveLength(13);
+    it('parses the real hold-paths.txt into 14 globs with reasons', () => {
+      expect(holds).toHaveLength(14);
       expect(holds[0]).toEqual({
         glob: 'apps/cms/src/migrations/**',
         reason: 'one-way on tenant data'
@@ -8020,6 +8085,62 @@ describe('hold list', () => {
   });
 });
 
+describe('review_paths', () => {
+  const RULES = [
+    { type: 'deletion' },
+    {
+      type: 'pull_request',
+      parameters: {
+        required_reviewers: [
+          {
+            minimum_approvals: 1,
+            file_patterns: ['tools/cdwr/agent-queue/**', '.claude/**'],
+            reviewer: { type: 'Team', id: 1 }
+          }
+        ]
+      }
+    }
+  ];
+  const node = (decision: string | null, paths: string[]) => ({
+    reviewDecision: decision,
+    files: { nodes: paths.map((path) => ({ path })) }
+  });
+  const paths = (n: unknown, rules: unknown = RULES) =>
+    run(`review_paths(${JSON.stringify(rules)})`, n);
+
+  it('lists the changed files the required reviewers cover, sorted', () => {
+    expect(
+      paths(
+        node('REVIEW_REQUIRED', [
+          'tools/cdwr/agent-queue/run.sh',
+          'apps/desk/src/x.ts',
+          '.claude/skills/work-queue/SKILL.md'
+        ])
+      )
+    ).toEqual([
+      '.claude/skills/work-queue/SKILL.md',
+      'tools/cdwr/agent-queue/run.sh'
+    ]);
+  });
+
+  it('is null unless the PR needs the review', () => {
+    expect(
+      paths(node('APPROVED', ['tools/cdwr/agent-queue/run.sh']))
+    ).toBeNull();
+    expect(paths(node(null, ['tools/cdwr/agent-queue/run.sh']))).toBeNull();
+  });
+
+  it('is null when the rules were not read or name no pattern', () => {
+    const n = node('REVIEW_REQUIRED', ['tools/cdwr/agent-queue/run.sh']);
+    expect(paths(n, null)).toBeNull();
+    expect(
+      paths(n, [
+        { type: 'pull_request', parameters: { required_reviewers: [] } }
+      ])
+    ).toBeNull();
+  });
+});
+
 describe('merge_verdict', () => {
   const NOW_ISO = '2026-10-01T00:00:00Z';
   const holds = run(
@@ -8088,6 +8209,21 @@ describe('merge_verdict', () => {
       verdict: "the ruleset requires Håkan's review",
       claimed: true,
       transient: false
+    });
+  });
+
+  it('names a parked wait before the ruleset, so a session mid-round is not told about', () => {
+    expect(
+      verdict(
+        prNode({ reviewDecision: 'REVIEW_REQUIRED' }),
+        ticket({
+          description:
+            '## Plan\n\n**Next:** `Waiting: CI · PR 5 @ abc1234 · since 2026-10-01T00:00Z`'
+        })
+      )
+    ).toMatchObject({
+      verdict: 'the ticket is parked on a wait',
+      transient: true
     });
   });
 
@@ -8404,18 +8540,21 @@ describe('step with merge', () => {
     merge?: Record<string, unknown> | null;
     label?: string;
     title?: string;
+    reviewPaths?: string[];
   };
   const step = ({
     now = {},
     prev = null,
     merge = OK,
     label,
-    title
+    title,
+    reviewPaths
   }: Over = {}) =>
     run('step', {
       id: 'COD-9',
       pr: 5,
       ...(title === undefined ? {} : { title }),
+      ...(reviewPaths === undefined ? {} : { reviewPaths }),
       now: {
         state: 'open',
         removedAt: null,
@@ -8691,6 +8830,37 @@ describe('step with merge', () => {
     it('is not carried from the previous entry', () => {
       const r = step({ merge: OK, prev: prev({ mergeWhy: HELD.verdict }) });
       expect(r.entry['mergeWhy']).toBeNull();
+    });
+
+    it('says whether the hold settles by itself, beside the verdict', () => {
+      expect(step({ merge: HELD }).entry['mergeTransient']).toBe(false);
+      expect(
+        step({
+          merge: { verdict: 'checks pending', claimed: true, transient: true }
+        }).entry['mergeTransient']
+      ).toBe(true);
+      expect(step({ merge: OK }).entry['mergeTransient']).toBeNull();
+    });
+  });
+
+  describe('review and reviewPaths', () => {
+    it('stores the review decision and the paths as read', () => {
+      const r = step({
+        merge: HELD,
+        now: { review: 'REVIEW_REQUIRED' },
+        reviewPaths: ['apps/agent-host/x.sh']
+      });
+      expect(r.entry['review']).toBe('REVIEW_REQUIRED');
+      expect(r.entry['reviewPaths']).toEqual(['apps/agent-host/x.sh']);
+    });
+
+    it('carries neither from the previous entry', () => {
+      const r = step({
+        merge: OK,
+        prev: prev({ review: 'APPROVED', reviewPaths: ['a'] })
+      });
+      expect(r.entry['review']).toBeNull();
+      expect(r.entry['reviewPaths']).toBeNull();
     });
   });
 

@@ -1332,6 +1332,8 @@ watch_prs() {
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
   local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy ev
+  # Main's branch rules, read once a run and only for a PR that needs Håkan's review (review_paths)
+  local rules=null rules_read=false
   gh_identity_or_note
   # The hold list sits beside watch.jq. Unread, no PR merges on its own
   holds="$(watch -Rsc 'include "watch"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
@@ -1388,13 +1390,21 @@ watch_prs() {
       state="$(jq -c --arg id "$id" 'del(.[$id])' <<<"$state")"
       continue
     fi
+    if [[ "$rules_read" == false && "$(jq -r '.reviewDecision // ""' <<<"$now")" == REVIEW_REQUIRED ]]; then
+      rules_read=true
+      # Anything but a JSON array would break --argjson for every PR after this one
+      rules="$(gh_read gh api repos/codeware-sthlm/cdwr/rules/branches/main)" &&
+        jq -e 'type == "array"' >/dev/null 2>&1 <<<"$rules" ||
+        { rules=null; note "warn: watch: main's branch rules were not read, so no review paths"; }
+    fi
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
-      --argjson state "$state" --argjson holds "$holds" --arg at "$(date -u +%FT%TZ)" '
+      --argjson state "$state" --argjson holds "$holds" --argjson rules "$rules" --arg at "$(date -u +%FT%TZ)" '
       include "watch";
       {id: $id, agentLabel: $agentLabel, pr: $pr, title: ($now.title // null), now: ($now | pr_state), prev: $state[$id],
        handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
        apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null),
-       merge: (if $holds == null then null else ($now | merge_verdict($node; $holds)) end)} | step')" ||
+       reviewPaths: ($now | review_paths($rules)),
+       merge:(if $holds == null then null else ($now | merge_verdict($node; $holds)) end)} | step')" ||
       { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue
