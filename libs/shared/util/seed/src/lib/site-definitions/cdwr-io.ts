@@ -33,12 +33,14 @@ const devlogPage: PageDefinition = {
   layout: [
     {
       blockType: 'hero',
+      blockName: 'Intro',
       badge: 'Devlog',
       heading: 'What shipped, and why',
       lede: 'Short dated notes on changes to the platform: what shipped and why.'
     },
     {
       blockType: 'posts',
+      blockName: 'All entries',
       title: 'Entries',
       description: 'Newest first.',
       limit: 10
@@ -124,6 +126,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'hero',
+            blockName: 'Intro',
             badge: 'Multi-tenant hosting',
             heading: 'Every site its own. One platform underneath.',
             illustration: heroIllustration,
@@ -149,6 +152,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
+            blockName: 'What the platform does',
             eyebrow: 'What you get',
             band: 'subtle',
             heading: 'What the platform does',
@@ -178,6 +182,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
+            blockName: 'Live theme switching',
             eyebrow: 'Theming',
             heading: 'Change the look. Nothing reloads.',
             illustration: themingIllustration,
@@ -206,6 +211,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
+            blockName: 'Readable themes',
             eyebrow: 'Theme studio',
             band: 'gradient',
             heading: 'A theme you cannot save until it is readable',
@@ -230,6 +236,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
+            blockName: 'Custom components',
             eyebrow: 'Custom components',
             heading: 'When no block fits, write one',
             intro:
@@ -243,6 +250,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
+            blockName: 'Block gallery',
             eyebrow: 'Content',
             heading: 'A gallery of every block',
             band: 'subtle',
@@ -258,6 +266,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'pill-list',
+            blockName: 'Tools it runs on',
             logoColor: 'own',
             eyebrow: 'Built on',
             heading: 'What the platform runs on',
@@ -318,6 +327,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             ? [
                 {
                   blockType: 'posts' as const,
+                  blockName: 'Latest devlog',
                   title: 'What shipped recently',
                   description: 'Short dated notes on changes to the platform.',
                   limit: 3
@@ -326,6 +336,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             : []),
           {
             blockType: 'callout',
+            blockName: 'Get started',
             showMark: true,
             markStyle: 'muted',
             heading: 'Build on the same platform',
@@ -348,6 +359,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'block-gallery',
+            blockName: 'All blocks',
             eyebrow: 'Block gallery',
             heading: 'Every block a page can be built from',
             intro:
@@ -369,6 +381,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'hero',
+            blockName: 'Intro',
             badge: 'Theme studio',
             heading: 'A theme you cannot save until it is readable',
             lede: 'Pick a brand colour. The studio derives every other colour from it and checks each pairing for readability while you work. A theme that fails cannot be published.'
@@ -376,6 +389,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             // What the fact cards below leave out: the rule that makes the claim
             blockType: 'feature-section',
+            blockName: 'How readability is checked',
             eyebrow: 'Readability',
             heading: 'How readability is checked',
             band: 'subtle',
@@ -401,11 +415,13 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             // The prose above has already said what this is, so no header —
             // just the studio, opened on the theme this site runs
             blockType: 'theme-studio',
+            blockName: 'The studio',
             startFrom: 'spotlight',
             note: 'This is the real studio. Nothing you do here leaves your browser.'
           },
           {
             blockType: 'feature-cards',
+            blockName: 'Guarantees',
             eyebrow: 'Saved themes',
             heading: 'What the studio guarantees',
             columns: '3',
@@ -440,12 +456,14 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'hero',
+            blockName: 'Intro',
             badge: 'Custom components',
             heading: 'A component written in the admin',
             lede: 'When no block does what a page needs, a developer writes one in the component studio. Saving it starts a build, and once the build is done an editor places it on a page like any other block.'
           },
           {
             blockType: 'feature-section',
+            blockName: 'From code to page',
             eyebrow: 'How it works',
             heading: 'From code to page',
             band: 'subtle',
@@ -468,6 +486,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'custom-component',
+            blockName: 'Theme swatch',
             component: { lookupSlug: 'theme-swatch' },
             props: {
               title: 'The colours on this page',
@@ -476,6 +495,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'code',
+            blockName: 'Swatch source',
             heading: 'The source of the component above',
             intro:
               'This is the code behind the colours shown above, as it was written in the component studio.',
@@ -485,6 +505,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
+            blockName: 'Limits',
             eyebrow: 'Limits',
             heading: 'What a component can and cannot do',
             columns: '2',
@@ -513,6 +534,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'callout',
+            blockName: 'Get a site',
             showMark: true,
             markStyle: 'muted',
             heading: 'Write a component on your own site',
@@ -533,12 +555,14 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'hero',
+            blockName: 'Intro',
             badge: 'Architecture',
             heading: 'Every site is its own deployment',
             lede: 'Each site runs as an app of its own, on its own domain, with its own certificate and secrets. All of them are hosted in Stockholm, in the EU.'
           },
           {
             blockType: 'feature-section',
+            blockName: 'One build per app',
             eyebrow: 'One build per app',
             heading: 'Built once, started for every site',
             band: 'subtle',
@@ -562,6 +586,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-section',
+            blockName: 'Two-factor login',
             eyebrow: 'Sign-in',
             heading: 'Two-factor login for editors',
             intro:
@@ -569,6 +594,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
+            blockName: 'Deploys',
             eyebrow: 'Deployment',
             heading: 'A release takes traffic once it is healthy',
             band: 'subtle',
@@ -593,6 +619,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
+            blockName: 'Pull request previews',
             eyebrow: 'Pull requests',
             heading: 'What a pull request gets',
             columns: '3',
@@ -617,6 +644,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             // The same tools in the same order as Home's list
             blockType: 'feature-cards',
+            blockName: 'Stack',
             eyebrow: 'Built on',
             heading: 'What it is built on, and why',
             band: 'subtle',
@@ -699,6 +727,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
             // How the list above fits together, run from the platform's own
             // command line. Named, but not offered: it is not published
             blockType: 'feature-section',
+            blockName: 'The cdwr CLI',
             eyebrow: 'Operations',
             heading: 'One tool runs the platform',
             intro:
@@ -733,6 +762,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'hero',
+            blockName: 'Intro',
             badge: 'Get started',
             heading: 'Get a site on the platform',
             lede: 'The platform hosts a small number of sites, so signup is limited and by invitation. With an invite code you create a workspace, choose a starter and have a site live without running anything yourself.',
@@ -740,6 +770,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
+            blockName: 'Hosted steps',
             eyebrow: 'Hosted',
             band: 'subtle',
             heading: 'From invite code to live site',
@@ -771,6 +802,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           {
             // On the band above, so hosted and self-built read as one choice
             blockType: 'content',
+            blockName: 'Build your own',
             band: 'subtle',
             columns: [
               {
@@ -795,6 +827,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'feature-cards',
+            blockName: 'Published packages',
             eyebrow: 'Three packages, published',
             heading: 'Usable on their own, without adopting anything else here',
             columns: '3',
@@ -822,6 +855,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
           },
           {
             blockType: 'callout',
+            blockName: 'Source',
             showMark: true,
             markStyle: 'muted',
             heading: 'The source is open',
@@ -842,6 +876,7 @@ export function defineCdwrIo({ devlog }: { devlog: boolean }): SiteDefinition {
         layout: [
           {
             blockType: 'content',
+            blockName: 'Privacy policy',
             columns: [
               { size: 'full', richText: { markdown: cdwrIoPrivacyMarkdown } }
             ]
