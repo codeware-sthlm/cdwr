@@ -784,9 +784,11 @@ def hold_matches($files; $holds):
 
 # The PR's changed files that need Håkan's review, from a pullRequest node and main's branch rules
 # (GET rules/branches/main): those the pull_request rule's required_reviewers file patterns match.
-# null when the PR does not read REVIEW_REQUIRED, the rules were not read or name no pattern
+# null when the PR does not read REVIEW_REQUIRED, the rules were not read or name no pattern, or
+# GitHub gave only the first page of files, where a match may sit past it
 def review_paths($rules):
   if .reviewDecision != "REVIEW_REQUIRED" or ($rules | type) != "array" then null
+  elif .files.pageInfo.hasNextPage == true then null
   else [ $rules[] | select(.type == "pull_request") | (.parameters.required_reviewers // [])[]
          | (.file_patterns // [])[] | select(type == "string") | glob_re ] as $res
     | if ($res | length) == 0 then null
