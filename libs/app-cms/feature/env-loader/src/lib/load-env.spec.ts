@@ -158,6 +158,21 @@ describe('loadEnv', () => {
       expect(withInfisical).not.toHaveBeenCalled();
     });
 
+    it('allows no CORS origin when its folder sets none', async () => {
+      process.env['PAYLOAD_SECRET_KEY'] = 'x';
+
+      expect((await loadEnv())?.['CORS_URLS']).toBe('');
+    });
+
+    it('keeps the CORS urls its folder sets', async () => {
+      Object.assign(process.env, {
+        PAYLOAD_SECRET_KEY: 'x',
+        CORS_URLS: 'https://moon.example'
+      });
+
+      expect((await loadEnv())?.['CORS_URLS']).toBe('https://moon.example');
+    });
+
     it('names the missing keys, never their values, and reads nothing', async () => {
       process.env['DATABASE_URL'] = 'postgres://secret';
 
