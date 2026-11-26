@@ -13,6 +13,7 @@ import {
 } from '../view/ticket';
 import { mergeBlocker } from '../view/waiting';
 
+import { ApplyExtras, type DropCtx, dropCtx } from './drop';
 import { Chip, Empty, PRIO } from './items';
 import { BAR, GROUP, META, RULE } from './items-ui';
 import { IdLink, Inline, LinkIds, Prn, TicketButton } from './links';
@@ -96,7 +97,22 @@ const applyState = (a: ApplyItem): [string, string, string | null] => {
   return ['needs-input', 'pending', a.outcome];
 };
 
-const QueuePart = ({ queue, now }: { queue: TicketQueue; now: Date }) => (
+const QueuePart = ({
+  queue,
+  now,
+  id,
+  done,
+  completedAt,
+  drop
+}: {
+  queue: TicketQueue;
+  now: Date;
+  id: string;
+  /** The ticket is Done: its PR merged, so an open line can be dropped */
+  done: boolean;
+  completedAt: string | null;
+  drop: DropCtx;
+}) => (
   <Part title="Queue">
     {queue.waiting ? (
       <Row label="Waits on you">
@@ -179,6 +195,13 @@ const QueuePart = ({ queue, now }: { queue: TicketQueue; now: Date }) => (
                 <code>{a.spec}</code>
                 <Chip kind={kind}>{label}</Chip>
                 {note ? <span className={META}>{note}</span> : null}
+                <ApplyExtras
+                  ctx={drop}
+                  a={a}
+                  ticket={id}
+                  completedAt={completedAt}
+                  droppable={done}
+                />
               </li>
             );
           })}
@@ -271,7 +294,16 @@ export const TicketBody = ({ m, state, now, actions }: SheetProps) => {
         notes={state.controls.dismissNotes}
         onDismiss={actions.onDismiss}
       />
-      {queue ? <QueuePart queue={queue} now={now} /> : null}
+      {queue ? (
+        <QueuePart
+          queue={queue}
+          now={now}
+          id={id}
+          done={linear?.status.type === 'completed'}
+          completedAt={linear?.completedAt ?? null}
+          drop={dropCtx(m, state, now, actions.onDrop)}
+        />
+      ) : null}
       {tree ? <TreePart tree={tree} onTicket={actions.onTicket} /> : null}
       {pr ? <PrPart pr={pr} /> : null}
       {gaps ? (

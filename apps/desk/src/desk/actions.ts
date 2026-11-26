@@ -15,6 +15,7 @@ import {
   type ControlKind,
   type PlatformCommandKind,
   type PrCommandKind,
+  dropCommandKey,
   prCommandKey,
   sendCommand
 } from './commands';
@@ -577,6 +578,7 @@ export const sheetActions: SheetActions = {
   wait: waitActions,
   onTicket: (id) => openTicket(id),
   onDismiss: dismissFinding,
+  onDrop: dropItem,
   onSnoozedOpen: setSnoozedOpen,
   onActFilter: (ticket) => {
     state.ui.actFilter = ticket;
@@ -874,6 +876,55 @@ export function dismissFinding(finding: string, note: string): void {
     })
     .finally(() => {
       c.dismissing.delete(finding);
+      render();
+    });
+}
+
+/** Asks the host's scheduler to strike an open hand-off or Apply list line of a merged ticket; its answer, a note if it refused, then shows beside the line */
+export function dropItem(ticket: string, item: string, note: string): void {
+  const c = state.controls;
+  const host = modelAt(new Date()).controls?.host;
+  const text = item.trim();
+  if (!c.target || !host || !text) return;
+  const key = dropCommandKey(ticket, text);
+  if (c.dropSending.has(key)) return;
+  const trimmed = note.trim();
+  const args: CommandArgs = { ticket, item: text, note: trimmed || null };
+  c.dropSending.add(key);
+  c.dropNotes.delete(key);
+  render();
+  sendCommand(c.target, host, 'drop', args)
+    .then((reply) => {
+      if (reply.status === 'refused')
+        c.dropNotes.set(key, reply.note ?? 'refused');
+      // The reply stands in for its row until Realtime delivers it, so the button does not flicker back
+      const stored = state.data.deskCommands;
+      if (stored && !stored.some((row) => row.id === reply.id)) {
+        const at = new Date().toISOString();
+        state.data.deskCommands = [
+          ...stored,
+          {
+            id: reply.id,
+            at,
+            host,
+            kind: 'drop',
+            args,
+            actor: 'desk',
+            status: reply.status,
+            applied_at: reply.status === 'pending' ? null : at,
+            note: reply.note
+          }
+        ];
+      }
+    })
+    .catch((error: unknown) => {
+      c.dropNotes.set(
+        key,
+        error instanceof CommandError ? error.message : 'The command failed.'
+      );
+    })
+    .finally(() => {
+      c.dropSending.delete(key);
       render();
     });
 }

@@ -266,6 +266,10 @@ export type ControlsUi = {
   prSending: Set<string>;
   /** `prCommandKey` -> why its last request failed or was refused, shown until it is used again */
   prNotes: Map<string, string>;
+  /** `dropCommandKey`s whose Drop request is in flight */
+  dropSending: Set<string>;
+  /** `dropCommandKey` -> why its last Drop failed or was refused, shown until it is used again */
+  dropNotes: Map<string, string>;
 };
 
 export type DeskState = {
@@ -357,5 +361,7 @@ export const emptyControls = (target: ControlsUi['target']): ControlsUi => ({
   labelNotes: new Map(),
   mergeConfirm: new Map(),
   prSending: new Set(),
-  prNotes: new Map()
+  prNotes: new Map(),
+  dropSending: new Set(),
+  dropNotes: new Map()
 });

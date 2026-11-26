@@ -3,6 +3,7 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { model } from '../model';
+import type { ApplyItem } from '../parsers';
 import {
   type DeskState,
   SHEET_IDS,
@@ -39,6 +40,7 @@ const actions: SheetActions = {
   },
   onTicket: vi.fn(),
   onDismiss: vi.fn(),
+  onDrop: vi.fn(),
   onSnoozedOpen: vi.fn(),
   onActFilter: vi.fn(),
   onFilter: vi.fn(),
@@ -149,6 +151,43 @@ describe('queue sheets', () => {
     expect(handoffs).toContain('Merged, hand-offs left · 1');
     expect(handoffs).toContain('check it');
     expect(handoffs).toContain('Hand-off checklist:');
+  });
+
+  it('drop a hand-off or an open apply item with its text and reason, only with controls', () => {
+    const state = filled();
+    const item: ApplyItem = {
+      text: 'agent-deploy · refused: no self-deploy within 3 hours',
+      spec: 'agent-deploy',
+      kind: 'agent-deploy',
+      args: [],
+      afterDeploy: false,
+      checked: false,
+      dropped: false,
+      outcome: 'refused: no self-deploy within 3 hours'
+    };
+    state.liveApply.set('COD-5', [item, { ...item, checked: true }]);
+    expect(body('handoffs', state).querySelector('[data-drop]')).toBeNull();
+    state.controls.target = {
+      supabaseUrl: 'https://x.supabase.co',
+      controlToken: 't'
+    };
+    const c = body('handoffs', state);
+    expect(c.querySelectorAll('[data-drop]')).toHaveLength(2);
+    fireEvent.change(
+      c.querySelector(
+        '[aria-label="Reason for dropping check it"]'
+      ) as HTMLElement,
+      { target: { value: 'moot' } }
+    );
+    fireEvent.click(c.querySelector('[aria-label="Drop check it"]') as Element);
+    expect(actions.onDrop).toHaveBeenCalledWith('COD-5', 'check it', 'moot');
+    fireEvent.click(
+      c.querySelector(`[aria-label="Drop ${item.text}"]`) as Element
+    );
+    expect(actions.onDrop).toHaveBeenCalledWith('COD-5', item.text, '');
+    expect(text(c)).toContain(
+      'Refused items are never retried: drop it, or do it by hand: cdwr agent deploy --host agent-host'
+    );
   });
 
   it('list Renovate PRs on the next sheet with GitHub and ticket links, and nothing without any', () => {

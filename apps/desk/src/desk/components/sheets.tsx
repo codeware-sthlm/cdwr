@@ -31,6 +31,8 @@ export type SheetActions = {
   onTicket: (id: string) => void;
   /** Dismisses a finding of the review, with a note that may be empty */
   onDismiss: (finding: string, note: string) => void;
+  /** Drops an open hand-off or Apply list line of a merged ticket, with a reason that may be empty */
+  onDrop: (ticket: string, item: string, note: string) => void;
   /** The Waiting on you sheet's snoozed fold */
   onSnoozedOpen: (open: boolean) => void;
   /** The Activity sheet's ticket filter */
@@ -84,7 +86,9 @@ export const SHEETS: Record<SheetId, SheetDef> = {
   handoffs: {
     title: 'Hand-offs left',
     sub: "Unticked hand-off items of merged agent tickets, from each ticket's latest Agent: PR ready comment. Tick them in Linear.",
-    Body: HandoffsBody
+    Body: ({ m, state, now, actions }) => (
+      <HandoffsBody m={m} state={state} now={now} onDrop={actions.onDrop} />
+    )
   },
   session: {
     title: 'Session',

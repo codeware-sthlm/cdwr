@@ -9,6 +9,13 @@ import type { QueueNext, QueueRenovate, SessionState } from '../types';
 import { parkedPlain, prWaitPlain } from '../view/parked';
 import { livePr } from '../view/pr';
 
+import {
+  ApplyExtras,
+  DropControl,
+  type DropCtx,
+  dropCtx,
+  isRefused
+} from './drop';
 import { Chip, Empty, Item, LoadMeter, ReasonChip } from './items';
 import {
   CHECKS,
@@ -405,12 +412,14 @@ const HandoffCard = ({
   m,
   details,
   x,
-  apply
+  apply,
+  drop
 }: {
   m: Model;
   details: ReadonlyMap<string, Detail>;
   x: { ticket: string; items?: string[] };
   apply: readonly ApplyItem[];
+  drop: DropCtx;
 }) => {
   const i: TicketRef = m.get(x.ticket);
   const when = i.completedAt
@@ -447,13 +456,22 @@ const HandoffCard = ({
             <span>
               <Inline text={t} />
             </span>
+            <DropControl ctx={drop} ticket={x.ticket} item={t} />
           </li>
         ))}
         {openApply(apply).map((a, n) => (
           <li key={'apply' + n} className={CHECK_LI}>
             <span>
               apply: <code>{a.spec}</code>
+              {isRefused(a) && a.outcome ? ` · ${a.outcome}` : null}
             </span>
+            <ApplyExtras
+              ctx={drop}
+              a={a}
+              ticket={x.ticket}
+              completedAt={i.completedAt}
+              droppable
+            />
           </li>
         ))}
       </ul>
@@ -461,9 +479,15 @@ const HandoffCard = ({
   );
 };
 
-export const HandoffsBody = ({ m, state }: BodyProps) => {
+export const HandoffsBody = ({
+  m,
+  state,
+  now,
+  onDrop
+}: BodyProps & { onDrop: DropCtx['onDrop'] }) => {
   if (!m.v) return <Empty>No queue view yet.</Empty>;
   const { details } = state;
+  const drop = dropCtx(m, state, now, onDrop);
   return (
     <>
       {m.handoffs.length ? (
@@ -476,6 +500,7 @@ export const HandoffsBody = ({ m, state }: BodyProps) => {
               details={details}
               x={x}
               apply={m.apply.get(x.ticket) ?? []}
+              drop={drop}
             />
           ))}
         </div>

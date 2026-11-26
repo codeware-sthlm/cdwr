@@ -16,6 +16,7 @@ export type CommandKind =
   | 'merge'
   | 'review'
   | 'dismiss'
+  | 'drop'
   | 'restart'
   | 'gate'
   | 'notify';
@@ -26,7 +27,7 @@ export type PrCommandKind = 'copilot' | 'merge';
 /** The kinds a tenant's sheet sends; they belong to a tenant's app or site */
 export type PlatformCommandKind = 'restart' | 'gate';
 
-/** The kinds behind a control; snooze, wake, copilot, merge and dismiss belong to a ticket or finding, review to the Review panel, and restart and gate to a tenant, so they stay in no control's state */
+/** The kinds behind a control; snooze, wake, copilot, merge, dismiss and drop belong to a ticket or finding, review to the Review panel, and restart and gate to a tenant, so they stay in no control's state */
 export type ControlKind = Exclude<
   CommandKind,
   | 'snooze'
@@ -35,6 +36,7 @@ export type ControlKind = Exclude<
   | 'merge'
   | 'review'
   | 'dismiss'
+  | 'drop'
   | 'restart'
   | 'gate'
 >;
@@ -45,13 +47,15 @@ export type CommandStatus = 'pending' | 'applied' | 'refused';
  * `value` for limit and cap; `session` for abandon, the session the desk showed; `ticket` for
  * snooze, wake, copilot and merge, and `kind` (a waiting row's kind) with `eventAt` (ISO, or
  * null) for snooze; `pr` (the number) for copilot and merge; `finding` (its id) with an
- * optional `note` for dismiss; `tenant` (its slug) for restart and gate, with `app` (the Fly
+ * optional `note` for dismiss; `ticket` with `item` (an open hand-off or Apply list line's text after its box)
+ * and `note` (a reason, or null) for drop; `tenant` (its slug) for restart and gate, with `app` (the Fly
  * app) and `sha` (the commit its machines run, or null) for restart and `action` for gate;
  * `level` with `muteUntil` (a future UTC ISO time, or null to clear the mute) for notify
  */
 export type CommandArgs = {
   finding?: string;
-  note?: string;
+  note?: string | null;
+  item?: string;
   value?: number;
   session?: string;
   ticket?: string;
@@ -380,6 +384,14 @@ export const prCommandStates = (
     const seen = newest.get(key);
     if (!seen || row.id > seen.id) newest.set(key, row);
   }
+  return settled(newest, now);
+};
+
+/** Each key's newest row as its command state, within the windows of `prCommandStates` */
+const settled = (
+  newest: ReadonlyMap<string, CommandRowLike>,
+  now: number
+): Map<string, PrCommandState> => {
   const states = new Map<string, PrCommandState>();
   for (const [key, row] of newest) {
     const age = now - Date.parse(row.applied_at ?? row.at);
@@ -392,6 +404,31 @@ export const prCommandStates = (
       states.set(key, { state: 'applied', at: row.applied_at });
   }
   return states;
+};
+
+/** The key a ticket's Drop command for one line is kept under in `dropCommandStates` */
+export const dropCommandKey = (ticket: string, item: string): string =>
+  `${ticket} ${item}`;
+
+/**
+ * Each hand-off or Apply list line's Drop command from its newest row, keyed by `dropCommandKey`;
+ * the windows are `prCommandStates`'s.
+ */
+export const dropCommandStates = (
+  rows: readonly CommandRowLike[],
+  now: number
+): Map<string, PrCommandState> => {
+  const newest = new Map<string, CommandRowLike>();
+  for (const row of rows) {
+    if (row.kind !== 'drop') continue;
+    const ticket = ticketOf(row.args);
+    const item = stringArg(row.args, 'item');
+    if (ticket === null || item === null) continue;
+    const key = dropCommandKey(ticket, item);
+    const seen = newest.get(key);
+    if (!seen || row.id > seen.id) newest.set(key, row);
+  }
+  return settled(newest, now);
 };
 
 /** Where a tenant's restart or gate command stands; a gate carries the `action` of its newest row */
