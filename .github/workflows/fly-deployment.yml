@@ -332,6 +332,8 @@ jobs:
           pr-number: ${{ needs.pre-deploy.outputs.pr-number }}
           # Shared build arguments. The per-app SENTRY_DSN, SENTRY_PROJECT and
           # SENTRY_RELEASE are added by the action from each app's `sentry` details.
+          # SENTRY_AUTH_TOKEN uploads the source maps during the build. No app
+          # reads it at runtime, so it is never passed to a deployed machine.
           build-args: |
             APP_SHA=${{ steps.meta.outputs.short-sha }}
             APP_BUILD_TIME=${{ steps.meta.outputs.build-time }}
@@ -451,12 +453,13 @@ jobs:
           env: |
             INFISICAL_SITE=${{ vars.INFISICAL_SITE }}
             SENTRY_ORG=${{ secrets.INF_SENTRY_ORG }}
-          # Sensitive secrets are also passed to app env on deployment
+          # Shared secrets: the read-everything Infisical identity. Only host
+          # deploys get them; a tenant deploy gets its pushed config instead,
+          # and an app whose github.json sets `sharedSecrets: none` gets none.
           secrets: |
             INFISICAL_CLIENT_ID=${{ secrets.INFISICAL_READ_CLIENT_ID }}
             INFISICAL_CLIENT_SECRET=${{ secrets.INFISICAL_READ_CLIENT_SECRET }}
             INFISICAL_PROJECT_ID=${{ secrets.INFISICAL_PROJECT_ID }}
-            SENTRY_AUTH_TOKEN=${{ secrets.INF_SENTRY_AUTH_TOKEN }}
           opt-out-depot-builder: ${{ vars.FLY_OPT_OUT_DEPOT }}
 
       # The release tag is the baseline `nx release` resolves the next bump from,
