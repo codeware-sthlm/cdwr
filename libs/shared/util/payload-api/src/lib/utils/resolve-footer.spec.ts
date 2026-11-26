@@ -153,6 +153,25 @@ describe('resolveFooter', () => {
     ]);
   });
 
+  it('lets an empty group leave loose links in one column', () => {
+    const footer = resolveFooter(makeSettings(), [
+      navigationTree[0],
+      { kind: 'group', key: 'group-1', label: 'Empty', children: [] },
+      navigationTree[1]
+    ]);
+
+    expect(footer?.groups).toEqual([
+      {
+        key: 'links',
+        label: null,
+        links: [
+          { key: 'nav-1', label: 'About', newTab: false, url: '/about' },
+          { key: 'nav-2', label: 'News', newTab: false, url: '/posts/news' }
+        ]
+      }
+    ]);
+  });
+
   it('renders no links when links are turned off', () => {
     const footer = resolveFooter(
       makeSettings({ linkSource: 'none' }),
@@ -286,6 +305,10 @@ describe('resolveFooter', () => {
     [
       { licence: 'MIT', licenceUrl: 'https://example.com/LICENSE' },
       { label: 'MIT', url: 'https://example.com/LICENSE', newTab: true }
+    ],
+    [
+      { licence: 'MIT', licenceUrl: 'HTTPS://example.com/LICENSE' },
+      { label: 'MIT', url: 'HTTPS://example.com/LICENSE', newTab: true }
     ],
     [
       { licence: 'MIT', licenceUrl: 'javascript:alert(1)' },

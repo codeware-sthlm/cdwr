@@ -19,6 +19,8 @@ describe('isSafeLinkHref', () => {
     'vbscript:msgbox',
     '//evil.example',
     '/\\evil.example',
+    '/\t/evil.example',
+    '/\n/evil.example',
     'licence',
     'mailto:a@b.com',
     '',
