@@ -254,6 +254,7 @@ cdwr agent usage [--days 30]   # API-equivalent spend by day, role, model and ti
 cdwr agent usage-record [--days 3] [--kind both] [--hours 6]   # upsert that spend into the telemetry database: day rows (this repo) and hour rows (every Claude project); --dry-run prints the rows
 cdwr agent platform-record [--dry-run]   # upsert tenant and platform state (db, Fly, health, Infisical flags, Sentry, Umami, deploy state) into tenant_state, then sends an urgent notice for each new `down` or new production Sentry issue (state in platform-alerts.json); the scheduler runs it each tick
 cdwr agent backup   # pg_dump the cms payload schema into the queue home's backups/, keep 7; the scheduler runs it nightly with PLATFORM_BACKUP_DATABASE_URL
+cdwr agent sweep   # check the platform for silent drift (orphan preview apps, apps pending two sweeps, the spend ledger) and write sweep.json in the queue home; the scheduler runs it daily from 03:00 with FLY_API_TOKEN
 … | cdwr agent activity [--runs <file>]   # activity rows and a table from a Linear history response on stdin
 cdwr agent notify [all|action]   # which notices are sent; no argument shows the level
 cdwr agent attend [COD-n] [--path <dir>] [--no-start]   # refresh codeware-queue to origin/main, then start /work-queue there

@@ -771,6 +771,74 @@ record_backup() {
   return 0
 }
 
+# A daily check of the platform for silent drift, made by `cdwr agent sweep`, which writes
+# sweep.json to $HOME_DIR. Run like record_backup: every tick, a paused one too, but started only
+# once a day from 03:00 local time (after the backup), with a sweep-ran-on stamp, a sweep.lock
+# directory taken over after 20 minutes, a deadline (AGENT_QUEUE_SWEEP_DEADLINE, default 10
+# minutes) and AGENT_QUEUE_SWEEP_HOUR for tests. A failure goes to sweep-failed and is warned about
+# at most once an hour. The finding keys the previous sweep.json didn't have (its `new`) go out as
+# one action notice. The pull request reads sign with a read-only app token, else go anonymous.
+# Without FLY_API_TOKEN it does nothing.
+sweep_warn() {
+  local stamp="$HOME_DIR/sweep-warned-at" last
+  note "warn: sweep: $1"
+  last="$(cat "$stamp" 2>/dev/null)"
+  [[ "$last" == <-> ]] || last=0
+  (( $(date +%s) - last > 3600 )) || return 0
+  date +%s > "$stamp"
+  record warn "" "sweep: $1"
+  notice action sweep "Sweep: $1"
+}
+record_sweep() {
+  $check && return 0
+  setopt local_options no_err_exit
+  [[ -n "${FLY_API_TOKEN:-}" ]] || return 0
+  local lockdir="$HOME_DIR/sweep.lock" failed="$HOME_DIR/sweep-failed" deadline="${AGENT_QUEUE_SWEEP_DEADLINE:-600}" hour today
+  if [[ -r "$failed" ]]; then
+    sweep_warn "$(cat "$failed")"
+    rm -f "$failed"
+  fi
+  hour="${AGENT_QUEUE_SWEEP_HOUR:-$(date +%H)}"
+  [[ "$hour" == <-> ]] || return 0
+  (( 10#$hour >= 3 )) || return 0
+  today="$(date +%F)"
+  [[ "$(cat "$HOME_DIR/sweep-ran-on" 2>/dev/null)" == "$today" ]] && return 0
+  if [[ -d "$lockdir" && -n "$(find "$lockdir" -maxdepth 0 -mmin +20 2>/dev/null)" ]]; then
+    rm -rf "$lockdir" && note "warn: cleared sweep.lock; its run is gone"
+  fi
+  mkdir "$lockdir" 2>/dev/null || return 0
+  print -r -- "$today" > "$HOME_DIR/sweep-ran-on"
+  rm -f "$HOME_DIR/sweep-timeout"
+  note "sweep: started"
+  ( cd "$REPO" || { rmdir "$lockdir"; exit 0; }
+    gh_read="$( { app_env "$REPO/tools/cdwr/.env" && app_token '{"pull_requests":"read","metadata":"read"}' &&
+      print -r -- "$GH_TOKEN"; } 2>"$LOGS/github-app.sweep.err" )" || {
+      gh_read=""
+      note "warn: sweep: the pull request reads go anonymous: $(tr '\n' ' ' < "$LOGS/github-app.sweep.err" | sed 's/ *$//')"
+    }
+    rm -f "$LOGS/github-app.sweep.err"
+    FLY_API_TOKEN="$FLY_API_TOKEN" PLATFORM_GITHUB_TOKEN="$gh_read" AGENT_QUEUE_HOME="$HOME_DIR" \
+      node tools/cdwr/bin/cdwr.mjs agent sweep --yes --json >/dev/null 2>&1 </dev/null &
+    cpid=$!
+    ( sleep "$deadline"; : > "$HOME_DIR/sweep-timeout"; kill -TERM $cpid 2>/dev/null ) &
+    watchdog=$!
+    wait $cpid
+    rc=$?
+    kill $watchdog 2>/dev/null
+    if [[ -e "$HOME_DIR/sweep-timeout" ]]; then
+      rm -f "$HOME_DIR/sweep-timeout"
+      print -r -- "cdwr agent sweep timed out after ${deadline}s" > "$failed"
+    elif (( rc != 0 )); then
+      print -r -- "cdwr agent sweep failed ($rc)" > "$failed"
+    else
+      added="$(jq -r '.new // [] | if length > 0 then "\(length) new: \(.[:5] | join(", "))\(if length > 5 then ", …" else "" end)" else empty end' \
+        "$HOME_DIR/sweep.json" 2>/dev/null)" || added=""
+      [[ -z "$added" ]] || notice action sweep "Sweep: $added"
+    fi
+    rmdir "$lockdir" 2>/dev/null ) &!
+  return 0
+}
+
 # A pause is deliberate: the tick takes no lock and still checks in ok, so the monitor does not
 # alert. It publishes its queue state below, once that can be written.
 paused=false
@@ -793,6 +861,7 @@ if ! $paused; then
 fi
 record_platform
 record_backup
+record_sweep
 CHECKIN_ID=""
 
 source "${0:A:h}/lib.sh"
