@@ -40,6 +40,8 @@ import type {
   CreateAppResponse,
   DeployAppOptions,
   DeployResponse,
+  DestroyAppOptions,
+  DestroyAppResponse,
   ListAppResponse,
   ListCertForAllResponse,
   ListCertForAppResponse,
@@ -233,23 +235,43 @@ export class Fly {
      * Destroy an application and make sure it gets detached from any Postgres clusters
      *
      * @param app - The name of the app to destroy
-     * @throws An error if the app cannot be destroyed
+     * @param options - Options for destroying an application
+     * @returns The Postgres clusters that could not be detached, when `allowDetachFailure` is set
+     * @throws An error if the app cannot be destroyed, or a cluster cannot be detached without `allowDetachFailure`
      */
-    destroy: async (app: string): Promise<void> => {
+    destroy: async (
+      app: string,
+      options?: DestroyAppOptions
+    ): Promise<DestroyAppResponse> => {
       try {
         await this.ensureInitialized();
+        const detachFailures: DestroyAppResponse['detachFailures'] = [];
         // First any Postgres clusters must be detached
         const attachedClusters = await this.getAttachedPostgresClusters(app);
         for (const cluster of attachedClusters) {
           this.logger.info(
             `Detaching Postgres cluster '${cluster}' from application '${app}'`
           );
-          const output = await this.detachPostgres(cluster, app);
-          this.logger.info(output);
+          try {
+            const output = await this.detachPostgres(cluster, app);
+            this.logger.info(output);
+          } catch (error) {
+            if (!options?.allowDetachFailure) {
+              throw error;
+            }
+            const message =
+              error instanceof Error ? error.message : String(error);
+            // Not an error: the caller allowed it and gets it in `detachFailures`
+            this.logger.info(
+              `Failed to detach Postgres cluster '${cluster}' from application '${app}', destroying it anyway\n${message}`
+            );
+            detachFailures.push({ cluster, error: message });
+          }
         }
         // Now it's safe to destroy the app
         await this.destroyApp(app);
         this.logger.info(`Application '${app}' was destroyed`);
+        return { detachFailures };
       } catch (error) {
         throw new Error(
           `[destroy app] something broke, check your apps\n${error}`,

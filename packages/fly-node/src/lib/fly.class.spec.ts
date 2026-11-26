@@ -810,6 +810,67 @@ describe('Fly', () => {
       assertSpawn('not', ['postgres', 'detach']);
     });
 
+    it('should return no detach failures when the detach succeeds', async () => {
+      const fly = new Fly(mockFlyConfig);
+      const response = await fly.apps.destroy(mockDefs.testApp, {
+        allowDetachFailure: true
+      });
+
+      expect(response).toEqual({ detachFailures: [] });
+    });
+
+    it('should throw and not destroy when the detach fails', async () => {
+      mockSpawnPty.mockRejectedValueOnce(
+        new Error('no 6pn ips founds for pg-preview app')
+      );
+      const fly = new Fly(mockFlyConfig);
+
+      await expect(fly.apps.destroy(mockDefs.testApp)).rejects.toThrow(
+        /no 6pn ips founds/
+      );
+      assertSpawn('not', ['apps', 'destroy']);
+    });
+
+    it('should destroy anyway and return the failure when the detach fails and failure is allowed', async () => {
+      mockSpawnPty.mockRejectedValueOnce(
+        new Error('no 6pn ips founds for pg-preview app')
+      );
+      const fly = new Fly(mockFlyConfig);
+      const response = await fly.apps.destroy(mockDefs.testApp, {
+        allowDetachFailure: true
+      });
+
+      assertSpawn('exact', ['apps', 'destroy', mockDefs.testApp, '--yes']);
+      expect(response).toEqual({
+        detachFailures: [
+          {
+            cluster: mockDefs.postgresAttached,
+            error: expect.stringContaining(
+              'no 6pn ips founds for pg-preview app'
+            )
+          }
+        ]
+      });
+      expect(mockConsoleInfo).toHaveBeenCalledWith(
+        expect.stringMatching(/Failed to detach Postgres cluster/)
+      );
+    });
+
+    it('should throw when the destroy fails even when detach failure is allowed', async () => {
+      setupFlyMocks([
+        {
+          cmdMatch: /apps destroy/,
+          resolveOrReject: 'reject',
+          output: 'destroy failed'
+        }
+      ]);
+      const fly = new Fly(mockFlyConfig);
+
+      await expect(
+        fly.apps.destroy(mockDefs.testApp, { allowDetachFailure: true })
+      ).rejects.toThrow(/destroy failed/);
+    });
+
     it('should list applications', async () => {
       const fly = new Fly(mockFlyConfig);
       const response = await fly.apps.list();
