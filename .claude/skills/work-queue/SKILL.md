@@ -368,11 +368,12 @@ to **What to take next**.
    a blank line and then this hint, word for word:
 
    ```md
-   _To drop an item without doing it, strike it through and leave it unticked, or say why in a comment._
+   _To drop an item, use Drop on the desk, or reply to this comment with `drop:` and the item's number or text, then why._
    ```
 
-   An unticked item struck through (`- [ ] ~~item~~`, a reason may follow) is dropped: it no
-   longer waits, in the merge notice, on the Desk or in "Queue waiting on you".
+   Håkan can't edit the app's comment, so the scheduler makes the drop for him: it strikes the
+   line through as `- [ ] ~~item~~ dropped: <reason>`. An unticked item struck through is
+   dropped: it no longer waits, in the merge notice, on the Desk or in "Queue waiting on you".
 
    The checklist holds what Håkan does after the merge, nothing else. A question or an open
    review thread goes under what is left open for him: once answered, the agent handles it,
