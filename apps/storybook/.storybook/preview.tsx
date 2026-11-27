@@ -61,7 +61,12 @@ const withPayload: Decorator = (Story, context) => {
             window.location.href = path;
           }
         },
-        payloadUrl: 'http://localhost:3000',
+        // A story overrides this through `parameters.payloadUrl` to load
+        // assets from Storybook's own static dirs
+        payloadUrl:
+          typeof context.parameters['payloadUrl'] === 'string'
+            ? context.parameters['payloadUrl']
+            : 'http://localhost:3000',
         submitForm: async () => ({
           success: false,
           data: { error: 'Not implemented in Storybook' }

@@ -14,7 +14,8 @@ import { BlockGalleryBlock } from './BlockGalleryBlock';
 const meta = {
   title: 'cms-renderer/BlockGalleryBlock',
   component: BlockGalleryBlock,
-  parameters: { layout: 'padded' }
+  // Storybook serves the cms's public/blocks itself, on its own origin
+  parameters: { layout: 'padded', payloadUrl: '' }
 } satisfies Meta<typeof BlockGalleryBlock>;
 
 export default meta;

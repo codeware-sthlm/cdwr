@@ -141,7 +141,8 @@ describe('BlockGalleryBlock index', () => {
             colorScheme: 'light',
             lockedColorScheme: 'light',
             locale: 'en',
-            getSearchParam: () => null
+            getSearchParam: () => null,
+            payloadUrl: 'https://cms.test'
           } as unknown as PayloadValue
         }
       >
@@ -198,7 +199,7 @@ describe('BlockGalleryBlock index', () => {
 
       const card = screen.getByText('callout').closest('li') as HTMLElement;
       expect(card.querySelector('img')?.getAttribute('src')).toBe(
-        '/blocks/callout.svg'
+        'https://cms.test/blocks/callout.svg'
       );
       expect(screen.queryByTestId('block-thumbnail')).toBe(null);
       expect(container.querySelectorAll('li img').length).toBe(
