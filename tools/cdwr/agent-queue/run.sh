@@ -243,6 +243,7 @@ query($n: Int!) {
         nodes { requestedReviewer { __typename ... on Bot { login } ... on User { login } } }
       }
       reviews(last: 50) { nodes { author { login } } }
+      latestReviews(first: 20) { nodes { state commit { oid } author { __typename login } } }
       timelineItems(last: 1, itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT]) {
         nodes { ... on RemovedFromMergeQueueEvent { reason createdAt } }
       }
@@ -306,17 +307,23 @@ copilot_token() { print -r -- "${AGENT_COPILOT_TOKEN:-}"; }
 # desk_pr_check <copilot|merge> <ticket> <pr>: prints `ok <node id> <head oid>` when the command
 # may go ahead, else the reason to refuse it. Only a PR the watch already holds for that ticket is
 # touched, so a desk token reaches no other PR, and the PR is read again here, as the app, so a desk
-# showing old data can't merge a PR that changed since. Run it in a command substitution.
+# showing old data can't merge a PR that changed since. A merge reads main's branch rules too, and
+# refuses when they can't be read (desk_verdict). Run it in a command substitution.
 desk_pr_check() {
   setopt local_options no_err_exit
-  local kind=$1 ticket=$2 pr=$3 node
+  local kind=$1 ticket=$2 pr=$3 node rules=null
   [[ "$ticket" == COD-<-> && "$pr" == <-> ]] || { print -r -- "bad ticket or PR"; return 0; }
   jq -e --arg t "$ticket" --argjson pr "$pr" '.[$t].pr == $pr' "$HOME_DIR/watch.json" >/dev/null 2>&1 ||
     { print -r -- "PR $pr is not watched for $ticket"; return 0; }
   gh_identity || { print -r -- "no GitHub app"; return 0; }
   node="$(gh api graphql -f query="$PR_QUERY" -F n="$pr" --jq '.data.repository.pullRequest' 2>/dev/null)"
   [[ -n "$node" && "$node" != null ]] || { print -r -- "could not read PR $pr"; return 0; }
-  watch -r --arg kind "$kind" 'include "watch"; desk_verdict($kind)' <<<"$node" ||
+  if [[ "$kind" == merge ]]; then
+    # Anything but a JSON array would break --argjson; null refuses the merge
+    rules="$(gh api 'repos/codeware-sthlm/cdwr/rules/branches/main?per_page=100' 2>/dev/null)"
+    jq -e 'type == "array"' >/dev/null 2>&1 <<<"$rules" || rules=null
+  fi
+  watch -r --arg kind "$kind" --argjson rules "$rules" 'include "watch"; desk_verdict($kind; $rules)' <<<"$node" ||
     print -r -- "watch.jq failed$(watch_err)"
 }
 
@@ -359,7 +366,7 @@ copilot_request() {
 # in a command substitution.
 desk_pr_act() {
   setopt local_options no_err_exit
-  local kind=$1 pr=$2 id=$3 oid=$4 out=""
+  local kind=$1 pr=$2 id=$3 oid=$4 out="" msg
   [[ "$kind" == copilot ]] && { copilot_request "$pr"; return; }
   gh_identity || { print -r -- "no GitHub app"; return 1; }
   case "$kind" in
@@ -367,6 +374,9 @@ desk_pr_act() {
       out="$(gh api graphql -f query="$ENQUEUE" -f id="$id" -f oid="$oid" 2>&1)" && return 0 ;;
     *) out="unknown kind" ;;
   esac
+  # GitHub's own words when a line of the output is its JSON error body, else the first line
+  msg="$(jq -Rrn '[inputs | fromjson? | objects | .errors?[0]?.message? // empty | strings] | first // empty' <<<"$out" 2>/dev/null)"
+  [[ -n "$msg" ]] && out=$msg
   out=${out%%$'\n'*}
   print -r -- "${out[1,160]:-GitHub refused}"
   return 1
@@ -1424,7 +1434,8 @@ watch_prs() {
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
   local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy ev
-  # Main's branch rules, read once a run and only for a PR that needs Håkan's review (review_paths)
+  # Main's branch rules, read once a run on the first PR, whatever its reviewDecision says: GitHub
+  # reads null for a required_reviewers rule (ruleset_gate)
   local rules=null rules_read=false
   gh_identity_or_note
   # The hold list sits beside watch.jq. Unread, no PR merges on its own
@@ -1482,12 +1493,12 @@ watch_prs() {
       state="$(jq -c --arg id "$id" 'del(.[$id])' <<<"$state")"
       continue
     fi
-    if [[ "$rules_read" == false && "$(jq -r '.reviewDecision // ""' <<<"$now")" == REVIEW_REQUIRED ]]; then
+    if [[ "$rules_read" == false ]]; then
       rules_read=true
       # Anything but a JSON array would break --argjson for every PR after this one
-      rules="$(gh_read gh api repos/codeware-sthlm/cdwr/rules/branches/main)" &&
+      rules="$(gh_read gh api 'repos/codeware-sthlm/cdwr/rules/branches/main?per_page=100')" &&
         jq -e 'type == "array"' >/dev/null 2>&1 <<<"$rules" ||
-        { rules=null; note "warn: watch: main's branch rules were not read, so no review paths"; }
+        { rules=null; note "warn: watch: main's branch rules were not read, so no PR merges on its own this run"; }
     fi
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --argjson holds "$holds" --argjson rules "$rules" --arg at "$(date -u +%FT%TZ)" '
@@ -1495,8 +1506,9 @@ watch_prs() {
       {id: $id, agentLabel: $agentLabel, pr: $pr, title: ($now.title // null), now: ($now | pr_state), prev: $state[$id],
        handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
        apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null),
-       reviewPaths: ($now | review_paths($rules)),
-       merge:(if $holds == null then null else ($now | merge_verdict($node; $holds)) end)} | step')" ||
+       reviewPaths: ($now | review_paths($rules)), reviewNeeded: ($now | review_needed($rules)),
+       reviewApproved: ($now | ruleset_gate($rules).approved),
+       merge:(if $holds == null then null else ($now | merge_verdict($node; $holds; $rules)) end)} | step')" ||
       { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do
       [[ -z "$level" ]] && continue

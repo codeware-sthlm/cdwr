@@ -36,7 +36,8 @@ const READS = [
   // read_deploy: the push runs of a merge commit (one list), the deploy's jobs and annotations
   /^gh api "repos\/codeware-sthlm\/cdwr\/(actions\/(runs\?head_sha=|runs\/\$rid\/jobs\?per_page=100)|check-runs\/\$job\/annotations)/,
   // watch_prs: main's branch rules, for the paths a PR needs Håkan's review on
-  /^gh api repos\/codeware-sthlm\/cdwr\/rules\/branches\/main\)/
+  // and desk_pr_check's, for a merge
+  /^gh api '?repos\/codeware-sthlm\/cdwr\/rules\/branches\/main(\?per_page=100)?'?( 2>\/dev\/null)?\)/
 ];
 
 // page_warn and page_check as written in run.sh, for the steps that call them
@@ -51,6 +52,9 @@ const COPILOT_REQUEST =
   SCRIPT.match(/^copilot_request\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
 const DESK_PR_ACT =
   SCRIPT.match(/^desk_pr_act\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+
+const DESK_PR_CHECK =
+  SCRIPT.match(/^desk_pr_check\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
 
 const ghCalls = (text: string) =>
   text
@@ -2454,6 +2458,10 @@ describe('run.sh watch_prs', () => {
         ...opts.pr
       })
     );
+    // No rules that name a path, unless the test wrote its own
+    if (!existsSync(join(root, 'rules.json'))) {
+      writeFileSync(join(root, 'rules.json'), '[]');
+    }
     const script = [
       `ROOT="${root}"; HOME_DIR="${root}"; OTHER_REPOS='[]'; WATCHED=w; WATCH_LABELS=l; PR_QUERY=q`,
       // The real hold list, or a directory with none
@@ -2534,6 +2542,7 @@ describe('run.sh watch_prs', () => {
     const entries = () =>
       Object.values(JSON.parse(read('watch.json'))) as {
         reviewPaths: unknown;
+        reviewNeeded: unknown;
       }[];
 
     it('reads main’s rules once a run and stores the matched paths', () => {
@@ -2547,15 +2556,40 @@ describe('run.sh watch_prs', () => {
         ['apps/agent-host/entrypoint.sh'],
         ['apps/agent-host/entrypoint.sh']
       ]);
+      expect(entries().map((e) => e.reviewNeeded)).toEqual([true, true]);
     });
 
-    it('reads no rules for a PR that needs no review', () => {
+    it('reads the rules whatever the review decision says', () => {
       writeFileSync(join(root, 'rules.json'), JSON.stringify(rules));
       run('feature/cod-5', [[ticket]], false, {
-        pr: { reviewDecision: 'APPROVED', files }
+        pr: { reviewDecision: null, files }
       });
-      expect(read('rules-reads')).toBe('');
-      expect(entries().map((e) => e.reviewPaths)).toEqual([null]);
+      expect(read('rules-reads').split('\n').filter(Boolean)).toHaveLength(1);
+      expect(entries().map((e) => e.reviewPaths)).toEqual([
+        ['apps/agent-host/entrypoint.sh']
+      ]);
+      expect(entries().map((e) => e.reviewNeeded)).toEqual([true]);
+    });
+
+    it('needs no review once a person approved', () => {
+      writeFileSync(join(root, 'rules.json'), JSON.stringify(rules));
+      run('feature/cod-5', [[ticket]], false, {
+        pr: {
+          reviewDecision: 'APPROVED',
+          headRefOid: 'h9',
+          files,
+          latestReviews: {
+            nodes: [
+              {
+                state: 'APPROVED',
+                commit: { oid: 'h9' },
+                author: { __typename: 'User' }
+              }
+            ]
+          }
+        }
+      });
+      expect(entries().map((e) => e.reviewNeeded)).toEqual([false]);
     });
 
     it('notes rules it could not read and stores no paths', () => {
@@ -2568,6 +2602,7 @@ describe('run.sh watch_prs', () => {
       expect(read('notes')).toContain("main's branch rules were not read");
       expect(read('notes')).not.toContain('watch.jq failed');
       expect(entries().map((e) => e.reviewPaths)).toEqual([null, null]);
+      expect(entries().map((e) => e.reviewNeeded)).toEqual([false, false]);
     });
   });
 
@@ -6088,7 +6123,11 @@ describe('run.sh apply list', () => {
 describe('watch.jq desk_verdict', () => {
   requireTools('jq');
   const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
-  const verdict = (kind: string, pr: Record<string, unknown>) =>
+  const verdict = (
+    kind: string,
+    pr: Record<string, unknown>,
+    rules: unknown = []
+  ) =>
     execFileSync(
       'jq',
       [
@@ -6098,7 +6137,10 @@ describe('watch.jq desk_verdict', () => {
         '--arg',
         'kind',
         kind,
-        'include "watch"; desk_verdict($kind)'
+        '--argjson',
+        'rules',
+        JSON.stringify(rules),
+        'include "watch"; desk_verdict($kind; $rules)'
       ],
       { input: JSON.stringify(pr), encoding: 'utf8' }
     ).trim();
@@ -6109,6 +6151,7 @@ describe('watch.jq desk_verdict', () => {
     isDraft: false,
     mergeable: 'MERGEABLE',
     mergeQueueEntry: null,
+    files: { nodes: [] },
     commits: {
       nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }]
     },
@@ -6161,6 +6204,44 @@ describe('watch.jq desk_verdict', () => {
     expect(verdict('merge', ready(over))).toBe(why);
   });
 
+  it('refuses a merge of a watched file until a person approves, and one with no rules read', () => {
+    const rules = [
+      {
+        type: 'pull_request',
+        parameters: { required_reviewers: [{ file_patterns: ['a/**'] }] }
+      }
+    ];
+    const files = { nodes: [{ path: 'a/x.sh' }] };
+    expect(verdict('merge', ready({ files }), rules)).toBe(
+      "needs Håkan's approval on GitHub (a/x.sh)"
+    );
+    expect(
+      verdict(
+        'merge',
+        ready({
+          files,
+          latestReviews: {
+            nodes: [
+              {
+                state: 'APPROVED',
+                commit: { oid: 'abc123' },
+                author: { __typename: 'User' }
+              }
+            ]
+          }
+        }),
+        rules
+      )
+    ).toBe('ok PR_node abc123');
+    expect(verdict('merge', ready({ files }), null)).toBe(
+      "main's branch rules were not read"
+    );
+    // A Copilot request has no use for the rules
+    expect(verdict('copilot', ready({ files }), null)).toBe(
+      'ok PR_node abc123'
+    );
+  });
+
   it('refuses a Copilot request once one is asked or done', () => {
     expect(
       verdict(
@@ -6186,6 +6267,88 @@ describe('watch.jq desk_verdict', () => {
         })
       )
     ).toBe('Copilot has reviewed it');
+  });
+});
+
+// desk_pr_act reports GitHub's own words for a refused merge; desk_pr_check reads main's rules
+describe('desk_pr_act and desk_pr_check', () => {
+  requireTools('jq');
+  const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'desk-pr-'));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const sh = (lines: string[]) =>
+    spawnSync('zsh', ['-c', lines.join('\n')], { encoding: 'utf8' });
+
+  const act = (ghBody: string) =>
+    sh([
+      'ENQUEUE=q',
+      'gh_identity() { return 0; }',
+      `gh() { cat <<'EOF'\n${ghBody}\nEOF\n return 1; }`,
+      DESK_PR_ACT,
+      'desk_pr_act merge 5 PR_1 abc',
+      'print -r -- "rc=$?"'
+    ]);
+
+  it('prints the message of a GraphQL error body, cut to 160', () => {
+    const message = `Pull request is not mergeable: ${'x'.repeat(300)}`;
+    const body = JSON.stringify({
+      data: { enqueuePullRequest: null },
+      errors: [{ type: 'UNPROCESSABLE', message }]
+    });
+    const r = act(`gh: something went wrong\n${body}`);
+    expect(r.stdout).toBe(`${message.slice(0, 160)}\nrc=1\n`);
+  });
+
+  it('keeps the first line when the output carries no error body', () => {
+    const r = act('gh: HTTP 502\nsecond line');
+    expect(r.stdout).toBe('gh: HTTP 502\nrc=1\n');
+  });
+
+  const check = (ghStub: string) => {
+    writeFileSync(
+      join(root, 'watch.json'),
+      JSON.stringify({ 'COD-5': { pr: 7 } })
+    );
+    return sh([
+      `HOME_DIR="${root}"; PR_QUERY=q; WATCH_DIR="${dir}"`,
+      'gh_identity() { return 0; }',
+      `watch() { jq -L "${dir}" "$@"; }`,
+      'watch_err() { :; }',
+      ghStub,
+      DESK_PR_CHECK,
+      'desk_pr_check merge COD-5 7'
+    ]);
+  };
+  const node = JSON.stringify({
+    id: 'PR_node',
+    headRefOid: 'abc123',
+    state: 'OPEN',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    mergeQueueEntry: null,
+    files: { nodes: [{ path: 'a/x.sh' }] },
+    commits: {
+      nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }]
+    },
+    reviewThreads: { nodes: [] }
+  });
+
+  it("refuses a merge when main's branch rules can't be read", () => {
+    const r = check(
+      `gh() { [[ "$1 $2" == "api graphql" ]] && { print -r -- '${node}'; return 0; }; return 1; }`
+    );
+    expect(r.stdout.trim()).toBe("main's branch rules were not read");
+  });
+
+  it('lets a merge through when the rules are read and name no match', () => {
+    const r = check(
+      `gh() { if [[ "$1 $2" == "api graphql" ]]; then print -r -- '${node}'; else print -r -- '[]'; fi; }`
+    );
+    expect(r.stdout.trim()).toBe('ok PR_node abc123');
   });
 });
 
