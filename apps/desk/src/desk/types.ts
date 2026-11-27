@@ -210,6 +210,8 @@ export type WatchEntry = {
   reviewNeeded?: boolean;
   /** The changed files main's ruleset requires a review for; null or missing when unread or not needed */
   reviewPaths?: string[] | null;
+  /** Why main's ruleset refuses the merge (watch.jq `ruleset_gate`), including when it could not check; null when it would not */
+  reviewWhy?: string | null;
   /** When the host last wrote the entry, ISO; null without one */
   at: string | null;
 };

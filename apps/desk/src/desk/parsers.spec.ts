@@ -1310,6 +1310,7 @@ describe('parseWatch', () => {
     copilot: 'requested',
     reviewNeeded: true,
     reviewPaths: ['apps/agent-host/x.sh', 7],
+    reviewWhy: "needs Håkan's approval on GitHub (apps/agent-host/x.sh)",
     mergeStateStatus: 'CLEAN',
     at: '2026-11-08T10:00:00Z',
     removedAt: null
@@ -1328,6 +1329,7 @@ describe('parseWatch', () => {
       copilot: 'requested',
       reviewNeeded: true,
       reviewPaths: ['apps/agent-host/x.sh'],
+      reviewWhy: "needs Håkan's approval on GitHub (apps/agent-host/x.sh)",
       at: '2026-11-08T10:00:00Z'
     });
   });
@@ -1347,6 +1349,7 @@ describe('parseWatch', () => {
       copilot: null,
       reviewNeeded: false,
       reviewPaths: null,
+      reviewWhy: null,
       at: null
     });
   });
@@ -1365,6 +1368,7 @@ describe('parseWatch', () => {
           copilot: 'maybe',
           reviewNeeded: 'yes',
           reviewPaths: 'a.ts',
+          reviewWhy: 7,
           at: 7
         }
       }).get('COD-1')
@@ -1380,6 +1384,7 @@ describe('parseWatch', () => {
       copilot: null,
       reviewNeeded: false,
       reviewPaths: null,
+      reviewWhy: null,
       at: null
     });
   });
