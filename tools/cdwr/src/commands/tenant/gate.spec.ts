@@ -59,9 +59,9 @@ describe('tenant gate', () => {
     });
 
     expect(exit).not.toBe(EXIT.ok);
-    expect(stdout.join('\n')).toContain(
-      'No tenant under /tenants in production'
-    );
+    const { error } = JSON.parse(stdout.join('\n'));
+    expect(error.message).toBe('No tenant under /tenants in production');
+    expect(error.hint).toContain('INFISICAL_PROJECT_ID');
   });
 
   it('closes a tenant on production, revealing the password once', async () => {
