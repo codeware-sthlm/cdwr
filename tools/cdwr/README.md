@@ -444,7 +444,8 @@ delays the deploy by one run.
 the scheduler's only GitHub writes. It acts only on a PR that its `watch.json` already holds for
 that ticket, reads the PR again as the `codeware-agent` app (never your login), and checks it with
 `desk_verdict` in `watch.jq` before the ack: a merge needs green checks, no conflict, every review
-thread resolved and no merge-queue entry, and a Copilot request needs no Copilot review asked or
+thread resolved, no merge-queue entry, and your approval on GitHub when the PR changes a file
+main's `required_reviewers` rule covers (it reads main's branch rules too, and refuses when it can't), and a Copilot request needs no Copilot review asked or
 done. The desk greys the buttons out by the same rules, read from `queue_state.watch`. A `merge`
 adds the PR to main's merge queue (`enqueuePullRequest` with the head it checked), so it ends like a
 merge on GitHub: the watch sees it merged and the hand-offs stay. A `copilot` asks for
