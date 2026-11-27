@@ -1308,6 +1308,8 @@ describe('parseWatch', () => {
     mergeable: 'MERGEABLE',
     ci: 'SUCCESS',
     copilot: 'requested',
+    reviewNeeded: true,
+    reviewPaths: ['apps/agent-host/x.sh', 7],
     mergeStateStatus: 'CLEAN',
     at: '2026-11-08T10:00:00Z',
     removedAt: null
@@ -1324,6 +1326,8 @@ describe('parseWatch', () => {
       mergeable: 'MERGEABLE',
       ci: 'SUCCESS',
       copilot: 'requested',
+      reviewNeeded: true,
+      reviewPaths: ['apps/agent-host/x.sh'],
       at: '2026-11-08T10:00:00Z'
     });
   });
@@ -1341,6 +1345,8 @@ describe('parseWatch', () => {
       mergeable: null,
       ci: null,
       copilot: null,
+      reviewNeeded: false,
+      reviewPaths: null,
       at: null
     });
   });
@@ -1357,6 +1363,8 @@ describe('parseWatch', () => {
           mergeable: 'MAYBE',
           ci: 3,
           copilot: 'maybe',
+          reviewNeeded: 'yes',
+          reviewPaths: 'a.ts',
           at: 7
         }
       }).get('COD-1')
@@ -1370,6 +1378,8 @@ describe('parseWatch', () => {
       mergeable: null,
       ci: null,
       copilot: null,
+      reviewNeeded: false,
+      reviewPaths: null,
       at: null
     });
   });

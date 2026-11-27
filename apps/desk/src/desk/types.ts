@@ -182,7 +182,7 @@ export type QueueAfter = {
   held?: string | null;
   /** The PR's GitHub review decision is APPROVED; older views have none */
   approved?: boolean;
-  /** The PR's GitHub review decision is REVIEW_REQUIRED: main's ruleset wants Håkan's review */
+  /** main's ruleset wants Håkan's approval on GitHub and he has not given it (the watch's reviewNeeded) */
   reviewRequired?: boolean;
   /** The changed files main's ruleset requires a review for; null when unread or not needed */
   reviewPaths?: string[] | null;
@@ -206,6 +206,10 @@ export type WatchEntry = {
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' | null;
   ci: string | null;
   copilot: 'none' | 'requested' | 'reviewed' | null;
+  /** main's ruleset wants Håkan's approval on GitHub and he has not given it; false for an entry without the field */
+  reviewNeeded?: boolean;
+  /** The changed files main's ruleset requires a review for; null or missing when unread or not needed */
+  reviewPaths?: string[] | null;
   /** When the host last wrote the entry, ISO; null without one */
   at: string | null;
 };

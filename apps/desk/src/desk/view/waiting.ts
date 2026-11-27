@@ -172,6 +172,15 @@ export const forgetLabelled = (
     if (!listed.has(ticket)) labelled.delete(ticket);
 };
 
+/** What the watch's verdict starts with while a ruleset review is missing */
+const RULESET_HELD = "needs Håkan's approval on GitHub";
+
+/** The watch's verdict while a ruleset review is missing, in its words (watch.jq `ruleset_gate`): the first path, the rest counted */
+const needsApproval = (paths: readonly string[]): string =>
+  paths.length === 0
+    ? RULESET_HELD
+    : `${RULESET_HELD} (${paths[0]}${paths.length > 1 ? `, +${paths.length - 1} more` : ''})`;
+
 /** Why the scheduler would refuse to merge the PR, in its words (watch.jq `desk_verdict`); null when it would not */
 export const mergeBlocker = (e: WatchEntry): string | null => {
   if (e.state === 'merged' || e.state === 'closed') return `PR is ${e.state}`;
@@ -185,6 +194,7 @@ export const mergeBlocker = (e: WatchEntry): string | null => {
   if (e.ci !== 'SUCCESS') return `checks ${e.ci.toLowerCase()}`;
   if (e.threads > 0)
     return `${e.threads} unresolved ${e.threads === 1 ? 'thread' : 'threads'}`;
+  if (e.reviewNeeded === true) return needsApproval(e.reviewPaths ?? []);
   return null;
 };
 
@@ -236,12 +246,9 @@ export const rowLabel = (r: WaitRow): string =>
           ? `cleanup · ${r.count ?? 0}`
           : r.kind;
 
-/** The merge verdict the watch gives while a ruleset review is missing */
-const RULESET_HELD = "the ruleset requires Håkan's review";
-
 /** Whether the watch's verdict is the ruleset's missing review */
 export const isRulesetHeld = (held: string | null): boolean =>
-  held === RULESET_HELD;
+  held !== null && held.startsWith(RULESET_HELD);
 
 /** What a row needing Håkan's review on GitHub says */
 export const REVIEW_NEEDED =

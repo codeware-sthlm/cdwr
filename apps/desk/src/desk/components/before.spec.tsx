@@ -137,7 +137,7 @@ const planReady = (s: DeskState): DeskState => {
 describe('BeforeSheet held merge', () => {
   const wcNotes = (el: Element): string[] =>
     Array.from(el.querySelectorAll('.wc-note')).map((n) => n.textContent ?? '');
-  const RULESET = "the ruleset requires Håkan's review";
+  const RULESET = "needs Håkan's approval on GitHub (a.ts)";
   const withHeld = (
     held: string,
     extra: {
@@ -214,7 +214,7 @@ describe('BeforeSheet held merge', () => {
   });
 
   it('says the ruleset blocks a review row waiting on your approval', () => {
-    const c = sheet(withHeld("the ruleset requires Håkan's review"));
+    const c = sheet(withHeld(RULESET, required));
     expect(wcNotes(cardOf(c, 'COD-3'))).toContain(
       "Needs your approval on GitHub: main's ruleset requires your review"
     );
