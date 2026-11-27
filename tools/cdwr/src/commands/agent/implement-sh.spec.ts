@@ -72,13 +72,48 @@ describe('implement.sh', () => {
     expect(code).not.toContain('bypassPermissions');
   });
 
-  it('writes only into the ticket worktrees', () => {
-    const rules = [...code.matchAll(/"((?:Edit|Write)\([^"]*\))"/g)].map(
-      ([, rule]) => rule
-    );
-    expect(rules).toEqual(['Edit($WT)', 'Write($WT)']);
-    expect(code).toMatch(/^WT="\/\$\{REPO:h\}\/codeware-cod-\*\/\*\*"$/m);
-    expect(code).not.toMatch(/\b(Edit|Write)\((?!\$WT\))/);
+  describe('writes', () => {
+    const editRules = (text: string) =>
+      [...text.matchAll(/"((?:Edit|Write)\([^"]*\))"/g)].map(
+        ([, rule]) => rule
+      );
+    // The deny rules added after the DENY array, and the allows of --allowedTools
+    const denyAdded = /^DENY\+=\(\n([\s\S]*?)^\)$/m.exec(code)?.[1] ?? '';
+    const allows =
+      /--allowedTools \\\n([\s\S]*?)> "\$result"/.exec(code)?.[1] ?? '';
+
+    it('only into the ticket worktrees', () => {
+      expect(editRules(allows)).toEqual([
+        'Edit($WT)',
+        'Write($WT)',
+        'Edit($WTS/.claude/skills/**)',
+        'Write($WTS/.claude/skills/**)',
+        'Edit($WTS/.claude/agents/**)',
+        'Write($WTS/.claude/agents/**)'
+      ]);
+      expect(code).toMatch(/^WTS="\/\$\{REPO:h\}\/codeware-cod-\*"$/m);
+      expect(code).toMatch(/^WT="\$WTS\/\*\*"$/m);
+      expect(code).not.toMatch(/\b(Edit|Write)\((?!\$WTS?[/)])/);
+    });
+
+    it('to skills and agents in a ticket worktree', () => {
+      for (const dir of ['skills', 'agents']) {
+        expect(allows).toContain(`"Edit($WTS/.claude/${dir}/**)"`);
+        expect(allows).toContain(`"Write($WTS/.claude/${dir}/**)"`);
+      }
+    });
+
+    it('never to the sessions’ settings or hooks, the deny sitting in DENY', () => {
+      expect(editRules(denyAdded)).toEqual([
+        'Edit($WTS/.claude/settings*.json)',
+        'Write($WTS/.claude/settings*.json)',
+        'Edit($WTS/.claude/hooks/**)',
+        'Write($WTS/.claude/hooks/**)'
+      ]);
+      expect(editRules(allows).join(' ')).not.toMatch(/settings|hooks/);
+      // Deny wins over any allow, and DENY reaches claude as --disallowedTools
+      expect(code).toMatch(/--disallowedTools[^\n]*\\\n\s*"\$\{DENY\[@\]\}"/);
+    });
   });
 
   // The identity comes from github-app.sh beside the script, and before the budget reservation

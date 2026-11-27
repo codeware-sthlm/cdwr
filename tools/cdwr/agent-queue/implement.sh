@@ -166,7 +166,15 @@ DENY=(
   "Bash(pnpm cdwr agent status *-*H*)" "Bash(pnpm cdwr agent logs *-*H*)"
 )
 # The ticket worktrees sit beside the agent worktree; `//` anchors the rule at the root
-WT="/${REPO:h}/codeware-cod-*/**"
+WTS="/${REPO:h}/codeware-cod-*"
+WT="$WTS/**"
+# Claude Code guards .claude/ apart from the rules, and the broad worktree allow doesn't lift it
+# (probed on COD-922). Skills and agents get rules of their own, so a ticket may edit them; the
+# sessions' permissions and hooks stay denied, deny winning over any allow
+DENY+=(
+  "Edit($WTS/.claude/settings*.json)" "Write($WTS/.claude/settings*.json)"
+  "Edit($WTS/.claude/hooks/**)" "Write($WTS/.claude/hooks/**)"
+)
 rc=0
 claude_pid=
 interrupted=false
@@ -206,6 +214,8 @@ prompt="/work-queue implement-only once"
   --allowedTools \
     Skill Read Grep Glob Agent \
     "Edit($WT)" "Write($WT)" \
+    "Edit($WTS/.claude/skills/**)" "Write($WTS/.claude/skills/**)" \
+    "Edit($WTS/.claude/agents/**)" "Write($WTS/.claude/agents/**)" \
     "Bash(git *)" "Bash(gh pr *)" "Bash(gh run view *)" "Bash(gh api repos/codeware-sthlm/cdwr/*)" \
     "Bash(tools/cdwr/agent-queue/gh-review.sh *)" "Bash(tools/cdwr/agent-queue/linear-upload.sh *)" \
     "Bash(tools/cdwr/agent-queue/force-push.sh *)" "Bash(tools/cdwr/agent-queue/review-diff.sh *)" \
