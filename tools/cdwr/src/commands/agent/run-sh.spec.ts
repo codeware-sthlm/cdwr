@@ -1183,7 +1183,7 @@ describe('run.sh telemetry', () => {
       'watch_state "$HOME_DIR/watch.json"\n  state="$WATCH_STATE"'
     );
     expect(attended.indexOf('watch_state "$HOME_DIR/watch.json"')).toBeLessThan(
-      attended.indexOf('resp="$(linear "$ATTENDED_QUERY"')
+      attended.indexOf('resp="$(attended_read)"')
     );
     expect(SCRIPT).not.toContain('$(watch_state');
     expect(SCRIPT).not.toContain(
@@ -1194,7 +1194,7 @@ describe('run.sh telemetry', () => {
     // Printed before the Linear read, so a Linear failure still reports the source
     expect(
       attended.indexOf('print -r -- "watch-source: $WATCH_SOURCE"')
-    ).toBeLessThan(attended.indexOf('resp="$(linear "$ATTENDED_QUERY"'));
+    ).toBeLessThan(attended.indexOf('resp="$(attended_read)"'));
   });
 
   it('sends one runs row on exit, detached, never on --check', () => {
@@ -1966,7 +1966,18 @@ describe('run.sh page_check', () => {
     expect(read('notes')).toBe(
       'warn: attended: the tickets (merged) filled a page, the rest not read\n'
     );
-    expect(read('records')).toBe('warn  attended: page limit reached\n');
+    expect(read('records')).toBe(
+      'warn  attended: page limit reached (merged)\n'
+    );
+  });
+
+  it('keeps a stamp per alias, so one full alias does not hide another', () => {
+    run(answer({ issues: true, merged: true }), 'attended');
+    expect(read('records')).toBe(
+      'warn  attended: page limit reached\nwarn  attended: page limit reached (merged)\n'
+    );
+    expect(read('page-warned-attended')).toMatch(/^\d+\n$/);
+    expect(read('page-warned-attended-merged')).toMatch(/^\d+\n$/);
   });
 
   it('records a step at most once an hour, and notes it every time', () => {
@@ -2017,11 +2028,28 @@ describe('run.sh page_check', () => {
     );
     // issues, merged and canceled through the fragment, subissues on its own
     expect(query).toMatch(
-      /fragment queued on IssueConnection \{\n(\s*#.*\n)?\s*pageInfo \{ hasNextPage \}/
+      /fragment queued on IssueConnection \{\n(\s*#.*\n)?\s*pageInfo \{ hasNextPage( endCursor)? \}/
     );
     expect(query).toMatch(
       /subissues: issues\([\s\S]*?\}\) \{\n\s*pageInfo \{ hasNextPage \}/
     );
+  });
+
+  it('keeps MERGED_QUERY the merged alias of the attended query', () => {
+    const heredoc = (name: string) => {
+      const start = LIB.indexOf(`read -r -d '' ${name}`);
+      return LIB.slice(start, LIB.indexOf('\nGQL\n', start));
+    };
+    const attended = heredoc('ATTENDED_QUERY');
+    const merged = heredoc('MERGED_QUERY');
+    const filter = merged.slice(
+      merged.indexOf('filter: {\n') + 'filter: {\n'.length,
+      merged.indexOf('  }) { ...queued }')
+    );
+    expect(filter).toContain('notStartsWith: "agent:"');
+    expect(attended).toContain(filter);
+    const fragment = merged.slice(merged.indexOf('fragment queued'));
+    expect(attended).toContain(fragment);
   });
 
   it.each([

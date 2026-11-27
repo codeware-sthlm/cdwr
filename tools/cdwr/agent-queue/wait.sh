@@ -54,6 +54,8 @@ elif linear_auth; then
 elif [[ -n "$LINEAR_PROXY_ATTENDED" ]]; then
   # A session without credentials asks the container's proxy, which runs the one query it needs
   linear() { linear_via_proxy "$@"; }
+  # The proxy pages the merged tickets itself
+  attended_read() { linear_via_proxy "$ATTENDED_QUERY"; }
 else
   print -r -- "wait: no Linear credentials"; $RUNNABLE && exit 1; exit 0
 fi
@@ -100,7 +102,7 @@ remember() {
 # watch_state (lib.sh): the local file where the scheduler runs, else the NUC's row
 pick() {
   local resp watch waits renovate
-  resp="$(linear "$ATTENDED_QUERY" | attended_nodes)" || return 1
+  resp="$(attended_read | attended_nodes)" || return 1
   jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null || return 1
   watch_state "$WATCH_FILE"
   watch="$WATCH_STATE"
