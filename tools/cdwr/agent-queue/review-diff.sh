@@ -5,7 +5,7 @@
 # `git diff origin/main...HEAD` and `git diff <path>` denied in practice (the implement-run
 # memory), whatever the `Bash(git *)` rule says, and may not pipe git into a file, so
 # settings.json and implement.sh allow this script instead.
-# It also prints the PR-ready comment's Merge line (watch.jq `hold_check_lines`): the diff's
+# It also prints the PR-ready comment's Merge line (guard.jq `hold_check_lines`): the diff's
 # files against the hold-paths.txt on origin/main, the list the watch reads too, never the
 # branch's own copy. The session can't run that jq call itself.
 #   review-diff.sh <worktree>    prints the path of the diff it wrote, then the Merge line
@@ -40,11 +40,11 @@ trap 'rm -f "$out.$$"' EXIT
 mv -f "$out.$$" "$out"
 print -r -- "$out"
 here="${0:A:h}"
-if [[ ! -r "$here/watch.jq" ]]; then
-  print -r -- "Merge: held: no watch.jq beside review-diff.sh"
+if [[ ! -r "$here/guard.jq" ]]; then
+  print -r -- "Merge: held: no guard.jq beside review-diff.sh"
 elif ! list="$(git -C "$wt" show origin/main:tools/cdwr/agent-queue/hold-paths.txt 2>/dev/null)"; then
   print -r -- "Merge: held: no hold list on origin/main"
 else
-  { print -r -- "$list"; cat "$out" } | jq -nrR -L "$here" 'include "watch"; hold_check_lines([inputs])' ||
+  { print -r -- "$list"; cat "$out" } | jq -nrR -L "$here" 'include "guard"; hold_check_lines([inputs])' ||
     print -r -- "Merge: held: the hold list could not be read"
 fi

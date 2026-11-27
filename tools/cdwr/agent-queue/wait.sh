@@ -112,17 +112,17 @@ pick() {
   waits="$(parked_waits <<<"$resp")"
   jq -L "$HERE" -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$BASE")" --argjson watch "$watch" --argjson waits "$waits" \
     --argjson renovate "$renovate" --argjson session "$session_json" \
-    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp"
+    'include "watch"; include "guard"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp"
 }
 # What the printed line shows: waiting and the limit only for an idle pick. A running line's
 # detail is this session's own Next line, so it stays out
 key_of() { jq -c '{verdict, ticket, reason} + (if .verdict == "idle" then {waiting, used, limit} else {} end)' <<<"$1"; }
-line_of() { jq -r -L "$HERE" 'include "watch"; attended_line' <<<"$1"; }
+line_of() { jq -r -L "$HERE" 'include "watch"; include "guard"; attended_line' <<<"$1"; }
 # The session's own ticket is among the resumable ones
-own() { [[ -n "$ticket" ]] && jq -e --arg t "$ticket" --arg s "$sid" -L "$HERE" 'include "watch"; own_pick($t; $s)' <<<"$1" >/dev/null; }
+own() { [[ -n "$ticket" ]] && jq -e --arg t "$ticket" --arg s "$sid" -L "$HERE" 'include "watch"; include "guard"; own_pick($t; $s)' <<<"$1" >/dev/null; }
 # <prefix>: <line>, or the resume line for the session's own ticket
 report() {
-  if own "$2"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$2"
+  if own "$2"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; include "guard"; resume_line($t)' <<<"$2"
   else print -r -- "$1: $(line_of "$2")"; fi
 }
 
@@ -143,7 +143,7 @@ if $NOW || $RUNNABLE; then
   now="$(pick)" || { offline && print -r -- "wait: offline" || print -r -- "wait: Linear did not answer"; $RUNNABLE && exit 1; exit 0; }
   # The same key launch() gives implement.sh: `<ticket> <reason>`, a PR's space as a dash
   if $RUNNABLE; then jq -r '.runnable[] | "\(.ticket | gsub(" "; "-")) \(.reason)"' <<<"$now"
-  elif own "$now"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; resume_line($t)' <<<"$now"; else line_of "$now"; fi
+  elif own "$now"; then jq -r --arg t "$ticket" -L "$HERE" 'include "watch"; include "guard"; resume_line($t)' <<<"$now"; else line_of "$now"; fi
   exit 0
 fi
 

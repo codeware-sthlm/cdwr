@@ -20,10 +20,6 @@ const SCRIPT_PATH = fileURLToPath(
   new URL('../../../agent-queue/review-diff.sh', import.meta.url)
 );
 
-const WATCH_JQ_PATH = fileURLToPath(
-  new URL('../../../agent-queue/watch.jq', import.meta.url)
-);
-
 const HOLD_PATHS_PATH = fileURLToPath(
   new URL('../../../agent-queue/hold-paths.txt', import.meta.url)
 );
@@ -215,7 +211,7 @@ describe('review-diff.sh', () => {
       ]);
     });
 
-    it('holds when watch.jq is missing beside the script', () => {
+    it('holds when guard.jq is missing beside the script', () => {
       const bare = join(dir, 'bare');
       mkdirSync(bare);
       copyFileSync(SCRIPT_PATH, join(bare, 'review-diff.sh'));
@@ -224,7 +220,7 @@ describe('review-diff.sh', () => {
         encoding: 'utf8'
       });
       expect(mergeLine(result.stdout)).toEqual([
-        'Merge: held: no watch.jq beside review-diff.sh'
+        'Merge: held: no guard.jq beside review-diff.sh'
       ]);
     });
   });

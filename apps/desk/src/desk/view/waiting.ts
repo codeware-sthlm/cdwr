@@ -175,13 +175,13 @@ export const forgetLabelled = (
 /** What the watch's verdict starts with while a ruleset review is missing */
 const RULESET_HELD = "needs Håkan's approval on GitHub";
 
-/** The watch's verdict while a ruleset review is missing, in its words (watch.jq `ruleset_gate`): the first path, the rest counted */
+/** The watch's verdict while a ruleset review is missing, in its words (guard.jq `ruleset_gate`): the first path, the rest counted */
 const needsApproval = (paths: readonly string[]): string =>
   paths.length === 0
     ? RULESET_HELD
     : `${RULESET_HELD} (${paths[0]}${paths.length > 1 ? `, +${paths.length - 1} more` : ''})`;
 
-/** Why the scheduler would refuse to merge the PR, in its words (watch.jq `desk_verdict`); null when it would not */
+/** Why the scheduler would refuse to merge the PR, in its words (guard.jq `desk_verdict`); null when it would not */
 export const mergeBlocker = (e: WatchEntry): string | null => {
   if (e.state === 'merged' || e.state === 'closed') return `PR is ${e.state}`;
   if (e.draft) return 'PR is a draft';

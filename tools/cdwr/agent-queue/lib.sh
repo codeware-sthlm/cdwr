@@ -353,7 +353,7 @@ fragment queued on IssueConnection {
     children(first: 25) { pageInfo { hasNextPage } nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
     state { type }
     labels { nodes { name } }
-    # The author tells the agent's comments from Håkan's (watch.jq `is_agent`)
+    # The author tells the agent's comments from Håkan's (guard.jq `is_agent`)
     comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
     # Who added agent:ready (watch.jq `ready_by_app`)
     history(first: 50) { nodes { createdAt actor { id app } addedLabels { name } } }
@@ -385,7 +385,7 @@ fragment queued on IssueConnection {
     children(first: 25) { pageInfo { hasNextPage } nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
     state { type }
     labels { nodes { name } }
-    # The author tells the agent's comments from Håkan's (watch.jq `is_agent`)
+    # The author tells the agent's comments from Håkan's (guard.jq `is_agent`)
     comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
     # Who added agent:ready (watch.jq `ready_by_app`)
     history(first: 50) { nodes { createdAt actor { id app } addedLabels { name } } }

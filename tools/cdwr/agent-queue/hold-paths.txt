@@ -1,5 +1,5 @@
 # The hold list: a green agent PR that changes a file matching one of these globs waits for
-# Håkan instead of merging on its own (watch.jq `hold_globs`, `merge_verdict`). One glob per
+# Håkan instead of merging on its own (guard.jq `hold_globs`, `merge_verdict`). One glob per
 # line, `<glob>  # <reason>`. `**` matches any path, `*` any run without `/`, `?` one character.
 # The watch reads the installed copy, which matches main, so a PR can't drop a glob for itself.
 

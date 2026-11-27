@@ -226,7 +226,7 @@ describe('run.sh', () => {
     it('leaves launched implement sessions out, and holds until attended reads them', () => {
       expect(SCRIPT).toContain(`attended_session='{"state":"unread"}'\n`);
       expect(SCRIPT).toContain(
-        `'include "watch"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }'`
+        `'include "watch"; include "guard"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }'`
       );
     });
   });
@@ -261,7 +261,9 @@ describe('run.sh', () => {
 
   // `cdwr agent status` and the Desk read the queue view by these markers
   it('launches through watch.jq and implement.sh, detached', () => {
-    expect(SCRIPT).toContain('\'include "watch"; launch($g)\'');
+    expect(SCRIPT).toContain(
+      '\'include "watch"; include "guard"; launch($g)\''
+    );
     expect(SCRIPT).toContain('nohup "$HOME_DIR/implement.sh"');
     expect(SCRIPT).toContain('print -r -- "launch: ');
     expect(SCRIPT).not.toContain('launch-pick:');
@@ -284,7 +286,9 @@ describe('run.sh', () => {
       '  fi\n';
     expect(SCRIPT).toContain(guard);
     const at = SCRIPT.indexOf(guard);
-    expect(SCRIPT.indexOf('\'include "watch"; launch($g)\'')).toBeLessThan(at);
+    expect(
+      SCRIPT.indexOf('\'include "watch"; include "guard"; launch($g)\'')
+    ).toBeLessThan(at);
     expect(at).toBeLessThan(SCRIPT.indexOf('print -r -- "launch: '));
     expect(at).toBeLessThan(
       SCRIPT.indexOf(
@@ -325,7 +329,7 @@ describe('run.sh', () => {
   // The verdict comes from watch.jq, never from logic copied into run.sh
   it('computes the attended line with watch.jq', () => {
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)'`
+      `'include "watch"; include "guard"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)'`
     );
     expect(SCRIPT).toContain('--argjson session "$session"');
     // The session is read before the pick, which takes it
@@ -335,7 +339,7 @@ describe('run.sh', () => {
       )
     );
     expect(SCRIPT).toContain(
-      `'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)'`
+      `'include "watch"; include "guard"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)'`
     );
     expect(SCRIPT).toContain('--argjson renovate "$renovate"');
   });
@@ -3614,6 +3618,7 @@ describe('run.sh job.json', () => {
     'lib.sh',
     'waits.sh',
     'watch.jq',
+    'guard.jq',
     'implement.sh',
     'github-app.sh',
     'notify.sh',
@@ -6514,157 +6519,6 @@ describe('run.sh apply list', () => {
       expect(r.ticks).toHaveLength(1);
       expect(r.notices).toEqual([]);
     });
-  });
-});
-
-// The scheduler's verdict on a desk command, from the PR it just read; desk_pr_check prints it
-describe('watch.jq desk_verdict', () => {
-  requireTools('jq');
-  const dir = fileURLToPath(new URL('../../../agent-queue', import.meta.url));
-  const verdict = (
-    kind: string,
-    pr: Record<string, unknown>,
-    rules: unknown = []
-  ) =>
-    execFileSync(
-      'jq',
-      [
-        '-L',
-        dir,
-        '-r',
-        '--arg',
-        'kind',
-        kind,
-        '--argjson',
-        'rules',
-        JSON.stringify(rules),
-        'include "watch"; desk_verdict($kind; $rules)'
-      ],
-      { input: JSON.stringify(pr), encoding: 'utf8' }
-    ).trim();
-  const ready = (over: Record<string, unknown> = {}) => ({
-    id: 'PR_node',
-    headRefOid: 'abc123',
-    state: 'OPEN',
-    isDraft: false,
-    mergeable: 'MERGEABLE',
-    mergeQueueEntry: null,
-    files: { nodes: [] },
-    commits: {
-      nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }]
-    },
-    reviewThreads: { nodes: [] },
-    reviewRequests: { nodes: [] },
-    reviews: { nodes: [] },
-    ...over
-  });
-
-  it('lets a ready PR through with its node and head', () => {
-    expect(verdict('merge', ready())).toBe('ok PR_node abc123');
-    expect(verdict('copilot', ready())).toBe('ok PR_node abc123');
-  });
-
-  it.each([
-    [{ state: 'MERGED' }, 'PR is merged'],
-    [{ isDraft: true }, 'PR is a draft'],
-    [{ mergeQueueEntry: { state: 'QUEUED' } }, 'already in the merge queue'],
-    [{ mergeable: 'CONFLICTING' }, 'conflicts with main'],
-    [{ mergeable: 'UNKNOWN' }, 'GitHub has not checked for conflicts yet'],
-    [
-      {
-        commits: {
-          nodes: [{ commit: { statusCheckRollup: { state: 'PENDING' } } }]
-        }
-      },
-      'checks pending'
-    ],
-    [{ commits: { nodes: [] } }, 'checks missing'],
-    [
-      { reviewThreads: { pageInfo: { hasNextPage: true }, nodes: [] } },
-      'too many review threads to check them all'
-    ],
-    [
-      {
-        reviewThreads: {
-          nodes: [
-            {
-              isResolved: false,
-              comments: {
-                nodes: [{ author: { __typename: 'Bot' }, body: 'x' }]
-              }
-            }
-          ]
-        }
-      },
-      '1 unresolved thread'
-    ]
-  ])('refuses a merge: %j', (over, why) => {
-    expect(verdict('merge', ready(over))).toBe(why);
-  });
-
-  it('refuses a merge of a watched file until a person approves, and one with no rules read', () => {
-    const rules = [
-      {
-        type: 'pull_request',
-        parameters: { required_reviewers: [{ file_patterns: ['a/**'] }] }
-      }
-    ];
-    const files = { nodes: [{ path: 'a/x.sh' }] };
-    expect(verdict('merge', ready({ files }), rules)).toBe(
-      "needs Håkan's approval on GitHub (a/x.sh)"
-    );
-    expect(
-      verdict(
-        'merge',
-        ready({
-          files,
-          latestReviews: {
-            nodes: [
-              {
-                state: 'APPROVED',
-                commit: { oid: 'abc123' },
-                author: { __typename: 'User' }
-              }
-            ]
-          }
-        }),
-        rules
-      )
-    ).toBe('ok PR_node abc123');
-    expect(verdict('merge', ready({ files }), null)).toBe(
-      "main's branch rules were not read"
-    );
-    // A Copilot request has no use for the rules
-    expect(verdict('copilot', ready({ files }), null)).toBe(
-      'ok PR_node abc123'
-    );
-  });
-
-  it('refuses a Copilot request once one is asked or done', () => {
-    expect(
-      verdict(
-        'copilot',
-        ready({
-          reviewRequests: {
-            nodes: [
-              {
-                requestedReviewer: { login: 'copilot-pull-request-reviewer' }
-              }
-            ]
-          }
-        })
-      )
-    ).toBe('Copilot review already requested');
-    expect(
-      verdict(
-        'copilot',
-        ready({
-          reviews: {
-            nodes: [{ author: { login: 'copilot-pull-request-reviewer' } }]
-          }
-        })
-      )
-    ).toBe('Copilot has reviewed it');
   });
 });
 

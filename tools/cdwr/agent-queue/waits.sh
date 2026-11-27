@@ -37,7 +37,7 @@ parked_waits() {
   setopt local_options no_err_exit
   local resp tickets query out
   resp="$(cat)"
-  tickets="$(jq -c -L "$WAITS_DIR" 'include "watch";
+  tickets="$(jq -c -L "$WAITS_DIR" 'include "watch"; include "guard";
     [ .data.issues.nodes[] | select(other_repo | not)
       | select((agent_label == "agent:working" or agent_label == "agent:review") and is_open and parked != null)
       | { ticket: .identifier, pr: parked.pr } ]' <<<"$resp" 2>/dev/null)" || { print -r -- '{}'; return 0; }

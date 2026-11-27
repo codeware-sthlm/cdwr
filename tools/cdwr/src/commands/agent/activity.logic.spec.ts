@@ -118,9 +118,9 @@ describe('commentEvents', () => {
 describe('actorOf', () => {
   const app = { id: AGENT_USER_ID, name: 'CDWR Agent', app: true };
 
-  it('keeps the app user id in step with watch.jq', () => {
+  it('keeps the app user id in step with guard.jq', () => {
     const jq = readFileSync(
-      fileURLToPath(new URL('../../../agent-queue/watch.jq', import.meta.url)),
+      fileURLToPath(new URL('../../../agent-queue/guard.jq', import.meta.url)),
       'utf8'
     );
     expect(jq).toContain(`def agent_user_id: "${AGENT_USER_ID}";`);

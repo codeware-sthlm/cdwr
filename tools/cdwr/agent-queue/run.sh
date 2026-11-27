@@ -323,7 +323,7 @@ desk_pr_check() {
     rules="$(gh api 'repos/codeware-sthlm/cdwr/rules/branches/main?per_page=100' 2>/dev/null)"
     jq -e 'type == "array"' >/dev/null 2>&1 <<<"$rules" || rules=null
   fi
-  watch -r --arg kind "$kind" --argjson rules "$rules" 'include "watch"; desk_verdict($kind; $rules)' <<<"$node" ||
+  watch -r --arg kind "$kind" --argjson rules "$rules" 'include "watch"; include "guard"; desk_verdict($kind; $rules)' <<<"$node" ||
     print -r -- "watch.jq failed$(watch_err)"
 }
 
@@ -331,7 +331,7 @@ desk_pr_check() {
 copilot_asked() {
   local s
   s="$(gh api graphql -f query="$PR_QUERY" -F n="$1" --jq '.data.repository.pullRequest' 2>/dev/null |
-    watch -r 'include "watch"; pr_state.copilot')"
+    watch -r 'include "watch"; include "guard"; pr_state.copilot')"
   [[ "$s" == requested || "$s" == reviewed ]]
 }
 
@@ -427,7 +427,7 @@ desk_platform_check() {
   [[ -n "${cmd[1]}" ]] || { print -r -- "bad args"; return 0; }
   out="$(desk_cdwr "${cmd[@]}" --dry-run)"
   [[ -n "$out" ]] || { print -r -- "the dry run printed nothing"; return 0; }
-  watch -r --arg kind "$1" --argjson args "$2" 'include "watch"; platform_verdict($kind; $args)' <<<"$out" ||
+  watch -r --arg kind "$1" --argjson args "$2" 'include "watch"; include "guard"; platform_verdict($kind; $args)' <<<"$out" ||
     print -r -- "watch.jq failed$(watch_err)"
 }
 
@@ -910,7 +910,7 @@ job_line() {
   elif [[ "$secs" == <-> ]]; then out="Job: every $(( secs / 60 )) min"; else out="Job: interval unknown"; fi
   want="$(git -C "$REPO" show origin/main:tools/cdwr/src/commands/agent/agent.logic.ts 2>/dev/null | sed -n "$INTERVAL_SED")"
   if [[ -z "$want" ]]; then print -r -- "$out · $kind unknown"; return 0; fi
-  for f in run.sh lib.sh waits.sh watch.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh deploy-gate.sh linear-tools.txt hold-paths.txt; do
+  for f in run.sh lib.sh waits.sh watch.jq guard.jq implement.sh github-app.sh notify.sh checkin.sh telemetry.sh deploy-gate.sh linear-tools.txt hold-paths.txt; do
     theirs="$(git -C "$REPO" show "origin/main:$dir/$f" 2>/dev/null)" ||
       { print -r -- "$out · $kind unknown"; return 0; }
     [[ "$(cat "$HOME_DIR/$f" 2>/dev/null)" == "$theirs" ]] || differs+=("$f")
@@ -1284,7 +1284,7 @@ $check || CHECKIN_ID="$(checkin in_progress)"
 # GitHub writes are the desk's copilot and merge commands (desk_pr_act), the watch's own Copilot
 # request for a ticket parked on Copilot (copilot_request), since the ruleset's automatic review
 # skips a PR the app opened, and the watch's own merge enqueue (desk_pr_act merge) for a PR on no
-# hold path (hold-paths.txt, watch.jq merge_verdict). All go as the app, the Copilot request then
+# hold path (hold-paths.txt, guard.jq merge_verdict). All go as the app, the Copilot request then
 # as AGENT_COPILOT_TOKEN. After such a merge it reads the production deploy (read_deploy).
 # Paged, since done tickets keep agent:review for 14 days and alone fill a page.
 read -r -d '' WATCHED <<'GQL' || true
@@ -1332,7 +1332,7 @@ relabel_merged() {
   id="$(jq -r '.identifier' <<<"$node")"
   [[ -n "$review" ]] || { note "warn: watch: no agent:review label for $id"; record warn "$id" "watch: no agent:review label"; return 1; }
   vars="$(watch -c --arg when "$when" --arg review "$review" '
-    include "watch";
+    include "watch"; include "guard";
     handoffs as $h
     | { id, add: [$review],
         remove: [ .labels.nodes[] | select((.name | startswith("agent:")) and .name != "agent:review") | .id ],
@@ -1391,7 +1391,7 @@ page_warn() {
 page_check() {
   setopt local_options no_err_exit
   local key
-  for key in ${(f)"$(watch -r 'include "watch"; full_pages[]' 2>/dev/null)"}; do
+  for key in ${(f)"$(watch -r 'include "watch"; include "guard"; full_pages[]' 2>/dev/null)"}; do
     if [[ "$key" == issues ]]; then page_warn "$1" "$2"; else page_warn "$1" "$2 ($key)" "$key"; fi
   done
   return 0
@@ -1418,7 +1418,7 @@ read_deploy() {
     done
   fi
   state="$(watch -nc --argjson runs "$runs" --argjson all "$allruns" --argjson newest "$newest" --slurpfile notes "$notes" --arg merged "$(jq -r '.mergedAt // ""' <<<"$entry")" \
-    --argjson now "$(date +%s)" 'include "watch";
+    --argjson now "$(date +%s)" 'include "watch"; include "guard";
     (if $merged == "" then null else $merged end) as $m
     | deploy_state($runs; ($notes | add // []); $m; $now) as $d
     | builds_state($all) as $b
@@ -1442,7 +1442,7 @@ watch_prs() {
   local rules=null rules_read=false
   gh_identity_or_note
   # The hold list sits beside watch.jq. Unread, no PR merges on its own
-  holds="$(watch -Rsc 'include "watch"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
+  holds="$(watch -Rsc 'include "watch"; include "guard"; hold_globs' 2>/dev/null < "$WATCH_DIR/hold-paths.txt")" || holds=null
   # An empty list is a broken install, not a licence: it reads as unread
   [[ -n "$holds" && "$holds" != "[]" ]] || holds=null
   [[ "$holds" == null ]] && hold_list_warn
@@ -1467,7 +1467,7 @@ watch_prs() {
   # A missing or broken state file counts as empty; tickets no longer watched drop out.
   state="$(jq -c 'if type == "object" then . else {} end' "$file" 2>/dev/null || print '{}')"
   state="$(watch -c --argjson ids "$(jq -c 'map(.identifier)' <<<"$nodes")" \
-    'include "watch"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed$(watch_err)"; return 1; }
+    'include "watch"; include "guard"; prune($ids)' <<<"$state")" || { print -r -- "watch.jq failed$(watch_err)"; return 1; }
   # The team's own agent:review label before a workspace one. Unread, it stays empty and
   # relabel_merged warns for each ticket it would relabel.
   resp="$(linear "$WATCH_LABELS")"
@@ -1478,8 +1478,8 @@ watch_prs() {
 
   for node in ${(f)"$(jq -c '.[]' <<<"$nodes")"}; do
     id="$(jq -r '.identifier' <<<"$node")"
-    label="$(watch -r 'include "watch"; agent_label // empty' <<<"$node")"
-    pr="$(watch 'include "watch"; pr_number // empty' <<<"$node")"
+    label="$(watch -r 'include "watch"; include "guard"; agent_label // empty' <<<"$node")"
+    pr="$(watch 'include "watch"; include "guard"; pr_number // empty' <<<"$node")"
     # Outside review only the attached PR counts: a search could find a PR that merely names the
     # ticket, and a merge there would relabel it
     if [[ -z "$pr" && "$label" == agent:review ]]; then
@@ -1505,7 +1505,7 @@ watch_prs() {
     fi
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
       --argjson state "$state" --argjson holds "$holds" --argjson rules "$rules" --arg at "$(date -u +%FT%TZ)" '
-      include "watch";
+      include "watch"; include "guard";
       {id: $id, agentLabel: $agentLabel, pr: $pr, title: ($now.title // null), now: ($now | pr_state), prev: $state[$id],
        handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
        apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null),
@@ -1807,7 +1807,7 @@ apply_item() {
   [[ -n "${cmd[1]}" ]] || { print -r -- "refused bad args"; return 0; }
   out="$(apply_cdwr "$kind" "${cmd[@]}" --dry-run)"
   [[ -n "$out" ]] || { print -r -- "refused the dry run printed nothing"; return 0; }
-  verdict="$(watch -r --argjson item "$item" 'include "watch"; apply_verdict($item)' <<<"$out")" ||
+  verdict="$(watch -r --argjson item "$item" 'include "watch"; include "guard"; apply_verdict($item)' <<<"$out")" ||
     verdict="watch.jq failed$(watch_err)"
   [[ "$verdict" == already\ <-> ]] && { print -r -- "applied $verdict"; return 0; }
   # The secret kinds' verdicts hold no value but a set one, which the PR states
@@ -1834,7 +1834,7 @@ apply_tick() {
   local vars resp
   vars="$(linear "$COMMENT_READ" "$(jq -nc --arg id "$1" '{id: $id}')" |
     watch -c --arg id "$1" --arg s "$2" --arg o "$3" --argjson t "$4" \
-      'include "watch"; .data.comment.body // error("no comment") | {id: $id, body: apply_mark($s; $o; $t)}')" || return 1
+      'include "watch"; include "guard"; .data.comment.body // error("no comment") | {id: $id, body: apply_mark($s; $o; $t)}')" || return 1
   resp="$(linear "$COMMENT_UPDATE" "$vars")"
   jq -e '.data.commentUpdate.success == true' >/dev/null 2>&1 <<<"$resp"
 }
@@ -1910,7 +1910,7 @@ apply_list() {
     entry="$(jq -c '.apply.done = true' <<<"$entry")"
   # Once only: a done list comes back while a tick is left to retry
   if [[ "$(jq -r '.apply.done == true and .apply.told != true' <<<"$entry")" == true ]]; then
-    summary="$(watch -r --arg id "$id" 'include "watch"; .apply | apply_summary($id) | "\(.level)\t\(.message)"' <<<"$entry")" &&
+    summary="$(watch -r --arg id "$id" 'include "watch"; include "guard"; .apply | apply_summary($id) | "\(.level)\t\(.message)"' <<<"$entry")" &&
       { note "watch: ${summary/$'\t'/ }"; notice "${summary%%$'\t'*}" watch "${summary#*$'\t'}"; }
     entry="$(jq -c '.apply.told = true' <<<"$entry")"
   fi
@@ -1970,10 +1970,10 @@ drop_edit() {
   setopt local_options no_err_exit
   local node=$1 text=$2 reason=$3 cid out
   [[ "$(jq -r '.state.type // ""' <<<"$node")" == completed ]] || { print -r -- "the ticket is not Done"; return 1; }
-  cid="$(watch -r 'include "watch"; pr_ready_comment.id // empty' <<<"$node")"
+  cid="$(watch -r 'include "watch"; include "guard"; pr_ready_comment.id // empty' <<<"$node")"
   [[ -n "$cid" ]] || { print -r -- "no PR-ready comment"; return 1; }
   out="$(linear "$COMMENT_READ" "$(jq -nc --arg id "$cid" '{id: $id}')" |
-    watch -c --arg id "$cid" --arg t "$text" --arg r "$reason" 'include "watch";
+    watch -c --arg id "$cid" --arg t "$text" --arg r "$reason" 'include "watch"; include "guard";
       (.data.comment.body // error("no comment")) as $b
       | ($b | drop_mark($t; $r)) as $n
       | if $n == $b then "no open item reads that any more" else {id: $id, body: $n} end')"
@@ -1996,7 +1996,7 @@ drop_write() {
   w='{}'
   [[ -r "$HOME_DIR/watch.json" ]] && w="$(jq -c 'if type == "object" then . else {} end' "$HOME_DIR/watch.json" 2>/dev/null)"
   [[ -n "$w" ]] || w='{}'
-  vars="$(watch -c --argjson e "$edit" --argjson w "$w" --argjson now "$(date +%s)" 'include "watch";
+  vars="$(watch -c --argjson e "$edit" --argjson w "$w" --argjson now "$(date +%s)" 'include "watch"; include "guard";
     .comments.nodes |= map(if .id == $e.id then .body = $e.body else . end)
     | if agent_label == "agent:review" and (handoffs | length) == 0 and (deploy_hold($now; $w) | not)
       then {id, remove: [ .labels.nodes[] | select(.name == "agent:review") | .id ]} else empty end' <<<"$node")" ||
@@ -2080,7 +2080,7 @@ drop_pass() {
   handled='[]'
   [[ -r "$DROP_HANDLED" ]] && handled="$(jq -Rsc 'split("\n") | map(select(. != ""))' "$DROP_HANDLED" 2>/dev/null)"
   [[ -n "$handled" ]] || handled='[]'
-  rows="$(watch -c --argjson h "$handled" 'include "watch";
+  rows="$(watch -c --argjson h "$handled" 'include "watch"; include "guard";
       .[] | select(.state.type == "completed") | . as $n
       | drop_replies($h)[] | .sel as $s
       | . + {ticket: $n.identifier, issue: $n.id, parent: ($n | pr_ready_comment.id), text: ($n | drop_target($s))}' <<<"$nodes")" ||
@@ -2171,7 +2171,7 @@ close_parents() {
   page_check close "the closed sub-issues of open parents" <<<"$resp"
   closed='[]'
   [[ -r "$file" ]] && closed="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
-  todo="$(watch -c --argjson closed "$closed" 'include "watch"; parents_to_close($closed)' <<<"$resp")" ||
+  todo="$(watch -c --argjson closed "$closed" 'include "watch"; include "guard"; parents_to_close($closed)' <<<"$resp")" ||
     { print -r -- "watch.jq failed$(watch_err)"; return 1; }
   [[ "$(jq '.parents | length' <<<"$todo")" == 0 ]] && return 0
   state="$(jq -r '.state // empty' <<<"$todo")"
@@ -2245,9 +2245,9 @@ label_parts() {
   page_check label "the open sub-issues" <<<"$resp"
   labelled='[]'
   [[ -r "$file" ]] && labelled="$(jq -Rsc 'split("\n") | map(select(length > 0))' "$file")"
-  todo="$(watch -c --argjson labelled "$labelled" 'include "watch"; parts_to_label_list($labelled)' <<<"$resp")" ||
+  todo="$(watch -c --argjson labelled "$labelled" 'include "watch"; include "guard"; parts_to_label_list($labelled)' <<<"$resp")" ||
     { print -r -- "watch.jq failed$(watch_err)"; return 1; }
-  retry="$(watch -c --argjson labelled "$labelled" 'include "watch"; parts_to_comment_list($labelled)' <<<"$resp")" ||
+  retry="$(watch -c --argjson labelled "$labelled" 'include "watch"; include "guard"; parts_to_comment_list($labelled)' <<<"$resp")" ||
     { print -r -- "watch.jq failed$(watch_err)"; return 1; }
   for p in ${(f)"$(jq -c '.[]' <<<"$retry")"}; do
     id="$(jq -r '.identifier' <<<"$p")"
@@ -2346,7 +2346,7 @@ watch_renovate() {
   # The PR list on stdin: with its commits it can outgrow an argument
   out="$(watch -c --argjson tickets "$(jq -c '.data.issues.nodes' <<<"$resp")" \
     --argjson prev "$prev" --arg at "$(date -u +%FT%TZ)" \
-    'include "watch"; {prs: ., tickets: $tickets, prev: $prev, at: $at} | renovate_step' <<<"$prs")" ||
+    'include "watch"; include "guard"; {prs: ., tickets: $tickets, prev: $prev, at: $at} | renovate_step' <<<"$prs")" ||
     { print -r -- "watch.jq failed$(watch_err)"; return 1; }
   # The state first: a failed write sends nothing, so the next run doesn't repeat the notices
   { jq -c '.state' <<<"$out" > "$file.tmp" && mv "$file.tmp" "$file"; } ||
@@ -2508,25 +2508,25 @@ attended() {
     done
     (( ${#items[@]} )) && sessions_json="$(printf '%s\n' "${items[@]}" | jq -cs '.' 2>/dev/null || echo '[]')"
   fi
-  session="$(watch -c --argjson now "$(date +%s)" 'include "watch"; session_state($now)' <<<"$sessions_json" 2>/dev/null)" ||
+  session="$(watch -c --argjson now "$(date +%s)" 'include "watch"; include "guard"; session_state($now)' <<<"$sessions_json" 2>/dev/null)" ||
     session='{"state":"none","detail":null,"id":null,"ticket":null,"lastSeen":null}'
   verdict="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson waits "$waits" \
     --argjson renovate "$renovate" --argjson session "$session" \
-    'include "watch"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp")" ||
+    'include "watch"; include "guard"; .data.issues.nodes | attended($now; $limit; $watch; $waits; $renovate; $session)' <<<"$resp")" ||
     { note "warn: attended: watch.jq failed$(watch_err)"; return 0; }
   # A launched implement session never claims a new ticket, so it holds no planning back; nor
   # does a session at the limit, which starts no new ticket
   attended_session="$(watch -c --argjson now "$(date +%s)" --argjson v "$verdict" \
-    'include "watch"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }' <<<"$sessions_json" 2>/dev/null)" ||
+    'include "watch"; include "guard"; [ .[] | select(.kind != "implement") ] | session_state($now) + { full: ($v.used >= $v.limit) }' <<<"$sessions_json" 2>/dev/null)" ||
     attended_session='{"state":"unread"}'
-  attended_line="$(watch -r 'include "watch"; attended_line' <<<"$verdict")"
+  attended_line="$(watch -r 'include "watch"; include "guard"; attended_line' <<<"$verdict")"
   [[ "$(jq -r '.verdict' <<<"$verdict" 2>/dev/null)" == idle ]] && attended_work=false || attended_work=true
-  attended_line="$(watch -r 'include "watch"; session_prefix' <<<"$session") · $attended_line"
+  attended_line="$(watch -r 'include "watch"; include "guard"; session_prefix' <<<"$session") · $attended_line"
   # The whole queue for queue_state and `cdwr agent status`; the pick above stays the
   # line and the notice
   queue_view="$(watch -c --argjson now "$(date +%s)" --argjson limit "$(queue_limit "$HOME_DIR")" --argjson watch "$state" --argjson session "$session" --argjson waits "$waits" \
     --argjson renovate "$renovate" \
-    'include "watch"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)' <<<"$resp")" ||
+    'include "watch"; include "guard"; .data.issues.nodes | queue_view($now; $limit; $watch; $session; $waits; $renovate)' <<<"$resp")" ||
     { note "warn: queue view: watch.jq failed$(watch_err)"; queue_view=""; }
   # The audit and the tree join the view; a failure keeps the view as it was. The audit's launch
   # guard reads launch.json before this run changes it. The output goes through files: it is too
@@ -2545,10 +2545,10 @@ attended() {
     order="$(jq -c '[ (.next[].ticket), (.held.tickets[]) ] | reduce .[] as $t ([]; if index([$t]) then . else . + [$t] end)' <<<"$queue_view")"
     if watch -c --argjson now "$(date +%s)" --argjson watch "$state" --argjson launch "$launch_state" \
          --argjson runnable "$(jq -c '.runnable // []' <<<"$verdict")" --slurpfile wide "$ax.wide" \
-         'include "watch"; .data.issues.nodes | audit($now; $watch; $launch; $runnable; $wide[0])' <<<"$resp" > "$ax.audit" &&
+         'include "watch"; include "guard"; .data.issues.nodes | audit($now; $watch; $launch; $runnable; $wide[0])' <<<"$resp" > "$ax.audit" &&
        watch -c --argjson now "$(date +%s)" --argjson watch "$state" --slurpfile gaps "$ax.audit" \
          --argjson order "$order" --slurpfile wide "$ax.wide" \
-         'include "watch"; .data.issues.nodes | tree($now; $watch; $gaps[0]; $order; $wide[0])' <<<"$resp" > "$ax.tree" &&
+         'include "watch"; include "guard"; .data.issues.nodes | tree($now; $watch; $gaps[0]; $order; $wide[0])' <<<"$resp" > "$ax.tree" &&
        jq -c --slurpfile a "$ax.audit" --slurpfile t "$ax.tree" '. + { audit: $a[0], tree: $t[0] }' <<<"$queue_view" > "$ax.view"; then
       queue_view="$(<"$ax.view")"
     else
@@ -2585,7 +2585,7 @@ attended() {
     --argjson cap "$cap" --argjson last "$last" --arg limited "$limited_until" \
     '{session: $session, locked: $locked, spent: $spent, cap: $cap, last: $last,
       limitedUntil: (if $limited == "" then null else $limited end)}')"
-  decision="$(watch -c --argjson g "$guards" 'include "watch"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
+  decision="$(watch -c --argjson g "$guards" 'include "watch"; include "guard"; launch($g)' <<<"$verdict" 2>/dev/null)" ||
     { local why="watch.jq failed$(watch_err)"; note "warn: launch: $why"
       decision="$(jq -c --arg r "$why" '{action: "skip", reason: $r, key: null, pick: (if .verdict == "run" and .reason != "ready" then {ticket, reason, detail} else null end)}' <<<"$verdict")"; }
   # Implement sessions run in the container only (COD-657): elsewhere a launch is a notice, so the
@@ -2612,7 +2612,7 @@ attended() {
     # The key goes to the launcher alone; implement.sh un-exports it before claude starts.
     AGENT_SUPABASE_SERVICE_KEY="${AGENT_SUPABASE_SERVICE_KEY:-}" nohup "$HOME_DIR/implement.sh" "$(jq -r '.key' <<<"$decision")" >/dev/null 2>&1 &
     note "launch: $(jq -r '.key' <<<"$decision") (pid $!)"
-    notice info scheduler "Agent queue: started an implementing session, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision")."
+    notice info scheduler "Agent queue: started an implementing session, $(watch -r 'include "watch"; include "guard"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision")."
     return 0
   fi
   # Once per change, only with no live session (a live one picks the work up), and not for a
@@ -2632,7 +2632,7 @@ attended() {
     if [[ -n "$(jq -r '.pick.ticket // empty' <<<"$decision")" &&
           ( "$sstate" == none || "$sstate" == stopped ) && ! $locked ]]; then
       note "attended: $attended_line"
-      notice action scheduler "Agent queue: no session running, $(watch -r 'include "watch"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision").$why Start /work-queue."
+      notice action scheduler "Agent queue: no session running, $(watch -r 'include "watch"; include "guard"; .pick + {verdict: "run"} | attended_line | ltrimstr("run now: ")' <<<"$decision").$why Start /work-queue."
     fi
   fi
 }
@@ -2673,7 +2673,7 @@ fi
 page_check plan "the agent:ready tickets" <<<"$resp"
 
 # Plan-only: an agent:ready ticket for this repo, not blocked by an open ticket, with no plan yet.
-ready="$(watch -r --argjson other "$OTHER_REPOS" 'include "watch";
+ready="$(watch -r --argjson other "$OTHER_REPOS" 'include "watch"; include "guard";
   .data.issues.nodes[]
   | select((status_rows | length) == 0)
   | select((.labels.nodes | map(.name | IN($other[])) | any) | not)
@@ -2934,7 +2934,7 @@ own_read() {
 # An action notice, so the dial's info level never drops it: it is the audit in place of Håkan's approval.
 review_notice() {
   local msg
-  msg="$(watch -r --arg desk "${AGENT_DESK_URL:-}" 'include "watch"; own_notice($desk)' <<<"$1")"
+  msg="$(watch -r --arg desk "${AGENT_DESK_URL:-}" 'include "watch"; include "guard"; own_notice($desk)' <<<"$1")"
   [[ -n "$msg" ]] || { note "warn: review: no daily notice$(watch_err)"; return 0; }
   note "review: notice: $msg"
   notice action review "$msg"

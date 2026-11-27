@@ -8,7 +8,7 @@ export type Person =
   | null
   | undefined;
 
-/** The queue's own Linear app user, `agent_user_id` in watch.jq */
+/** The queue's own Linear app user, `agent_user_id` in guard.jq */
 export const AGENT_USER_ID = 'bbbb4a33-e052-486e-8e0f-d3abb5c5c841';
 
 export type BotActor =
@@ -68,7 +68,7 @@ const COMMENT_LENGTH = 80;
 
 /**
  * Who did it. The agent writes as the queue's own Linear app user, matched by
- * its id as `is_agent` in watch.jq does; another app is named like a person.
+ * its id as `is_agent` in guard.jq does; another app is named like a person.
  * A bot actor is named by its name, else its type.
  */
 export const actorOf = ({
