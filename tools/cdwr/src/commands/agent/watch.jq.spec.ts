@@ -2049,6 +2049,8 @@ describe('step', () => {
         mergeTransient: null,
         review: null,
         reviewPaths: null,
+        reviewNeeded: false,
+        reviewApproved: false,
         oid: null,
         mergedAt: null,
         mergeCommit: null,
@@ -2090,6 +2092,8 @@ describe('step', () => {
         mergeTransient: null,
         review: null,
         reviewPaths: null,
+        reviewNeeded: false,
+        reviewApproved: false,
         oid: null,
         mergedAt: null,
         mergeCommit: null,
@@ -4807,13 +4811,20 @@ describe('attended picks', () => {
 
     it('carries the approval and the paths needing review on a pr row', () => {
       const r = view(
-        [review('COD-2'), review('COD-4'), review('COD-6'), review('COD-8')],
+        [
+          review('COD-2'),
+          review('COD-4'),
+          review('COD-6'),
+          review('COD-8'),
+          review('COD-10')
+        ],
         5,
         {
           'COD-2': { pr: 7, review: 'APPROVED', mergeWhy: 'a hold' },
           'COD-4': {
             pr: 8,
             review: 'REVIEW_REQUIRED',
+            reviewNeeded: true,
             mergeWhy: 'checks pending',
             mergeTransient: true,
             reviewPaths: ['apps/agent-host/x.sh']
@@ -4825,7 +4836,9 @@ describe('attended picks', () => {
             mergeWhy: 'checks pending',
             mergeTransient: true
           },
-          'COD-8': { pr: 10, review: 'APPROVED', mergeWhy: null }
+          'COD-8': { pr: 10, review: 'APPROVED', mergeWhy: null },
+          // The decision alone no longer says it: reviewNeeded does
+          'COD-10': { pr: 11, review: 'REVIEW_REQUIRED', mergeWhy: 'a hold' }
         }
       );
       expect(
@@ -4839,6 +4852,7 @@ describe('attended picks', () => {
       ).toEqual([
         [true, false, null],
         [false, true, ['apps/agent-host/x.sh']],
+        [false, false, null],
         [false, false, null],
         [false, false, null]
       ]);
@@ -8148,11 +8162,11 @@ describe('review_paths', () => {
     ]);
   });
 
-  it('is null unless the PR needs the review', () => {
-    expect(
-      paths(node('APPROVED', ['tools/cdwr/agent-queue/run.sh']))
-    ).toBeNull();
-    expect(paths(node(null, ['tools/cdwr/agent-queue/run.sh']))).toBeNull();
+  it('does not read the review decision', () => {
+    const files = ['tools/cdwr/agent-queue/run.sh'];
+    for (const d of ['APPROVED', null, 'REVIEW_REQUIRED']) {
+      expect(paths(node(d, files))).toEqual(files);
+    }
   });
 
   it('is null when GitHub gave only the first page of files', () => {
@@ -8215,10 +8229,11 @@ describe('merge_verdict', () => {
   });
   const verdict = (
     pr: Record<string, unknown> = prNode(),
-    t: Record<string, unknown> = ticket()
+    t: Record<string, unknown> = ticket(),
+    rules: unknown = []
   ) =>
     run(
-      `merge_verdict(${JSON.stringify(t)}; ${JSON.stringify(holds)})`,
+      `merge_verdict(${JSON.stringify(t)}; ${JSON.stringify(holds)}; ${JSON.stringify(rules)})`,
       pr
     ) as {
       verdict: string;
@@ -8236,34 +8251,156 @@ describe('merge_verdict', () => {
     });
   });
 
-  it("holds for a lasting reason while the ruleset requires Håkan's review", () => {
-    expect(verdict(prNode({ reviewDecision: 'REVIEW_REQUIRED' }))).toEqual({
-      verdict: "the ruleset requires Håkan's review",
-      claimed: true,
-      transient: false
+  describe("Håkan's review", () => {
+    const REVIEW_RULES = [
+      {
+        type: 'pull_request',
+        parameters: {
+          required_reviewers: [{ file_patterns: ['apps/desk/**', 'libs/x/**'] }]
+        }
+      }
+    ];
+    const reviewNode = (paths: string[], over: Record<string, unknown> = {}) =>
+      prNode({
+        reviewDecision: null,
+        files: {
+          pageInfo: { hasNextPage: false },
+          nodes: paths.map((path) => ({ path }))
+        },
+        ...over
+      });
+    const WATCHED = ['apps/desk/src/a.ts'];
+    const approval = (typename: string, state = 'APPROVED', oid = 'h1') => ({
+      latestReviews: {
+        nodes: [{ state, commit: { oid }, author: { __typename: typename } }]
+      }
     });
-  });
+    const deskVerdict = (
+      pr: Record<string, unknown>,
+      rules: unknown = REVIEW_RULES
+    ) => run(`desk_verdict("merge"; ${JSON.stringify(rules)})`, pr);
 
-  it('names a parked wait before the ruleset, so a session mid-round is not told about', () => {
-    expect(
-      verdict(
-        prNode({ reviewDecision: 'REVIEW_REQUIRED' }),
-        ticket({
-          description:
-            '## Plan\n\n**Next:** `Waiting: CI · PR 5 @ abc1234 · since 2026-10-01T00:00Z`'
-        })
-      )
-    ).toMatchObject({
-      verdict: 'the ticket is parked on a wait',
-      transient: true
+    it('holds for a lasting reason on a watched file with no approval, whatever reviewDecision says', () => {
+      const expected = "needs Håkan's approval on GitHub (apps/desk/src/a.ts)";
+      expect(deskVerdict(reviewNode(WATCHED))).toBe(expected);
+      expect(
+        deskVerdict(reviewNode(WATCHED, { reviewDecision: 'REVIEW_REQUIRED' }))
+      ).toBe(expected);
+      expect(verdict(reviewNode(WATCHED), ticket(), REVIEW_RULES)).toEqual({
+        verdict: expected,
+        claimed: true,
+        transient: false
+      });
     });
-  });
 
-  it('is ok when the review decision is APPROVED', () => {
-    expect(verdict(prNode({ reviewDecision: 'APPROVED' }))).toEqual({
-      verdict: 'ok PR_node1 h1',
-      claimed: true,
-      transient: false
+    it('counts the other matches after the first', () => {
+      const n = reviewNode(['apps/desk/src/a.ts', 'libs/x/b.ts']);
+      expect(deskVerdict(n)).toBe(
+        "needs Håkan's approval on GitHub (apps/desk/src/a.ts, +1 more)"
+      );
+    });
+
+    it('is ok after a person approved', () => {
+      const n = reviewNode(WATCHED, approval('User'));
+      expect(deskVerdict(n)).toBe('ok PR_node1 h1');
+      expect(verdict(n, ticket(), REVIEW_RULES)).toEqual({
+        verdict: 'ok PR_node1 h1',
+        claimed: true,
+        transient: false
+      });
+    });
+
+    it('is not approved by the app, or by a review that is not an approval', () => {
+      const expected = "needs Håkan's approval on GitHub (apps/desk/src/a.ts)";
+      expect(deskVerdict(reviewNode(WATCHED, approval('Bot')))).toBe(expected);
+      expect(
+        deskVerdict(reviewNode(WATCHED, approval('User', 'COMMENTED')))
+      ).toBe(expected);
+    });
+
+    it('is ok when no changed file matches a pattern', () => {
+      expect(deskVerdict(reviewNode(['apps/web/src/x.ts']))).toBe(
+        'ok PR_node1 h1'
+      );
+      expect(deskVerdict(reviewNode(WATCHED), [])).toBe('ok PR_node1 h1');
+    });
+
+    it("holds, transient, when main's branch rules were not read", () => {
+      expect(deskVerdict(reviewNode(WATCHED), null)).toBe(
+        "main's branch rules were not read"
+      );
+      expect(verdict(reviewNode(WATCHED), ticket(), null)).toEqual({
+        verdict: "main's branch rules were not read",
+        claimed: true,
+        transient: true
+      });
+    });
+
+    it('holds when GitHub gave only the first page of files', () => {
+      const n = reviewNode(WATCHED, {
+        files: {
+          pageInfo: { hasNextPage: true },
+          nodes: WATCHED.map((path) => ({ path }))
+        }
+      });
+      expect(deskVerdict(n)).toBe(
+        "too many changed files to check for Håkan's review"
+      );
+    });
+
+    it('holds when the files were not read', () => {
+      expect(deskVerdict(prNode({ files: null }))).toBe(
+        "the PR's files were not read"
+      );
+    });
+
+    it('lets a parked wait speak first, so a session mid-round sends no notice', () => {
+      expect(
+        verdict(
+          reviewNode(WATCHED),
+          ticket({
+            description:
+              '## Plan\n\n**Next:** `Waiting: CI · PR 5 @ abc1234 · since 2026-10-01T00:00Z`'
+          }),
+          REVIEW_RULES
+        )
+      ).toEqual({
+        verdict: 'the ticket is parked on a wait',
+        claimed: true,
+        transient: true
+      });
+    });
+
+    it('does not count an approval of an older head', () => {
+      expect(
+        deskVerdict(reviewNode(WATCHED, approval('User', 'APPROVED', 'h0')))
+      ).toBe("needs Håkan's approval on GitHub (apps/desk/src/a.ts)");
+    });
+
+    it('lets a long file list through once approved, or when no rule names a pattern', () => {
+      const long = {
+        files: {
+          pageInfo: { hasNextPage: true },
+          nodes: WATCHED.map((path) => ({ path }))
+        }
+      };
+      expect(
+        deskVerdict(reviewNode(WATCHED, { ...long, ...approval('User') }))
+      ).toBe('ok PR_node1 h1');
+      expect(deskVerdict(reviewNode(WATCHED, long), [])).toBe('ok PR_node1 h1');
+    });
+
+    it("holds on a person's change request though reviewDecision reads null", () => {
+      expect(
+        verdict(
+          reviewNode(
+            ['apps/web/src/x.ts'],
+            approval('User', 'CHANGES_REQUESTED')
+          ),
+          ticket(),
+          REVIEW_RULES
+        ).verdict
+      ).toBe('a review requested changes');
     });
   });
 
@@ -8573,6 +8710,7 @@ describe('step with merge', () => {
     label?: string;
     title?: string;
     reviewPaths?: string[];
+    reviewNeeded?: boolean;
   };
   const step = ({
     now = {},
@@ -8580,13 +8718,15 @@ describe('step with merge', () => {
     merge = OK,
     label,
     title,
-    reviewPaths
+    reviewPaths,
+    reviewNeeded
   }: Over = {}) =>
     run('step', {
       id: 'COD-9',
       pr: 5,
       ...(title === undefined ? {} : { title }),
       ...(reviewPaths === undefined ? {} : { reviewPaths }),
+      ...(reviewNeeded === undefined ? {} : { reviewNeeded }),
       now: {
         state: 'open',
         removedAt: null,
@@ -8886,6 +9026,13 @@ describe('step with merge', () => {
       expect(r.entry['reviewPaths']).toEqual(['apps/agent-host/x.sh']);
     });
 
+    it('stores reviewNeeded, false when not given', () => {
+      expect(
+        step({ merge: HELD, reviewNeeded: true }).entry['reviewNeeded']
+      ).toBe(true);
+      expect(step({ merge: OK }).entry['reviewNeeded']).toBe(false);
+    });
+
     it('carries neither from the previous entry', () => {
       const r = step({
         merge: OK,
@@ -8893,6 +9040,7 @@ describe('step with merge', () => {
       });
       expect(r.entry['review']).toBeNull();
       expect(r.entry['reviewPaths']).toBeNull();
+      expect(r.entry['reviewNeeded']).toBe(false);
     });
   });
 

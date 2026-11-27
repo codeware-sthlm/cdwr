@@ -237,7 +237,9 @@ def pr_state:
 # commit, and sends no merge notice: run.sh sends one when the list has run (apply_summary). Once
 # stored, entry.apply is kept while the PR stays the same, as copilotAsked is.
 # $in.title is the PR's title, carried only into own: the events run.sh keeps in own.jsonl.
-# $in.reviewPaths is review_paths (the files main's ruleset wants Håkan's review for), stored as is.
+# $in.reviewPaths is review_paths (the files main's ruleset wants Håkan's review for), stored as is,
+# and $in.reviewNeeded is review_needed: true while those files wait for his approval. $in.reviewApproved
+# is ruleset_gate's approved: a person approved the head on GitHub.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr
@@ -331,7 +333,8 @@ def step:
                 mergeCommit: ($now.mergeCommit // $prev.mergeCommit // null), at: $in.at,
                 mergeWhy: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.verdict else null end),
                 mergeTransient: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.transient == true else null end),
-                review: ($now.review // null), reviewPaths: ($in.reviewPaths // null) }
+                review: ($now.review // null), reviewPaths: ($in.reviewPaths // null),
+                reviewNeeded: ($in.reviewNeeded == true), reviewApproved: ($in.reviewApproved == true) }
               + (if $prev.relabelled == true then { relabelled: true } else {} end)
               + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end)
               + (if $snap then
@@ -353,26 +356,6 @@ def step:
   | .askCopilot = ($in.parked.wait == "copilot" and $in.parked.pr == $pr
                    and ($in.now.state | IN("merged", "closed") | not)
                    and ($in.now.copilot // "none") == "none" and .entry.copilotAsked == null);
-
-# The scheduler's verdict on a desk copilot or merge command, from the pullRequest node it just read
-# (run.sh desk_pr_check): `ok <node id> <head oid>`, else why not. The desk's buttons use the same
-# rules on the watch entry (apps/desk), so a refusal here means the PR changed since the desk read it.
-def desk_verdict($kind):
-  pr_state as $s
-  | if .state != "OPEN" then "PR is \((.state // "unknown") | ascii_downcase)"
-    elif $kind == "copilot" then
-      if $s.copilot == "reviewed" then "Copilot has reviewed it"
-      elif $s.copilot == "requested" then "Copilot review already requested"
-      else "ok \(.id) \(.headRefOid)" end
-    elif $kind != "merge" then "unknown kind"
-    elif .isDraft == true then "PR is a draft"
-    elif .mergeQueueEntry != null then "already in the merge queue"
-    elif .mergeable == "CONFLICTING" then "conflicts with main"
-    elif .mergeable != "MERGEABLE" then "GitHub has not checked for conflicts yet"
-    elif $s.ci != "SUCCESS" then "checks \(($s.ci // "missing") | ascii_downcase)"
-    elif $s.threadsTruncated then "too many review threads to check them all"
-    elif $s.threads > 0 then "\($s.threads) unresolved \(if $s.threads == 1 then "thread" else "threads" end)"
-    else "ok \(.id) \(.headRefOid)" end;
 
 # The scheduler's verdict on a desk restart or gate command, from the `cdwr --dry-run --json`
 # envelope it just ran (run.sh desk_platform_check): `ok`, else why not. $args is the command's args
@@ -784,10 +767,11 @@ def hold_matches($files; $holds):
 
 # The PR's changed files that need Håkan's review, from a pullRequest node and main's branch rules
 # (GET rules/branches/main): those the pull_request rule's required_reviewers file patterns match.
-# null when the PR does not read REVIEW_REQUIRED, the rules were not read or name no pattern, or
-# GitHub gave only the first page of files, where a match may sit past it
+# Never keyed on reviewDecision: GitHub reads null for a required_reviewers rule. null when the
+# rules were not read or name no pattern, or GitHub gave only the first page of files, where a match
+# may sit past it
 def review_paths($rules):
-  if .reviewDecision != "REVIEW_REQUIRED" or ($rules | type) != "array" then null
+  if ($rules | type) != "array" then null
   elif .files.pageInfo.hasNextPage == true then null
   else [ $rules[] | select(.type == "pull_request") | (.parameters.required_reviewers // [])[]
          | (.file_patterns // [])[] | select(type == "string") | glob_re ] as $res
@@ -795,6 +779,54 @@ def review_paths($rules):
       else [ (.files.nodes // [])[] | .path | select(type == "string")
              | select(. as $p | any($res[]; . as $re | $p | test($re))) ] | unique end
   end;
+
+# Whether main's ruleset still wants Håkan's approval on GitHub before the PR can merge:
+# { paths, approved, verdict }. paths is review_paths. approved is true for an APPROVED latest
+# review of the head commit by a person, never the app. verdict is null when no rule names a
+# pattern, when it is approved, or when no changed file matches, else why the merge waits; rules
+# unread or a file list cut short refuse rather than pass unchecked
+def ruleset_gate($rules):
+  review_paths($rules) as $p
+  | .headRefOid as $head
+  | any((.latestReviews.nodes // [])[]; .state == "APPROVED" and .author.__typename == "User"
+        and .commit.oid != null and .commit.oid == $head) as $ok
+  | ([ ($rules // [])[]? | select(.type == "pull_request") | (.parameters.required_reviewers // [])[]
+       | (.file_patterns // [])[] | select(type == "string") ] | length > 0) as $patterns
+  | { paths: $p, approved: $ok,
+      verdict: (if ($rules | type) != "array" then "main's branch rules were not read"
+                elif ($patterns | not) or $ok then null
+                elif .files == null then "the PR's files were not read"
+                elif .files.pageInfo.hasNextPage == true then "too many changed files to check for Håkan's review"
+                elif (($p // []) | length) == 0 then null
+                else "needs Håkan's approval on GitHub (\($p[0])"
+                     + (if ($p | length) > 1 then ", +\(($p | length) - 1) more" else "" end) + ")" end) };
+
+# True when the PR changes a file main's ruleset wants Håkan's review for and he has not approved
+def review_needed($rules):
+  ruleset_gate($rules) | (((.paths // []) | length) > 0 and (.approved | not));
+
+# The scheduler's verdict on a desk copilot or merge command, from the pullRequest node it just read
+# (run.sh desk_pr_check) and main's branch rules (null for copilot): `ok <node id> <head oid>`, else
+# why not. The desk's buttons use the same rules on the watch entry (apps/desk), so a refusal here
+# means the PR changed since the desk read it.
+def desk_verdict($kind; $rules):
+  pr_state as $s
+  | (if $kind == "merge" then ruleset_gate($rules).verdict else null end) as $g
+  | if .state != "OPEN" then "PR is \((.state // "unknown") | ascii_downcase)"
+    elif $kind == "copilot" then
+      if $s.copilot == "reviewed" then "Copilot has reviewed it"
+      elif $s.copilot == "requested" then "Copilot review already requested"
+      else "ok \(.id) \(.headRefOid)" end
+    elif $kind != "merge" then "unknown kind"
+    elif .isDraft == true then "PR is a draft"
+    elif .mergeQueueEntry != null then "already in the merge queue"
+    elif .mergeable == "CONFLICTING" then "conflicts with main"
+    elif .mergeable != "MERGEABLE" then "GitHub has not checked for conflicts yet"
+    elif $s.ci != "SUCCESS" then "checks \(($s.ci // "missing") | ascii_downcase)"
+    elif $s.threadsTruncated then "too many review threads to check them all"
+    elif $s.threads > 0 then "\($s.threads) unresolved \(if $s.threads == 1 then "thread" else "threads" end)"
+    elif $g != null then $g
+    else "ok \(.id) \(.headRefOid)" end;
 
 # The PR-ready comment's Merge line for the matches: the first one named, the rest counted
 def merge_line($m):
@@ -837,8 +869,10 @@ def body_line($prefix):
 # the session's consent, never authority, so every rule is checked again here. transient is true
 # for a reason that settles by itself or has a notice of its own (pending checks, a conflict).
 # Once Håkan comments after the PR-ready comment the merge is his, even after review addressed.
-def merge_verdict($node; $holds):
-  desk_verdict("merge") as $d
+def merge_verdict($node; $holds; $rules):
+  # The review gate stands where it did before the parked and PR-ready checks: mid-round it is not the reason
+  desk_verdict("merge"; []) as $d
+  | ruleset_gate($rules).verdict as $g
   | ($node | pr_ready_comment) as $c
   | ([ (.files.nodes // [])[] | .path | select(type == "string") ]) as $files
   | (($c != null) and ($c | body_line("merge: merging on its own"))) as $claimed
@@ -849,14 +883,17 @@ def merge_verdict($node; $holds):
      elif ($claimed | not) then "the PR-ready comment does not say it merges on its own"
      # A parked wait is a session mid-round: a push is coming, or CI runs on the head it just pushed
      elif ($node | parked) != null then "the ticket is parked on a wait"
-     elif .reviewDecision == "REVIEW_REQUIRED" then "the ruleset requires Håkan's review"
+     elif $g != null then $g
      elif any(($node.comments.nodes // [])[]; (is_agent | not) and (.createdAt | epoch) > ($c.createdAt | epoch))
        then "Håkan commented after the PR-ready comment"
      elif ($node | asks_before_merging) then "the report says Ask me before merging"
      # Credentials stay Håkan's: a secret write applied after a self-merge would bypass him
      elif any(($node | apply_items)[]; (.dropped | not) and ((.kind // "") | startswith("secret-")))
        then "the Apply list writes a secret"
-     elif .reviewDecision == "CHANGES_REQUESTED" then "a review requested changes"
+     # reviewDecision reads null when only a ruleset applies, so a person's latest review counts too
+     elif .reviewDecision == "CHANGES_REQUESTED"
+          or any((.latestReviews.nodes // [])[]; .state == "CHANGES_REQUESTED" and .author.__typename == "User")
+       then "a review requested changes"
      elif .files == null then "the PR's files were not read"
      elif .files.pageInfo.hasNextPage == true then "too many changed files to check them all"
      elif ($files | length) == 0 then "no changed files read"
@@ -869,7 +906,7 @@ def merge_verdict($node; $holds):
   | { verdict: $v, claimed: $claimed,
       transient: (($v | startswith("ok ") | not)
                   # Review feedback is a session's pick, and Håkan knows his own comment
-                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main|[0-9]+ unresolved thread|too many review threads|Håkan commented|the ticket is parked|the ticket is not agent:review)"))) };
+                  and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main|[0-9]+ unresolved thread|too many review threads|Håkan commented|the ticket is parked|the ticket is not agent:review|main's branch rules were not read)"))) };
 
 # The settled outcome of the production deploy after a self-merge, from the Fly Deployment push
 # runs for the merge commit and the annotations of that run's jobs: success, failure, skipped (the
@@ -1236,8 +1273,8 @@ def queue_view($now; $limit; $watch; $session; $waits; $renovate):
         # approved: Håkan approved on GitHub and the watch's own hold lasts, so the merge is his button
         after: (($lu.open | map(($watch[.] // {}) as $w
                                 | { ticket: ., kind: "pr", pr: ($w.pr // null), held: ($w.mergeWhy // null),
-                                    approved: ($w.review == "APPROVED" and $w.mergeWhy != null and $w.mergeTransient != true),
-                                    reviewRequired: ($w.review == "REVIEW_REQUIRED"), reviewPaths: ($w.reviewPaths // null) }))
+                                    approved: (($w.review == "APPROVED" or $w.reviewApproved == true) and $w.mergeWhy != null and $w.mergeTransient != true),
+                                    reviewRequired: ($w.reviewNeeded == true), reviewPaths: ($w.reviewPaths // null) }))
                 + ($lu.handoffs | map({ ticket: ., kind: "handoffs", items: ($by[.] | handoffs) })))
       }
     };
