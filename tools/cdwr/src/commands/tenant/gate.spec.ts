@@ -31,6 +31,39 @@ vi.mock('../../services/infisical', () => ({
 }));
 
 describe('tenant gate', () => {
+  it('says why --tenant has nothing to choose when production holds no tenant', async () => {
+    const { readTenantDeployments } = await import('../../services/infisical');
+    vi.mocked(readTenantDeployments).mockResolvedValueOnce(new Map());
+    const command = (await import('./gate')).default;
+    const stdout: string[] = [];
+
+    const exit = await runCommand({
+      name: 'tenant gate',
+      command,
+      argv: [
+        'open',
+        '--env',
+        'production',
+        '--tenant',
+        'acme',
+        '--yes',
+        '--json'
+      ],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (t) => stdout.push(t)
+    });
+
+    expect(exit).not.toBe(EXIT.ok);
+    expect(stdout.join('\n')).toContain(
+      'No tenant under /tenants in production'
+    );
+  });
+
   it('closes a tenant on production, revealing the password once', async () => {
     const { setInfisicalSecret } = await import('../../services/infisical');
     const { setSecretsTogether } = await import('../../services/fly');

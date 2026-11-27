@@ -41,6 +41,58 @@ vi.mock('../../services/infisical', () => ({
 }));
 
 describe('tenant rotate-key', () => {
+  it('says why --tenant has nothing to choose when production holds no tenant', async () => {
+    const { readTenantDeployments } = await import('../../services/infisical');
+    vi.mocked(readTenantDeployments).mockResolvedValueOnce(new Map());
+    const command = (await import('./rotate-key')).default;
+    const stdout: string[] = [];
+
+    const exit = await runCommand({
+      name: 'tenant rotate-key',
+      command,
+      argv: ['--env', 'production', '--tenant', 'acme', '--yes', '--json'],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (t) => stdout.push(t)
+    });
+
+    expect(exit).not.toBe(EXIT.ok);
+    expect(stdout.join('\n')).toContain(
+      'No tenant under /tenants in production'
+    );
+  });
+
+  it('says why --tenant has nothing to choose when no tenant has a key', async () => {
+    const { readTenantDeployments } = await import('../../services/infisical');
+    vi.mocked(readTenantDeployments).mockResolvedValueOnce(
+      new Map([['acme', [{ app: 'cms', secrets: {} }]]])
+    );
+    const command = (await import('./rotate-key')).default;
+    const stdout: string[] = [];
+
+    const exit = await runCommand({
+      name: 'tenant rotate-key',
+      command,
+      argv: ['--env', 'production', '--tenant', 'acme', '--yes', '--json'],
+      root: '/repo',
+      env: {},
+      prefs: memoryPrefs(),
+      interactive: false,
+      ui: fakeUi([], false),
+      history: () => undefined,
+      stdout: (t) => stdout.push(t)
+    });
+
+    expect(exit).not.toBe(EXIT.ok);
+    expect(stdout.join('\n')).toContain(
+      'No tenant in production has a PAYLOAD_API_KEY to rotate'
+    );
+  });
+
   it('rotates the key in Payload, Infisical and Fly', async () => {
     const { setInfisicalSecret } = await import('../../services/infisical');
     const { setSecretsTogether } = await import('../../services/fly');

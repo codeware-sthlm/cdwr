@@ -36,6 +36,7 @@ import {
   tenantHint,
   unreadApps
 } from './gate.logic';
+import { noTenantsError } from './tenants.logic';
 
 /** Whether the deployed app carries the gate password; unreachable is reported rather than assumed open */
 async function readFlyState(
@@ -91,6 +92,7 @@ export default defineCommand({
       choices: async (ctx, resolved) => {
         const environment = resolved['environment'] as Environment;
         const deployments = await readTenantDeployments(environment);
+        if (deployments.size === 0) throw noTenantsError(environment);
         return [...deployments.entries()].map(([tenantId, apps]) => ({
           value: tenantId,
           hint: tenantHint(apps)
