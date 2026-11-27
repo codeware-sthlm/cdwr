@@ -49,7 +49,8 @@ const isWorkspaceAdmin = (
 /**
  * The caller's statistics account state in a workspace, with what the state
  * was read from. `none` unless the caller is an admin of the workspace, the
- * workspace has a statistics website and team, and Umami can be managed.
+ * workspace has a statistics website and team, and Umami can be managed,
+ * which only the host app can.
  */
 export async function resolveStatsAccount(
   req: PayloadRequest,
@@ -57,7 +58,9 @@ export async function resolveStatsAccount(
   tenant: { statsWebsiteId?: string | null; statsTeamId?: string | null }
 ): Promise<{ state: StatsAccountState; umamiUserId?: string }> {
   const { user } = req;
+  // Umami's admin login is the host's to read; a tenant app holds no credentials
   if (
+    getEnv().APP_MODE.type !== 'host' ||
     !user ||
     !isWorkspaceAdmin(user, tenantId) ||
     !tenant.statsWebsiteId ||

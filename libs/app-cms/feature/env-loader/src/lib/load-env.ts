@@ -111,6 +111,15 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   const environmentPair = resolveTurnstilePair([environment]);
   applyTurnstilePair(environmentPair);
 
+  const tenantId = process.env['TENANT_ID'];
+  const pushedConfig = !!tenantId && !process.env['INFISICAL_CLIENT_ID'];
+
+  // The schema's default `*` allows every origin; a tenant app whose folder
+  // sets no CORS_URLS allows none, as an empty Infisical read did before
+  if (pushedConfig && process.env['CORS_URLS'] === undefined) {
+    process.env['CORS_URLS'] = '';
+  }
+
   // Pre-check environment variables as they can be injected from CLI.
   // Then there is no reason to connect to Infisical using the SDK.
   const preResponse = EnvSchema.safeParse(process.env);
@@ -120,6 +129,16 @@ export const loadEnv = async (): Promise<Env | undefined> => {
     );
     logTurnstilePair(environmentPair);
     return preResponse.data;
+  }
+
+  // A deployed tenant app holds no Infisical credentials: its config is pushed
+  // at deploy, so what fails the check above is missing from its folder
+  if (pushedConfig) {
+    const missing = Object.keys(preResponse.error.flatten().fieldErrors);
+    console.error(
+      `[ENV] Pushed config for tenant ${tenantId} is incomplete, missing: ${missing.join(', ')}`
+    );
+    return;
   }
 
   // Load secrets for the cms app
@@ -141,8 +160,7 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   const turnstileSources: Array<TurnstileSource> = [];
 
   // If TENANT_ID is set (tenant deployment), load tenant-specific secrets
-  if (process.env['TENANT_ID']) {
-    const tenantId = process.env['TENANT_ID'];
+  if (tenantId) {
     console.log(`[ENV] Loading tenant secrets for tenant: ${tenantId}`);
 
     const tenantAppPath = `/tenants/${tenantId}/apps/cms`;
@@ -168,10 +186,14 @@ export const loadEnv = async (): Promise<Env | undefined> => {
   applyTurnstilePair(turnstilePair);
   logTurnstilePair(turnstilePair);
 
-  // Load CORS urls for the tenants
+  // Load CORS urls: every tenant's for the host, only its own for a tenant app
   const corsSecrets = await withInfisical({
     environment: process.env['DEPLOY_ENV'],
-    filter: { path: '/tenants', recurse: true, tags: ['cors'] },
+    filter: {
+      path: tenantId ? `/tenants/${tenantId}` : '/tenants',
+      recurse: true,
+      tags: ['cors']
+    },
     silent: true
   });
   // Inject CORS urls into process.env manually

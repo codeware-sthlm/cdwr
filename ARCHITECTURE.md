@@ -38,6 +38,12 @@ A deployment is switched on per environment by an Infisical secret `DEPLOY_ENABL
 
 A host app reads `/apps/<app>` itself at boot, so the deploy pushes no folder secrets to it. The flag never reaches Fly. `cdwr infisical analysis` prints the matrix, and `cdwr tenant provision` sets a tenant's flags.
 
+### Shared secrets
+
+The deploy workflow's shared secrets are the read-everything Infisical identity (`INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, `INFISICAL_PROJECT_ID`). Only a host deploy gets them, so it can read its folder at boot. A tenant deploy never does: its app is public and per tenant, so it gets its config pushed from `/tenants/<tenant>/apps/<app>`, with that folder's imports and references resolved. An app that runs third-party code sets `"sharedSecrets": "none"` in its `github.json` and gets none on its host deploy either (umami). `SENTRY_AUTH_TOKEN` is a build argument only and never reaches a machine.
+
+A pushed value changes on the app's next deploy, not on a restart: after rotating a value a tenant app imports, dispatch `Fly Deployment` for that app.
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/ci.yml`) runs lint/test/build on PRs using Nx affected detection and Nx Cloud caching. Deployment selection is separate and **not** affected-based: the deployment workflow ships an app when `nx release` resolves a version bump for it from its conventional commits since the last release tag. A bump alone is not enough: the app also needs a runtime change in its range, meaning a changed file outside the ignore list (`ignoredFiles` in `nx-deploy`: Markdown, `.claude/**`, specs, stories, snapshots) that makes it affected. A preview's range is its own PR (`merge-base(origin/main, PR head)..PR head`), so unreleased commits on main and docs-only PRs deploy nothing. Production's range runs from the app's last release tag. Every dropped app is logged as `Skip: <app> - bumped by nx release, but no runtime change in <range>`. A manual dispatch naming an app skips both checks. Preview environments are created for a PR carrying the `preview-deploy` label, with temporary Postgres databases from a dedicated preview cluster. The label is an opt-in: nothing adds it when a PR opens, the agent queue adds it once a PR's Copilot round is settled, and adding it deploys at once. A manual dispatch for a PR number deploys without it, and closing a PR tears its preview down either way.

@@ -22,6 +22,14 @@ describe('getUmamiApi', () => {
 
   afterEach(() => {
     delete process.env['DEPLOY_ENV'];
+    delete process.env['UMAMI_API_KEY'];
+  });
+
+  it('builds a client from the pushed key, without reading the vault', async () => {
+    process.env['UMAMI_API_KEY'] = 'pushed_key';
+
+    expect((await getUmamiApi(URL)).status).toBe('ready');
+    expect(credentials).not.toHaveBeenCalled();
   });
 
   it('builds a client from the stored key', async () => {

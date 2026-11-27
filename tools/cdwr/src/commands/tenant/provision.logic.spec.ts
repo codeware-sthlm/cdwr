@@ -14,8 +14,10 @@ import {
   planFlyAppsToDeploy,
   planFolders,
   planImports,
+  planReferences,
   provisionSteps,
   reasonSkipped,
+  secretReference,
   statsDomain,
   statsStep,
   statsWrites,
@@ -161,19 +163,154 @@ describe('provisionSteps flags', () => {
 
 describe('planImports', () => {
   it('plans the shared import for headless when none exist', () => {
-    expect(planImports(['cms', 'headless'], [])).toEqual([
+    expect(planImports(['headless'], 'demo', {})).toEqual([
       { app: 'headless', importPath: '/apps/headless', action: 'create' }
     ]);
   });
 
   it('keeps the import already there', () => {
-    expect(planImports(['headless'], ['/apps/headless'])).toEqual([
+    expect(
+      planImports(['headless'], 'demo', { headless: ['/apps/headless'] })
+    ).toEqual([
       { app: 'headless', importPath: '/apps/headless', action: 'present' }
     ]);
   });
 
-  it('plans nothing for the cms', () => {
-    expect(planImports(['cms'], [])).toEqual([]);
+  it('plans the tenant folder before /apps/cms for the cms', () => {
+    expect(planImports(['cms'], 'demo', {})).toEqual([
+      { app: 'cms', importPath: '/tenants/demo', action: 'create' },
+      { app: 'cms', importPath: '/apps/cms', action: 'create' }
+    ]);
+  });
+
+  it('keeps the cms imports already there and creates the rest', () => {
+    expect(
+      planImports(['cms'], 'demo', { cms: ['/apps/cms'] }).map(
+        ({ importPath, action }) => [importPath, action]
+      )
+    ).toEqual([
+      ['/tenants/demo', 'create'],
+      ['/apps/cms', 'present']
+    ]);
+  });
+
+  it('plans both apps, each against its own imports', () => {
+    expect(
+      planImports(['cms', 'headless'], 'demo', {
+        cms: ['/tenants/demo', '/apps/cms'],
+        headless: []
+      }).map(({ app, importPath, action }) => [app, importPath, action])
+    ).toEqual([
+      ['cms', '/tenants/demo', 'present'],
+      ['cms', '/apps/cms', 'present'],
+      ['headless', '/apps/headless', 'create']
+    ]);
+  });
+});
+
+describe('secretReference', () => {
+  it('names the environment, the folders and the key', () => {
+    expect(
+      secretReference('production', { path: '/tenants/acme', key: 'CORS' })
+    ).toBe('${production.tenants.acme.CORS}');
+    expect(
+      secretReference('preview', {
+        path: '/tenants/acme/apps/web',
+        key: 'ORIGIN'
+      })
+    ).toBe('${preview.tenants.acme.apps.web.ORIGIN}');
+  });
+});
+
+describe('planReferences', () => {
+  const cors = [{ path: '/tenants/demo', key: 'CORS' }];
+
+  it('plans both references when the folder holds neither', () => {
+    expect(planReferences('production', 'demo', {}, cors, true)).toEqual({
+      references: [
+        {
+          key: 'CORS_URLS',
+          action: 'create',
+          value: '${production.tenants.demo.CORS}'
+        },
+        {
+          key: 'UMAMI_API_KEY',
+          action: 'create',
+          value: '${production.integrations.umami.API_KEY}'
+        }
+      ],
+      warnings: []
+    });
+  });
+
+  it('joins every cors secret, sorted, in one value', () => {
+    const { references } = planReferences(
+      'production',
+      'demo',
+      {},
+      [
+        { path: '/tenants/demo/sites/b', key: 'CORS' },
+        { path: '/tenants/demo', key: 'CORS' },
+        { path: '/tenants/demo', key: 'CORS' }
+      ],
+      false
+    );
+    expect(references).toEqual([
+      {
+        key: 'CORS_URLS',
+        action: 'create',
+        value:
+          '${production.tenants.demo.CORS},${production.tenants.demo.sites.b.CORS}'
+      }
+    ]);
+  });
+
+  it('keeps a key the folder already holds, whatever its value', () => {
+    expect(
+      planReferences(
+        'production',
+        'demo',
+        { CORS_URLS: 'https://own.test', UMAMI_API_KEY: 'k' },
+        cors,
+        true
+      )
+    ).toEqual({
+      references: [
+        { key: 'CORS_URLS', action: 'present', value: 'https://own.test' },
+        { key: 'UMAMI_API_KEY', action: 'present', value: 'k' }
+      ],
+      warnings: []
+    });
+  });
+
+  it('plans no CORS_URLS and warns when the tenant has no cors secret', () => {
+    const { references, warnings } = planReferences(
+      'production',
+      'demo',
+      {},
+      [],
+      true
+    );
+    expect(references.map(({ key }) => key)).toEqual(['UMAMI_API_KEY']);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(
+      "No secret tagged 'cors' under /tenants/demo"
+    );
+  });
+
+  it('does not warn about a missing cors secret once CORS_URLS is set', () => {
+    expect(
+      planReferences('production', 'demo', { CORS_URLS: 'x' }, [], false)
+        .warnings
+    ).toEqual([]);
+  });
+
+  it('skips the Umami key silently when its source is absent', () => {
+    expect(
+      planReferences('production', 'demo', {}, cors, false).references.map(
+        ({ key }) => key
+      )
+    ).toEqual(['CORS_URLS']);
   });
 });
 
@@ -188,10 +325,35 @@ describe('provisionSteps imports', () => {
         undefined,
         false,
         [],
-        planImports(['headless'], ['/apps/headless'])
+        planImports(['headless'], 'demo', { headless: ['/apps/headless'] })
       )
     ).toEqual([
       'Keep import of /apps/headless in /tenants/demo/apps/headless (already there)'
+    ]);
+  });
+
+  it('lists the cms imports and references before the flag', () => {
+    expect(
+      provisionSteps(
+        'demo',
+        [],
+        [],
+        [{ app: 'cms', action: 'create' }],
+        undefined,
+        false,
+        [],
+        planImports(['cms'], 'demo', { cms: ['/apps/cms'] }),
+        [
+          { key: 'CORS_URLS', action: 'create', value: '${production.a.B}' },
+          { key: 'UMAMI_API_KEY', action: 'present', value: 'k' }
+        ]
+      )
+    ).toEqual([
+      'Import /tenants/demo into /tenants/demo/apps/cms',
+      'Keep import of /apps/cms in /tenants/demo/apps/cms (already there)',
+      'Set CORS_URLS in /tenants/demo/apps/cms to ${production.a.B}',
+      'Keep UMAMI_API_KEY in /tenants/demo/apps/cms (already there)',
+      'Set DEPLOY_ENABLED=true in /tenants/demo/apps/cms'
     ]);
   });
 
@@ -205,7 +367,7 @@ describe('provisionSteps imports', () => {
         undefined,
         false,
         [],
-        planImports(['headless'], [])
+        planImports(['headless'], 'demo', {})
       )
     ).toEqual([
       'Import /apps/headless into /tenants/demo/apps/headless',

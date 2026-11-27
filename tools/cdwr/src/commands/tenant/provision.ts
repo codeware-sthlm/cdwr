@@ -29,7 +29,9 @@ import {
   ensureInfisicalSecretImport,
   listInfisicalSecretImports,
   readDeployFlag,
+  readOwnSecrets,
   readSecrets,
+  readTaggedSecrets,
   setInfisicalSecret
 } from '../../services/infisical';
 import { sleep } from '../../services/shell';
@@ -65,9 +67,11 @@ import {
   type Folder,
   type ImportPlan,
   type KeyPlan,
+  type ReferencePlan,
   type StatsPlan,
   TENANT_APPS,
   type TenantRow,
+  UMAMI_SOURCE,
   cmsPaused,
   conflictMessage,
   deployArgs,
@@ -80,6 +84,7 @@ import {
   planFlyAppsToDeploy,
   planFolders,
   planImports,
+  planReferences,
   provisionSteps,
   reasonSkipped,
   statsDomain,
@@ -123,6 +128,36 @@ function namesInFactory(
     }
     return cache.get(parent) ?? null;
   };
+}
+
+/**
+ * What the cms folder's reference secrets come to: the tenant's own `cors`
+ * secrets, and whether the Umami key exists to point at. `own` is the folder's
+ * own secrets, empty when the folder is yet to be created.
+ */
+async function planCmsReferences(
+  environment: Environment,
+  deployment: string,
+  own: Record<string, string>,
+  tenantFolderExists: boolean
+): Promise<{ references: ReferencePlan[]; warnings: string[] }> {
+  const cors = tenantFolderExists
+    ? await readTaggedSecrets(environment, `/tenants/${deployment}`, 'cors')
+    : [];
+  const umami: Record<string, string> = await readOwnSecrets(
+    environment,
+    UMAMI_SOURCE.path
+  ).catch((error: unknown) => {
+    if (isNotFound(error)) return {};
+    throw error;
+  });
+  return planReferences(
+    environment,
+    deployment,
+    own,
+    cors,
+    Boolean(umami[UMAMI_SOURCE.key])
+  );
 }
 
 /** Run states that have not started yet, and still wait for the branch's slot */
@@ -270,6 +305,7 @@ interface PlanData {
   keysToWrite: AppKind[];
   flags: FlagPlan[];
   imports: ImportPlan[];
+  references: ReferencePlan[];
   databaseUrl: string;
   tenantId: number;
   stats: StatsPlan;
@@ -603,7 +639,7 @@ export default defineCommand({
 
     const connection = await createClient({});
 
-    const { folders, keys, flags, imports } = await ctx.ui.task(
+    const read = await ctx.ui.task(
       'Reading what Infisical already holds',
       async () => {
         const folders = await planFolders(
@@ -639,27 +675,41 @@ export default defineCommand({
             return { key, plan };
           })
         );
-        const headlessPath = `/tenants/${deployment}/apps/headless`;
-        const imported =
-          apps.includes('headless') && !missing.has(headlessPath)
-            ? (
-                await listInfisicalSecretImports({
-                  environment,
-                  path: headlessPath
-                })
-              )
-                .filter((found) => found.environment === environment)
-                .map((found) => found.path)
-            : [];
+        const imported: Partial<Record<AppKind, string[]>> = {};
+        for (const app of apps) {
+          const appPath = `/tenants/${deployment}/apps/${app}`;
+          if (missing.has(appPath)) continue;
+          imported[app] = (
+            await listInfisicalSecretImports({ environment, path: appPath })
+          )
+            .filter((found) => found.environment === environment)
+            .map((found) => found.path);
+        }
+
+        const cmsPath = `/tenants/${deployment}/apps/cms`;
+        const cmsPlan = apps.includes('cms')
+          ? await planCmsReferences(
+              environment,
+              deployment,
+              missing.has(cmsPath)
+                ? {}
+                : await readOwnSecrets(environment, cmsPath),
+              !missing.has(`/tenants/${deployment}`)
+            )
+          : { references: [], warnings: [] };
         return {
           folders,
           keys: rows.map(({ key }) => key),
           flags: rows.map(({ plan }) => plan),
-          imports: planImports(apps, imported)
+          imports: planImports(apps, deployment, imported),
+          references: cmsPlan.references,
+          referenceWarnings: cmsPlan.warnings
         };
       },
       () => 'Plan ready'
     );
+    const { folders, keys, flags, imports, references, referenceWarnings } =
+      read;
 
     const conflicts = keys
       .filter(({ action }) => action === 'conflict')
@@ -703,6 +753,7 @@ export default defineCommand({
     const paused = cmsPaused(flags);
     const flip = flipsStatus(tenant, apps, !noWait, flags);
     const notes = [
+      ...referenceWarnings,
       ...(pendingCms && paused
         ? [
             `The cms is paused, so ${tenant.name} stays pending after provisioning.`
@@ -727,7 +778,8 @@ export default defineCommand({
         stats,
         flip,
         statsTeam?.plan.steps,
-        imports
+        imports,
+        references
       ),
       notes,
       target: { environment, name: deployment },
@@ -742,6 +794,7 @@ export default defineCommand({
         keysToWrite,
         flags,
         imports,
+        references,
         databaseUrl,
         tenantId: tenant.id,
         stats,
@@ -756,6 +809,7 @@ export default defineCommand({
           keysToWrite.length +
           flags.filter(({ action }) => action === 'create').length +
           imports.filter(({ action }) => action === 'create').length +
+          references.filter(({ action }) => action === 'create').length +
           statsWrites(stats, tenant.statsShareId) +
           (statsTeam?.plan.steps.length ?? 0)
       } satisfies PlanData
@@ -774,6 +828,7 @@ export default defineCommand({
       keysToWrite,
       flags,
       imports,
+      references,
       databaseUrl,
       tenantId,
       stats,
@@ -860,6 +915,36 @@ export default defineCommand({
             : `${secretPath} already imports ${importPath}`
       );
       if (created) importsWritten.push(`${secretPath} <- ${importPath}`);
+    }
+
+    // Created like the key, and after the imports they resolve through: a key
+    // that appeared after the plan is kept
+    const referencesWritten: string[] = [];
+    for (const { key, value } of references.filter(
+      ({ action }) => action === 'create'
+    )) {
+      const secretPath = `/tenants/${deployment}/apps/cms`;
+      const created = await ctx.ui.task(
+        `Setting ${key} in ${secretPath}`,
+        async () => {
+          if (key in (await readOwnSecrets(environment, secretPath))) {
+            return false;
+          }
+          await setInfisicalSecret({
+            environment,
+            path: secretPath,
+            key,
+            value,
+            createOnly: true
+          });
+          return true;
+        },
+        (result) =>
+          result
+            ? `${secretPath} has ${key}`
+            : `${secretPath} already has ${key}`
+      );
+      if (created) referencesWritten.push(key);
     }
 
     // Created like the key: a flag that appeared after the plan is never overwritten
@@ -1122,6 +1207,7 @@ export default defineCommand({
           .filter(({ action }) => action === 'create')
           .map(({ app }) => app),
         importsWritten,
+        referencesWritten,
         paused: paused.map(({ app }) => app),
         statistics: {
           action: statistics.action,

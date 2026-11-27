@@ -1,8 +1,18 @@
-import { EnvSchema } from '@codeware/app-headless/util/env-schema';
+import { EnvSchema as HeadlessEnvSchema } from '@codeware/app-headless/util/env-schema';
 import { isDeployEnabled } from '@codeware/shared/util/pure';
+import type { z } from 'zod';
 
 import type { Environment } from '../../services/infisical';
 import type { DeploymentsMap, SkippedDeployment } from '../../services/tenancy';
+
+/**
+ * Loaded untyped: the cms schema's types reach Payload's, whose Next globals
+ * make `NODE_ENV` required on every `ProcessEnv` in this tool
+ */
+const CMS_ENV_SCHEMA = '@codeware/app-cms/util/env-schema' as string;
+const { EnvSchema: CmsEnvSchema } = (await import(CMS_ENV_SCHEMA)) as {
+  EnvSchema: z.ZodType;
+};
 
 /** Apps analyzed on every run */
 export const APPS = ['cms', 'headless', 'builder', 'umami'] as const;
@@ -23,30 +33,85 @@ export const flagStateOf = (value: string | undefined): FlagState => {
 const HEADLESS_DEPLOY_SET: readonly string[] = ['TENANT_ID'];
 
 /**
- * The variables the headless env schema requires that the deploy would not
+ * Keys the deploy sets on a tenant cms app itself (`addOpinionatedEnv`, and
+ * `DEPLOY_ENV` from the deploy's environment), not read from the tenant folder
+ */
+const CMS_DEPLOY_SET: readonly string[] = [
+  'APP_NAME',
+  'DEPLOY_ENV',
+  'FLY_URL',
+  'PR_NUMBER',
+  'TENANT_ID'
+];
+
+/** An app whose tenant folders are checked against its env schema */
+interface EnvCheck {
+  schema: z.ZodType;
+  deploySet: readonly string[];
+}
+
+const HEADLESS_CHECK: EnvCheck = {
+  schema: HeadlessEnvSchema,
+  deploySet: HEADLESS_DEPLOY_SET
+};
+const CMS_CHECK: EnvCheck = { schema: CmsEnvSchema, deploySet: CMS_DEPLOY_SET };
+
+/** Apps whose enabled tenant folders are checked, with what each checks against */
+const ENV_CHECKS: Record<string, EnvCheck | undefined> = {
+  headless: HEADLESS_CHECK,
+  cms: CMS_CHECK
+};
+
+/**
+ * The keys a schema requires: those it rejects when parsing an empty
+ * environment, which leaves out optional keys and keys with a default.
+ * Refinements across keys only run once the shape passes, so they add none.
+ */
+function requiredKeys(schema: z.ZodType): string[] {
+  const result = schema.safeParse({});
+  if (result.success) return [];
+  return [
+    ...new Set(
+      result.error.issues.flatMap(({ path }) =>
+        typeof path[0] === 'string' ? [path[0]] : []
+      )
+    )
+  ];
+}
+
+/**
+ * The variables an app's env schema requires that the deploy would not
  * deliver: neither set by the deploy nor in the tenant folder's env or
  * secrets. Names only, sorted.
  */
-export function missingHeadlessKeys(entry: {
-  env?: Record<string, string>;
-  secrets?: Record<string, string>;
-}): string[] {
+function missingKeys(
+  { schema, deploySet }: EnvCheck,
+  entry: { env?: Record<string, string>; secrets?: Record<string, string> }
+): string[] {
   const present = new Set([
-    ...HEADLESS_DEPLOY_SET,
+    ...deploySet,
     ...Object.keys(entry.env ?? {}),
     ...Object.keys(entry.secrets ?? {})
   ]);
-  return Object.entries(EnvSchema.shape)
-    .filter(([, field]) => !field.safeParse(undefined).success)
-    .map(([key]) => key)
+  return requiredKeys(schema)
     .filter((key) => !present.has(key))
     .sort();
 }
 
+type FolderEntry = Parameters<typeof missingKeys>[1];
+
+/** Required headless variables the deploy of this tenant would not deliver */
+export const missingHeadlessKeys = (entry: FolderEntry): string[] =>
+  missingKeys(HEADLESS_CHECK, entry);
+
+/** Required cms variables the deploy of this tenant would not deliver */
+export const missingCmsKeys = (entry: FolderEntry): string[] =>
+  missingKeys(CMS_CHECK, entry);
+
 export interface TenantFlag {
   tenant: string;
   flag: FlagState;
-  /** Headless only: required variables the deploy would not deliver, for a tenant that is on */
+  /** Cms and headless only: required variables the deploy would not deliver, for a tenant that is on */
   missing?: string[];
 }
 
@@ -89,6 +154,7 @@ export function summarize(
       const enabled = deployments[app] ?? [];
       const off = skipped.filter((entry) => entry.app === app);
       const hostSkip = off.find(({ tenant }) => tenant === undefined);
+      const check = ENV_CHECKS[app];
 
       const tenants: TenantFlag[] = [
         ...enabled.flatMap((entry) =>
@@ -98,9 +164,7 @@ export function summarize(
                 {
                   tenant: entry.tenant,
                   flag: 'on' as const,
-                  ...(app === 'headless' && {
-                    missing: missingHeadlessKeys(entry)
-                  })
+                  ...(check && { missing: missingKeys(check, entry) })
                 }
               ]
         ),

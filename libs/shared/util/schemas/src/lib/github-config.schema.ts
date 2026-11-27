@@ -24,7 +24,7 @@ export const GitHubConfigSchema = withEnvVars(
       .regex(/^[a-zA-Z0-9_-]*$/, 'flyPostgresDatabaseName pattern is invalid')
       .optional(),
 
-    sharedSecrets: z.boolean().optional(),
+    sharedSecrets: z.enum(['host', 'none']).optional(),
 
     previewWith: z.array(z.string().min(1)).optional()
   }),

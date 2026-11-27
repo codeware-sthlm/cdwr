@@ -74,6 +74,15 @@ vi.mock('../../services/github', () => ({
 vi.mock('../../services/infisical', () => ({
   readSecrets: vi.fn(async () => ({})),
   readDeployFlag: vi.fn(async (): Promise<string | undefined> => undefined),
+  readOwnSecrets: vi.fn(
+    async (
+      _environment: string,
+      _path: string
+    ): Promise<Record<string, string>> => ({})
+  ),
+  readTaggedSecrets: vi.fn(
+    async (): Promise<Array<{ path: string; key: string }>> => []
+  ),
   ensureInfisicalSecretImport: vi.fn(async (): Promise<boolean> => true),
   listInfisicalSecretImports: vi.fn(
     async (): Promise<Array<{ path: string; environment: string }>> => []
@@ -170,10 +179,17 @@ const existingFolder = async (flag?: string) => {
 describe('tenant provision', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    const { readSecrets, readDeployFlag, listInfisicalSecretImports } =
-      await import('../../services/infisical');
+    const {
+      readSecrets,
+      readDeployFlag,
+      readOwnSecrets,
+      readTaggedSecrets,
+      listInfisicalSecretImports
+    } = await import('../../services/infisical');
     vi.mocked(readSecrets).mockResolvedValue({});
     vi.mocked(readDeployFlag).mockResolvedValue(undefined);
+    vi.mocked(readOwnSecrets).mockResolvedValue({});
+    vi.mocked(readTaggedSecrets).mockResolvedValue([]);
     listFolders.mockImplementation(async () => []);
     vi.mocked(listInfisicalSecretImports).mockResolvedValue([]);
   });
@@ -360,16 +376,16 @@ describe('tenant provision', () => {
       }
     });
 
-    it('plans no import for the cms', async () => {
-      const { ensureInfisicalSecretImport, listInfisicalSecretImports } =
+    it('plans no headless import for the cms alone', async () => {
+      const { ensureInfisicalSecretImport } =
         await import('../../services/infisical');
       await existingFolder('true');
 
-      const { ui } = await run();
+      await run();
 
-      expect(ui.printed.note.join('\n')).not.toContain('Import ');
-      expect(ensureInfisicalSecretImport).not.toHaveBeenCalled();
-      expect(listInfisicalSecretImports).not.toHaveBeenCalled();
+      expect(ensureInfisicalSecretImport).not.toHaveBeenCalledWith(
+        expect.objectContaining({ importPath: '/apps/headless' })
+      );
     });
 
     it('shows the imports and writes none on a dry run', async () => {
@@ -384,6 +400,154 @@ describe('tenant provision', () => {
       expect(ui.printed.note.join('\n')).toContain(
         'Import /apps/headless into /tenants/acme/apps/headless'
       );
+    });
+  });
+
+  describe('cms folder', () => {
+    const CMS = '/tenants/acme/apps/cms';
+    const CORS = [{ path: '/tenants/acme', key: 'CORS' }];
+
+    /** What each folder holds of its own; the Umami source exists unless said */
+    const holding = async (
+      cms: Record<string, string>,
+      umami: Record<string, string> = { API_KEY: 'umami' }
+    ) => {
+      const { readOwnSecrets, readTaggedSecrets } =
+        await import('../../services/infisical');
+      vi.mocked(readOwnSecrets).mockImplementation(
+        async (_environment: string, path: string) =>
+          path === '/integrations/umami' ? umami : cms
+      );
+      vi.mocked(readTaggedSecrets).mockResolvedValue(CORS);
+    };
+
+    it('imports the tenant folder before /apps/cms', async () => {
+      const { ensureInfisicalSecretImport } =
+        await import('../../services/infisical');
+      await existingFolder('true');
+
+      await run();
+
+      expect(
+        vi
+          .mocked(ensureInfisicalSecretImport)
+          .mock.calls.map(([arg]) => arg.importPath)
+      ).toEqual(['/tenants/acme', '/apps/cms']);
+    });
+
+    it('sets the references, after the imports and before the flag', async () => {
+      const { setInfisicalSecret, ensureInfisicalSecretImport } =
+        await import('../../services/infisical');
+      await existingFolder();
+      await holding({});
+
+      const { exit, out } = await run(['--json']);
+
+      expect(exit).toBe(EXIT.ok);
+      expect(setInfisicalSecret).toHaveBeenCalledWith({
+        environment: 'production',
+        path: CMS,
+        key: 'CORS_URLS',
+        value: '${production.tenants.acme.CORS}',
+        createOnly: true
+      });
+      expect(setInfisicalSecret).toHaveBeenCalledWith({
+        environment: 'production',
+        path: CMS,
+        key: 'UMAMI_API_KEY',
+        value: '${production.integrations.umami.API_KEY}',
+        createOnly: true
+      });
+      const order = (key: string) =>
+        vi.mocked(setInfisicalSecret).mock.invocationCallOrder[
+          vi
+            .mocked(setInfisicalSecret)
+            .mock.calls.findIndex(([arg]) => arg.key === key)
+        ];
+      const lastImport = Math.max(
+        ...vi.mocked(ensureInfisicalSecretImport).mock.invocationCallOrder
+      );
+      expect(order('CORS_URLS')).toBeGreaterThan(lastImport);
+      expect(order('CORS_URLS')).toBeLessThan(order('DEPLOY_ENABLED'));
+      expect(out).toContain('referencesWritten');
+      expect(out).toContain('UMAMI_API_KEY');
+    });
+
+    it('never overwrites a key the folder holds', async () => {
+      const { setInfisicalSecret } = await import('../../services/infisical');
+      await existingFolder('true');
+      await holding({ CORS_URLS: 'https://own.test', UMAMI_API_KEY: 'own' });
+
+      const { ui } = await run();
+
+      expect(setInfisicalSecret).not.toHaveBeenCalled();
+      expect(ui.printed.note.join('\n')).toContain(
+        `Keep CORS_URLS in ${CMS} (already there)`
+      );
+    });
+
+    it('keeps a key that appeared after the plan', async () => {
+      const { setInfisicalSecret, readOwnSecrets } =
+        await import('../../services/infisical');
+      await existingFolder('true');
+      await holding({});
+      let reads = 0;
+      vi.mocked(readOwnSecrets).mockImplementation(
+        async (
+          _environment: string,
+          path: string
+        ): Promise<Record<string, string>> => {
+          if (path === '/integrations/umami') return { API_KEY: 'umami' };
+          // The plan's read is the first of the folder, the write's check the next
+          reads += 1;
+          return reads > 1 ? { CORS_URLS: 'late', UMAMI_API_KEY: 'late' } : {};
+        }
+      );
+
+      await run();
+
+      expect(setInfisicalSecret).not.toHaveBeenCalled();
+    });
+
+    it('plans nothing and warns when the tenant has no cors secret', async () => {
+      const { setInfisicalSecret, readTaggedSecrets } =
+        await import('../../services/infisical');
+      await existingFolder('true');
+      await holding({}, {});
+      vi.mocked(readTaggedSecrets).mockResolvedValue([]);
+
+      const { ui } = await run();
+
+      expect(setInfisicalSecret).not.toHaveBeenCalled();
+      expect(ui.printed.warn.join('\n')).toContain(
+        "No secret tagged 'cors' under /tenants/acme"
+      );
+      expect(ui.printed.note.join('\n')).not.toContain('UMAMI_API_KEY');
+    });
+
+    it('shows the references and writes nothing on a dry run', async () => {
+      const { setInfisicalSecret } = await import('../../services/infisical');
+      await existingFolder();
+      await holding({});
+
+      const { exit, ui } = await run(['--dry-run']);
+
+      expect(exit).toBe(EXIT.ok);
+      expect(setInfisicalSecret).not.toHaveBeenCalled();
+      expect(ui.printed.note.join('\n')).toContain(
+        `Set CORS_URLS in ${CMS} to \${production.tenants.acme.CORS}`
+      );
+    });
+
+    it('plans no reference for headless alone', async () => {
+      const { readTaggedSecrets, readOwnSecrets } =
+        await import('../../services/infisical');
+      await existingFolder('true');
+
+      await run([], 'production', 'headless');
+
+      expect(readTaggedSecrets).not.toHaveBeenCalled();
+      expect(readOwnSecrets).not.toHaveBeenCalled();
     });
   });
 

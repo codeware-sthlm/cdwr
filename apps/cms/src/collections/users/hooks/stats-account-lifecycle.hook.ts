@@ -49,7 +49,8 @@ const umamiUserIdOf = async (
 export const removeStatsTeamMembershipHook: CollectionAfterChangeHook<
   User
 > = async ({ doc, previousDoc, operation, req }) => {
-  if (operation !== 'update') {
+  // Umami's admin login is the host's to read; the prune finds what a tenant app missed
+  if (operation !== 'update' || getEnv().APP_MODE.type !== 'host') {
     return doc;
   }
 
@@ -132,7 +133,7 @@ export const deleteStatsAccountHook: CollectionAfterDeleteHook<User> = async ({
   const key = deletedUmamiUserKey(id);
   const umamiUserId = req.context[key];
   delete req.context[key];
-  if (typeof umamiUserId !== 'string') {
+  if (typeof umamiUserId !== 'string' || getEnv().APP_MODE.type !== 'host') {
     return doc;
   }
 

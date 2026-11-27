@@ -70,7 +70,8 @@ const call = (user: unknown) =>
 beforeEach(() => {
   jest.resetAllMocks();
   jest.mocked(getEnv).mockReturnValue({
-    UMAMI_URL: 'https://umami.example'
+    UMAMI_URL: 'https://umami.example',
+    APP_MODE: { type: 'host' }
   } as ReturnType<typeof getEnv>);
   jest.mocked(getSingleTenantIdFromHeaders).mockReturnValue(5);
   findByID.mockResolvedValue({ statsWebsiteId: 'site-1' });

@@ -76,7 +76,19 @@ export const ensureInfisicalSecretImport = async <TEnv = Environment>({
     return true;
   }
 
+  // A 403 names the permission the identity lacks
+  const reason = await response
+    .json()
+    .then((body: unknown) =>
+      typeof body === 'object' &&
+      body !== null &&
+      'message' in body &&
+      typeof body.message === 'string'
+        ? body.message
+        : undefined
+    )
+    .catch(() => undefined);
   throw new Error(
-    `Infisical refused to import ${importPath} into ${path} [StatusCode=${response.status}]`
+    `Infisical refused to import ${importPath} into ${path} [StatusCode=${response.status}]${reason ? `: ${reason}` : ''}`
   );
 };

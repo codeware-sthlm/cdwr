@@ -181,10 +181,15 @@ export const runDeployApps = async (options: {
       }
 
       // Merge secrets: global -> deployment-specific (deployment wins).
-      // An app that runs third-party code opts out of the global ones.
-      const withholdShared = githubConfig.sharedSecrets === false;
+      // The global ones hold the read-everything Infisical identity, so only a
+      // host deploy gets them: a tenant deploy gets its pushed config instead,
+      // and an app that runs third-party code opts out with `none`.
+      const withholdShared =
+        !isHostDeployment || githubConfig.sharedSecrets === 'none';
       if (withholdShared) {
-        core.info('Shared secrets withheld: sharedSecrets is false');
+        core.info(
+          `Shared secrets withheld: ${isHostDeployment ? 'sharedSecrets is none' : 'tenant deployment'}`
+        );
       }
       const mergedSecrets = {
         ...(!withholdShared && config.secrets),

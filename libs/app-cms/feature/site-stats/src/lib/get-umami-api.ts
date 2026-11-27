@@ -12,6 +12,12 @@ const PROVIDER = 'umami';
 /** Secret that authenticates every Umami api call */
 const KEY = 'API_KEY';
 
+/**
+ * The same key pushed at deploy to a tenant app, which holds no Infisical
+ * credentials. `cdwr tenant provision` sets it as a reference to `KEY`.
+ */
+const PUSHED_KEY = 'UMAMI_API_KEY';
+
 /** Secrets of the Umami admin user that manages users and teams; never used to read statistics */
 const ADMIN_USERNAME = 'UMAMI_ADMIN_USERNAME';
 const ADMIN_PASSWORD = 'UMAMI_ADMIN_PASSWORD';
@@ -36,7 +42,8 @@ const readKey = async (key: string): Promise<string | undefined> => {
  * Statistics are optional: without an Umami url the dashboard simply has
  * nothing to show, and the secret store is not even asked.
  *
- * The key is read from Infisical on demand, see `getIntegrationCredentials`.
+ * A tenant app gets the key pushed as `UMAMI_API_KEY`. Otherwise it is read
+ * from Infisical on demand, see `getIntegrationCredentials`.
  * Unlike Fly's token this runs on every dashboard load, so a missing key is
  * not read again from fresh: its cached empty answer expires on its own.
  *
@@ -50,7 +57,7 @@ export const getUmamiApi = async (
   }
 
   try {
-    const apiKey = await readKey(KEY);
+    const apiKey = process.env[PUSHED_KEY] || (await readKey(KEY));
 
     return apiKey
       ? {

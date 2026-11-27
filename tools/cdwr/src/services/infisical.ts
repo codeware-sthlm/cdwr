@@ -86,6 +86,33 @@ export async function readDeployFlag(
   return ownDeployFlag(secrets ?? [], path);
 }
 
+/**
+ * The secrets tagged `tag` anywhere under a path, each named by the folder it
+ * lives in. Whatever the read pulls in from an import is left out, since the
+ * folder it came from is outside the path.
+ *
+ * @throws When the API does not say which folder a secret is in
+ */
+export async function readTaggedSecrets(
+  environment: Environment,
+  path: string,
+  tag: string
+): Promise<Array<{ path: string; key: string }>> {
+  const secrets = await muted(() =>
+    readInfisical({ environment, filter: { path, recurse: true, tags: [tag] } })
+  );
+  return (secrets ?? []).flatMap(({ secretKey, secretPath }) => {
+    if (secretPath === undefined) {
+      throw new Error(
+        `Infisical did not say which folder ${secretKey} is in under ${path}`
+      );
+    }
+    return secretPath === path || secretPath.startsWith(`${path}/`)
+      ? [{ path: secretPath, key: secretKey }]
+      : [];
+  });
+}
+
 /** One secret, or an error naming what is missing where */
 export async function readSecret(
   environment: Environment,
