@@ -1263,3 +1263,143 @@ describe('lib.sh', () => {
     });
   });
 });
+
+describe('lib.sh attended_read', () => {
+  requireTools('zsh', 'jq');
+
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'attended-read-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const merged = (ids: string[], next: string | null) => ({
+    pageInfo: { hasNextPage: next !== null, endCursor: next },
+    nodes: ids.map((identifier) => ({ identifier }))
+  });
+  const first = (next: string | null) => ({
+    data: {
+      issues: { pageInfo: { hasNextPage: false }, nodes: [] },
+      merged: merged(['COD-1'], next)
+    }
+  });
+
+  // pages[i] answers the i-th call; calls logs each query kind and variables
+  const read = (
+    answers: unknown[],
+    env: Record<string, string> = {}
+  ): { out: string; calls: string[] } => {
+    answers.forEach((a, i) =>
+      writeFileSync(
+        join(dir, `a${i}.json`),
+        typeof a === 'string' ? a : JSON.stringify(a)
+      )
+    );
+    writeFileSync(join(dir, 'n'), '0');
+    const stub = [
+      'n=$(( $(cat "$D/n") + 1 )); print -r -- $n > "$D/n"',
+      '[[ "$1" == *\'query($after\'* ]] && k=page || k=first',
+      'print -r -- "$k ${2:-}" >> "$D/calls"',
+      'f="$D/a$(( n - 1 )).json"; [[ -f "$f" ]] || f="$D/a$(( ${#answers} )).json"',
+      'case "$(cat "$f")" in FAIL) exit 1 ;; esac; cat "$f"'
+    ].join('\n');
+    writeFileSync(
+      join(dir, 'stub.sh'),
+      stub.replace('${#answers}', String(answers.length - 1))
+    );
+    const result = spawnSync(
+      'zsh',
+      [
+        '-c',
+        `source "${LIB}"; linear() { eval "$AGENT_QUEUE_LINEAR_CMD"; }; attended_read`
+      ],
+      {
+        encoding: 'utf8',
+        // Past the default 1 MiB, for the page over the argument limit
+        maxBuffer: 16 * 1024 * 1024,
+        env: {
+          PATH: process.env['PATH'] ?? '',
+          D: dir,
+          AGENT_QUEUE_LINEAR_CMD: `. "${dir}/stub.sh"`,
+          ...env
+        }
+      }
+    );
+    const calls = existsSync(join(dir, 'calls'))
+      ? readFileSync(join(dir, 'calls'), 'utf8').trim().split('\n')
+      : [];
+    return { out: result.stdout.trim(), calls };
+  };
+
+  it('reads one page when the merged tickets fit', () => {
+    const { out, calls } = read([first(null)]);
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(out)).toEqual(first(null));
+  });
+
+  it('appends the next pages of merged tickets, from the last cursor', () => {
+    const page2 = { data: { merged: merged(['COD-2'], 'c2') } };
+    const page3 = { data: { merged: merged(['COD-3'], null) } };
+    const { out, calls } = read([first('c1'), page2, page3]);
+    expect(calls).toHaveLength(3);
+    expect(calls[1]).toContain('page');
+    expect(calls[1]).toContain('{"after":"c1"}');
+    expect(calls[2]).toContain('{"after":"c2"}');
+    const body = JSON.parse(out);
+    expect(
+      body.data.merged.nodes.map((n: { identifier: string }) => n.identifier)
+    ).toEqual(['COD-1', 'COD-2', 'COD-3']);
+    expect(body.data.merged.pageInfo.hasNextPage).toBe(false);
+    expect(body.data.issues.nodes).toEqual([]);
+  });
+
+  it('stops at AGENT_QUEUE_MERGED_PAGES extra pages and leaves hasNextPage true', () => {
+    const more = { data: { merged: merged(['COD-2'], 'c2') } };
+    const { out, calls } = read([first('c1'), more], {
+      AGENT_QUEUE_MERGED_PAGES: '1'
+    });
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(out).data.merged.pageInfo.hasNextPage).toBe(true);
+  });
+
+  it('pages an answer past the argument limit', () => {
+    const big = 'x'.repeat(1_200_000);
+    const page2 = {
+      data: {
+        merged: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: [{ identifier: 'COD-2', description: big }]
+        }
+      }
+    };
+    const { out, calls } = read([first('c1'), page2]);
+    expect(calls).toHaveLength(2);
+    const body = JSON.parse(out);
+    expect(body.data.merged.nodes).toHaveLength(2);
+    expect(body.data.merged.nodes[1].description).toHaveLength(big.length);
+  });
+
+  it('reads no further page when AGENT_QUEUE_MERGED_PAGES is 0', () => {
+    const { out, calls } = read([first('c1')], {
+      AGENT_QUEUE_MERGED_PAGES: '0'
+    });
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(out)).toEqual(first('c1'));
+  });
+
+  it.each([
+    ['fails', 'FAIL'],
+    ['is not an answer with nodes', { errors: [{ message: 'x' }] }]
+  ])('keeps the first page as it came when a later page %s', (_name, page) => {
+    const { out, calls } = read([first('c1'), page]);
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(out)).toEqual(first('c1'));
+  });
+
+  it('prints an error answer unchanged', () => {
+    const error = { errors: [{ message: 'boom' }] };
+    const { out, calls } = read([error]);
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(out)).toEqual(error);
+  });
+});

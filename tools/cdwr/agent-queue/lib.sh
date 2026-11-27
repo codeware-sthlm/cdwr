@@ -306,9 +306,11 @@ query {
     state: { type: { neq: "canceled" } }
     or: [{ completedAt: { null: true } }, { completedAt: { gt: "-P14D" } }]
   }) { ...queued }
-  # Merged tickets whose agent label was cleared: a later comment still gets its answer
+  # Merged tickets whose agent label was cleared: a later comment still gets its answer. Agent-labelled
+  # ones are in `issues`; `attended_read` pages the rest
   merged: issues(first: 100, filter: {
     team: { key: { eq: "COD" } }
+    labels: { every: { name: { notStartsWith: "agent:" } } }
     state: { type: { eq: "completed" } }
     completedAt: { gt: "-P14D" }
     comments: { some: { body: { startsWith: "**Agent: PR ready**" } } }
@@ -341,7 +343,39 @@ query {
 }
 fragment queued on IssueConnection {
   # A full page warns (run.sh `page_check`)
-  pageInfo { hasNextPage }
+  pageInfo { hasNextPage endCursor }
+  nodes {
+    identifier title priority createdAt completedAt updatedAt description
+    parent {
+      identifier title state { type }
+      children(first: 25) { pageInfo { hasNextPage } nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
+    }
+    children(first: 25) { pageInfo { hasNextPage } nodes { identifier title state { type } labels(first: 5) { nodes { name } } } }
+    state { type }
+    labels { nodes { name } }
+    # The author tells the agent's comments from Håkan's (watch.jq `is_agent`)
+    comments(first: 50, orderBy: createdAt) { nodes { body createdAt user { id app } } }
+    # Who added agent:ready (watch.jq `ready_by_app`)
+    history(first: 50) { nodes { createdAt actor { id app } addedLabels { name } } }
+    inverseRelations { nodes { type issue { identifier completedAt state { type } labels(first: 20) { nodes { name } } } } }
+  }
+}
+GQL
+
+# The merged alias of ATTENDED_QUERY alone, for the pages after its first (`attended_read`)
+read -r -d '' MERGED_QUERY <<'GQL' || true
+query($after: String) {
+  merged: issues(first: 100, after: $after, filter: {
+    team: { key: { eq: "COD" } }
+    labels: { every: { name: { notStartsWith: "agent:" } } }
+    state: { type: { eq: "completed" } }
+    completedAt: { gt: "-P14D" }
+    comments: { some: { body: { startsWith: "**Agent: PR ready**" } } }
+  }) { ...queued }
+}
+fragment queued on IssueConnection {
+  # A full page warns (run.sh `page_check`)
+  pageInfo { hasNextPage endCursor }
   nodes {
     identifier title priority createdAt completedAt updatedAt description
     parent {
@@ -392,6 +426,36 @@ attended_nodes() {
         if any(.data.issues.nodes[]; .identifier == $n.identifier) then . else .data.issues.nodes += [$n] end)
       | del(.data.merged, .data.canceled, .data.subissues)
     else . end' 2>/dev/null
+}
+
+# attended_read: the attended answer as Linear gives it, the aliases not merged (pipe it through
+# attended_nodes), with the merged tickets read past their first page, up to AGENT_QUEUE_MERGED_PAGES
+# more (3 by default, 0 for none). A page that fails ends the read, says so on stderr, and leaves
+# hasNextPage true. Pages go through files: one is past the argument limit
+attended_read() {
+  setopt local_options no_err_exit
+  local resp after page next n max="${AGENT_QUEUE_MERGED_PAGES:-3}"
+  local first="${TMPDIR:-/tmp}/attended-first.$$" pages="${TMPDIR:-/tmp}/attended-pages.$$"
+  [[ "$max" == <-> ]] && max=$(( 10#$max )) || max=3
+  resp="$(linear "$ATTENDED_QUERY")" || return 1
+  if ! jq -e '(.data.merged.nodes | type) == "array"' >/dev/null 2>&1 <<<"$resp"; then
+    print -r -- "$resp"; return 0
+  fi
+  next="$(jq -c '.data.merged.pageInfo | select(.hasNextPage == true) | .endCursor' <<<"$resp")"
+  [[ -n "$next" ]] && (( max > 0 )) || { print -r -- "$resp"; return 0; }
+  print -r -- "$resp" > "$first"
+  : > "$pages"
+  for (( n = 1; n <= max && ${#next} > 0; n++ )); do
+    after="$next" next=""
+    if ! page="$(linear "$MERGED_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")" ||
+      ! jq -ce '.data.merged | select((.nodes | type) == "array") | { nodes, pageInfo }' <<<"$page" >> "$pages" 2>/dev/null; then
+      print -ru2 -- "linear: merged page $(( n + 1 )) of the attended query could not be read"; break
+    fi
+    next="$(jq -c '.data.merged.pageInfo | select(.hasNextPage == true) | .endCursor' <<<"$page")"
+  done
+  jq -c --slurpfile p "$pages" '.data.merged.nodes += [ $p[].nodes[] ]
+    | if ($p | length) > 0 then .data.merged.pageInfo = $p[-1].pageInfo else . end' "$first"
+  rm -f "$first" "$pages"
 }
 
 # Every open COD ticket and the ones Done within 14 days, for the tree and the audit's candidate
@@ -592,6 +656,6 @@ watch_state() {
 if [[ "$ZSH_EVAL_CONTEXT" == toplevel ]]; then
   case "${1:-}" in
     header) linear_header "${2:-}"; exit ;;
-    attended) linear "$ATTENDED_QUERY"; exit ;;
+    attended) attended_read; exit ;;
   esac
 fi

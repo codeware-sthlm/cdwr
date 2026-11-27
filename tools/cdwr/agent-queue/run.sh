@@ -1370,18 +1370,18 @@ deploy_warn() {
   date +%s > "$stamp"
   record warn "$1" "watch: could not read the deploy"
 }
-# page_warn <step> <what>: a Linear read that filled its page leaves the rest unread. Noted each
-# time, one warn row an hour per step, as hold_list_warn, so a lasting full page can't push real
-# rows out of runs.jsonl
+# page_warn <step> <what> [alias]: a Linear read that filled its page leaves the rest unread. Noted each
+# time, one warn row an hour per step and alias, as hold_list_warn, so a lasting full page can't push real
+# rows out of runs.jsonl; the row names the alias when it isn't `issues`
 page_warn() {
-  local stamp="$HOME_DIR/page-warned-$1" last
+  local stamp="$HOME_DIR/page-warned-$1${3:+-$3}" last
   note "warn: $1: $2 filled a page, the rest not read"
   $check && return 0
   last="$(cat "$stamp" 2>/dev/null)"
   [[ "$last" == <-> ]] || last=0
   (( $(date +%s) - last > 3600 )) || return 0
   date +%s > "$stamp"
-  record warn "" "$1: page limit reached"
+  record warn "" "$1: page limit reached${3:+ ($3)}"
 }
 # page_check <step> <what>: page_warn for each connection of the Linear answer on stdin that has a
 # next page (watch.jq full_pages); an alias other than `issues` is named after <what>
@@ -1389,7 +1389,7 @@ page_check() {
   setopt local_options no_err_exit
   local key
   for key in ${(f)"$(watch -r 'include "watch"; full_pages[]' 2>/dev/null)"}; do
-    if [[ "$key" == issues ]]; then page_warn "$1" "$2"; else page_warn "$1" "$2 ($key)"; fi
+    if [[ "$key" == issues ]]; then page_warn "$1" "$2"; else page_warn "$1" "$2 ($key)" "$key"; fi
   done
   return 0
 }
@@ -2277,7 +2277,7 @@ attended() {
     print -r -- "watch-state: $state"
   fi
   # Checked raw: attended_nodes merges the aliases and drops their pageInfo
-  resp="$(linear "$ATTENDED_QUERY")"
+  resp="$(attended_read)"
   page_check attended "the attended query" <<<"$resp"
   resp="$(attended_nodes <<<"$resp")"
   if ! jq -e '.data.issues.nodes' >/dev/null <<<"$resp" 2>/dev/null; then

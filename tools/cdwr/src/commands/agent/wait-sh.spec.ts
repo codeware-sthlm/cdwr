@@ -739,6 +739,12 @@ while true; do beat "$1" "$2"; sleep 1; done`
     });
   });
 
+  it('has the proxy branch ask for the attended query once, as the proxy pages itself', () => {
+    expect(readFileSync(SCRIPT, 'utf8')).toContain(
+      'attended_read() { linear_via_proxy "$ATTENDED_QUERY"; }'
+    );
+  });
+
   describe('watcher file', () => {
     const sessions = () => join(dir, 'sessions');
 
