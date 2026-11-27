@@ -315,7 +315,7 @@ const WaitCard = ({
                 }
               : { text: 'Answer in Linear', href: r.url };
   const secondary = r.kind === 'ready to label' || r.kind === 'approved';
-  // Read from the review decision, so it shows while the checks still run too
+  // Read from the watch's reviewNeeded, so it shows while the checks still run too
   const rulesetHeld = r.kind === 'review' && r.reviewRequired;
   const note = [
     // An approved card already names its blockers in its kind

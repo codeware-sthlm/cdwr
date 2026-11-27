@@ -187,7 +187,12 @@ describe('a review row held by the merge', () => {
 
 describe('isRulesetHeld', () => {
   it('is true for the ruleset verdict only', () => {
-    expect(isRulesetHeld("the ruleset requires Håkan's review")).toBe(true);
+    expect(isRulesetHeld("needs Håkan's approval on GitHub")).toBe(true);
+    expect(isRulesetHeld("needs Håkan's approval on GitHub (a.ts)")).toBe(true);
+    expect(
+      isRulesetHeld("needs Håkan's approval on GitHub (a.ts, +2 more)")
+    ).toBe(true);
+    expect(isRulesetHeld("the ruleset requires Håkan's review")).toBe(false);
     expect(isRulesetHeld('a hold')).toBe(false);
     expect(isRulesetHeld(null)).toBe(false);
   });
@@ -217,7 +222,7 @@ describe('reviewPathsText', () => {
 
 describe('heldText', () => {
   it('names the ruleset when it is what blocks the merge', () => {
-    expect(heldText("the ruleset requires Håkan's review")).toBe(
+    expect(heldText("needs Håkan's approval on GitHub (a.ts)")).toBe(
       "Needs your approval on GitHub: main's ruleset requires your review"
     );
   });
@@ -233,7 +238,7 @@ describe('heldText', () => {
   });
 
   it('keeps naming the ruleset when approved', () => {
-    expect(heldText("the ruleset requires Håkan's review", true)).toBe(
+    expect(heldText("needs Håkan's approval on GitHub (a.ts)", true)).toBe(
       "Needs your approval on GitHub: main's ruleset requires your review"
     );
   });
@@ -583,6 +588,36 @@ describe('snoozed waiting rows', () => {
 
     it.each([
       ['nothing in the way', {}, null],
+      [
+        'no review needed',
+        { reviewNeeded: false, reviewPaths: ['a.ts'] },
+        null
+      ],
+      [
+        'a review needed, no paths known',
+        { reviewNeeded: true },
+        "needs Håkan's approval on GitHub"
+      ],
+      [
+        'a review needed, no paths',
+        { reviewNeeded: true, reviewPaths: [] },
+        "needs Håkan's approval on GitHub"
+      ],
+      [
+        'a review needed, one path',
+        { reviewNeeded: true, reviewPaths: ['a.ts'] },
+        "needs Håkan's approval on GitHub (a.ts)"
+      ],
+      [
+        'a review needed, two paths',
+        { reviewNeeded: true, reviewPaths: ['a.ts', 'b.ts'] },
+        "needs Håkan's approval on GitHub (a.ts, +1 more)"
+      ],
+      [
+        'threads before the review',
+        { reviewNeeded: true, reviewPaths: ['a.ts'], threads: 2 },
+        '2 unresolved threads'
+      ],
       ['in the merge queue', { state: 'queued' }, 'already in the merge queue'],
       [
         'queued beats a conflict',
