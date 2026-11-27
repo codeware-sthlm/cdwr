@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -1351,6 +1352,15 @@ describe('lib.sh attended_read', () => {
     ).toEqual(['COD-1', 'COD-2', 'COD-3']);
     expect(body.data.merged.pageInfo.hasNextPage).toBe(false);
     expect(body.data.issues.nodes).toEqual([]);
+  });
+
+  it('keeps the pages in a private directory and removes it', () => {
+    const page2 = { data: { merged: merged(['COD-2'], null) } };
+    const { calls } = read([first('c1'), page2], { TMPDIR: dir });
+    expect(calls).toHaveLength(2);
+    expect(readdirSync(dir).filter((f) => f.startsWith('attended.'))).toEqual(
+      []
+    );
   });
 
   it('stops at AGENT_QUEUE_MERGED_PAGES extra pages and leaves hasNextPage true', () => {
