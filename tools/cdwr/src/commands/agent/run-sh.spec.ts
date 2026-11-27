@@ -6952,6 +6952,69 @@ describe('run.sh review session', () => {
     ).toHaveLength(2);
   });
 
+  it("reports the newest review's own list on --check, idle or not", () => {
+    expect(
+      SCRIPT.match(/print -r -- "review-own: \$\(review_own_line\)"/g)
+    ).toHaveLength(2);
+  });
+
+  describe('review_own_line', () => {
+    // supabase_select_checked is stubbed: the given rows, or a failed read; `off` unsets telemetry
+    const noted = join(mkdtempSync(join(tmpdir(), 'review-own-')), 'noted');
+    const line = (rows: string | null, telemetry: 'on' | 'off' = 'on') =>
+      spawnSync(
+        'zsh',
+        [
+          '-c',
+          [
+            `telemetry_on() { [[ ${telemetry} == on ]]; }`,
+            `note() { print -r -- "$*" >> ${noted}; }`,
+            rows === null
+              ? 'supabase_select_checked() { (( $+functions[note] )) && note failed; return 1; }'
+              : `supabase_select_checked() { print -r -- '${rows}'; }`,
+            fn('review_own_line'),
+            'review_own_line'
+          ].join('\n')
+        ],
+        { encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '' } }
+      ).stdout.trim();
+
+    it('prints the newest row compact, its list cut to since and count', () => {
+      const own = {
+        since: '2026-11-20T08:00:00Z',
+        until: 'x',
+        items: [{ title: 'a' }, { title: 'b' }]
+      };
+      expect(
+        line(JSON.stringify([{ at: '2026-11-21T08:00:00Z', own, extra: 1 }]))
+      ).toBe(
+        JSON.stringify({
+          at: '2026-11-21T08:00:00Z',
+          own: { since: '2026-11-20T08:00:00Z', count: 2 }
+        })
+      );
+    });
+
+    it('prints a null own as it is', () => {
+      expect(line('[{"at":"2026-11-21T08:00:00Z","own":null}]')).toBe(
+        '{"at":"2026-11-21T08:00:00Z","own":null}'
+      );
+    });
+
+    it('prints none before the first review', () => {
+      expect(line('[]')).toBe('none');
+    });
+
+    it('prints unread when the read failed, and logs nothing', () => {
+      expect(line(null)).toBe('unread');
+      expect(existsSync(noted)).toBe(false);
+    });
+
+    it('prints off without telemetry', () => {
+      expect(line('[]', 'off')).toBe('off');
+    });
+  });
+
   describe('a run', () => {
     // review_run over stubs: claude prints the given result, node stands in for review-check
     const review = (opts: {

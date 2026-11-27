@@ -2553,6 +2553,20 @@ review_gate() {
   print due
 }
 
+# review_own_line: the newest review's time and own list as compact JSON, the list cut to its since
+# and count; `none` before the first review, `off` without telemetry and `unread` when the read
+# failed. For --check, which writes no log: the read runs without `note`.
+review_own_line() {
+  setopt local_options no_err_exit
+  local rows
+  telemetry_on || { print off; return 0; }
+  rows="$(unfunction note 2>/dev/null; supabase_select_checked reviews "select=at,own&order=at.desc&limit=1" 2>/dev/null)" ||
+    { print unread; return 0; }
+  jq -r 'if length == 0 then "none"
+    else .[0] | {at, own: (.own | if . == null then null else {since, count: (.items | length)} end)} | tojson end' <<<"$rows" 2>/dev/null ||
+    print unread
+}
+
 # The result handling both claude runs share: appends the readable result to the log, sets
 # `spent`, and on a nonzero exit notes, notifies and records a cap or a failure, setting `outcome`.
 #   run_outcome <a planning run|a suggest run> <log prefix> <budget> <log> <result> <rc>
@@ -2881,7 +2895,7 @@ if [[ -z "$ready" ]]; then
   # The decision stays the last line: status reads it from there
   if $check; then
     limit_at="$(limit_held)" && print -r -- "limit: claude runs held until $limit_at"
-    print -r -- "suggest: $gate"; print -r -- "review: $(review_gate)"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0
+    print -r -- "suggest: $gate"; print -r -- "review: $(review_gate)"; print -r -- "review-own: $(review_own_line)"; print -r -- "devlog: $(devlog_gate)"; echo "idle: nothing to plan"; exit 0
   fi
   # The plan's session limit holds every claude run until the reset; a note, not a row, each tick
   if limit_at="$(limit_held)"; then note "skip: session limit, claude runs held until $limit_at"; exit 0; fi
@@ -2905,6 +2919,7 @@ fi
 if $check; then
   print -r -- "suggest: $(suggest_gate)"
   print -r -- "review: $(review_gate)"
+  print -r -- "review-own: $(review_own_line)"
   print -r -- "devlog: $(devlog_gate)"
   limit_at="$(limit_held)" && print -r -- "limit: claude runs held until $limit_at"
   hold="$(session_hold)"; [[ -n "$hold" ]] && { print -r -- "$hold"; exit 0; }

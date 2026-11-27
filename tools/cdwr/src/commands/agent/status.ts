@@ -70,6 +70,7 @@ import {
   formatLimit,
   parseListener,
   parseRemoteStatus,
+  parseReviewOwn,
   rmLockCommand,
   schedulerRow,
   showsRow,
@@ -294,6 +295,19 @@ export default defineCommand({
                 )
               : row('warn', 'review', 'unknown; no verdict from the script')
           ]),
+      ...(report.reviewOwn === undefined
+        ? []
+        : [
+            row(
+              // Only a read that failed, or a review that could not read its list, needs a look
+              report.reviewOwn.state === 'unread' ||
+                report.reviewOwn.state === 'not-read'
+                ? 'warn'
+                : true,
+              'own list',
+              report.reviewOwn.text
+            )
+          ]),
       report.attended
         ? row(
             report.attended.kind === 'run' || report.attended.kind === 'unknown'
@@ -459,6 +473,9 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
         ...(checked?.review === undefined
           ? {}
           : { review: parseReview(checked.review) }),
+        ...(checked?.reviewOwn === undefined
+          ? {}
+          : { reviewOwn: parseReviewOwn(checked.reviewOwn) }),
         queueView:
           checked?.queueView === undefined
             ? null

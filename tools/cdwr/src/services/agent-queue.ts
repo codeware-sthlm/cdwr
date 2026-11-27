@@ -135,7 +135,7 @@ export async function linearAuth(
 
 /**
  * What the installed script would do now: its decision (the last line) and the
- * `attended:` verdict, `linear:` line, `queue-view:`, `suggest:`, `devlog:`, `review:`, `watch-source:` and `watch-state:` lines when it printed them. Undefined when it is not installed
+ * `attended:` verdict, `linear:` line, `queue-view:`, `suggest:`, `devlog:`, `review:`, `review-own:`, `watch-source:` and `watch-state:` lines when it printed them. Undefined when it is not installed
  */
 export async function checkRun(
   queue: QueuePaths,
@@ -150,6 +150,7 @@ export async function checkRun(
       suggest?: string;
       devlog?: string;
       review?: string;
+      reviewOwn?: string;
       watchSource?: string;
       watchState?: string;
     }
@@ -176,6 +177,9 @@ export async function checkRun(
   const suggest = lines.filter((line) => line.startsWith('suggest: ')).at(-1);
   const devlog = lines.filter((line) => line.startsWith('devlog: ')).at(-1);
   const review = lines.filter((line) => line.startsWith('review: ')).at(-1);
+  const reviewOwn = lines
+    .filter((line) => line.startsWith('review-own: '))
+    .at(-1);
   const watchSource = lines
     .filter((line) => line.startsWith('watch-source: '))
     .at(-1);
@@ -193,6 +197,9 @@ export async function checkRun(
     ...(review === undefined
       ? {}
       : { review: review.slice('review: '.length) }),
+    ...(reviewOwn === undefined
+      ? {}
+      : { reviewOwn: reviewOwn.slice('review-own: '.length) }),
     ...(attended === undefined
       ? {}
       : { attended: attended.slice('attended: '.length) }),
