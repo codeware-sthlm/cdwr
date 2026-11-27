@@ -171,6 +171,11 @@ describe('queue sheets', () => {
       supabaseUrl: 'https://x.supabase.co',
       controlToken: 't'
     };
+    // A Status-table hand-off (no PR-ready comment read) has no comment to strike
+    expect(
+      body('handoffs', state).querySelectorAll('[data-drop]')
+    ).toHaveLength(1);
+    state.liveHandoffs.set('COD-5', ['check it']);
     const c = body('handoffs', state);
     expect(c.querySelectorAll('[data-drop]')).toHaveLength(2);
     fireEvent.change(
