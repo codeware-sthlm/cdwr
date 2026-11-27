@@ -6,32 +6,29 @@
   "tags": ["scope:storybook", "type:app"],
   "targets": {
     "storybook": {
-      "executor": "@nx/storybook:storybook",
+      "syncGenerators": ["dev-plugin:theme-sync"],
       "options": {
         "port": 6006,
-        "configDir": "apps/storybook/.storybook"
+        "config-dir": ".storybook"
       },
       "configurations": {
         "ci": {
-          "quiet": true
+          "args": ["--quiet"]
         }
-      },
-      "syncGenerators": ["dev-plugin:theme-sync"]
+      }
     },
     "build-storybook": {
-      "executor": "@nx/storybook:build",
-      "outputs": ["{options.outputDir}"],
+      "syncGenerators": ["dev-plugin:theme-sync"],
       "options": {
-        "outputDir": "dist/storybook",
-        "configDir": "apps/storybook/.storybook",
-        "statsJson": true
+        "statsJson": true,
+        "config-dir": ".storybook",
+        "output-dir": "../../dist/storybook"
       },
       "configurations": {
         "ci": {
           "quiet": true
         }
-      },
-      "syncGenerators": ["dev-plugin:theme-sync"]
+      }
     },
     "chromatic": {
       "executor": "nx:run-commands",
