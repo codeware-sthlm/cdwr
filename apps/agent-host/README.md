@@ -119,10 +119,11 @@ It will not:
 - write under `/etc/sudoers.d`
 - honour `NUC_APPLY_*` overrides when run as root (they exist for the specs; sudo drops them anyway)
 
-The control is the hold list: `tools/cdwr/agent-queue/hold-paths.txt` holds `apps/agent-host/**`,
-`tools/cdwr/agent-queue/**` and `.claude/**`. So a PR that changes what the installer installs,
-the installer, or the queue scripts that decide a merge never merges on its own. Root on the NUC
-follows a merge Håkan made.
+The control is the hold list: `tools/cdwr/agent-queue/hold-paths.txt` holds `apps/agent-host/**`
+and the rest of the kernel (`guard.jq`, which decides a merge, `implement.sh`, the credentials,
+`.claude/settings*.json` and the workflows). So a PR that changes what the installer installs,
+the installer, or what decides a merge never merges on its own. Root on the NUC follows a merge
+Håkan made.
 
 To change a script or unit, edit it in `nuc/` and merge. To add one, give it a name that fits the
 pattern; a timer is enabled on its first install. The apply list's `nuc-install` waits for the

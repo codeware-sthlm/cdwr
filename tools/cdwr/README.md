@@ -307,7 +307,7 @@ asks for the client id and secret when they are missing, and only does what diff
 again after the script changes.
 
 The queue tells the agent's Linear comments from Håkan's by their author: a comment is the agent's
-when the queue's app user wrote it, matched by its id (`agent_user_id` and `is_agent` in `watch.jq`,
+when the queue's app user wrote it, matched by its id (`agent_user_id` and `is_agent` in `guard.jq`,
 which the attended query and the scheduler's watch feed with each comment's `user { id app }`);
 another Linear app is not the agent. The `**Agent` prefix is the comment's kind (`**Agent: PR
 ready**`), and a kind counts only on the agent's own comment, so pasting the marker fakes no gate.
@@ -443,7 +443,7 @@ delays the deploy by one run.
 `copilot` and `merge` (`{ticket, pr}`) are the buttons on a review row in **Waiting on you**, and
 the scheduler's only GitHub writes. It acts only on a PR that its `watch.json` already holds for
 that ticket, reads the PR again as the `codeware-agent` app (never your login), and checks it with
-`desk_verdict` in `watch.jq` before the ack: a merge needs green checks, no conflict, every review
+`desk_verdict` in `guard.jq` before the ack: a merge needs green checks, no conflict, every review
 thread resolved, no merge-queue entry, and your approval on GitHub when the PR changes a file
 main's `required_reviewers` rule covers (it reads main's branch rules too, and refuses when it can't), and a Copilot request needs no Copilot review asked or
 done. The desk greys the buttons out by the same rules, read from `queue_state.watch`. A `merge`
