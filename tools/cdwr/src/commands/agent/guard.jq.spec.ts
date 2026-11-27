@@ -39,8 +39,8 @@ describe('hold list', () => {
     matches([path], [{ glob, reason: '' }]).length === 1;
 
   describe('hold_globs', () => {
-    it('parses the real hold-paths.txt into 22 globs with reasons', () => {
-      expect(holds).toHaveLength(22);
+    it('parses the real hold-paths.txt into 27 globs with reasons', () => {
+      expect(holds).toHaveLength(27);
       expect(holds[0]).toEqual({
         glob: 'apps/cms/src/migrations/**',
         reason: 'one-way on tenant data'
@@ -264,16 +264,21 @@ describe('the kernel and main’s ruleset', () => {
     '.claude/settings*.json',
     '.github/workflows/**',
     'apps/agent-host/**',
-    'packages/fly-deployment-action/**',
+    'packages/*-action/**',
+    'tools/cdwr/agent-queue/force-push.sh',
+    'tools/cdwr/agent-queue/gh-review.sh',
     'tools/cdwr/agent-queue/github-app.sh',
     'tools/cdwr/agent-queue/guard.jq',
     'tools/cdwr/agent-queue/hold-paths.txt',
     'tools/cdwr/agent-queue/implement.sh',
     'tools/cdwr/agent-queue/lib.sh',
     'tools/cdwr/agent-queue/linear-tools.txt',
+    'tools/cdwr/agent-queue/linear-upload.sh',
     'tools/cdwr/agent-queue/session-hook.sh',
     'tools/cdwr/agent-queue/session-start.sh',
-    'tools/cdwr/agent-queue/supabase/migrations/**'
+    'tools/cdwr/agent-queue/supabase/functions/**',
+    'tools/cdwr/agent-queue/supabase/migrations/**',
+    'tools/cdwr/agent-queue/telemetry.sh'
   ];
 
   describe('kernel_globs', () => {

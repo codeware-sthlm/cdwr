@@ -22,9 +22,14 @@ tools/cdwr/agent-queue/lib.sh  # kernel: the claude launch and the credentials
 tools/cdwr/agent-queue/linear-tools.txt  # kernel: the Linear tools a session may call
 tools/cdwr/agent-queue/session-start.sh  # kernel: runs as every session's hook
 tools/cdwr/agent-queue/session-hook.sh  # kernel: runs as every session's hook
+tools/cdwr/agent-queue/telemetry.sh  # kernel: sourced by implement.sh and the session hook
+tools/cdwr/agent-queue/force-push.sh  # kernel: the only force push an implement run may make
+tools/cdwr/agent-queue/gh-review.sh  # kernel: the only GitHub GraphQL an implement run may make
+tools/cdwr/agent-queue/linear-upload.sh  # kernel: the only upload an implement run may make
 tools/cdwr/agent-queue/supabase/migrations/**  # kernel: one-way on the queue's database
+tools/cdwr/agent-queue/supabase/functions/**  # kernel: the desk's command token and webhook checks
 apps/agent-host/**  # kernel: the agent image, its secrets and the NUC's root installer and units
 .github/workflows/**  # kernel: CI, the production deploy and the agent image build
-packages/fly-deployment-action/**  # kernel: the production deploy
+packages/*-action/**  # kernel: the actions CI and the production deploy run with their secrets
 .claude/settings*.json  # kernel: the sessions' permissions and hooks
 .claude/hooks/**  # kernel: the sessions' hooks
