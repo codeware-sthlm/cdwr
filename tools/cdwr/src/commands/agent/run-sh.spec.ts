@@ -1020,8 +1020,8 @@ describe('run.sh without Linear documents', () => {
     expect(code.split('"$COMMENT_UPDATE"')).toHaveLength(3);
   });
 
-  it('uses "$DROP_REPLY" only inside drop_pass', () => {
-    expect(fn('drop_pass')).toContain('linear "$DROP_REPLY"');
+  it('uses "$DROP_REPLY" only inside drop_answer', () => {
+    expect(fn('drop_answer')).toContain('linear "$DROP_REPLY"');
     expect(code.split('"$DROP_REPLY"')).toHaveLength(2);
   });
 
@@ -4196,6 +4196,8 @@ describe('run.sh drop_pass', () => {
       rows?: Array<{ id: number; args: Record<string, unknown> }>;
       live?: string;
       handled?: string[];
+      unread?: boolean;
+      fail?: Array<'fail-update' | 'fail-reply'>;
     } = {}
   ) => {
     writeFileSync(
@@ -4213,13 +4215,20 @@ describe('run.sh drop_pass', () => {
     );
     writeFileSync(
       join(home, 'read.json'),
-      JSON.stringify({ data: { comment: { body: opts.live ?? TWO } } })
+      opts.unread
+        ? '{}'
+        : JSON.stringify({ data: { comment: { body: opts.live ?? TWO } } })
     );
+    for (const f of ['fail-update', 'fail-reply'] as const) {
+      rmSync(join(home, f), { force: true });
+      if (opts.fail?.includes(f)) writeFileSync(join(home, f), '');
+    }
+    rmSync(join(home, 'calls'), { force: true });
     if (opts.handled) {
       writeFileSync(join(home, 'drop-replies'), opts.handled.join('\n') + '\n');
     }
     const script = [
-      `HOME_DIR="${home}"; DESK_STALE_SECS=7200; DROP_HANDLED="${home}/drop-replies"`,
+      `HOME_DIR="${home}"; DESK_STALE_SECS=7200; DROP_HANDLED="${home}/drop-replies"; DROP_ANSWERS="${home}/drop-answers"`,
       'COMMENT_READ=READ; COMMENT_UPDATE=UPDATE; UNLABEL=UNLABEL; DROP_REPLY=REPLY',
       'telemetry_on() { return 0; }',
       'telemetry_host() { print nuc; }',
@@ -4237,11 +4246,12 @@ describe('run.sh drop_pass', () => {
       'linear() {',
       '  case "$1" in',
       `    READ) cat "${home}/read.json" ;;`,
-      `    UPDATE) print -r -- "update $2" >> "${home}/calls"; print -r -- '{"data":{"commentUpdate":{"success":true}}}' ;;`,
+      `    UPDATE) print -r -- "update $2" >> "${home}/calls"; [[ -e "${home}/fail-update" ]] && print '{}' || print -r -- '{"data":{"commentUpdate":{"success":true}}}' ;;`,
       `    UNLABEL) print -r -- "unlabel $2" >> "${home}/calls"; print -r -- '{"data":{"issueUpdate":{"success":true}}}' ;;`,
-      `    REPLY) print -r -- "reply $2" >> "${home}/calls"; print -r -- '{"data":{"commentCreate":{"success":true}}}' ;;`,
+      `    REPLY) print -r -- "reply $2" >> "${home}/calls"; [[ -e "${home}/fail-reply" ]] && print '{}' || print -r -- '{"data":{"commentCreate":{"success":true}}}' ;;`,
       '  esac',
       '}',
+      fn('drop_answer'),
       fn('drop_edit'),
       fn('drop_write'),
       fn('drop_pass'),
@@ -4282,7 +4292,8 @@ describe('run.sh drop_pass', () => {
           >
       ),
       notes: lines('notes'),
-      handled: lines('drop-replies')
+      handled: lines('drop-replies'),
+      answers: lines('drop-answers')
     };
   };
   const struck = (text: string, item: string, reason: string) =>
@@ -4370,6 +4381,24 @@ describe('run.sh drop_pass', () => {
       });
     });
 
+    it('goes back to pending when Linear does not take the edit', () => {
+      const r = drop([node(TWO)], {
+        rows: [row('set the DNS')],
+        fail: ['fail-update']
+      });
+      expect(r.patches.map((p) => p.body)).toEqual([
+        expect.objectContaining({ status: 'applied' }),
+        { status: 'pending', applied_at: null, note: null }
+      ]);
+      expect(r.upserts).toEqual([]);
+    });
+
+    it('stays pending, unacked, when the comment was not read', () => {
+      const r = drop([node(TWO)], { rows: [row('set the DNS')], unread: true });
+      expect(r.patches).toEqual([]);
+      expect(r.upserts).toEqual([]);
+    });
+
     it('takes agent:review out when nothing is left', () => {
       const r = drop([node(ONE)], { rows: [row('set the DNS')], live: ONE });
       expect(r.calls.map((c) => c.kind)).toEqual(['update', 'unlabel']);
@@ -4409,6 +4438,20 @@ describe('run.sh drop_pass', () => {
       expect(String(answer?.vars['body'])).toMatch(
         /^\*\*Agent: not dropped\*\* /
       );
+    });
+
+    it('keeps an answer Linear refused and posts it on the next run', () => {
+      const n = node(TWO, {}, [reply('drop: 1')]);
+      const first = drop([n], { fail: ['fail-reply'] });
+      expect(first.updates).toHaveLength(1);
+      expect(first.handled).toEqual(['r1']);
+      expect(first.answers).toHaveLength(1);
+      const next = drop([n]);
+      expect(next.calls.map((c) => c.kind)).toEqual(['reply']);
+      expect(String(next.calls[0]?.vars['body'])).toMatch(
+        /^\*\*Agent: dropped\*\* /
+      );
+      expect(next.answers).toEqual([]);
     });
 
     it('skips an id already in the file', () => {
