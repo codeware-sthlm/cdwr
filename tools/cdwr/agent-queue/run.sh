@@ -1955,6 +1955,13 @@ mutation($id: String!, $parent: String!, $body: String!) {
 GQL
 # The drop: replies this host acted on, one comment id a line, the newest 500 kept
 DROP_HANDLED="$HOME_DIR/drop-replies"
+# Answers to handled replies that Linear refused, one DROP_REPLY variables object a line, posted again
+DROP_ANSWERS="$HOME_DIR/drop-answers"
+
+# drop_answer <vars>: posts one answer; returns 1 when Linear did not take it
+drop_answer() {
+  jq -e '.data.commentCreate.success == true' >/dev/null 2>&1 <<<"$(linear "$DROP_REPLY" "$1")"
+}
 
 # drop_edit <node> <text> <reason>: prints the COMMENT_UPDATE variables, the ticket's PR-ready
 # comment read again as the app with the open item whose text is <text> struck through; else prints
@@ -2033,6 +2040,10 @@ drop_pass() {
         elif edit="$(drop_edit "$node" "$item" "$reason")"; then verdict=applied
         else why="$edit"; fi
       fi
+      # Linear failing is no verdict: the command stays pending for the next tick
+      if [[ "$why" == "the comment was not read" ]]; then
+        note "desk command $id (drop): $why, tried again next tick"; continue
+      fi
       stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       acked="$(supabase_patch desk_commands "id=eq.$id&status=eq.pending" "$(jq -nc --arg s "$verdict" --arg n "$why" --arg at "$stamp" \
         '{status: $s, applied_at: $at, note: (if $n == "" then null else $n end)}')")"
@@ -2040,9 +2051,11 @@ drop_pass() {
         note "desk command $id (drop): not acked here, left to the tick that did or the next one"
         continue
       fi
+      # An edit Linear did not take goes back to pending, so the next tick tries it again
       if [[ "$verdict" == applied ]] && ! why="$(drop_write "$node" "$edit")"; then
-        verdict=refused
-        supabase_patch desk_commands "id=eq.$id" "$(jq -nc --arg n "$why" '{status: "refused", note: $n}')" >/dev/null
+        supabase_patch desk_commands "id=eq.$id" '{"status": "pending", "applied_at": null, "note": null}' >/dev/null
+        note "desk command $id (drop): $why, tried again next tick"
+        continue
       fi
       if [[ "$verdict" == applied ]]; then change="dropped \"${item[1,120]}\" on $ticket from the desk ($actor)"
       else change="drop refused from the desk ($actor): $why"; fi
@@ -2052,6 +2065,15 @@ drop_pass() {
         --arg ticket "$ticket" \
         '{event_id: $id, at: $at, ticket: (if $ticket == "" then null else $ticket end), actor: "human", change: $change, host: $host}')" merge
     done
+  fi
+
+  # Answers an earlier tick could not post, oldest first; the ones Linear refuses again stay
+  local left=() vars
+  if [[ -s "$DROP_ANSWERS" ]]; then
+    for vars in ${(f)"$(<"$DROP_ANSWERS")"}; do
+      drop_answer "$vars" || left+=("$vars")
+    done
+    if (( ${#left} )); then print -rl -- "${left[@]}" > "$DROP_ANSWERS"; else rm -f "$DROP_ANSWERS"; fi
   fi
 
   # jq on a missing file still prints its slurped input, so the file is checked first
@@ -2082,9 +2104,12 @@ drop_pass() {
     if [[ -z "$why" ]]; then body="**Agent: dropped** $text"
     else body="**Agent: not dropped** $why"; fi
     note "drop: $ticket reply $id: ${body#\*\*Agent: }"
-    resp="$(linear "$DROP_REPLY" "$(jq -nc --arg id "$issue" --arg p "$parent" --arg b "$body" '{id: $id, parent: $p, body: $b}')")"
-    jq -e '.data.commentCreate.success == true' >/dev/null 2>&1 <<<"$resp" ||
-      { note "warn: drop: $ticket: the answer to reply $id was not posted"; record warn "$ticket" "drop: answer not posted"; }
+    vars="$(jq -nc --arg id "$issue" --arg p "$parent" --arg b "$body" '{id: $id, parent: $p, body: $b}')"
+    if ! drop_answer "$vars"; then
+      print -r -- "$vars" >> "$DROP_ANSWERS"
+      note "warn: drop: $ticket: the answer to reply $id was not posted, tried again next tick"
+      record warn "$ticket" "drop: answer not posted"
+    fi
   done
   if [[ -s "$DROP_HANDLED" ]]; then
     tail -n 500 "$DROP_HANDLED" > "$DROP_HANDLED.tmp" && mv "$DROP_HANDLED.tmp" "$DROP_HANDLED"
