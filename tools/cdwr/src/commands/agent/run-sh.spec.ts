@@ -6540,9 +6540,9 @@ describe('run.sh devlog session', () => {
     });
 
     it('is done with the stamp date plus the interval', () => {
-      expect(next({ hour: '0' }, '2026-11-20')).toMatchObject({
+      expect(next({ hour: '0' }, day(1))).toMatchObject({
         state: 'done',
-        next: '2026-11-27',
+        next: day(-6),
         hour: 0
       });
     });
