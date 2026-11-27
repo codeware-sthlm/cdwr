@@ -701,7 +701,7 @@ const num = (v: unknown): number | null =>
 
 /**
  * A host's watch.json by ticket. An entry without a PR number or a known state is dropped alone;
- * a field of the wrong type reads as missing, and older entries lack `ci`, `threads`, `copilot`, `draft`, `mergeable`, `reviewNeeded` and `reviewPaths`.
+ * a field of the wrong type reads as missing, and older entries lack `ci`, `threads`, `copilot`, `draft`, `mergeable`, `reviewNeeded`, `reviewPaths` and `reviewWhy`.
  */
 export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
   const entries = new Map<string, WatchEntry>();
@@ -724,6 +724,7 @@ export const parseWatch = (json: unknown): Map<string, WatchEntry> => {
       ci: typeof e.ci === 'string' ? e.ci : null,
       copilot: COPILOT_STATES.find((s) => s === e.copilot) ?? null,
       reviewNeeded: e.reviewNeeded === true,
+      reviewWhy: typeof e.reviewWhy === 'string' ? e.reviewWhy : null,
       reviewPaths: Array.isArray(e.reviewPaths)
         ? e.reviewPaths.filter((x): x is string => typeof x === 'string')
         : null,

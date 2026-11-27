@@ -614,6 +614,19 @@ describe('snoozed waiting rows', () => {
         "needs Håkan's approval on GitHub (a.ts, +1 more)"
       ],
       [
+        'the gate could not check',
+        { reviewWhy: "main's branch rules were not read" },
+        "main's branch rules were not read"
+      ],
+      [
+        "the gate's words over the paths",
+        {
+          reviewWhy: "too many changed files to check for Håkan's review",
+          reviewNeeded: false
+        },
+        "too many changed files to check for Håkan's review"
+      ],
+      [
         'threads before the review',
         { reviewNeeded: true, reviewPaths: ['a.ts'], threads: 2 },
         '2 unresolved threads'

@@ -239,7 +239,8 @@ def pr_state:
 # $in.title is the PR's title, carried only into own: the events run.sh keeps in own.jsonl.
 # $in.reviewPaths is review_paths (the files main's ruleset wants Håkan's review for), stored as is,
 # and $in.reviewNeeded is review_needed: true while those files wait for his approval. $in.reviewApproved
-# is ruleset_gate's approved: a person approved the head on GitHub.
+# is ruleset_gate's approved: a person approved the head on GitHub. $in.reviewWhy is its verdict,
+# so the desk refuses a merge for the same reason before sending it.
 def step:
   . as $in
   | $in.id as $id | $in.pr as $pr
@@ -334,7 +335,8 @@ def step:
                 mergeWhy: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.verdict else null end),
                 mergeTransient: (if $review and $mv != null and (($mv.verdict // "") | startswith("ok ") | not) then $mv.transient == true else null end),
                 review: ($now.review // null), reviewPaths: ($in.reviewPaths // null),
-                reviewNeeded: ($in.reviewNeeded == true), reviewApproved: ($in.reviewApproved == true) }
+                reviewNeeded: ($in.reviewNeeded == true), reviewApproved: ($in.reviewApproved == true),
+                reviewWhy: ($in.reviewWhy // null) }
               + (if $prev.relabelled == true then { relabelled: true } else {} end)
               + (if $prev.copilotAsked != null then { copilotAsked: $prev.copilotAsked } else {} end)
               + (if $snap then

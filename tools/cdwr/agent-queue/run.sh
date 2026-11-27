@@ -1507,7 +1507,7 @@ watch_prs() {
        handoffs: ($node | handoffs), parked: ($node | parked), at: $at,
        apply: ($node | apply_input), left: ($node | checklist_handoffs), mergedAt: ($now.mergedAt // null),
        reviewPaths: ($now | review_paths($rules)), reviewNeeded: ($now | review_needed($rules)),
-       reviewApproved: ($now | ruleset_gate($rules).approved),
+       reviewApproved: ($now | ruleset_gate($rules).approved), reviewWhy: ($now | ruleset_gate($rules).verdict),
        merge:(if $holds == null then null else ($now | merge_verdict($node; $holds; $rules)) end)} | step')" ||
       { why="$(watch_err)"; note "warn: watch: watch.jq failed on $id$why"; record warn "$id" "watch: watch.jq failed$why"; continue; }
     while IFS=$'\t' read -r level msg; do

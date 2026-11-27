@@ -194,6 +194,8 @@ export const mergeBlocker = (e: WatchEntry): string | null => {
   if (e.ci !== 'SUCCESS') return `checks ${e.ci.toLowerCase()}`;
   if (e.threads > 0)
     return `${e.threads} unresolved ${e.threads === 1 ? 'thread' : 'threads'}`;
+  // The gate's own words, its refusals when it could not check included; older entries carry reviewNeeded only
+  if (e.reviewWhy) return e.reviewWhy;
   if (e.reviewNeeded === true) return needsApproval(e.reviewPaths ?? []);
   return null;
 };
