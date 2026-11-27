@@ -8,6 +8,7 @@ import {
   formatLimit,
   parseListener,
   parseRemoteStatus,
+  parseReviewOwn,
   remoteStatus,
   rmLockCommand,
   schedulerRow,
@@ -431,4 +432,66 @@ describe('checkRepoOf', () => {
       checkRepoOf('elsewhere', { path: '/p/planner', exists: true }, '/p/root')
     ).toBe('/p/planner');
   });
+});
+
+describe('parseReviewOwn', () => {
+  const at = '2026-11-21T08:00:00Z';
+  const since = '2026-11-20T08:00:00Z';
+  const line = (own: unknown) => JSON.stringify({ at, own });
+
+  it('lists the items of its own', () => {
+    expect(parseReviewOwn(line({ since, count: 3 }))).toEqual({
+      state: 'listed',
+      at,
+      count: 3,
+      since,
+      text: '21 Nov · 3 on its own since 20 Nov'
+    });
+  });
+
+  it('reads an own with no items', () => {
+    expect(parseReviewOwn(line({ since, count: 0 }))).toEqual({
+      state: 'empty',
+      at,
+      since,
+      text: '21 Nov · none since 20 Nov'
+    });
+  });
+
+  it('reads an own of null', () => {
+    expect(parseReviewOwn(line(null))).toEqual({
+      state: 'not-read',
+      at,
+      text: '21 Nov · not read'
+    });
+  });
+
+  it('reads no review stored', () => {
+    expect(parseReviewOwn('none')).toEqual({
+      state: 'none',
+      text: 'no review stored'
+    });
+  });
+
+  it('reads telemetry off', () => {
+    expect(parseReviewOwn('off')).toEqual({
+      state: 'off',
+      text: 'telemetry off'
+    });
+  });
+
+  it('reads a failed read', () => {
+    expect(parseReviewOwn('unread')).toEqual({
+      state: 'unread',
+      text: 'not read from telemetry'
+    });
+  });
+
+  it.each(['', 'garbage', '{"at":1}', '{"at":"x","own":{"since":"y"}}'])(
+    'treats %j as unreadable',
+    (input) => {
+      expect(parseReviewOwn(input).state).toBe('unread');
+      expect(parseReviewOwn(input).text).toMatch(/^unreadable: /);
+    }
+  );
 });

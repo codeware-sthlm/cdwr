@@ -22,6 +22,82 @@ export const STATUS_ARGS = ['agent', 'status', '--json'];
 export const remoteStatus = (host: string): string[] =>
   remoteCdwr(host, STATUS_ARGS);
 
+/** The newest review and whether it carries its own list (`review-own:` in the `--check` output) */
+const reviewOwnSchema = z.discriminatedUnion('state', [
+  z.object({
+    state: z.literal('listed'),
+    at: z.string(),
+    count: z.number(),
+    since: z.string(),
+    text: z.string()
+  }),
+  z.object({
+    state: z.literal('empty'),
+    at: z.string(),
+    since: z.string(),
+    text: z.string()
+  }),
+  z.object({ state: z.literal('not-read'), at: z.string(), text: z.string() }),
+  z.object({ state: z.literal('none'), text: z.string() }),
+  z.object({ state: z.literal('off'), text: z.string() }),
+  z.object({ state: z.literal('unread'), text: z.string() })
+]);
+
+export type ReviewOwn = z.infer<typeof reviewOwnSchema>;
+
+const reviewOwnRow = z.object({
+  at: z.string(),
+  own: z.object({ since: z.string(), count: z.number() }).nullable()
+});
+
+/** A timestamp as day and short month in local time, like `20 Nov`; the input itself when it is no date */
+const formatDay = (value: string): string => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+};
+
+/** Reads the text after `review-own: ` in the `run.sh --check` output */
+export const parseReviewOwn = (text: string): ReviewOwn => {
+  const line = text.trim();
+  if (line === 'unread') {
+    return { state: 'unread', text: 'not read from telemetry' };
+  }
+  if (line === 'none') return { state: 'none', text: 'no review stored' };
+  if (line === 'off') return { state: 'off', text: 'telemetry off' };
+  let json: unknown;
+  try {
+    json = JSON.parse(line);
+  } catch {
+    json = undefined;
+  }
+  const row = reviewOwnRow.safeParse(json);
+  if (!row.success) {
+    return { state: 'unread', text: `unreadable: ${excerpt(line)}` };
+  }
+  const { at, own } = row.data;
+  const day = formatDay(at);
+  if (own === null) {
+    return { state: 'not-read', at, text: `${day} · not read` };
+  }
+  const since = formatDay(own.since);
+  return own.count > 0
+    ? {
+        state: 'listed',
+        at,
+        count: own.count,
+        since: own.since,
+        text: `${day} · ${own.count} on its own since ${since}`
+      }
+    : {
+        state: 'empty',
+        at,
+        since: own.since,
+        text: `${day} · none since ${since}`
+      };
+};
+
 /** Exactly what the status table reads; `localReport` must produce it, so a missing or renamed field fails to compile (an extra local field does not) */
 const reportShape = z.object({
   job: z.discriminatedUnion('loaded', [
@@ -127,6 +203,8 @@ const reportShape = z.object({
     })
     .nullable()
     .optional(),
+  // Absent from a container on an older image
+  reviewOwn: reviewOwnSchema.optional(),
   queueView: queueViewSchema.or(z.literal('malformed')).nullable(),
   // Absent from a container on an older image, and null without a listener file
   listener: listenerStateShape.nullable().optional(),
