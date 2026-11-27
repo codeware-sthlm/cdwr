@@ -32,6 +32,7 @@ import {
   summarizeTenantKeys,
   tenantFlyApps
 } from './rotate-key.logic';
+import { noTenantsError } from './tenants.logic';
 
 /** Rotate the key in Payload via the local-api and return the new value */
 async function rotateInPayload(
@@ -103,11 +104,17 @@ export default defineCommand({
       choices: async (ctx, resolved) => {
         const environment = resolved['environment'] as Environment;
         const deployments = await readTenantDeployments(environment);
+        if (deployments.size === 0) throw noTenantsError(environment);
         const choices: Array<{ value: string; hint: string }> = [];
         for (const [tenantId, apps] of deployments) {
           const { apps: withKey } = summarizeTenantKeys(apps);
           if (withKey.length)
             choices.push({ value: tenantId, hint: withKey.join(', ') });
+        }
+        if (choices.length === 0) {
+          throw new CliError(
+            `No tenant in ${environment} has a PAYLOAD_API_KEY to rotate`
+          );
         }
         return choices;
       }
