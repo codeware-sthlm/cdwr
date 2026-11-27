@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { requireTools } from '../../testing/require-tools';
@@ -38,15 +39,15 @@ describe('hold list', () => {
     matches([path], [{ glob, reason: '' }]).length === 1;
 
   describe('hold_globs', () => {
-    it('parses the real hold-paths.txt into 14 globs with reasons', () => {
-      expect(holds).toHaveLength(14);
+    it('parses the real hold-paths.txt into 22 globs with reasons', () => {
+      expect(holds).toHaveLength(22);
       expect(holds[0]).toEqual({
         glob: 'apps/cms/src/migrations/**',
         reason: 'one-way on tenant data'
       });
       expect(holds.at(-1)).toEqual({
-        glob: '.claude/**',
-        reason: "the sessions' skills, agents and permissions"
+        glob: '.claude/hooks/**',
+        reason: "kernel: the sessions' hooks"
       });
       expect(holds.every((h) => h.reason !== '')).toBe(true);
     });
@@ -80,6 +81,25 @@ describe('hold list', () => {
       'apps/agent-hostx/a.ts'
     ])('%s is held by none of the real globs', (path) => {
       expect(matches([path], holds)).toEqual([]);
+    });
+
+    it.each([
+      'tools/cdwr/agent-queue/run.sh',
+      'tools/cdwr/agent-queue/watch.jq',
+      '.claude/skills/work-queue/SKILL.md',
+      '.claude/agents/implementer.md'
+    ])('%s is not held: only the kernel of the queue is', (path) => {
+      expect(matches([path], holds)).toEqual([]);
+    });
+
+    it.each([
+      'tools/cdwr/agent-queue/guard.jq',
+      '.claude/settings.json',
+      '.claude/settings.local.json',
+      '.github/workflows/ci.yml',
+      'tools/cdwr/agent-queue/supabase/migrations/20260101000000_x.sql'
+    ])('%s is held', (path) => {
+      expect(matches([path], holds)).toHaveLength(1);
     });
 
     it('carries the glob and reason of the match, in path order', () => {
@@ -213,6 +233,142 @@ describe('hold list', () => {
           'x/**  # other'
         ])
       ).toBe('Merge: merging on its own: no hold path');
+    });
+  });
+});
+
+describe('the kernel and main’s ruleset', () => {
+  const HOLD_TEXT = readFileSync(`${DIR}/hold-paths.txt`, 'utf8');
+  const ROOT = fileURLToPath(new URL('../../../../..', import.meta.url));
+  const holds = run('hold_globs', HOLD_TEXT) as Array<{
+    glob: string;
+    reason: string;
+  }>;
+  const kernel = (list: unknown) =>
+    run(`kernel_globs(${JSON.stringify(list)})`) as string[];
+  const drift = (rules: unknown, list: unknown = holds) =>
+    run(`ruleset_drift(${JSON.stringify(rules)}; ${JSON.stringify(list)})`);
+  const rule = (...patterns: string[]) => ({
+    type: 'pull_request',
+    parameters: { required_reviewers: [{ file_patterns: patterns }] }
+  });
+  const H = [
+    { glob: 'b/**', reason: 'kernel: b' },
+    { glob: 'a.sh', reason: 'kernel: a' },
+    { glob: 'x/**', reason: 'access control' }
+  ];
+
+  // What Håkan pastes into the ruleset's required_reviewers
+  const PAYLOAD = [
+    '.claude/hooks/**',
+    '.claude/settings*.json',
+    '.github/workflows/**',
+    'apps/agent-host/**',
+    'packages/fly-deployment-action/**',
+    'tools/cdwr/agent-queue/github-app.sh',
+    'tools/cdwr/agent-queue/guard.jq',
+    'tools/cdwr/agent-queue/hold-paths.txt',
+    'tools/cdwr/agent-queue/implement.sh',
+    'tools/cdwr/agent-queue/lib.sh',
+    'tools/cdwr/agent-queue/linear-tools.txt',
+    'tools/cdwr/agent-queue/session-hook.sh',
+    'tools/cdwr/agent-queue/session-start.sh',
+    'tools/cdwr/agent-queue/supabase/migrations/**'
+  ];
+
+  describe('kernel_globs', () => {
+    it('takes the globs whose reason starts with kernel:, sorted and unique', () => {
+      expect(kernel([...H, { glob: 'a.sh', reason: 'kernel: again' }])).toEqual(
+        ['a.sh', 'b/**']
+      );
+    });
+
+    it('is empty without a kernel line', () => {
+      expect(
+        kernel([{ glob: 'x/**', reason: 'the kernel: not first' }])
+      ).toEqual([]);
+    });
+  });
+
+  describe('ruleset_drift', () => {
+    it('is null when the rules were not read', () => {
+      expect(drift(null, H)).toBeNull();
+      expect(drift({ message: 'busy' }, H)).toBeNull();
+    });
+
+    it('has both sides empty when the patterns are the kernel', () => {
+      expect(drift([rule('a.sh', 'b/**')], H)).toEqual({
+        missing: [],
+        extra: []
+      });
+    });
+
+    it('lists the kernel globs no pattern names', () => {
+      expect(drift([rule('a.sh')], H)).toEqual({
+        missing: ['b/**'],
+        extra: []
+      });
+      expect(drift([], H)).toEqual({ missing: ['a.sh', 'b/**'], extra: [] });
+    });
+
+    it('lists the patterns that are no kernel glob', () => {
+      expect(drift([rule('a.sh', 'b/**', 'z/**', 'c/**')], H)).toEqual({
+        missing: [],
+        extra: ['c/**', 'z/**']
+      });
+    });
+
+    it('ignores a rule that is not pull_request', () => {
+      expect(
+        drift(
+          [
+            rule('a.sh', 'b/**'),
+            {
+              type: 'required_status_checks',
+              parameters: { required_reviewers: [{ file_patterns: ['q/**'] }] }
+            },
+            { type: 'deletion' }
+          ],
+          H
+        )
+      ).toEqual({ missing: [], extra: [] });
+    });
+
+    it('counts a duplicate pattern once, across rules', () => {
+      expect(
+        drift([rule('a.sh', 'a.sh', 'z/**'), rule('z/**', 'b/**')], H)
+      ).toEqual({ missing: [], extra: ['z/**'] });
+    });
+
+    it('does not count a non-kernel hold glob as a kernel glob', () => {
+      expect(drift([rule('a.sh', 'b/**', 'x/**')], H)).toEqual({
+        missing: [],
+        extra: ['x/**']
+      });
+    });
+  });
+
+  describe('the ruleset payload', () => {
+    it('is the kernel of the real hold-paths.txt', () => {
+      expect(run('hold_globs | kernel_globs(.)', HOLD_TEXT)).toEqual(PAYLOAD);
+    });
+
+    it('leaves no drift against a ruleset that names exactly it', () => {
+      const rules = [
+        {
+          type: 'pull_request',
+          parameters: { required_reviewers: [{ file_patterns: PAYLOAD }] }
+        }
+      ];
+      expect(drift(rules)).toEqual({ missing: [], extra: [] });
+    });
+
+    it('names a file that exists for every glob without a wildcard', () => {
+      const plain = PAYLOAD.filter((glob) => !/[*?]/.test(glob));
+      expect(plain.length).toBeGreaterThan(0);
+      for (const glob of plain) {
+        expect(existsSync(join(ROOT, glob)), glob).toBe(true);
+      }
     });
   });
 });

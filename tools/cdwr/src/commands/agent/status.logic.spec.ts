@@ -9,8 +9,10 @@ import {
   parseListener,
   parseRemoteStatus,
   parseReviewOwn,
+  parseRulesetDrift,
   remoteStatus,
   rmLockCommand,
+  rulesetRow,
   schedulerRow,
   showsRow,
   skewedStatus,
@@ -276,6 +278,46 @@ describe('parseListener', () => {
 
   it.each([[undefined], ['not json'], ['{}']])('gives null for %s', (text) => {
     expect(parseListener(text)).toBeNull();
+  });
+});
+
+describe('parseRulesetDrift', () => {
+  it('reads a ruleset-drift file', () => {
+    const text = JSON.stringify({ at: 'x', missing: ['a'], extra: [] });
+    expect(parseRulesetDrift(text)).toEqual({
+      at: 'x',
+      missing: ['a'],
+      extra: []
+    });
+  });
+
+  it.each([[undefined], ['not json'], ['{}'], ['{"missing":"a","extra":[]}']])(
+    'gives null for %s',
+    (text) => {
+      expect(parseRulesetDrift(text)).toBeNull();
+    }
+  );
+});
+
+describe('rulesetRow', () => {
+  it('matches when both lists are empty', () => {
+    expect(rulesetRow({ missing: [], extra: [] })).toEqual({
+      ok: true,
+      detail: 'matches the kernel'
+    });
+  });
+
+  it('names both sides and says none for an empty one', () => {
+    expect(rulesetRow({ missing: ['a', 'b'], extra: ['c'] })).toEqual({
+      ok: 'warn',
+      detail: 'differs from the kernel: missing a, b; extra c'
+    });
+    expect(rulesetRow({ missing: [], extra: ['c'] }).detail).toBe(
+      'differs from the kernel: missing none; extra c'
+    );
+    expect(rulesetRow({ missing: ['a'], extra: [] }).detail).toBe(
+      'differs from the kernel: missing a; extra none'
+    );
   });
 });
 

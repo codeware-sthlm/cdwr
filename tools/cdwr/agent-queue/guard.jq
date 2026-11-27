@@ -339,3 +339,20 @@ def merge_verdict($node; $holds; $rules):
       transient: (($v | startswith("ok ") | not)
                   # Review feedback is a session's pick, and Håkan knows his own comment
                   and ($v | test("^(PR is |checks |GitHub has not checked|already in the merge queue|conflicts with main|[0-9]+ unresolved thread|too many review threads|Håkan commented|the ticket is parked|the ticket is not agent:review|main's branch rules were not read)"))) };
+
+# --- The kernel and main's ruleset ---
+
+# The kernel globs of the parsed hold list: those whose reason starts with `kernel:`
+def kernel_globs($holds): [ $holds[] | select(.reason | test("^kernel:")) | .glob ] | unique;
+
+# How main's ruleset differs from the kernel: { missing, extra }, sorted. missing are kernel globs
+# no required_reviewers file pattern names, extra are patterns that are no kernel glob. null when
+# the rules were not read. Both empty when GitHub asks Håkan's review for exactly the kernel.
+def ruleset_drift($rules; $holds):
+  if ($rules | type) != "array" then null
+  else
+    kernel_globs($holds) as $k
+    | ([ $rules[] | select(.type == "pull_request") | (.parameters.required_reviewers // [])[]
+         | (.file_patterns // [])[] | select(type == "string") ] | unique) as $p
+    | { missing: ($k - $p), extra: ($p - $k) }
+  end;

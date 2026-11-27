@@ -2464,7 +2464,11 @@ describe('run.sh watch_prs', () => {
       SCRIPT.indexOf(`${name}() {`),
       SCRIPT.indexOf('\n}\n', SCRIPT.indexOf(`${name}() {`)) + 3
     );
-  const source = [cutFn('hold_list_warn'), cutFn('watch_prs')].join('\n');
+  const source = [
+    cutFn('hold_list_warn'),
+    cutFn('read_rules'),
+    cutFn('watch_prs')
+  ].join('\n');
   requireTools('zsh', 'jq');
   let root: string;
 
@@ -2546,6 +2550,8 @@ describe('run.sh watch_prs', () => {
       'relabel_merged() { print -r -- "$*" >> "$ROOT/relabels"; }',
       // The drops have their own spec
       'drop_pass() { :; }',
+      // The drift note has its own spec; here it records the drift it was given
+      'ruleset_drift_note() { print -r -- "$1" >> "$ROOT/drift"; }',
       // The request: one line per call; it fails with a reason while copilot-fail exists
       'copilot_request() { print -r -- "$1" >> "$ROOT/copilot"; [[ -f "$ROOT/copilot-fail" ]] || return 0; print -r -- "no Copilot seat"; return 1; }',
       `linear() { [[ "$1" == l ]] && { print -r -- '{"data":{"issueLabels":{"nodes":[]}}}'; return 0; }; cat "$ROOT/page-$(jq -r '.after // "1"' <<<"$2").json"; }`,
@@ -2670,6 +2676,34 @@ describe('run.sh watch_prs', () => {
       expect(read('notes')).not.toContain('watch.jq failed');
       expect(entries().map((e) => e.reviewPaths)).toEqual([null, null]);
       expect(entries().map((e) => e.reviewNeeded)).toEqual([false, false]);
+    });
+  });
+
+  describe('the ruleset against the kernel', () => {
+    it('checks the drift once a run, with a PR or without', () => {
+      run('feature/cod-5', [tickets(5, 6)]);
+      expect(read('drift').split('\n').filter(Boolean)).toHaveLength(1);
+      expect(JSON.parse(read('drift'))).toMatchObject({ extra: [] });
+      expect(JSON.parse(read('drift')).missing).toContain(
+        'tools/cdwr/agent-queue/guard.jq'
+      );
+      rmSync(join(root, 'drift'));
+      rmSync(join(root, 'rules-reads'));
+      run('feature/cod-5', [[]]);
+      expect(read('drift').split('\n').filter(Boolean)).toHaveLength(1);
+      expect(read('rules-reads').split('\n').filter(Boolean)).toHaveLength(1);
+    });
+
+    it('does nothing with rules it could not read', () => {
+      writeFileSync(join(root, 'rules.json'), '<html>busy</html>');
+      run('feature/cod-5', [[]]);
+      expect(read('drift')).toBe('');
+      expect(read('notes')).toContain('the ruleset drift not checked');
+    });
+
+    it('does nothing without a hold list', () => {
+      run('feature/cod-5', [[ticket]], false, { noHolds: true });
+      expect(read('drift')).toBe('');
     });
   });
 
@@ -5279,6 +5313,93 @@ describe('run.sh apply_commands', () => {
         'only partly applied, see cdwr history on the host'
       );
     });
+  });
+});
+
+// ruleset_drift_note: one notice per distinct drift of main's ruleset from the kernel
+describe('run.sh ruleset_drift_note', () => {
+  requireTools('zsh', 'jq');
+  const FN =
+    SCRIPT.match(/^ruleset_drift_note\(\) \{\n[\s\S]*?\n\}\n/m)?.[0] ?? '';
+  let home: string;
+
+  // Calls the note with each drift in turn, in one shell, as consecutive ticks would
+  const run = (drifts: object[], check = false) =>
+    spawnSync(
+      'zsh',
+      [
+        '-c',
+        [
+          `HOME_DIR="${home}"; check=${check}`,
+          'note() { print -r -- "$*" >> "$HOME_DIR/notes"; }',
+          'notice() { print -r -- "$*" >> "$HOME_DIR/notices"; }',
+          FN,
+          ...drifts.map((d) => `ruleset_drift_note '${JSON.stringify(d)}'`)
+        ].join('\n')
+      ],
+      { encoding: 'utf8' }
+    );
+  const read = (name: string) =>
+    existsSync(join(home, name)) ? readFileSync(join(home, name), 'utf8') : '';
+  const notices = () => read('notices').split('\n').filter(Boolean);
+
+  const drift = { missing: ['a/**', 'b'], extra: ['c'] };
+  const clear = { missing: [], extra: [] };
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'drift-note-'));
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  it('is in run.sh', () => {
+    expect(FN).not.toBe('');
+  });
+
+  it('writes the drift with the time', () => {
+    run([drift]);
+    const written = JSON.parse(read('ruleset-drift.json'));
+    expect(written).toMatchObject(drift);
+    expect(written.at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+    expect(existsSync(join(home, 'ruleset-drift.json.tmp'))).toBe(false);
+  });
+
+  it('notices a drift once, naming both sides', () => {
+    run([drift, drift, drift]);
+    expect(notices()).toEqual([
+      "action watch main's ruleset differs from the kernel: missing a/**, b; extra c"
+    ]);
+    expect(read('notes')).toContain('watch: ruleset drift');
+  });
+
+  it('says none for an empty side', () => {
+    run([{ missing: [], extra: ['c'] }]);
+    expect(notices()).toEqual([
+      "action watch main's ruleset differs from the kernel: missing none; extra c"
+    ]);
+  });
+
+  it('notices a changed drift', () => {
+    run([drift, { missing: ['a/**'], extra: [] }]);
+    expect(notices()).toHaveLength(2);
+  });
+
+  it('notices again after it cleared and returned', () => {
+    run([drift, clear, drift]);
+    expect(notices()).toHaveLength(2);
+  });
+
+  it('says nothing when equal, and still writes the file', () => {
+    run([clear, clear]);
+    expect(notices()).toEqual([]);
+    expect(read('notes')).toBe('');
+    expect(JSON.parse(read('ruleset-drift.json'))).toMatchObject(clear);
+    expect(existsSync(join(home, 'ruleset-drift-notified'))).toBe(false);
+  });
+
+  it('does nothing under --check', () => {
+    run([drift], true);
+    expect(notices()).toEqual([]);
+    expect(existsSync(join(home, 'ruleset-drift.json'))).toBe(false);
   });
 });
 

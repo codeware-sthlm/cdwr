@@ -2,6 +2,9 @@
 # Håkan instead of merging on its own (guard.jq `hold_globs`, `merge_verdict`). One glob per
 # line, `<glob>  # <reason>`. `**` matches any path, `*` any run without `/`, `?` one character.
 # The watch reads the installed copy, which matches main, so a PR can't drop a glob for itself.
+# A reason that starts with `kernel:` marks the guard itself: what decides a merge, what a session
+# may run, and the credentials. Main's ruleset `required_reviewers` names exactly the kernel globs
+# (guard.jq `ruleset_drift`). The rest of the queue's scripts, skills and agents merge on their own.
 
 apps/cms/src/migrations/**  # one-way on tenant data
 libs/app-cms/util/access/**  # access control
@@ -11,9 +14,17 @@ apps/cms/src/collections/tenants/**  # tenant API-key auth
 libs/app-cms/data-access/src/lib/login-member.ts  # member login
 libs/shared/util/csp/**  # the cms CSP
 libs/app-headless/feature/security/**  # headless CSP and the site gate
-.github/workflows/fly-deployment.yml  # production deploy
-packages/fly-deployment-action/**  # production deploy
-.github/workflows/agent-host-image.yml  # the agent image build
-apps/agent-host/**  # the agent image, its secrets and the NUC's root installer and units
-tools/cdwr/agent-queue/**  # the queue's own scripts: the merge verdict, guardrails and this list
-.claude/**  # the sessions' skills, agents and permissions
+tools/cdwr/agent-queue/guard.jq  # kernel: the merge verdict and what it reads
+tools/cdwr/agent-queue/hold-paths.txt  # kernel: this list
+tools/cdwr/agent-queue/implement.sh  # kernel: what an implement run may do
+tools/cdwr/agent-queue/github-app.sh  # kernel: the GitHub App token
+tools/cdwr/agent-queue/lib.sh  # kernel: the claude launch and the credentials
+tools/cdwr/agent-queue/linear-tools.txt  # kernel: the Linear tools a session may call
+tools/cdwr/agent-queue/session-start.sh  # kernel: runs as every session's hook
+tools/cdwr/agent-queue/session-hook.sh  # kernel: runs as every session's hook
+tools/cdwr/agent-queue/supabase/migrations/**  # kernel: one-way on the queue's database
+apps/agent-host/**  # kernel: the agent image, its secrets and the NUC's root installer and units
+.github/workflows/**  # kernel: CI, the production deploy and the agent image build
+packages/fly-deployment-action/**  # kernel: the production deploy
+.claude/settings*.json  # kernel: the sessions' permissions and hooks
+.claude/hooks/**  # kernel: the sessions' hooks

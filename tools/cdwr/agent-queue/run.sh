@@ -1432,11 +1432,41 @@ read_deploy() {
   jq -nc --argjson s "$state" --arg at "$(date -u +%FT%TZ)" '$s + {at: $at}'
 }
 
+# read_rules: main's branch rules, printed as a JSON array; returns 1 for anything else, which
+# would break --argjson for every PR after it
+read_rules() {
+  local rules
+  rules="$(gh_read gh api 'repos/codeware-sthlm/cdwr/rules/branches/main?per_page=100')" &&
+    jq -e 'type == "array"' >/dev/null 2>&1 <<<"$rules" || return 1
+  print -r -- "$rules"
+}
+
+# ruleset_drift_note <drift json>: <drift> is guard.jq ruleset_drift, how main's required_reviewers
+# differ from the kernel globs. Written to ruleset-drift.json for `cdwr agent status`; a drift is
+# noticed once, and again if it clears and returns or changes. A check run writes and says nothing.
+ruleset_drift_note() {
+  setopt local_options no_err_exit
+  local drift="$1" file="$HOME_DIR/ruleset-drift.json" stamp="$HOME_DIR/ruleset-drift-notified" compact msg
+  $check && return 0
+  jq -n --argjson d "$drift" --arg at "$(date -u +%FT%TZ)" '{at: $at, missing: $d.missing, extra: $d.extra}' > "$file.tmp" 2>/dev/null &&
+    mv "$file.tmp" "$file"
+  if jq -e '(.missing | length) == 0 and (.extra | length) == 0' >/dev/null 2>&1 <<<"$drift"; then
+    rm -f "$stamp"
+    return 0
+  fi
+  compact="$(jq -c '{missing, extra}' <<<"$drift")"
+  [[ "$compact" == "$(cat "$stamp" 2>/dev/null)" ]] && return 0
+  msg="$(jq -r '"main'"'"'s ruleset differs from the kernel: missing \((.missing | join(", ")) | if . == "" then "none" else . end); extra \((.extra | join(", ")) | if . == "" then "none" else . end)"' <<<"$drift")"
+  note "watch: ruleset drift $msg"
+  notice action watch "$msg"
+  print -r -- "$compact" > "$stamp.tmp" && mv "$stamp.tmp" "$stamp"
+}
+
 watch_prs() {
   # One PR failing to read skips that PR, not the rest.
   setopt local_options no_err_exit
   local file="$HOME_DIR/watch.json" pages="$HOME_DIR/watch-pages.jsonl" after=null page
-  local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy ev
+  local resp nodes state node id label pr now out level msg review why asked ok holds nodeid oid deploy ev drift
   # Main's branch rules, read once a run on the first PR, whatever its reviewDecision says: GitHub
   # reads null for a required_reviewers rule (ruleset_gate)
   local rules=null rules_read=false
@@ -1498,9 +1528,7 @@ watch_prs() {
     fi
     if [[ "$rules_read" == false ]]; then
       rules_read=true
-      # Anything but a JSON array would break --argjson for every PR after this one
-      rules="$(gh_read gh api 'repos/codeware-sthlm/cdwr/rules/branches/main?per_page=100')" &&
-        jq -e 'type == "array"' >/dev/null 2>&1 <<<"$rules" ||
+      rules="$(read_rules)" ||
         { rules=null; note "warn: watch: main's branch rules were not read, so no PR merges on its own this run"; }
     fi
     out="$(watch -cn --arg id "$id" --arg agentLabel "$label" --argjson pr "$pr" --argjson node "$node" --argjson now "$now" \
@@ -1575,6 +1603,16 @@ watch_prs() {
     fi
     state="$(jq -c --arg id "$id" --argjson e "$(jq -c '.entry' <<<"$out")" '.[$id] = $e' <<<"$state")"
   done
+
+  # The ruleset against the kernel, with or without a PR to read it on; unread, the warn above or
+  # none (no PR this run) is all there is
+  if [[ "$rules_read" == false ]]; then
+    rules="$(read_rules)" || { rules=null; note "warn: watch: main's branch rules were not read, the ruleset drift not checked"; }
+  fi
+  if [[ "$holds" != null && "$rules" != null ]]; then
+    drift="$(watch -cn --argjson rules "$rules" --argjson holds "$holds" 'include "watch"; include "guard"; ruleset_drift($rules; $holds)' 2>/dev/null)" &&
+      [[ -n "$drift" && "$drift" != null ]] && ruleset_drift_note "$drift"
+  fi
 
   print -r -- "$state" > "$file.tmp" && mv "$file.tmp" "$file"
   # After the state is saved, which drop_write reads for the deploy hold

@@ -71,7 +71,9 @@ import {
   parseListener,
   parseRemoteStatus,
   parseReviewOwn,
+  parseRulesetDrift,
   rmLockCommand,
+  rulesetRow,
   schedulerRow,
   showsRow,
   skewedStatus,
@@ -308,6 +310,16 @@ export default defineCommand({
               report.reviewOwn.text
             )
           ]),
+      // Absent without the file (an older image, or no run has read the ruleset): no row
+      ...(report.rulesetDrift
+        ? [
+            row(
+              rulesetRow(report.rulesetDrift).ok,
+              'ruleset',
+              rulesetRow(report.rulesetDrift).detail
+            )
+          ]
+        : []),
       report.attended
         ? row(
             report.attended.kind === 'run' || report.attended.kind === 'unknown'
@@ -457,6 +469,10 @@ async function localReport(ctx: Context): Promise<RemoteReport> {
           host === 'container'
             ? parseListener(readText(join(queue.home, 'listener.json')))
             : null,
+        // Both hosts: whichever scheduler runs here writes it
+        rulesetDrift: parseRulesetDrift(
+          readText(join(queue.home, 'ruleset-drift.json'))
+        ),
         next: checked === undefined ? null : parseCheck(checked.decision),
         attended:
           checked?.attended === undefined

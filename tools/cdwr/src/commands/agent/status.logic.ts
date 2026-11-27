@@ -98,6 +98,13 @@ export const parseReviewOwn = (text: string): ReviewOwn => {
       };
 };
 
+/** `ruleset-drift.json`: the kernel globs main's ruleset lacks and the ones it names beyond the kernel */
+const rulesetDriftShape = z.object({
+  at: z.string().optional(),
+  missing: z.array(z.string()),
+  extra: z.array(z.string())
+});
+
 /** Exactly what the status table reads; `localReport` must produce it, so a missing or renamed field fails to compile (an extra local field does not) */
 const reportShape = z.object({
   job: z.discriminatedUnion('loaded', [
@@ -208,6 +215,8 @@ const reportShape = z.object({
   queueView: queueViewSchema.or(z.literal('malformed')).nullable(),
   // Absent from a container on an older image, and null without a listener file
   listener: listenerStateShape.nullable().optional(),
+  // Absent from a container on an older image, and null without a ruleset-drift file
+  rulesetDrift: rulesetDriftShape.nullable().optional(),
   // Absent from a container on an older image, and null when the check printed none
   watchSource: z
     .discriminatedUnion('kind', [
@@ -410,6 +419,36 @@ export const parseListener = (
   } catch {
     return null;
   }
+};
+
+/** How main's ruleset differs from the kernel globs, as run.sh's ruleset_drift_note writes it */
+export type RulesetDrift = z.infer<typeof rulesetDriftShape>;
+
+/** The ruleset-drift file's text as a drift; null when absent or malformed */
+export const parseRulesetDrift = (
+  text: string | undefined
+): RulesetDrift | null => {
+  if (text === undefined) return null;
+  try {
+    const parsed = rulesetDriftShape.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The `ruleset` row: whether main's ruleset names exactly the kernel globs, else the difference */
+export const rulesetRow = (
+  drift: RulesetDrift
+): { ok: boolean | 'warn'; detail: string } => {
+  if (drift.missing.length === 0 && drift.extra.length === 0)
+    return { ok: true, detail: 'matches the kernel' };
+  const side = (globs: string[]) =>
+    globs.length > 0 ? globs.join(', ') : 'none';
+  return {
+    ok: 'warn',
+    detail: `differs from the kernel: missing ${side(drift.missing)}; extra ${side(drift.extra)}`
+  };
 };
 
 /** The listener counts as live while its heartbeat is younger than this */
