@@ -434,8 +434,7 @@ attended_nodes() {
 # hasNextPage true. Pages go through files: one is past the argument limit
 attended_read() {
   setopt local_options no_err_exit
-  local resp after page next n max="${AGENT_QUEUE_MERGED_PAGES:-3}"
-  local first="${TMPDIR:-/tmp}/attended-first.$$" pages="${TMPDIR:-/tmp}/attended-pages.$$"
+  local resp after page next n max="${AGENT_QUEUE_MERGED_PAGES:-3}" tmp first pages
   [[ "$max" == <-> ]] && max=$(( 10#$max )) || max=3
   resp="$(linear "$ATTENDED_QUERY")" || return 1
   if ! jq -e '(.data.merged.nodes | type) == "array"' >/dev/null 2>&1 <<<"$resp"; then
@@ -443,19 +442,23 @@ attended_read() {
   fi
   next="$(jq -c '.data.merged.pageInfo | select(.hasNextPage == true) | .endCursor' <<<"$resp")"
   [[ -n "$next" ]] && (( max > 0 )) || { print -r -- "$resp"; return 0; }
-  print -r -- "$resp" > "$first"
-  : > "$pages"
-  for (( n = 1; n <= max && ${#next} > 0; n++ )); do
-    after="$next" next=""
-    if ! page="$(linear "$MERGED_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")" ||
-      ! jq -ce '.data.merged | select((.nodes | type) == "array") | { nodes, pageInfo }' <<<"$page" >> "$pages" 2>/dev/null; then
-      print -ru2 -- "linear: merged page $(( n + 1 )) of the attended query could not be read"; break
-    fi
-    next="$(jq -c '.data.merged.pageInfo | select(.hasNextPage == true) | .endCursor' <<<"$page")"
-  done
-  jq -c --slurpfile p "$pages" '.data.merged.nodes += [ $p[].nodes[] ]
-    | if ($p | length) > 0 then .data.merged.pageInfo = $p[-1].pageInfo else . end' "$first"
-  rm -f "$first" "$pages"
+  # A private directory: the pages carry every ticket's description and comments
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/attended.XXXXXX")" || { print -r -- "$resp"; return 0; }
+  {
+    first="$tmp/first.json" pages="$tmp/pages.jsonl"
+    print -r -- "$resp" > "$first"
+    : > "$pages"
+    for (( n = 1; n <= max && ${#next} > 0; n++ )); do
+      after="$next" next=""
+      if ! page="$(linear "$MERGED_QUERY" "$(jq -nc --argjson a "$after" '{after: $a}')")" ||
+        ! jq -ce '.data.merged | select((.nodes | type) == "array") | { nodes, pageInfo }' <<<"$page" >> "$pages" 2>/dev/null; then
+        print -ru2 -- "linear: merged page $(( n + 1 )) of the attended query could not be read"; break
+      fi
+      next="$(jq -c '.data.merged.pageInfo | select(.hasNextPage == true) | .endCursor' <<<"$page")"
+    done
+    jq -c --slurpfile p "$pages" '.data.merged.nodes += [ $p[].nodes[] ]
+      | if ($p | length) > 0 then .data.merged.pageInfo = $p[-1].pageInfo else . end' "$first"
+  } always { rm -rf "$tmp" }
 }
 
 # Every open COD ticket and the ones Done within 14 days, for the tree and the audit's candidate
