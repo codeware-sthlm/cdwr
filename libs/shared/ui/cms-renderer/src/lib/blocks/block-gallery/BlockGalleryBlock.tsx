@@ -100,7 +100,7 @@ function BlockCard({
   render?: RenderExample;
   onOpen: () => void;
 }) {
-  const { locale } = usePayload();
+  const { locale, payloadUrl } = usePayload();
   const example =
     picture === 'block' && doc && hasExample(doc) && !noThumbnail.has(meta.slug)
       ? doc
@@ -144,11 +144,11 @@ function BlockCard({
               )}
         </p>
       </button>
-      {/* The admin picker's own image, so the two cannot drift apart. The cms
-          serves it from public/blocks */}
+      {/* The admin picker's own image, so the two cannot drift apart. Only the
+          cms serves public/blocks, so a headless site loads it from there */}
       {picture === 'illustration' && (
         <img
-          src={`/blocks/${meta.slug}.svg`}
+          src={`${payloadUrl}/blocks/${meta.slug}.svg`}
           alt=""
           loading="lazy"
           className="bg-core-background-content mt-auto h-40 w-full rounded-lg border object-contain p-4"
