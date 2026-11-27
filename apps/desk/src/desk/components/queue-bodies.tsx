@@ -456,7 +456,10 @@ const HandoffCard = ({
             <span>
               <Inline text={t} />
             </span>
-            <DropControl key={t} ctx={drop} ticket={x.ticket} item={t} />
+            {/* Only a PR-ready comment's item: Status-table hand-offs have no comment to strike */}
+            {drop.state.liveHandoffs.has(x.ticket) ? (
+              <DropControl key={t} ctx={drop} ticket={x.ticket} item={t} />
+            ) : null}
           </li>
         ))}
         {openApply(apply).map((a, n) => (
