@@ -149,7 +149,6 @@ export default async function RootLayout({
           humanCheckSiteKey={env.HUMAN_CHECK?.siteKey ?? null}
           locale={runtime.tenantConfig?.locale ?? 'en'}
           nonce={nonce}
-          payloadUrl={env.APP_MODE.serverURL}
           signupPolicy={signupPolicy}
           chrome={runtime.tenantConfig?.chrome ?? 'outlined'}
           colorScheme={runtime.tenantConfig?.colorScheme ?? 'system'}
