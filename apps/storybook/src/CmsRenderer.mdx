@@ -76,7 +76,7 @@ export default function Layout({ children }) {
 | Prop             | Required | Purpose                                                                  |
 | ---------------- | -------- | ------------------------------------------------------------------------ |
 | `appInfo`        | Yes      | Running app's build metadata (name, version, sha, env, build time)       |
-| `payloadUrl`     | Yes      | Base URL of the Payload CMS instance — used for media image src          |
+| `payloadUrl`     | Yes      | Base URL of the Payload CMS instance for asset src; `''` on the cms site |
 | `getCurrentPath` | Yes      | Returns the current URL path for active route detection in navigation    |
 | `getSearchParam` | Yes      | Reads one query parameter — how the block gallery opens at `?block=`     |
 | `navigate`       | Yes      | Navigates to a local path or external URL                                |

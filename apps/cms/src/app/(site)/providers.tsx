@@ -33,7 +33,6 @@ type ProvidersProps = {
   | 'iconConfig'
   | 'iconStyle'
   | 'locale'
-  | 'payloadUrl'
   | 'signupPolicy'
   | 'theme'
   | 'themes'
@@ -54,7 +53,6 @@ export function Providers({
   iconStyle,
   locale,
   nonce,
-  payloadUrl,
   signupPolicy,
   theme,
   themes
@@ -85,7 +83,6 @@ export function Providers({
         iconConfig={iconConfig}
         iconStyle={iconStyle}
         locale={locale}
-        payloadUrl={payloadUrl}
         signupPolicy={signupPolicy}
         theme={theme}
         themes={themes}
@@ -106,7 +103,6 @@ function PayloadProviderInner({
   iconConfig,
   iconStyle,
   locale,
-  payloadUrl,
   signupPolicy,
   theme,
   themes
@@ -138,7 +134,9 @@ function PayloadProviderInner({
             router.push(path);
           }
         },
-        payloadUrl,
+        // The site and Payload are one app, so paths the renderer builds stay
+        // on whichever domain the visitor used rather than a fixed host
+        payloadUrl: '',
         setColorScheme: (colorScheme) => setColorScheme(colorScheme),
         // The server picks the theme from this cookie, so persist it before
         // refreshing — otherwise the re-render returns the previous theme

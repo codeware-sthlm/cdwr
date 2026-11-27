@@ -132,7 +132,8 @@ describe('BlockGalleryBlock full screen', () => {
 
 describe('BlockGalleryBlock index', () => {
   const renderIndex = (
-    cardPicture: BlockGalleryBlockProps['cardPicture'] = 'block'
+    cardPicture: BlockGalleryBlockProps['cardPicture'] = 'block',
+    payloadUrl = 'https://cms.test'
   ) =>
     render(
       <PayloadProvider
@@ -142,7 +143,7 @@ describe('BlockGalleryBlock index', () => {
             lockedColorScheme: 'light',
             locale: 'en',
             getSearchParam: () => null,
-            payloadUrl: 'https://cms.test'
+            payloadUrl
           } as unknown as PayloadValue
         }
       >
@@ -207,6 +208,16 @@ describe('BlockGalleryBlock index', () => {
       );
     }
   );
+
+  it('keeps the illustration on the page origin when payloadUrl is empty', () => {
+    renderIndex('illustration', '');
+    scrollIntoView();
+
+    const card = screen.getByText('callout').closest('li') as HTMLElement;
+    expect(card.querySelector('img')?.getAttribute('src')).toBe(
+      '/blocks/callout.svg'
+    );
+  });
 
   it('draws no thumbnail until the card nears the viewport', () => {
     renderIndex();
